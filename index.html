@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0f3d3e">
+  <title>GestNow Mini</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <strong>GestNow <span>Mini</span></strong>
+    <nav id="nav" hidden>
+      <button data-view="picar">Picar</button>
+      <button data-view="naobra">Na obra</button>
+      <button data-view="trabalhadores">Trabalhadores</button>
+      <button data-view="obras">Obras</button>
+      <button data-action="sair" class="ghost">Sair</button>
+    </nav>
+  </header>
+  <main id="app"><p class="muted">A carregar…</p></main>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script src="vendor/supabase-2.117.2.js"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
