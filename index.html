@@ -2,28 +2,58 @@
 <html lang="pt-PT">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0f3d3e">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0e4a4b">
+  <meta name="color-scheme" content="light dark">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://hnowcydpmrwlqwsggcqx.supabase.co wss://hnowcydpmrwlqwsggcqx.supabase.co; object-src 'none'; base-uri 'none'; form-action 'self'">
   <title>GestNow Mini</title>
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="signed-out">
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <symbol id="i-tap" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0M9 11a3 3 0 0 1 6 0M12 14v7"/></symbol>
+    <symbol id="i-site" viewBox="0 0 24 24"><path d="M3 20h18M5 20V10l7-5 7 5v10M10 20v-5h4v5"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2"/></symbol>
+    <symbol id="i-office" viewBox="0 0 24 24"><path d="M9 11l3 3 8-8M20 12v7a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h11"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6zM9 12l2 2 4-4"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21a7 7 0 0 1 14 0M16 3.5a4 4 0 0 1 0 7.5M18 14a6 6 0 0 1 4 7"/></symbol>
+    <symbol id="i-crane" viewBox="0 0 24 24"><path d="M6 21V4l14 3H6M10 4v17M4 21h8M16 7v5M14.5 12h3v2h-3z"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><path d="M5 12h.01M12 12h.01M19 12h.01" stroke-width="3.2"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M5 19l1.5-1.5M17.5 6.5 19 5"/></symbol>
+    <symbol id="i-out" viewBox="0 0 24 24"><path d="M15 4h4v16h-4M10 17l-5-5 5-5M5 12h11"/></symbol>
+    <symbol id="i-ok" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17"/></symbol>
+    <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"/></symbol>
+    <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .5-8 6 6 0 0 0-11.4 1.6A3.3 3.3 0 0 0 7 18zM12 11v3M12 16.5h.01"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24"><path d="M3 7h18v10H3zM7 11h.01M11 11h.01M15 11h.01M8 14h8"/></symbol>
+    <symbol id="i-in" viewBox="0 0 24 24"><path d="M10 7l5 5-5 5M15 12H3M14 4h5v16h-5"/></symbol>
+    <symbol id="i-auto" viewBox="0 0 24 24"><path d="M4 9h13l-3-3M20 15H7l3 3"/></symbol>
+    <symbol id="i-print" viewBox="0 0 24 24"><path d="M7 9V3h10v6M7 17H4v-7h16v7h-3M7 14h10v7H7z"/></symbol>
+    <symbol id="i-card" viewBox="0 0 24 24"><path d="M3 6h18v12H3zM7 14h4"/></symbol>
+  </svg>
   <header class="top">
-    <strong>GestNow <span>Mini</span></strong>
+    <div class="brand"><svg class="logo" viewBox="0 0 44 44" aria-hidden="true"><rect width="44" height="44" rx="12" fill="#f5b301"/><path d="M11 26a11 11 0 0 1 22 0v3H11z" fill="#0f1d1c"/><rect x="9" y="28" width="26" height="4" rx="2" fill="#0f1d1c"/></svg><strong>GestNow <span>Mini</span></strong></div>
+    <div id="net" class="net" hidden></div>
     <div id="whoami" class="who" hidden></div>
-    <nav id="nav" hidden>
-      <button data-view="picar">Picar</button>
-      <button data-view="naobra">Na obra</button>
-      <button data-view="horas">Horas</button>
-      <button data-view="seguranca">Segurança</button>
-      <button data-view="trabalhadores">Trabalhadores</button>
-      <button data-view="obras">Obras</button>
-      <button data-view="secretariado" hidden>Secretariado</button>
-      <button data-action="sair" class="ghost">Sair</button>
-    </nav>
+    <button id="sol" class="iconbtn" type="button" hidden aria-pressed="false" aria-label="Modo sol (alto contraste)" title="Modo sol (alto contraste)"><svg class="i"><use href="#i-sun"/></svg></button>
   </header>
-  <main id="app"><p class="muted">A carregar…</p></main>
+  <main id="app"><div class="skel" aria-busy="true"><div class="card"><span class="av"></span><div class="grow"><div class="sk" style="width:60%"></div><div class="sk" style="width:35%;margin-top:10px"></div></div></div></div></main>
+  <nav id="nav" hidden aria-label="Menu">
+    <div class="scrim" id="scrim" hidden></div>
+    <div class="sheet" id="more" hidden></div>
+    <div class="tabs" id="tabs">
+      <button data-view="picar"><svg class="i" aria-hidden="true"><use href="#i-tap"/></svg><span>Picar</span></button>
+      <button data-view="naobra"><svg class="i" aria-hidden="true"><use href="#i-site"/></svg><span>Na obra</span></button>
+      <button data-view="horas"><svg class="i" aria-hidden="true"><use href="#i-clock"/></svg><span>Horas</span></button>
+      <button data-view="secretariado" hidden><svg class="i" aria-hidden="true"><use href="#i-office"/></svg><span>Secretaria</span></button>
+      <button data-view="seguranca"><svg class="i" aria-hidden="true"><use href="#i-shield"/></svg><span>Segurança</span></button>
+      <button data-view="trabalhadores"><svg class="i" aria-hidden="true"><use href="#i-users"/></svg><span>Pessoas</span></button>
+      <button data-view="obras"><svg class="i" aria-hidden="true"><use href="#i-crane"/></svg><span>Obras</span></button>
+      <button data-action="sair" class="out"><svg class="i" aria-hidden="true"><use href="#i-out"/></svg><span>Sair</span></button>
+      <button data-more aria-expanded="false" aria-controls="more"><svg class="i" aria-hidden="true"><use href="#i-more"/></svg><span>Mais</span></button>
+    </div>
+  </nav>
+  <div id="flash" role="alert" aria-live="assertive" hidden></div>
   <div id="toast" role="status" aria-live="polite"></div>
   <script src="vendor/supabase-2.117.2.js"></script>
   <script src="config.js"></script>

@@ -111,6 +111,75 @@ const state = { ready: false, me: null, sites: [], people: [], docTypes: [], vie
 // ------------------------------------------------------------------ helpers
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const $ = (sel) => app.querySelector(sel);
+
+// ------------------------------------------------------------------ look: icons, chips, avatars, loading, empty states
+const ic = (name, extra) => `<svg class="i${extra ? ' ' + extra : ''}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
+const chip = (kind, text, icon) => `<span class="chip ${kind}">${icon ? ic(icon) : ''}${esc(text)}</span>`;
+function initials(name) {
+  const w = String(name || '?').replace(/[^\p{L}\p{N} ]/gu, ' ').trim().split(/\s+/).filter(Boolean);
+  return ((w[0] || '?')[0] + (w.length > 1 ? w[w.length - 1][0] : (w[0] || '')[1] || '')).toUpperCase();
+}
+function avatar(name) {
+  let h = 0; for (const ch of String(name || '')) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return `<span class="av a${h % 8}" aria-hidden="true">${esc(initials(name))}</span>`;
+}
+// Skeleton cards instead of "A carregar…".
+const skel = (n = 3) => `<div class="skel" aria-busy="true" aria-label="A carregar">${Array.from({ length: n }, (_, i) =>
+  `<div class="card"><span class="av"></span><div class="grow"><div class="sk" style="width:${62 - i * 9}%"></div><div class="sk" style="width:${38 + i * 6}%;margin-top:10px"></div></div></div>`).join('')}</div>`;
+const ART = {
+  helmet: '<path d="M30 58a30 30 0 0 1 60 0v6H30z" fill="var(--brand)"/><rect x="22" y="62" width="76" height="9" rx="4.5" fill="var(--brand)"/><path d="M54 28h12v20H54z" fill="var(--accent)"/><ellipse cx="60" cy="78" rx="34" ry="4" fill="var(--line)"/>',
+  calendar: '<rect x="18" y="18" width="84" height="58" rx="8" fill="var(--surface-2)" stroke="var(--line)" stroke-width="2"/><path d="M18 32h84" stroke="var(--line)" stroke-width="2"/><rect x="34" y="10" width="6" height="16" rx="3" fill="var(--brand)"/><rect x="80" y="10" width="6" height="16" rx="3" fill="var(--brand)"/><circle cx="60" cy="54" r="13" fill="var(--accent)"/><path d="M60 47v7l5 3" stroke="#0f1d1c" stroke-width="3" fill="none" stroke-linecap="round"/>',
+  box: '<path d="M22 34l38-16 38 16v34l-38 14-38-14z" fill="var(--surface-2)" stroke="var(--line)" stroke-width="2"/><path d="M22 34l38 14 38-14M60 48v34" stroke="var(--line)" stroke-width="2" fill="none"/><path d="M41 26l38 16" stroke="var(--accent)" stroke-width="5"/>',
+  card: '<rect x="20" y="20" width="80" height="50" rx="8" fill="var(--surface-2)" stroke="var(--line)" stroke-width="2"/><rect x="30" y="50" width="28" height="6" rx="3" fill="var(--brand)"/><path d="M76 34a10 10 0 0 1 14 0M80 39a4 4 0 0 1 6 0" stroke="var(--accent)" stroke-width="3" fill="none" stroke-linecap="round"/>',
+  check: '<circle cx="60" cy="44" r="30" fill="var(--ok-bg)"/><path d="M46 45l10 10 18-20" stroke="var(--ok)" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
+};
+const empty = (art, title, text) => `<div class="empty"><svg viewBox="0 0 120 84" aria-hidden="true">${ART[art] || ART.box}</svg><b>${esc(title)}</b>${text ? `<p>${esc(text)}</p>` : ''}</div>`;
+// One line of help, the rest behind an "i".
+const more = (label, html) => `<details class="more"><summary>${esc(label)}</summary><div>${html}</div></details>`;
+// Day bar: periods "08:00–12:00 · 13:00–?" over 06:00–20:00 (wider if needed). Open period: to now (today) or dashed (missing).
+function dayline(periods, opts = {}) {
+  const toMin = (t) => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m ? +m[1] * 60 + +m[2] : null; };
+  const segs = periodList(periods).map((p) => { const [a, b] = p.split('–'); return { a: toMin(a), b: toMin(b) }; }).filter((s) => s.a !== null || s.b !== null);
+  if (!segs.length) return '';
+  let lo = 6 * 60; let hi = 20 * 60;
+  for (const s of segs) {
+    if (s.a !== null) { lo = Math.min(lo, s.a); hi = Math.max(hi, s.a + 60); }
+    if (s.b !== null && (s.a === null || s.b >= s.a)) { hi = Math.max(hi, s.b); lo = Math.min(lo, s.b - 60); }
+  }
+  if (opts.now !== undefined && segs.some((s) => s.b === null)) hi = Math.max(hi, opts.now + 30);
+  lo = Math.max(0, lo);
+  if (segs.some((s) => s.a !== null && s.b !== null && s.b < s.a)) hi = 24 * 60;
+  lo = Math.floor(lo / 60) * 60; hi = Math.min(24 * 60, Math.ceil(hi / 60) * 60);
+  const pc = (m) => Math.max(0, Math.min(100, ((m - lo) / (hi - lo)) * 100)).toFixed(1);
+  const now = opts.now;   // minutes since midnight, only for today
+  const bars = segs.map((s) => {
+    const a = s.a === null ? lo : s.a; let b = s.b; let cls = '';
+    if (b === null) { if (now !== undefined && now > a) { b = now; cls = 'open'; } else { b = Math.min(hi, a + 120); cls = 'miss'; } }
+    if (b < a) b = 24 * 60;
+    if (s.a === null) cls = 'miss';
+    return `<i class="${cls}" style="left:${pc(a)}%;width:${(pc(b) - pc(a)).toFixed(1)}%"></i>`;
+  }).join('');
+  const hh = (m) => pad2(Math.floor(m / 60) % 24) + 'h';
+  return `<div class="dayline" role="img" aria-label="${esc(periods)}">${bars}${now !== undefined && now >= lo && now <= hi ? `<u style="left:${pc(now)}%"></u>` : ''}</div>${opts.axis ? `
+    <div class="axis" aria-hidden="true"><span>${hh(lo)}</span><span>${hh((lo + hi) / 2 - ((lo + hi) / 2) % 60)}</span><span>${hh(hi)}</span></div>` : ''}`;
+}
+const periodsHtml = (list) => list.map((p) => `<span>${esc(p)}</span>`).join(' · ');
+
+// ---- Modo Sol (alto contraste): botão no topo, guardado neste telemóvel; também quando o sistema pede mais contraste.
+const THEME_KEY = 'gestnow.theme';
+function applyTheme() {
+  let t = null; try { t = localStorage.getItem(THEME_KEY); } catch (_) {}
+  const sol = t === 'sol' || (t === null && window.matchMedia && matchMedia('(prefers-contrast: more)').matches);
+  if (sol) document.documentElement.dataset.theme = 'sol'; else delete document.documentElement.dataset.theme;
+  const b = document.getElementById('sol'); if (b) b.setAttribute('aria-pressed', String(sol));
+}
+applyTheme();
+document.getElementById('sol').addEventListener('click', () => {
+  const on = document.documentElement.dataset.theme !== 'sol';
+  try { localStorage.setItem(THEME_KEY, on ? 'sol' : 'normal'); } catch (_) {}
+  applyTheme(); toast(on ? 'Modo sol: mais contraste.' : 'Modo normal.');
+});
+
 function toast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
@@ -229,7 +298,8 @@ function load(key, dflt) { try { const v = localStorage.getItem(key); return v ?
 // true: short high beep (accepted). false: long low buzz (refused or error). 'neutral': two medium beeps (saved, not checked yet).
 function beep(ok) {
   const neutral = ok === 'neutral';
-  try { navigator.vibrate && navigator.vibrate(neutral ? [60, 90, 60] : ok ? 120 : [80, 60, 80, 60, 200]); } catch (_) {}
+  // Short tick = accepted; long triple buzz = refused; two soft taps = saved, not checked yet. No vibration API (iPhone): sound and colour only.
+  try { if (typeof navigator.vibrate === 'function') navigator.vibrate(neutral ? [40, 80, 40] : ok ? [40] : [80, 60, 80, 60, 160]); } catch (_) {}
   try {
     const a = new (window.AudioContext || window.webkitAudioContext)(); const g = a.createGain(); g.connect(a.destination); g.gain.value = 0.15;
     const tone = (f, at, len) => { const o = a.createOscillator(); o.frequency.value = f; o.connect(g); o.start(a.currentTime + at); o.stop(a.currentTime + at + len); };
@@ -250,10 +320,45 @@ const sb = window.supabase.createClient(cfg.url, cfg.anonKey, { auth: { persistS
 const core = () => sb.schema('core');
 
 nav.addEventListener('click', (e) => {
+  if (e.target.id === 'scrim') return openMore(false);
   const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.more !== undefined) return openMore(document.getElementById('more').hidden);
+  openMore(false);
   if (b.dataset.action === 'sair') return signOut();
   go(b.dataset.view);
 });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
+// Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
+// The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
+const TABS = { supervisor: ['picar', 'naobra', 'horas', 'trabalhadores'], admin: ['picar', 'naobra', 'horas', 'secretariado'],
+  hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['seguranca', 'naobra', 'trabalhadores', 'picar'],
+  project_manager: ['picar', 'naobra', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'] };
+const MORE_ORDER = ['picar', 'naobra', 'horas', 'secretariado', 'seguranca', 'trabalhadores', 'obras'];
+function layoutNav(role) {
+  const tabs = document.getElementById('tabs'); const sheet = document.getElementById('more');
+  const btn = (v) => nav.querySelector(`button[data-view="${v}"]`);
+  const main = (TABS[role] || TABS.supervisor).filter((v) => !btn(v).hidden);
+  const moreBtn = nav.querySelector('button[data-more]');
+  for (const v of main) tabs.insertBefore(btn(v), moreBtn);
+  for (const v of MORE_ORDER) if (!main.includes(v)) sheet.appendChild(btn(v));
+  sheet.appendChild(Object.assign(document.createElement('hr'), {}));
+  sheet.appendChild(nav.querySelector('button[data-action=sair]'));
+  sheet.querySelectorAll('hr').forEach((h, i, all) => { if (i < all.length - 1) h.remove(); });
+}
+function openMore(open) {
+  const sheet = document.getElementById('more'); if (!sheet) return;
+  sheet.hidden = !open; document.getElementById('scrim').hidden = !open;
+  nav.querySelector('button[data-more]').setAttribute('aria-expanded', String(!!open));
+}
+// Header: "Sem rede" and taps waiting, always in sight.
+function showNet() {
+  const el = document.getElementById('net'); if (!el) return;
+  const me = state.me && state.me.user_id;
+  const n = state.ready ? queue().filter((x) => !x._u || x._u === me).length : 0;
+  const off = state.ready && (state.offline || navigator.onLine === false);
+  el.hidden = !(off || n);
+  el.textContent = off ? `Sem rede${n ? ' · ' + n : ''}` : `${n} por enviar`;
+}
 sb.auth.onAuthStateChange((event) => { if (event === 'SIGNED_OUT') boot(); });
 // The session can end outside this tab (Sair in another tab, expired token). Re-check when the user comes back.
 document.addEventListener('visibilitychange', () => {
@@ -297,8 +402,9 @@ state.clockOffset = (load(CLOCK_KEY, null) || {}).off || 0;
 boot();
 
 async function boot() {
-  stopNfc(); clearInterval(state.timer);
+  stopNfc(); clearInterval(state.timer); clearInterval(state.tick); hideFlash(); openMore(false);
   state.ready = false; state.offline = false; nav.hidden = true; document.getElementById('whoami').hidden = true;
+  document.getElementById('sol').hidden = true; signedOut(true); showNet();
   let session = null; let sErr = null;
   try { const r = await sb.auth.getSession(); session = r.data.session; sErr = r.error; } catch (e) { sErr = e; }
   if (!session) return (sErr && isNetErr(sErr)) || (navigator.onLine === false && storedSessionExists()) ? showNetworkError() : showLogin();
@@ -328,8 +434,9 @@ async function boot() {
   if (session.user.user_metadata && session.user.user_metadata.must_change_password) return state.offline ? showNetworkError() : showNewPassword();
   if (!state.offline) store(ME_KEY, { ...state.me });
   state.ready = true; touch();
-  nav.hidden = false;
   nav.querySelector('[data-view=secretariado]').hidden = !canPeople();
+  layoutNav(me.role);
+  signedOut(false); nav.hidden = false; document.getElementById('sol').hidden = false; showNet();
   await loadBasics();
   showWho();
   if (state.offline) { go('picar'); return; }
@@ -343,11 +450,21 @@ async function boot() {
 function showNetworkError() {
   nav.hidden = true;
   const n = queue().length;
-  app.innerHTML = `<div class="card" style="max-width:460px;margin:30px auto"><h1>Sem ligação</h1>
-    <p>Não consegui falar com o servidor. Confirma que o telemóvel tem rede (dados móveis ou Wi-Fi) e toca em <b>Tentar outra vez</b>.</p>
-    ${n ? `<p class="small">${n} picagem(ns) guardada(s) neste telemóvel. Não se perdem: são enviadas quando a rede voltar.</p>` : ''}
-    <p><button class="btn" id="retry">Tentar outra vez</button></p></div>`;
+  authScreen(`<h1>Sem ligação</h1>
+    <p>Não consegui falar com o servidor. Confirma que o telemóvel tem rede (dados móveis ou Wi-Fi).</p>
+    ${n ? `<div class="result warn">${ic('cloud')}<div><b>${n} picagem(ns) guardada(s)</b>Não se perdem: são enviadas quando a rede voltar.</div></div>` : ''}
+    <button class="btn big" id="retry">Tentar outra vez</button>`);
   $('#retry').onclick = () => boot();
+}
+// Before login: brand background, logo, one white card. No menu, no data.
+function signedOut(on) { document.body.classList.toggle('signed-out', !!on); }
+function authScreen(inner) {
+  signedOut(true);
+  const online = navigator.onLine !== false;
+  app.innerHTML = `<div class="auth"><div class="logo-big"><svg viewBox="0 0 44 44" aria-hidden="true"><rect width="44" height="44" rx="12" fill="#f5b301"/><path d="M11 26a11 11 0 0 1 22 0v3H11z" fill="#0f1d1c"/><rect x="9" y="28" width="26" height="4" rx="2" fill="#0f1d1c"/></svg>
+    <div><b>GestNow Mini</b><span>Picagem e horas da obra</span></div></div>
+    <div class="card">${inner}</div>
+    <p class="foot"><i class="${online ? '' : 'off'}"></i>${online ? 'Ligado à rede' : 'Sem rede'}</p></div>`;
 }
 
 const AUTH_LOST = /permission denied|JWT|not authenticated|401/i;
@@ -367,19 +484,19 @@ async function signOut() { stopNfc(); state.ready = false; nav.hidden = true; st
 
 function showMessage(title, text, withLogout) {
   nav.hidden = true;
-  app.innerHTML = `<div class="card"><h1>${esc(title)}</h1><p>${esc(text)}</p>
-    ${withLogout ? '<button class="btn ghost" id="out">Sair</button>' : ''}</div>`;
+  authScreen(`<h1>${esc(title)}</h1><p>${esc(text)}</p>
+    ${withLogout ? '<button class="btn ghost wide" id="out">Sair</button>' : ''}`);
   if (withLogout) $('#out').onclick = signOut;
 }
 
 // ------------------------------------------------------------------ login and MFA
 function showLogin() {
   nav.hidden = true;
-  app.innerHTML = `<div class="card" style="max-width:420px;margin:30px auto">
-    <h1>Entrar</h1>${state.idleOut ? '<p class="small muted">Saíste automaticamente por estares sem mexer na app. Entra outra vez.</p>' : ''}
-    <form id="f"><label>Email</label><input name="email" type="email" autocomplete="username" required>
-    <label>Palavra-passe</label><input name="password" type="password" autocomplete="current-password" required>
-    <p><button class="btn" style="width:100%">Entrar</button></p></form></div>`;
+  authScreen(`<h1>Entrar</h1>${state.idleOut ? `<div class="result warn">${ic('clock')}<div>Saíste automaticamente por estares sem mexer na app. Entra outra vez.</div></div>`
+      : '<p class="muted" style="margin-top:-6px">Com o email e a palavra-passe da empresa.</p>'}
+    <form id="f"><label for="em">Email</label><input id="em" name="email" type="email" autocomplete="username" inputmode="email" required>
+    <label for="pw">Palavra-passe</label><input id="pw" name="password" type="password" autocomplete="current-password" required>
+    <p style="margin-top:20px"><button class="btn big acc">Entrar</button></p></form>`);
   $('#f').onsubmit = async (e) => {
     e.preventDefault();
     const f = new FormData(e.target);
@@ -396,8 +513,7 @@ async function showMfaEnroll() {
   for (const f of (list && list.all) || []) if (f.status !== 'verified') await sb.auth.mfa.unenroll({ factorId: f.id });
   const { data, error } = await sb.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'GestNow ' + new Date().toISOString().slice(0, 10) });
   if (error) return showMessage('Segunda verificação', friendly(error), true);
-  app.innerHTML = `<div class="card" style="max-width:460px;margin:20px auto">
-    <h1>Ativar a segunda verificação</h1>
+  authScreen(`<h1>Ativar a segunda verificação</h1>
     <p>Como administrador, precisas de um código do telemóvel para entrar. Faz isto uma vez:</p>
     <ol><li>Instala no telemóvel uma app de códigos (Google Authenticator, Microsoft Authenticator ou 1Password).</li>
     <li>Na app, adiciona uma conta e aponta a câmara para este código:</li></ol>
@@ -405,7 +521,7 @@ async function showMfaEnroll() {
     <p class="small muted">Se não conseguires ler o QR, escreve esta chave na app: <code>${esc(data.totp.secret)}</code></p>
     <form id="f"><label>Escreve o código de 6 números que aparece na app</label>
     <input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" required>
-    <p><button class="btn">Confirmar</button> <button type="button" class="btn ghost" id="out">Sair</button></p></form></div>`;
+    <div class="acts"><button class="btn big acc">Confirmar</button><button type="button" class="btn ghost" id="out">Sair</button></div></form>`);
   $('#out').onclick = signOut;
   $('#f').onsubmit = (e) => { e.preventDefault(); verifyCode(data.id, new FormData(e.target).get('code')); };
 }
@@ -415,22 +531,22 @@ async function showMfaVerify() {
   const { data: list } = await sb.auth.mfa.listFactors();
   const factor = list && list.totp && list.totp[0];
   if (!factor) return showMfaEnroll();
-  app.innerHTML = `<div class="card" style="max-width:420px;margin:30px auto"><h1>Código de verificação</h1>
+  authScreen(`<h1>Código de verificação</h1>
     <form id="f"><label>Abre a app de códigos e escreve os 6 números</label>
-    <input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" required autofocus>
-    <p><button class="btn">Confirmar</button> <button type="button" class="btn ghost" id="out">Sair</button></p></form></div>`;
+    <input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" required autofocus style="font-size:26px;letter-spacing:6px;text-align:center">
+    <div class="acts"><button class="btn big acc">Confirmar</button><button type="button" class="btn ghost" id="out">Sair</button></div></form>`);
   $('#out').onclick = signOut;
   $('#f').onsubmit = (e) => { e.preventDefault(); verifyCode(factor.id, new FormData(e.target).get('code')); };
 }
 
 function showNewPassword() {
   nav.hidden = true;
-  app.innerHTML = `<div class="card" style="max-width:420px;margin:30px auto"><h1>Escolhe a tua palavra-passe</h1>
+  authScreen(`<h1>Escolhe a tua palavra-passe</h1>
     <p>Entraste com uma palavra-passe temporária. Escolhe agora a tua. Não a digas a ninguém.</p>
     <form id="f"><label>Palavra-passe nova (pelo menos 10 caracteres)</label>
     <input name="p1" type="password" autocomplete="new-password" minlength="10" required>
     <label>Repete a palavra-passe</label><input name="p2" type="password" autocomplete="new-password" minlength="10" required>
-    <p><button class="btn">Guardar</button> <button type="button" class="btn ghost" id="out">Sair</button></p></form></div>`;
+    <div class="acts"><button class="btn big acc">Guardar</button><button type="button" class="btn ghost" id="out">Sair</button></div></form>`);
   $('#out').onclick = signOut;
   $('#f').onsubmit = async (e) => {
     e.preventDefault(); const f = new FormData(e.target);
@@ -454,7 +570,7 @@ const ROLE_NAMES = { admin: 'Administrador', hr: 'Secretariado / RH', hse: 'Téc
 function showWho() {
   const me = state.me; const p = me.collaborator_id && state.people.find((x) => x.id === me.collaborator_id);
   const el = document.getElementById('whoami'); el.textContent = `${p ? p.full_name : me.email} · ${ROLE_NAMES[me.role] || me.role}`;
-  el.className = 'who' + (PRIVILEGED.includes(me.role) ? ' strong' : ''); el.hidden = false;
+  el.title = el.textContent; el.className = 'who' + (PRIVILEGED.includes(me.role) ? ' strong' : ''); el.hidden = false;
 }
 async function loadBasics() {
   const [s, p] = await Promise.all([
@@ -493,10 +609,13 @@ function bindSiteSelect(id, after) {
 function go(view) {
   if (!state.ready) return boot();   // never show a screen before login (and the phone code, when required)
   if (state.offline && view !== 'picar') { toast('Sem rede: por agora só podes picar.'); view = 'picar'; }
-  stopNfc(); clearInterval(state.timer);
+  stopNfc(); clearInterval(state.timer); clearInterval(state.tick); hideFlash(); openMore(false);
   state.view = view;
   const tab = view === 'ficha' ? 'trabalhadores' : view;
   nav.querySelectorAll('button[data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === tab));
+  const cur = nav.querySelector(`button[data-view="${tab}"]`);
+  nav.querySelector('button[data-more]').classList.toggle('on', !!cur && cur.parentElement.id === 'more');
+  window.scrollTo(0, 0);
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
      ficha: viewWorker, obras: viewSites, secretariado: viewOffice }[view] || viewClock)();
 }
@@ -504,24 +623,25 @@ function go(view) {
 // ------------------------------------------------------------------ Picar
 function viewClock() {
   const nfcOk = 'NDEFReader' in window;
-  app.innerHTML = `<h1>Picar</h1>
-    ${state.offline ? '<div class="result warn" style="font-size:16px"><b>Sem rede</b>Só podes picar. As picagens ficam guardadas neste telemóvel e são enviadas quando a rede voltar.</div>' : ''}
+  app.innerHTML = `<div class="pic-head"><div><h1>Picar</h1><div class="clock" id="clk"></div><div class="small muted" id="clkday"></div></div></div>
+    ${state.offline ? `<div class="result warn">${ic('cloud')}<div><b>Sem rede</b>Só podes picar. As picagens ficam guardadas neste telemóvel e são enviadas quando a rede voltar.</div></div>` : ''}
     <div id="clockwarn"></div>
     <div class="card">${siteSelect('site')}
-      <div class="dir"><button class="auto" data-d="auto">AUTOMÁTICO</button>
+      <div class="dir"><button class="auto" data-d="auto">${ic('auto')}AUTOMÁTICO</button>
       <button class="in" data-d="in">ENTRADA</button>
       <button class="out" data-d="out">SAÍDA</button></div>
       <p class="small muted" id="dirhelp"></p>
-      ${nfcOk ? '<button class="btn" id="nfc" style="width:100%;padding:16px">Começar a ler cartões</button>'
-              : '<p class="small muted">Este aparelho não lê cartões pelo browser (só o Chrome em Android lê). Usa o leitor USB ou escreve o número do cartão.</p>'}
-      <form id="manual" class="row" style="margin-top:10px"><div><label>Número do cartão (ou leitor USB)</label>
-        <input name="uid" autocomplete="off" placeholder="ex.: 04:A1:B2:C3"></div>
-        <div style="flex:0 0 auto"><button class="btn ghost">Picar</button></div></form>
-      <div id="result"></div><div id="taplog" class="taplog"></div><p id="queue" class="small muted"></p>
+      ${nfcOk ? `<button class="tapzone" id="nfc" aria-pressed="false"><span class="ring">${ic('tap')}</span><b id="nfclbl">Tocar para ligar o leitor</b>
+          <span class="small" id="nfchelp">Depois é só encostar o cartão às costas do telemóvel.</span></button>`
+        : `<div class="nonfc">${ic('key')}<span>Este aparelho não lê cartões pelo browser (só o Chrome em Android). Usa o leitor USB ou escreve o número.</span></div>`}
+      <form id="manual" class="manual"><div><label for="uid">Número do cartão (ou leitor USB)</label>
+        <input id="uid" name="uid" autocomplete="off" autocapitalize="characters" placeholder="ex.: 04:A1:B2:C3"></div>
+        <button class="btn ghost">Picar</button></form>
+      <div id="result" aria-live="polite"></div><div id="taplog" class="taplog"></div><div id="queue"></div>
     </div>
     <div id="rejected"></div>
-    <h2>Últimas picagens nesta obra</h2><div class="card" id="recent"><p class="muted">A carregar…</p></div>`;
-  bindSiteSelect('site', loadRecent);
+    <h2 class="eyebrow">Últimas picagens nesta obra</h2><div id="recent">${skel(3)}</div>`;
+  bindSiteSelect('site', () => { loadRecent(); tickClock(); });
   app.querySelectorAll('.dir button').forEach((b) => b.onclick = () => {
     state.dirOverride = b.dataset.d === 'auto' ? null : b.dataset.d; renderDir();
   });
@@ -531,6 +651,15 @@ function viewClock() {
   };
   if (nfcOk) $('#nfc').onclick = toggleNfc;
   renderDir(); renderTapLog(); showQueue(); showRejected(); showClockWarn(); loadRecent();
+  tickClock(); state.tick = setInterval(tickClock, 1000);
+}
+// The big clock: the server's time, in the site's time zone (what the tap will record).
+function tickClock() {
+  const el = $('#clk'); if (!el) return;
+  const site = currentSite(); const tz = site ? siteTz(site.id) : DEFAULT_TZ; const p = tzParts(serverNow().getTime(), tz);
+  el.innerHTML = `${pad2(p.hour % 24)}:${pad2(p.minute)}<small>:${pad2(p.second)}</small>`;
+  const d = $('#clkday');
+  if (d) d.textContent = serverNow().toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long', timeZone: tz }) + ' · ' + tzName(tz);
 }
 // Automatic by default: the server knows if the person is inside. A forced ENTRADA or SAÍDA is for the next tap only.
 function renderDir() {
@@ -542,12 +671,11 @@ function renderDir() {
 }
 
 async function toggleNfc() {
-  const btn = $('#nfc');
-  if (state.nfc) { stopNfc(); btn.textContent = 'Começar a ler cartões'; return; }
+  if (state.nfc) { stopNfc(); return; }
   try {
     const ctrl = new AbortController(); const reader = new NDEFReader();
     await reader.scan({ signal: ctrl.signal });
-    state.nfc = ctrl; btn.textContent = 'A ler… encosta o cartão (toca para parar)';
+    state.nfc = ctrl; nfcLook(true);
     let last = { uid: '', at: 0 };
     reader.onreading = (ev) => {
       const uid = normUid(ev.serialNumber);
@@ -561,7 +689,13 @@ async function toggleNfc() {
     toast(err.name === 'NotAllowedError' ? 'Dá permissão ao NFC no Chrome.' : 'O NFC não arrancou: ' + err.message);
   }
 }
-function stopNfc() { if (state.nfc) { state.nfc.abort(); state.nfc = null; } }
+function stopNfc() { if (state.nfc) { state.nfc.abort(); state.nfc = null; } nfcLook(false); }
+function nfcLook(on) {
+  const b = $('#nfc'); if (!b) return;
+  b.classList.toggle('reading', on); b.setAttribute('aria-pressed', String(on));
+  $('#nfclbl').textContent = on ? 'Encoste o cartão' : 'Tocar para ligar o leitor';
+  $('#nfchelp').textContent = on ? 'O leitor está ligado. Toque aqui para desligar.' : 'Depois é só encostar o cartão às costas do telemóvel.';
+}
 
 // ---- the phone's clock: taps use the server's time (M5)
 const serverNow = () => new Date(Date.now() + (state.clockOffset || 0));
@@ -577,9 +711,9 @@ async function syncClock() {
 function showClockWarn() {
   const el = $('#clockwarn'); if (!el) return;
   const off = state.clockOffset || 0;
-  el.innerHTML = Math.abs(off) > 120000 ? `<div class="result warn" style="font-size:16px"><b>Acerta a hora do telemóvel</b>
-    O relógio deste telemóvel está ${Math.round(Math.abs(off) / 60000)} min ${off > 0 ? 'atrasado' : 'adiantado'}. As picagens usam a hora certa do servidor,
-    mas acerta-o em Definições › Data e hora › Automática.</div>` : '';
+  el.innerHTML = Math.abs(off) > 120000 ? `<div class="result warn">${ic('clock')}<div><b>Acerta a hora do telemóvel</b>
+    Está ${Math.round(Math.abs(off) / 60000)} min ${off > 0 ? 'atrasado' : 'adiantado'}. As picagens usam a hora certa do servidor.
+    ${more('Como acertar', '<p>Definições › Data e hora › Automática.</p>')}</div></div>` : '';
 }
 
 // ---- direction: the server decides; without network, the last direction this phone saw for the card (M7)
@@ -643,7 +777,7 @@ async function warnExpiring(collabId, who, word, seq) {
   const line = state.tapLog.find((x) => x.seq === seq); if (line) { line.note = note; renderTapLog(); }
   if (seq !== state.tapSeq) return;
   const el = $('#result'); if (!el) return;
-  el.innerHTML = `<div class="result warn"><b>${esc(who)}</b>${esc(word)} aceite<div class="small" style="margin-top:6px">${esc(note)}</div></div>`;
+  el.innerHTML = `<div class="result warn">${ic('warn')}<div><b>${esc(who)}</b>${esc(word)} aceite<div class="small" style="margin-top:6px">${esc(note)}</div></div></div>`;
 }
 
 // ---- the offline queue (C2): each tap has its own id; items leave the queue one by one, by id, only when the server answered.
@@ -729,13 +863,14 @@ async function doFlush() {
   } else if (kept) showQueue();
 }
 function showQueue() {
+  showNet();
   const el = $('#queue'); if (!el) return;
   const q = queue(); const me = state.me && state.me.user_id;
   const mine = q.filter((x) => !x._u || x._u === me).length; const other = q.filter((x) => x._u && x._u !== me);
   const accounts = [...new Set(other.map((x) => x._e || 'outra conta'))].join(', ');
-  el.innerHTML = [mine ? `<span class="pill warn">${mine} picagem(ns) à espera de rede</span>${navigator.onLine !== false && !state.offline ? ' <button class="btn ghost small" id="flushNow">Enviar agora</button>' : ''}` : '',
-    other.length ? `<span class="pill warn">${other.length} picagem(ns) de outra conta (${esc(accounts)}), ainda não enviadas</span> Só são enviadas quando essa pessoa voltar a entrar neste telemóvel.` : '']
-    .filter(Boolean).join('<br>');
+  el.innerHTML = [mine ? `<div class="qline"><span class="chip warn">${ic('cloud')}${mine} picagem(ns) à espera de rede</span>${navigator.onLine !== false && !state.offline ? ' <button class="btn ghost small" id="flushNow">Enviar agora</button>' : ''}</div>` : '',
+    other.length ? `<div class="qline"><span class="chip warn wrap">${other.length} picagem(ns) de outra conta (${esc(accounts)}), ainda não enviadas</span> <span class="small muted">Só são enviadas quando essa pessoa voltar a entrar neste telemóvel.</span></div>` : '']
+    .filter(Boolean).join('');
   const b = $('#flushNow'); if (b) b.onclick = () => flushQueue();
 }
 // The taps the server refused after the network came back: who, when, why, and what to do (C2, A3).
@@ -744,14 +879,16 @@ function showRejected() {
   const me = state.me && state.me.user_id;
   const list = load(REJECTED_KEY, []).filter((x) => !x._u || x._u === me);
   if (!list.length) { el.innerHTML = ''; return; }
-  el.innerHTML = `<h2>Picagens recusadas depois de enviadas (${list.length})</h2><div class="card">
-    <p class="small muted">Estas picagens foram feitas sem rede e o servidor recusou-as quando a rede voltou. Ficam aqui até as tratares:
-      se a pessoa trabalhou mesmo, acrescenta a picagem à mão (com o motivo).</p>
-    <table><tr><th>Quando</th><th>Quem</th><th>Porquê</th><th></th></tr>${list.map((x) => `<tr>
-      <td>${esc(fmtTime(x.at, siteTz(x.project)))}<div class="small muted">${x.dir === 'in' ? 'Entrada' : 'Saída'} · ${esc((state.sites.find((s) => s.id === x.project) || {}).cost_center_code || '')}</div></td>
-      <td>${esc(x.name || 'Cartão …' + String(x.uid || '').slice(-4))}</td><td>${esc(x.reason)}</td>
-      <td><button class="btn small ghost" data-addrej="${esc(x.id)}">Acrescentar à mão</button>
-        <button class="btn small ghost" data-donerej="${esc(x.id)}">Já tratei</button></td></tr>`).join('')}</table></div>`;
+  el.innerHTML = `<h2>Picagens recusadas depois de enviadas (${list.length})</h2>
+    <p class="small muted">Feitas sem rede e recusadas quando a rede voltou.</p>
+    ${more('O que fazer', '<p>Ficam aqui até as tratares. Se a pessoa trabalhou mesmo, acrescenta a picagem à mão (com o motivo).</p>')}
+    <div class="list">${list.map((x) => `<div class="card">
+      <div class="wk">${avatar(x.name || '?')}<div class="grow"><div class="nm">${esc(x.name || 'Cartão …' + String(x.uid || '').slice(-4))}</div>
+        <div class="sub">${esc(fmtTime(x.at, siteTz(x.project)))} · ${x.dir === 'in' ? 'Entrada' : 'Saída'}</div></div>
+        <span class="chip code">${esc((state.sites.find((s) => s.id === x.project) || {}).cost_center_code || '')}</span></div>
+      <div class="tags"><span class="chip anom wrap">${ic('x')}${esc(x.reason)}</span></div>
+      <div class="acts"><button class="btn small" data-addrej="${esc(x.id)}">Acrescentar à mão</button>
+        <button class="btn small ghost" data-donerej="${esc(x.id)}">Já tratei</button></div></div>`).join('')}</div>`;
   el.querySelectorAll('[data-addrej]').forEach((b) => b.onclick = () => {
     const x = list.find((y) => y.id === b.dataset.addrej); if (!x) return;
     store(SITE_KEY, x.project);
@@ -775,59 +912,130 @@ function renderTapLog() {
     <b>${esc(x.title)}</b> ${esc(x.text || '')}${x.note ? ` <span class="small">${esc(x.note)}</span>` : ''}</div>`).join('');
 }
 // The big box still shows a tap that was waiting for the network: replace "NÃO VERIFICADA" with the server's verdict.
-function verdictBox(ev, kind, title, text) { if (state.resultId === ev.p_client_event_id) showResult(kind, title, text); }
-function showResult(kind, title, text, seq) {
+function verdictBox(ev, kind, title, text) { if (state.resultId === ev.p_client_event_id) showResult(kind, title, text, undefined, false); }
+function showResult(kind, title, text, seq, flash) {
   if (seq !== undefined) logTap(kind, title, text, seq);
   if (seq !== undefined && seq !== state.tapSeq) return;   // an older tap answering late: only its line in the list
   const el = $('#result'); if (!el) return toast(title + ': ' + text);
-  el.innerHTML = `<div class="result ${kind}"><b>${esc(title)}</b>${esc(text)}</div>`;
+  el.innerHTML = `<div class="result ${kind}">${ic(RESULT_ICON[kind])}<div><b>${esc(title)}</b>${esc(text)}</div></div>`;
+  if (flash !== false) showFlash(kind, title, text);
 }
+// The whole screen in green, red or amber for ~1.6 s: readable from a metre away, with gloves and noise. Tap to close earlier.
+const RESULT_ICON = { ok: 'ok', bad: 'x', warn: 'cloud' };
+function showFlash(kind, title, text) {
+  const f = document.getElementById('flash'); if (!f || !state.ready) return;
+  f.className = kind;
+  f.innerHTML = `<div class="ficon">${ic(RESULT_ICON[kind] || 'warn')}</div><b>${esc(title)}</b><div class="ftext">${esc(text)}</div><div class="fhint">Toque para fechar</div>`;
+  f.hidden = false; clearTimeout(f._h); f._h = setTimeout(hideFlash, 1600);
+}
+function hideFlash() { const f = document.getElementById('flash'); if (f) { clearTimeout(f._h); f.hidden = true; } }
+document.getElementById('flash').addEventListener('click', hideFlash);
 async function loadRecent() {
   const el = $('#recent'); const site = currentSite(); if (!el) return;
-  if (!site) { el.innerHTML = '<p class="muted">Sem obra.</p>'; return; }
-  if (state.offline) { el.innerHTML = '<p class="muted">Sem rede: as últimas picagens aparecem quando a rede voltar.</p>'; return; }
+  if (!site) { el.innerHTML = empty('helmet', 'Sem obra', 'Abre uma obra em Obras.'); return; }
+  if (state.offline) { el.innerHTML = empty('box', 'Sem rede', 'As últimas picagens aparecem quando a rede voltar.'); return; }
   const { data, error } = await core().from('time_events')
     .select('id, event_time, direction, status, reasons, collaborator_id, raw_uid')
     .eq('project_id', site.id).order('event_time', { ascending: false }).limit(15);
   if (error) { el.innerHTML = `<p class="muted">${esc(friendly(error))}</p>`; return; }
-  if (!data.length) { el.innerHTML = '<p class="muted">Ainda não há picagens.</p>'; return; }
+  if (!data.length) { el.innerHTML = `<div class="card">${empty('card', 'Ainda ninguém picou nesta obra', 'Escolhe ENTRADA ou AUTOMÁTICO e encosta o primeiro cartão.')}</div>`; return; }
   const name = (id) => (state.people.find((p) => p.id === id) || {}).full_name;
-  el.innerHTML = `<p class="small muted">Horas: ${esc(tzName(site.timezone || DEFAULT_TZ))}.</p><table><tr><th>Hora</th><th>Quem</th><th></th><th>Resultado</th></tr>${data.map((e) => `<tr>
-    <td>${esc(fmtTime(e.event_time, site.timezone))}</td><td>${esc(name(e.collaborator_id) || 'Cartão ' + (e.raw_uid || '?'))}</td>
-    <td>${e.direction === 'in' ? 'Entrada' : e.direction === 'out' ? 'Saída' : esc(e.direction)}</td>
-    <td>${e.status === 'accepted' ? '<span class="pill ok">aceite</span>' : e.status === 'duplicate' ? '<span class="pill warn">repetida</span>'
-      : `<span class="pill bad">recusada</span> <span class="small">${esc((e.reasons || []).map(reasonText).join(' · '))}</span>`}</td></tr>`).join('')}</table>`;
+  const today = localDay(new Date().toISOString(), site.timezone);
+  el.innerHTML = `<div class="list">${data.slice(0, 8).map((e) => { const who = name(e.collaborator_id) || 'Cartão ' + (e.raw_uid || '?');
+    const when = localDay(e.event_time, site.timezone) === today ? fmtHour(e.event_time, site.timezone) : fmtTime(e.event_time, site.timezone);
+    const dir = e.direction === 'in' ? 'Entrada' : e.direction === 'out' ? 'Saída' : e.direction;
+    return `<div class="card"><div class="wk">${avatar(who)}<div class="grow"><div class="nm">${esc(who)}</div><div class="sub">${esc(dir)} · ${esc(when)}</div></div>
+      ${e.status === 'accepted' ? chip('ok', 'aceite', 'ok') : e.status === 'duplicate' ? chip('warn', 'repetida') : chip('bad', 'recusada', 'x')}</div>
+      ${e.status !== 'accepted' && e.status !== 'duplicate' && (e.reasons || []).length ? `<div class="note small muted" style="margin:6px 0 0 56px">${esc(e.reasons.map(reasonText).join(' · '))}</div>` : ''}</div>`; }).join('')}</div>
+    <p class="small muted">Horas: ${esc(tzName(site.timezone || DEFAULT_TZ))}.</p>`;
 }
 
 // ------------------------------------------------------------------ Na obra
 function viewOnSite() {
-  app.innerHTML = `<h1>Quem está na obra agora</h1>
-    <div class="card"><div class="noprint">${siteSelect('site')}</div>
-    <div id="list"><p class="muted">A carregar…</p></div>
-    <p class="noprint"><button class="btn ghost" id="print">Imprimir lista (emergência)</button></p></div>`;
-  bindSiteSelect('site', loadOnSite);
-  $('#print').onclick = () => window.print();
+  if (!state.onsiteFilter) state.onsiteFilter = 'all';
+  app.innerHTML = `<h1>Na obra agora</h1>
+    <div class="noprint">${siteSelect('site')}</div>
+    <div id="list" style="margin-top:14px">${skel(4)}</div>
+    <p class="noprint"><button class="btn ghost wide" id="print">${ic('print')}Imprimir lista (emergência)</button></p>`;
+  bindSiteSelect('site', () => { $('#list').innerHTML = skel(4); loadOnSite(); });
+  $('#print').onclick = () => { state.onsiteFilter = 'in'; renderOnSite(); window.print(); };
   loadOnSite();
   state.timer = setInterval(loadOnSite, 30000);
 }
+// Who is inside (the emergency list), plus today's picture: on a break, left, and who still lacks an exit.
+// "Em pausa": left less than 2 hours ago after working today (the lunch exit); after that, "Saiu".
+let onSiteSeq = 0;
 async function loadOnSite() {
   const el = $('#list'); const site = currentSite(); if (!el) return;
-  if (!site) { el.innerHTML = ''; return; }
-  const { data, error } = await sb.rpc('mini_on_site', { p_project: site.id });
-  if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
-  el.innerHTML = `<p><span class="big-count">${data.length}</span> pessoa(s) em <b>${esc(site.title)}</b>
-    <span class="small muted">· atualizado ${esc(new Date().toLocaleTimeString('pt-PT'))}</span></p>
-    ${data.length ? `<table><tr><th>Nome</th><th>Nº</th><th>Empresa</th><th>Desde</th></tr>${data.map((r) => `<tr>
-      <td>${esc(r.full_name)}</td><td>${esc(r.employee_number || '')}</td><td>${esc(r.organization)}</td><td>${esc(fmtTime(r.since, site.timezone))}</td></tr>`).join('')}</table>` : ''}`;
+  if (!site) { el.innerHTML = `<div class="card">${empty('helmet', 'Sem obras abertas', 'Abre uma obra em Obras.')}</div>`; return; }
+  const seq = ++onSiteSeq; const tz = siteTz(site.id);
+  const today = localDay(new Date().toISOString(), tz);
+  const y = new Date(today + 'T12:00:00Z'); y.setUTCDate(y.getUTCDate() - 1); const yday = y.toISOString().slice(0, 10);
+  const [on, hrs, per] = await Promise.all([sb.rpc('mini_on_site', { p_project: site.id }),
+    sb.rpc('mini_hours', { p_project: site.id, p_from: yday, p_to: today }), dayPeriods(yday, today, site.id).catch(() => ({}))]);
+  if (seq !== onSiteSeq || !$('#list')) return;
+  if (on.error) { el.innerHTML = `<p>${esc(friendly(on.error))}</p>`; return; }
+  const rows = hrs.error ? null : hrs.data || [];
+  const nowP = tzParts(Date.now(), tz); const nowMin = (nowP.hour % 24) * 60 + nowP.minute;
+  const people = new Map();
+  for (const r of on.data) {
+    people.set(r.collaborator_id, { id: r.collaborator_id, name: r.full_name, num: r.employee_number, org: r.organization, st: 'in', since: r.since });
+  }
+  for (const r of rows || []) {
+    const p = people.get(r.collaborator_id) || { id: r.collaborator_id, name: r.full_name, num: r.employee_number, org: r.organization };
+    const missing = r.shift_date < today && r.anomalies.some((a) => a === 'missing_out' || a === 'open_shift');
+    if (r.shift_date === today) { p.today = r; p.periods = per[r.work_day_id]; }
+    if (missing) { p.missDay = r; if (!p.today) p.periods = per[r.work_day_id]; }
+    if (!p.st) {
+      if (r.shift_date === today && r.last_out) {
+        const ago = (Date.now() - new Date(r.last_out).getTime()) / 60000;
+        p.st = ago < 120 ? 'pause' : 'out'; p.lastOut = r.last_out;
+      } else if (missing) p.st = 'miss';
+    }
+    if (p.st) people.set(p.id, p);
+  }
+  // inside since an earlier day: that day still has no exit
+  for (const p of people.values()) if (p.st === 'in' && p.since && localDay(p.since, tz) < today) p.st = 'miss';
+  const list = [...people.values()];
+  const n = (st) => list.filter((p) => p.st === st).length;
+  state.onsite = { site, list, tz, today, nowMin, partial: !rows, count: on.data.length };
+  renderOnSite();
+}
+function renderOnSite() {
+  const el = $('#list'); const o = state.onsite; if (!el || !o) return;
+  const { site, list, tz, nowMin } = o;
+  const n = (st) => list.filter((p) => p.st === st).length;
+  const f = state.onsiteFilter;
+  const shown = list.filter((p) => f === 'all' || p.st === f || (f === 'in' && p.st === 'miss' && p.since));
+  const LABEL = { in: 'Na obra', pause: 'Em pausa', out: 'Saiu', miss: 'Falta saída' };
+  const filt = [['all', `Todos ${list.length}`], ['in', 'Na obra'], ['pause', 'Em pausa'], ['out', 'Saíram'], ['miss', 'Falta saída']];
+  el.innerHTML = `<div class="kpis">
+      <div class="kpi ok"><b>${o.count}</b><span>na obra</span></div>
+      <div class="kpi info"><b>${o.partial ? '–' : n('pause')}</b><span>em pausa</span></div>
+      <div class="kpi ${n('miss') ? 'warn' : ''}"><b>${o.partial ? '–' : n('miss')}</b><span>falta saída</span></div></div>
+    <p class="small muted"><span class="big-count" style="font-size:20px">${o.count}</span> pessoa(s) em <b>${esc(site.title)}</b> · atualizado ${esc(new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }))}</p>
+    <div class="chips noprint" role="group" aria-label="Filtrar">${filt.map(([k, t]) => `<button class="chip ${k === 'miss' ? 'warn' : ''}" data-f="${k}" aria-pressed="${f === k}">${esc(t)}</button>`).join('')}</div>
+    ${shown.length ? `<div class="list">${shown.map((p) => {
+      const sub = p.st === 'in' ? `entrou ${fmtHour(p.since, tz)} · há ${fmtMin(Math.max(0, Math.round((Date.now() - new Date(p.since).getTime()) / 60000)))}`
+        : p.st === 'miss' ? `${p.missDay ? fmtDate(p.missDay.shift_date) : 'desde ' + fmtTime(p.since, tz)} · sem saída`
+        : `saiu ${fmtHour(p.lastOut, tz)}${p.today ? ' · ' + fmtMin(p.today.worked_minutes) : ''}`;
+      const kind = { in: 'ok', pause: 'info', out: '', miss: 'warn' }[p.st];
+      return `<div class="card"><div class="wk">${avatar(p.name)}<div class="grow"><div class="nm">${esc(p.name)}</div>
+        <div class="sub">${esc(sub)}</div>${p.org ? `<div class="sub">${esc(p.org)}${p.num ? ' · nº ' + esc(p.num) : ''}</div>` : ''}</div>
+        ${chip(kind, LABEL[p.st], p.st === 'in' ? 'ok' : p.st === 'miss' ? 'warn' : '')}</div>
+        ${p.periods ? dayline(p.periods, p.today && p.st !== 'miss' ? { now: nowMin, axis: true } : { axis: true }) : ''}</div>`; }).join('')}</div>`
+    : `<div class="card">${empty('helmet', f === 'all' ? 'Ainda ninguém picou hoje' : 'Ninguém neste filtro', f === 'all' ? 'Quando alguém picar a entrada, aparece aqui.' : '')}</div>`}`;
+  el.querySelectorAll('[data-f]').forEach((b) => b.onclick = () => { state.onsiteFilter = b.dataset.f; renderOnSite(); });
 }
 
 // ------------------------------------------------------------------ Trabalhadores
 async function viewPeople() {
   app.innerHTML = `<h1>Trabalhadores</h1>
-    <div class="card" id="list"><p class="muted">A carregar…</p></div>
-    ${canPeople() ? `<p><button class="btn" id="new">+ Novo trabalhador</button></p>
+    ${canPeople() ? `<p><button class="btn big" id="new">+ Novo trabalhador</button></p>` : ''}
+    <div id="list">${skel(4)}</div>
+    ${canPeople() ? `
     <div class="card" id="newcard" hidden><h2 style="margin-top:0">Novo trabalhador</h2>
-    <p class="small muted">Só para quem ainda não está na lista. Se a pessoa já está, toca no nome dela.</p>
+    <p class="small muted">Só para quem ainda não está na lista.</p>
     <form id="f"><div class="row"><div><label>Nome completo *</label><input name="name" required></div>
       <div><label>NIF *</label><input name="nif" inputmode="numeric" required></div></div>
       <div class="row"><div><label>Nº de trabalhador</label><input name="num"></div>
@@ -836,7 +1044,8 @@ async function viewPeople() {
       ${'NDEFReader' in window ? '<div style="flex:0 0 auto"><button type="button" class="btn ghost" id="read">Ler cartão</button></div>' : ''}</div>
       ${siteSelect('site')}
       <h2>Documentos que travam a entrada</h2>
-      <p class="small muted">Copia as datas do papel e tira uma foto ao documento (ou escolhe o PDF). Sem estes dois válidos, a pessoa não entra na obra. Se ainda não os tens, deixa em branco e regista depois na ficha.</p>
+      <p class="small muted">Sem estes válidos, a pessoa não entra na obra.</p>
+      ${more('Como preencher', '<p>Copia as datas do papel e tira uma foto ao documento (ou escolhe o PDF). Se ainda não os tens, deixa em branco e regista depois na ficha.</p>')}
       ${state.docTypes.filter((t) => t.is_blocking).map((t) => `<fieldset class="doc" data-type="${esc(t.id)}"><legend>${esc(t.name)}</legend>
         <div class="row"><div><label>Data de emissão</label><input name="i_${esc(t.id)}" type="date" max="${isoDay(new Date())}"></div>
         <div><label>Válido até (vazio = não caduca)</label><input name="e_${esc(t.id)}" type="date"></div></div>
@@ -844,9 +1053,10 @@ async function viewPeople() {
       <label class="check"><input type="checkbox" name="seen" required> Vi em papel a identificação e o contrato desta pessoa *</label>
       <label>Notas (opcional)</label><input name="notes" placeholder="ex.: contrato a termo até 12/2026">
       <p class="small muted">Fica guardado, com o teu nome, como prova do que verificaste.</p>
-      <p><button class="btn">Guardar</button></p></form></div>` : ''}`;
+      <p><button class="btn big">Guardar</button></p></form></div>` : ''}`;
   if ($('#f')) {
     $('#new').onclick = () => { $('#newcard').hidden = false; $('#new').hidden = true; $('#newcard').scrollIntoView({ behavior: 'smooth' }); };
+    app.insertBefore($('#newcard'), $('#list'));
     bindSiteSelect('site');
     if ($('#read')) $('#read').onclick = () => readOneCard('input[name=card]');
     $('#f').onsubmit = async (e) => {
@@ -886,22 +1096,25 @@ async function viewPeople() {
   const { data, error } = await sb.rpc('mini_workers');
   const el = $('#list'); if (!el) return;
   if (error) { el.innerHTML = `<p class="muted">${esc(friendly(error))}</p>`; return; }
-  if (!data.length) { el.innerHTML = '<p class="muted">Ainda ninguém.</p>'; return; }
-  const siteCodes = (ids) => ids.map((id) => (state.sites.find((s) => s.id === id) || {}).cost_center_code).filter(Boolean).join(', ');
-  el.innerHTML = `<p class="small muted">Toca num nome para ver os documentos, o cartão e as obras.</p>
-    <table><tr><th>Nome</th><th>Obras</th><th>Estado</th></tr>${data.map((w) => `<tr class="link" data-id="${esc(w.collaborator_id)}">
-    <td><b>${esc(w.full_name)}</b><div class="small muted">${esc(w.employee_number || '')}${w.card_uid ? ' · cartão ' + esc(w.card_uid) : ' · sem cartão'}</div></td>
-    <td>${esc(siteCodes(w.site_ids)) || '<span class="muted">nenhuma</span>'}</td>
-    <td>${!w.is_active ? '<span class="pill">inativo</span>'
-      : w.blocking_problems ? `<span class="pill bad">não entra: ${w.blocking_problems} doc.</span>`
-      : !w.card_uid ? '<span class="pill warn">sem cartão</span>' : '<span class="pill ok">pode entrar</span>'}</td></tr>`).join('')}</table>`;
-  el.querySelectorAll('tr.link').forEach((tr) => tr.onclick = () => { state.worker = tr.dataset.id; go('ficha'); });
+  if (!data.length) { el.innerHTML = `<div class="card">${empty('helmet', 'Ainda não há trabalhadores', canPeople() ? 'Toca em «+ Novo trabalhador» para registar o primeiro.' : 'O escritório regista as pessoas.')}</div>`; return; }
+  const codes = (ids) => ids.map((id) => (state.sites.find((s) => s.id === id) || {}).cost_center_code).filter(Boolean);
+  const okN = data.filter((w) => w.is_active && !w.blocking_problems && w.card_uid).length;
+  el.innerHTML = `<p class="small muted">${data.length} pessoa(s) · ${okN} pode(m) entrar. Toca numa pessoa para ver a ficha.</p>
+    <div class="list">${data.map((w) => `<div class="card link" role="button" tabindex="0" data-id="${esc(w.collaborator_id)}">
+    <div class="wk">${avatar(w.full_name)}<div class="grow"><div class="nm">${esc(w.full_name)}</div>
+      <div class="sub">${w.employee_number ? 'nº ' + esc(w.employee_number) + ' · ' : ''}${w.card_uid ? 'cartão ' + esc(w.card_uid) : 'sem cartão'}</div></div></div>
+    <div class="tags">${!w.is_active ? chip('', 'inativo')
+      : w.blocking_problems ? chip('bad', `não entra: ${w.blocking_problems} documento${w.blocking_problems > 1 ? 's' : ''}`, 'x')
+      : !w.card_uid ? chip('warn', 'sem cartão', 'card') : chip('ok', 'pode entrar', 'ok')}
+      ${codes(w.site_ids).map((c) => `<span class="chip code">${esc(c)}</span>`).join('') || '<span class="chip">sem obra</span>'}</div></div>`).join('')}</div>`;
+  el.querySelectorAll('.link').forEach((c) => { c.onclick = () => { state.worker = c.dataset.id; go('ficha'); };
+    c.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); c.onclick(); } }; });
 }
 
 // One worker: documents, card, sites, active.
 async function viewWorker() {
   const id = state.worker; if (!id) return go('trabalhadores');
-  app.innerHTML = `<p class="noprint"><button class="btn ghost" id="back">‹ Trabalhadores</button></p><div id="w"><p class="muted">A carregar…</p></div>`;
+  app.innerHTML = `<p class="noprint"><button class="btn ghost small" id="back">‹ Trabalhadores</button></p><div id="w">${skel(3)}</div>`;
   $('#back').onclick = () => go('trabalhadores');
   const [ws, ds, us, fs] = await Promise.all([sb.rpc('mini_workers'), sb.rpc('mini_worker_documents', { p_collab: id }),
     isAdmin() ? sb.rpc('mini_app_users') : Promise.resolve({ data: [] }),
@@ -913,31 +1126,34 @@ async function viewWorker() {
   const el = $('#w'); if (!el) return;
   if (ws.error || ds.error) { el.innerHTML = `<p>${esc(friendly(ws.error || ds.error))}</p>`; return; }
   const w = ws.data.find((x) => x.collaborator_id === id); if (!w) { el.innerHTML = '<p>Não encontrado.</p>'; return; }
-  const docState = (d) => ({ ok: '<span class="pill ok">válido</span>', a_caducar: `<span class="pill warn">caduca em ${d.days_left} dia(s)</span>`,
-    caducado: '<span class="pill bad">caducado</span>', em_falta: d.is_blocking ? '<span class="pill bad">em falta</span>' : '<span class="pill">não tem</span>' }[d.state]);
-  el.innerHTML = `<h1>${esc(w.full_name)}</h1>
-    <p class="muted">${esc(w.employee_number || '')} · ${esc(w.organization)} · ${w.is_active ? 'ativo' : '<b>inativo</b>'}</p>
+  const docState = (d) => ({ ok: chip('ok', 'válido', 'ok'), a_caducar: chip('warn', `caduca em ${d.days_left} dia(s)`, 'clock'),
+    caducado: chip('bad', 'caducado', 'x'), em_falta: d.is_blocking ? chip('bad', 'em falta', 'x') : chip('', 'não tem') }[d.state]);
+  const blocked = ds.data.filter((d) => d.is_blocking && ['caducado', 'em_falta'].includes(d.state)).length;
+  el.innerHTML = `<div class="card"><div class="wk">${avatar(w.full_name)}<div class="grow"><h1 style="margin:0">${esc(w.full_name)}</h1>
+      <div class="sub">${w.employee_number ? 'nº ' + esc(w.employee_number) + ' · ' : ''}${esc(w.organization)}</div></div></div>
+      <div class="tags">${!w.is_active ? chip('', 'inativo') : blocked ? chip('bad', `não entra: ${blocked} documento${blocked > 1 ? 's' : ''}`, 'x') : chip('ok', 'ativo', 'ok')}
+        ${w.card_uid ? chip('', 'cartão ' + w.card_uid, 'card') : chip('warn', 'sem cartão', 'card')}</div></div>
     <div class="card"><h2 style="margin-top:0">Documentos e formação</h2>
-      <table><tr><th>Documento</th><th>Validade</th><th>Estado</th></tr>${ds.data.map((d) => `<tr>
-        <td>${esc(d.name)}${d.is_blocking ? ' <span class="small muted">(trava a entrada)</span>' : ''}
+      <table class="rt"><tr><th>Documento</th><th>Validade</th><th>Estado</th></tr>${ds.data.map((d) => `<tr>
+        <td><b>${esc(d.name)}</b>${d.is_blocking ? ' <span class="small muted">(trava a entrada)</span>' : ''}
           ${d.document_number ? `<div class="small muted">nº ${esc(d.document_number)}</div>` : ''}</td>
-        <td>${d.issue_date ? (d.expiration_date ? 'até ' + esc(fmtDate(d.expiration_date)) : 'sem validade') : ''}</td>
-        <td>${docState(d)}${canDocs() && d.issue_date ? (current(d.type_id) && current(d.type_id).file_path
-          ? `<div><button class="btn small ghost" data-file="${esc(current(d.type_id).file_path)}">Ver comprovativo</button></div>`
-          : '<div><span class="pill warn">sem comprovativo</span></div>') : ''}</td></tr>`).join('')}</table>
-      ${canDocs() && older.length ? `<details><summary class="small">Versões antigas (${older.length})</summary>
-        <table>${older.map((x) => `<tr><td>${esc(x.type_name)}<div class="small muted">registado ${esc(fmtDate(x.registered_at))}${x.registered_by ? ' por ' + esc(x.registered_by) : ''}</div></td>
+        <td data-l="Validade">${d.issue_date ? (d.expiration_date ? 'até ' + esc(fmtDate(d.expiration_date)) : 'sem validade') : ''}</td>
+        <td><div class="tags" style="margin:0">${docState(d)}${canDocs() && d.issue_date && !(current(d.type_id) && current(d.type_id).file_path) ? chip('warn', 'sem comprovativo') : ''}</div>
+          ${canDocs() && d.issue_date && current(d.type_id) && current(d.type_id).file_path
+          ? `<div style="margin-top:8px"><button class="btn small ghost" data-file="${esc(current(d.type_id).file_path)}">Ver comprovativo</button></div>` : ''}</td></tr>`).join('')}</table>
+      ${canDocs() && older.length ? `<details class="fold"><summary>Versões antigas (${older.length})</summary><div>
+        <table class="rt">${older.map((x) => `<tr><td><b>${esc(x.type_name)}</b><div class="small muted">registado ${esc(fmtDate(x.registered_at))}${x.registered_by ? ' por ' + esc(x.registered_by) : ''}</div></td>
           <td>${x.expiration_date ? 'até ' + esc(fmtDate(x.expiration_date)) : 'sem validade'}</td>
-          <td>${x.file_path ? `<button class="btn small ghost" data-file="${esc(x.file_path)}">Ver</button>` : '<span class="small muted">só em papel</span>'}</td></tr>`).join('')}</table></details>` : ''}
+          <td>${x.file_path ? `<button class="btn small ghost" data-file="${esc(x.file_path)}">Ver</button>` : '<span class="small muted">só em papel</span>'}</td></tr>`).join('')}</table></div></details>` : ''}
       ${canDocs() ? `<h2>Registar ou renovar</h2>
       <form id="doc"><label>Documento *</label><select name="type" required><option value="">Escolhe o documento…</option>${ds.data.map((d) => `<option value="${esc(d.type_id)}">${esc(d.name)}</option>`).join('')}</select>
         <div class="row"><div><label>Data de emissão *</label><input name="issue" type="date" required max="${isoDay(new Date())}"></div>
         <div><label>Válido até (vazio = não caduca)</label><input name="expiry" type="date"></div></div>
         <label>Número (opcional)</label><input name="num">
         <label>Foto ou PDF do documento *</label><input name="file" type="file" accept="${FILE_ACCEPT}" required>
-        <p class="small muted">Tira uma foto nítida ao documento ou escolhe o PDF (até 10 MB). Fica guardado em privado, nunca se apaga,
-          e só o administrador, o RH e a segurança o podem abrir. Fica escrito que foste tu a verificar, e quando.</p>
-        <p><button class="btn">Guardar documento</button></p></form>` : ''}
+        <p class="small muted">Foto nítida ou PDF, até 10 MB.</p>
+        ${more('Quem vê o ficheiro', '<p>Fica guardado em privado e nunca se apaga. Só o administrador, o RH e a segurança o podem abrir. Fica escrito que foste tu a verificar, e quando.</p>')}
+        <p><button class="btn wide">Guardar documento</button></p></form>` : ''}
     </div>
     ${canPeople() ? `<div class="card"><h2 style="margin-top:0">Cartão</h2>
       <p>${w.card_uid ? 'Cartão atual: <b>' + esc(w.card_uid) + '</b>' : '<b>Sem cartão.</b> Não consegue picar.'}</p>
@@ -945,24 +1161,24 @@ async function viewWorker() {
         ${'NDEFReader' in window ? '<div style="flex:0 0 auto"><button type="button" class="btn ghost" id="read">Ler cartão</button></div>' : ''}</div>
         <label>Porquê? *</label><input name="why" required placeholder="ex.: cartão perdido">
         <p class="small muted">O cartão antigo deixa de funcionar logo.</p>
-        <p><button class="btn">Trocar cartão</button></p></form></div>` : ''}
+        <p><button class="btn wide">Trocar cartão</button></p></form></div>` : ''}
     ${isAdmin() || (state.me && ['hr', 'project_manager'].includes(state.me.role)) ? `<div class="card"><h2 style="margin-top:0">Obras</h2>
       ${activeSites().map((s) => `<label class="check"><input type="checkbox" data-site="${esc(s.id)}" ${w.site_ids.includes(s.id) ? 'checked' : ''}>
         ${esc(s.title)} (${esc(s.cost_center_code)})</label>`).join('') || '<p class="muted">Sem obras abertas.</p>'}
       <p class="small muted">Só pode picar nas obras marcadas.</p></div>` : ''}
     ${isAdmin() ? `<div class="card"><h2 style="margin-top:0">Conta na app</h2>${login ? `
       <p>${esc(login.email)} · ${esc(ROLE_NAMES[login.role] || login.role)} ·
-        ${login.is_active ? '<span class="pill ok">ligada</span>' : '<span class="pill">desligada</span>'}</p>
-      <p><button class="btn ghost" id="toggleLogin">${login.is_active ? 'Desligar a conta' : 'Ligar a conta'}</button></p>` : w.is_active ? `
+        ${login.is_active ? chip('ok', 'ligada', 'ok') : chip('', 'desligada')}</p>
+      <p><button class="btn ghost wide" id="toggleLogin">${login.is_active ? 'Desligar a conta' : 'Ligar a conta'}</button></p>` : w.is_active ? `
       <p class="small muted">Dá a esta pessoa acesso à app para picar, ver quem está na obra e validar horas.</p>
       <form id="login"><label>Email *</label><input name="email" type="email" required autocomplete="off">
         <label>Papel</label><select name="role"><option value="supervisor">Encarregado</option><option value="hse">Técnico de segurança</option><option value="hr">Secretariado / RH</option></select>
-        <p class="small muted">O secretariado vê os NIFs, os documentos e as horas de todas as obras, e tem de usar a app de códigos.</p>
-        <p><button class="btn">Criar conta</button></p></form><div id="newpw"></div>` : '<p class="muted">Pessoa inativa: sem conta.</p>'}</div>` : ''}
+        ${more('O que cada papel vê', '<p>O secretariado vê os NIFs, os documentos e as horas de todas as obras, e tem de usar a app de códigos.</p>')}
+        <p><button class="btn wide">Criar conta</button></p></form><div id="newpw"></div>` : '<p class="muted">Pessoa inativa: sem conta.</p>'}</div>` : ''}
     ${canPeople() ? `<div class="card"><h2 style="margin-top:0">${w.is_active ? 'Desativar' : 'Reativar'}</h2>
       <form id="act"><label>Porquê? *</label><input name="why" required placeholder="${w.is_active ? 'ex.: terminou o contrato' : 'ex.: voltou a ser contratado'}">
       <p class="small muted">${w.is_active ? 'Deixa de poder entrar em qualquer obra e o cartão é anulado. O histórico fica guardado.' : 'Depois de reativar, dá-lhe um cartão.'}</p>
-      <p><button class="btn ${w.is_active ? 'danger' : ''}">${w.is_active ? 'Desativar' : 'Reativar'}</button></p></form></div>` : ''}`;
+      <p><button class="btn wide ${w.is_active ? 'danger' : ''}">${w.is_active ? 'Desativar' : 'Reativar'}</button></p></form></div>` : ''}`;
   if ($('#doc')) $('#doc').onsubmit = async (e) => {
     e.preventDefault(); const f = new FormData(e.target); const btn = e.target.querySelector('.btn'); btn.disabled = true;
     btn.textContent = 'A enviar…';
@@ -993,9 +1209,9 @@ async function viewWorker() {
     if (error && error.context && error.context.json) { try { msg = (await error.context.json()).error || msg; } catch (_) {} }
     if (error) return toast(friendly({ message: msg }));
     e.target.hidden = true;
-    $('#newpw').innerHTML = `<div class="result warn"><b>${esc(data.password)}</b>Palavra-passe temporária de ${esc(data.email)}</div>
+    $('#newpw').innerHTML = `<div class="result warn">${ic('key')}<div><b>${esc(data.password)}</b>Palavra-passe temporária de ${esc(data.email)}</div></div>
       <p><b>Dá-a à pessoa em mão ou diz-lha de viva voz.</b> Não a envies por mensagem nem email. Só aparece agora.
-      No primeiro login, a pessoa escolhe a sua palavra-passe.</p><p><button class="btn ghost" id="pwdone">Já entreguei</button></p>`;
+      No primeiro login, a pessoa escolhe a sua palavra-passe.</p><p><button class="btn wide" id="pwdone">Já entreguei</button></p>`;
     $('#pwdone').onclick = () => viewWorker();
   };
   if ($('#toggleLogin')) $('#toggleLogin').onclick = async () => {
@@ -1025,8 +1241,8 @@ async function findByNif(nif) {
 function offerExisting(p) {
   const card = $('#newcard'); if (!card) return;
   let box = $('#dup'); if (!box) { box = document.createElement('div'); box.id = 'dup'; card.prepend(box); }
-  box.innerHTML = `<div class="result warn" style="font-size:16px"><b>Já existe</b>${esc(p.full_name)} já está registado com esse NIF.
-    <p><button class="btn" id="opendup">Abrir a ficha de ${esc(p.full_name)}</button></p></div>`;
+  box.innerHTML = `<div class="result warn">${ic('warn')}<div><b>Já existe</b>${esc(p.full_name)} já está registado com esse NIF.
+    <p><button class="btn" id="opendup">Abrir a ficha de ${esc(p.full_name)}</button></p></div></div>`;
   $('#opendup').onclick = () => { state.worker = p.id; go('ficha'); };
   box.scrollIntoView({ behavior: 'smooth' });
 }
@@ -1043,8 +1259,8 @@ async function readOneCard(sel) {
 // ------------------------------------------------------------------ Segurança
 function viewSafety() {
   app.innerHTML = `<h1>Segurança</h1>
-    <div class="card"><div class="noprint">${siteSelect('site')}</div><div id="list"><p class="muted">A carregar…</p></div>
-    <p class="noprint"><button class="btn ghost" id="print">Imprimir</button></p></div>
+    <div class="noprint">${siteSelect('site')}</div><div id="list" style="margin-top:14px">${skel(3)}</div>
+    <p class="noprint"><button class="btn ghost wide" id="print">${ic('print')}Imprimir</button></p>
     ${isAdmin() ? `<h2 class="noprint">O que trava a entrada</h2><div class="card noprint" id="types"></div>` : ''}`;
   bindSiteSelect('site', loadSafety);
   $('#print').onclick = () => window.print();
@@ -1057,19 +1273,24 @@ async function loadSafety() {
   const { data, error } = await sb.rpc('mini_safety_alerts', { p_project: site.id });
   if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
   const blocked = new Set(data.filter((r) => r.is_blocking && r.state !== 'a_caducar').map((r) => r.collaborator_id));
-  if (!data.length) { el.innerHTML = `<p class="result ok" style="font-size:17px"><b>Tudo em dia</b>Ninguém atribuído a ${esc(site.title)} tem documentos em falta ou a caducar.</p>`; return; }
+  if (!data.length) { el.innerHTML = `<div class="card">${empty('check', 'Tudo em dia', `Ninguém atribuído a ${site.title} tem documentos em falta ou a caducar.`)}</div>`; return; }
   const label = { em_falta: 'em falta', caducado: 'caducado', a_caducar: 'a caducar' };
-  el.innerHTML = `<p><span class="big-count">${blocked.size}</span> pessoa(s) <b>não podem entrar</b> em ${esc(site.title)}</p>
-    <table><tr><th>Quem</th><th>Documento</th><th>Estado</th></tr>${data.map((r) => `<tr class="link" data-id="${esc(r.collaborator_id)}">
-    <td>${esc(r.full_name)}<div class="small muted">${esc(r.employee_number || '')}</div></td>
-    <td>${esc(r.document)}${r.is_blocking ? '' : ' <span class="small muted">(não trava)</span>'}</td>
-    <td><span class="pill ${r.state === 'a_caducar' || !r.is_blocking ? 'warn' : 'bad'}">${label[r.state]}${r.expiration_date ? ' ' + esc(fmtDate(r.expiration_date)) : ''}</span></td></tr>`).join('')}</table>
+  const byP = new Map();
+  for (const r of data) { const p = byP.get(r.collaborator_id) || { id: r.collaborator_id, name: r.full_name, num: r.employee_number, docs: [] }; p.docs.push(r); byP.set(r.collaborator_id, p); }
+  const soon = [...byP.values()].filter((p) => !blocked.has(p.id)).length;
+  el.innerHTML = `${blocked.size ? `<div class="alert bad">${ic('shield')}<div><span class="big-count">${blocked.size}</span> pessoa(s) <b>não podem entrar</b> em ${esc(site.title)}</div></div>`
+      : `<div class="alert ok">${ic('shield')}<div><span class="big-count">${blocked.size}</span> pessoa(s) <b>não podem entrar</b> em ${esc(site.title)}</div></div>`}
+    ${soon ? `<p class="small muted">${soon} pessoa(s) com documentos a caducar ou que não travam.</p>` : ''}
+    <div class="list">${[...byP.values()].sort((a, b) => blocked.has(b.id) - blocked.has(a.id)).map((p) => `<div class="card link" data-id="${esc(p.id)}" role="button" tabindex="0">
+      <div class="wk">${avatar(p.name)}<div class="grow"><div class="nm">${esc(p.name)}</div><div class="sub">${p.num ? 'nº ' + esc(p.num) : ''}</div></div>
+        ${blocked.has(p.id) ? chip('bad', 'não entra', 'x') : chip('warn', 'atenção', 'warn')}</div>
+      <div class="tags">${p.docs.map((r) => `<span class="chip ${r.state === 'a_caducar' || !r.is_blocking ? 'warn' : 'bad'} wrap">${esc(r.document)}: ${label[r.state]}${r.expiration_date ? ' ' + esc(fmtDate(r.expiration_date)) : ''}${r.is_blocking ? '' : ' (não trava)'}</span>`).join('')}</div></div>`).join('')}</div>
     ${canDocs() ? '<p class="small muted noprint">Toca numa pessoa para registar o documento.</p>' : ''}`;
-  el.querySelectorAll('tr.link').forEach((tr) => tr.onclick = () => { state.worker = tr.dataset.id; go('ficha'); });
+  el.querySelectorAll('.link').forEach((c) => c.onclick = () => { state.worker = c.dataset.id; go('ficha'); });
 }
 function showDocTypes() {
   const el = $('#types'); if (!el) return;
-  el.innerHTML = `<p class="small muted">Um documento que trava é obrigatório para todos: sem ele válido, a entrada é recusada.</p>
+  el.innerHTML = `<p class="small muted">Sem um documento que trava válido, a entrada é recusada.</p>
     ${state.docTypes.map((t) => `<label class="check"><input type="checkbox" data-type="${esc(t.id)}" ${t.is_blocking ? 'checked' : ''}> ${esc(t.name)}</label>`).join('')}`;
   el.querySelectorAll('input[data-type]').forEach((cb) => cb.onchange = async () => {
     const why = prompt(cb.checked ? 'Porque é que este documento passa a travar a entrada?' : 'Porque é que este documento deixa de travar a entrada?');
@@ -1086,23 +1307,28 @@ function viewHours() {
   if (!state.weekStart) state.weekStart = monday(new Date());
   const from = state.weekStart; const to = new Date(from); to.setDate(to.getDate() + 6);
   const site = currentSite(); const tz = site ? siteTz(site.id) : DEFAULT_TZ;
+  const short = (d) => d.toLocaleDateString('pt-PT', { day: 'numeric', month: 'short' });
   app.innerHTML = `<h1>Mapa de horas</h1>
-    <div class="card"><div class="noprint">${siteSelect('site')}</div>
-      <div class="row noprint" style="margin-top:10px"><div style="flex:0 0 auto"><button class="btn ghost" id="prev">‹ Semana anterior</button></div>
-        <div style="flex:0 0 auto"><button class="btn ghost" id="next">Semana seguinte ›</button></div></div>
-      <p><b>Semana de ${esc(fmtDate(isoDay(from)))} a ${esc(fmtDate(isoDay(to)))}</b> <span class="small muted">· ${esc(tzName(tz))}</span></p>
-      <div id="list"><p class="muted">A carregar…</p></div>
-      <p class="noprint"><button class="btn" id="all" hidden>Validar todos os dias sem problemas</button>
-        <button class="btn ghost" id="print">Imprimir</button></p></div>
+    <div class="noprint">${siteSelect('site')}</div>
+    <div class="row noprint" style="margin:12px 0 4px;flex-wrap:nowrap;align-items:center">
+      <button class="btn ghost small" id="prev" style="flex:0 0 auto" aria-label="Semana anterior">‹</button>
+      <div style="text-align:center;flex:1 1 auto"><b>${esc(short(from))} – ${esc(short(to))}</b><div class="small muted">${esc(tzName(tz))}</div></div>
+      <button class="btn ghost small" id="next" style="flex:0 0 auto" aria-label="Semana seguinte">›</button></div>
+    <p class="print-only"><b>Semana de ${esc(fmtDate(isoDay(from)))} a ${esc(fmtDate(isoDay(to)))}</b></p>
+    <div id="hsum"></div>
+    <div id="list">${skel(3)}</div>
+    <div class="acts noprint"><button class="btn big" id="all" hidden>${ic('ok')}Validar todos os dias sem problemas</button>
+      <button class="btn ghost wide" id="print">${ic('print')}Imprimir</button></div>
     <div class="card noprint" id="fix" hidden></div>
-    <div class="card noprint"><h2 style="margin-top:0">Picagem esquecida</h2>
+    <div class="card noprint" style="margin-top:16px"><h2 style="margin-top:0">Picagem esquecida</h2>
+      <p class="small muted">Acrescenta uma entrada ou saída que faltou, com o motivo.</p>
+      ${more('Regras', `<p>Escreve a hora como se vê no relógio da obra (${esc(tzName(tz))}). Fica marcada como acrescentada à mão, com o teu nome e o motivo.
+          Não podes acrescentar picagens a ti próprio. Uma entrada só é aceite se a pessoa podia entrar a essa hora (ativa, com os documentos).</p>`)}
       <form id="miss"><label>Trabalhador</label><select name="who" id="who"></select>
         <div class="row"><div><label>Entrada ou saída</label><select name="dir"><option value="in">Entrada</option><option value="out">Saída</option></select></div>
-        <div><label>Dia e hora * <span class="small">(${esc(tzName(tz))})</span></label><input name="at" type="datetime-local" required></div></div>
+        <div><label>Dia e hora * <span class="small muted">(${esc(tzName(tz))})</span></label><input name="at" type="datetime-local" required></div></div>
         <label>Porquê? *</label><input name="why" required placeholder="ex.: esqueceu-se de picar à saída, confirmado por mim">
-        <p class="small muted">Escreve a hora como se vê no relógio da obra. Fica marcada como acrescentada à mão, com o teu nome e o motivo.
-          Não podes acrescentar picagens a ti próprio. Uma entrada só é aceite se a pessoa podia entrar a essa hora (ativa, com os documentos).</p>
-        <p><button class="btn">Acrescentar</button></p></form></div>`;
+        <p style="margin-top:16px"><button class="btn wide">Acrescentar</button></p></form></div>`;
   bindSiteSelect('site', viewHours);
   $('#prev').onclick = () => { state.weekStart.setDate(state.weekStart.getDate() - 7); viewHours(); };
   $('#next').onclick = () => { state.weekStart.setDate(state.weekStart.getDate() + 7); viewHours(); };
@@ -1143,52 +1369,68 @@ function setWorker(id, name) {
   if (![...sel.options].some((o) => o.value === id)) sel.add(new Option(name || 'Trabalhador', id));
   sel.value = id;
 }
-// One period: entry and exit in their columns. Several: each period on its own line across both columns.
-function inOutCells(r, periods, tz) {
+// Status chips: the same words and colours on every screen.
+const DAY_STATUS = { registered: chip('reg', 'por validar'), supervisor_validated: chip('val', 'validado', 'ok'),
+  hr_validated: chip('apr', 'aprovado', 'ok'), sent_to_payroll: chip('fech', 'fechado') };
+const dayLabel = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('pt-PT', { weekday: 'short', day: '2-digit', month: '2-digit' });
+// One day of one person: date, periods on one line (wrapping only between periods), hours on the right, status.
+function periodsOf(r, periods, tz) {
   const list = periodList(periods);
-  if (list.length > 1) return `<td colspan="2">${list.map((p) => `<div>${esc(p)}</div>`).join('')}<div class="small muted">${list.length} períodos</div></td>`;
-  if (list.length === 1) { const [a, b] = list[0].split('–'); return `<td>${esc(a)}</td><td>${esc(b)}</td>`; }
-  return `<td>${esc(fmtHour(r.first_in, tz))}</td><td>${esc(fmtHour(r.last_out, tz))}</td>`;
+  return list.length ? list : (r.first_in || r.last_out ? [`${fmtHour(r.first_in, tz) || '?'}–${fmtHour(r.last_out, tz) || '?'}`] : []);
 }
-const DAY_STATUS = { registered: '<span class="pill">por validar</span>', supervisor_validated: '<span class="pill ok">validado</span>',
-  hr_validated: '<span class="pill ok">validado RH</span>', sent_to_payroll: '<span class="pill ok">salários</span>' };
 let hoursSeq = 0;
 async function loadHours(from, to) {
   const el = $('#list'); const site = currentSite(); if (!el) return [];
-  if (!site) { el.innerHTML = ''; return []; }
+  if (!site) { el.innerHTML = `<div class="card">${empty('helmet', 'Sem obras abertas', 'Abre uma obra em Obras.')}</div>`; return []; }
   const seq = ++hoursSeq; const tz = siteTz(site.id);
   const [{ data, error }, back, per] = await Promise.all([sb.rpc('mini_hours', { p_project: site.id, p_from: from, p_to: to }),
     sb.rpc('mini_returned_days', { p_project: site.id, p_from: from, p_to: to }), dayPeriods(from, to, site.id)]);
   if (seq !== hoursSeq || !$('#list')) return [];   // a newer week or site was asked meanwhile
   if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return []; }
   const returned = Object.fromEntries(((back && back.data) || []).map((b) => [b.work_day_id, b.reason]));
-  if (!data.length) { el.innerHTML = '<p class="muted">Sem horas nesta semana.</p>'; return []; }
+  if (!data.length) { el.innerHTML = `<div class="card">${empty('calendar', 'Sem horas nesta semana', 'As horas aparecem aqui quando as pessoas picarem nesta obra.')}</div>`; return []; }
   const byWorker = {};
   for (const r of data) (byWorker[r.collaborator_id] = byWorker[r.collaborator_id] || []).push(r);
   const me = state.me && state.me.collaborator_id;
-  const day = (r) => esc(new Date(r.shift_date + 'T12:00:00').toLocaleDateString('pt-PT', { weekday: 'short', day: '2-digit', month: '2-digit' }));
+  const today = localDay(new Date().toISOString(), tz); const nowP = tzParts(Date.now(), tz);
   const fixBtn = (r, label, cls) => `<button class="btn ${cls} small" data-${label === 'Corrigir' ? 'fix' : 'taps'}="${esc(r.collaborator_id)}" data-day="${esc(r.shift_date)}" data-name="${esc(r.full_name)}">${label}</button>`;
+  const actions = (r) => {
+    if (!['registered', 'supervisor_validated'].includes(r.status) || r.collaborator_id === me) return '';
+    let b;
+    if (r.status !== 'registered' || onlyOpenToday(r, tz)) b = fixBtn(r, 'Picagens', 'ghost');
+    else if (r.anomalies.length) b = fixBtn(r, 'Corrigir', '');
+    else if (r.overtime_minutes) b = `<button class="btn small" data-ok="${esc(r.work_day_id)}" data-ot="1">Validar com extra</button>
+              <button class="btn ghost small" data-ok="${esc(r.work_day_id)}" data-ot="0">Sem extra</button>` + fixBtn(r, 'Picagens', 'ghost');
+    else b = `<button class="btn small" data-ok="${esc(r.work_day_id)}">Validar</button>` + fixBtn(r, 'Picagens', 'ghost');
+    return `<div class="acts noprint">${b}</div>`;
+  };
+  const n = { todo: 0, anom: 0, ok: 0, open: 0 };
   el.innerHTML = Object.values(byWorker).map((rows) => {
     const tot = rows.reduce((a, r) => ({ w: a.w + r.worked_minutes, o: a.o + r.overtime_minutes }), { w: 0, o: 0 });
-    return `<h2>${esc(rows[0].full_name)} <span class="small muted">${esc(rows[0].employee_number || '')}</span></h2>
-    <table><tr><th>Dia</th><th>Entrada</th><th>Saída</th><th>Horas</th><th>Estado</th></tr>${rows.map((r) => `<tr>
-      <td>${day(r)}</td>
-      ${inOutCells(r, per[r.work_day_id], tz)}
-      <td>${esc(fmtMin(r.worked_minutes))}${r.overtime_minutes ? `<div class="small">${esc(fmtMin(r.overtime_minutes))} extra${r.overtime_approved === false ? ' (recusadas)' : ''}</div>` : ''}
-        ${r.has_manual ? '<div class="small muted">tem picagem à mão</div>' : ''}</td>
-      <td>${r.anomalies.length ? `<span class="pill ${onlyOpenToday(r, tz) ? 'warn' : 'bad'}">${esc(r.anomalies.map((a) => anomalyText(a, r.shift_date, tz)).join(', '))}</span>` : DAY_STATUS[r.status] || esc(r.status)}
-        ${returned[r.work_day_id] ? `<div class="small"><span class="pill warn">devolvido pelo secretariado</span> ${esc(returned[r.work_day_id])}</div>` : ''}
-        ${['registered', 'supervisor_validated'].includes(r.status) && r.collaborator_id !== me ? `<div class="noprint" style="margin-top:4px">${r.status !== 'registered' ? fixBtn(r, 'Picagens', 'ghost')
-          : onlyOpenToday(r, tz) ? fixBtn(r, 'Picagens', 'ghost')
-          : r.anomalies.length ? fixBtn(r, 'Corrigir', 'ghost')
-          : (r.overtime_minutes ? `<button class="btn small" data-ok="${esc(r.work_day_id)}" data-ot="1">Validar com extra</button>
-              <button class="btn ghost small" data-ok="${esc(r.work_day_id)}" data-ot="0">Sem extra</button>`
-          : `<button class="btn small" data-ok="${esc(r.work_day_id)}">Validar</button>`) + ' ' + fixBtn(r, 'Picagens', 'ghost')}</div>` : ''}</td></tr>`).join('')}
-      <tr><td colspan="3"><b>Total da semana</b></td><td colspan="2"><b>${esc(fmtMin(tot.w))}</b>${tot.o ? ` <span class="small">(${esc(fmtMin(tot.o))} extra)</span>` : ''}</td></tr></table>`;
+    return `<div class="card pcard"><div class="wk">${avatar(rows[0].full_name)}<div class="grow"><h2 style="margin:0;font-size:19px">${esc(rows[0].full_name)}</h2>
+      <div class="sub">${rows[0].employee_number ? 'nº ' + esc(rows[0].employee_number) : ''}</div></div></div>
+    ${rows.map((r) => {
+      const anom = r.anomalies.length; if (onlyOpenToday(r, tz)) n.open++; else if (anom) n.anom++; else if (r.status === 'registered') n.todo++; else n.ok++;
+      const list = periodsOf(r, per[r.work_day_id], tz);
+      return `<div class="day"><div class="day-h"><span class="d">${esc(dayLabel(r.shift_date))}</span>
+        ${anom ? `<span class="chip ${onlyOpenToday(r, tz) ? 'warn' : 'anom'}">${ic(onlyOpenToday(r, tz) ? 'clock' : 'warn')}${esc(r.anomalies.map((a) => anomalyText(a, r.shift_date, tz)).join(', '))}</span>` : DAY_STATUS[r.status] || chip('', r.status)}
+        <span class="hrs">${esc(fmtMin(r.worked_minutes))}</span></div>
+      <div class="per">${periodsHtml(list) || '<span class="muted">sem picagens</span>'}</div>
+      ${list.length ? dayline(list.join(' · '), r.shift_date === today ? { now: (nowP.hour % 24) * 60 + nowP.minute } : {}) : ''}
+      ${r.overtime_minutes || r.has_manual || returned[r.work_day_id] ? `<div class="tags">
+        ${r.overtime_minutes ? chip(r.overtime_approved === false ? '' : 'info', `${fmtMin(r.overtime_minutes)} extra${r.overtime_approved === false ? ' (recusadas)' : ''}`) : ''}
+        ${r.has_manual ? chip('', 'tem picagem à mão') : ''}
+        ${returned[r.work_day_id] ? chip('dev', 'devolvido pelo secretariado') : ''}</div>` : ''}
+      ${returned[r.work_day_id] ? `<div class="note">${esc(returned[r.work_day_id])}</div>` : ''}
+      ${actions(r)}</div>`; }).join('')}
+    <div class="ptotal"><span>Total da semana</span><span class="hrs">${esc(fmtMin(tot.w))}${tot.o ? ` <span class="small">(${esc(fmtMin(tot.o))} extra)</span>` : ''}</span></div></div>`;
   }).join('') + '<p class="small muted print-only">Assinatura do encarregado: ______________________</p>';
+  const sum = $('#hsum');
+  if (sum) sum.innerHTML = `<div class="kpis noprint"><div class="kpi ${n.todo ? 'hot' : ''}"><b>${n.todo}</b><span>dias a validar</span></div>
+    <div class="kpi ${n.anom ? 'warn' : ''}"><b>${n.anom}</b><span>com problemas</span></div><div class="kpi ok"><b>${n.ok}</b><span>validados</span></div></div>`;
   // Bulk validation only for plain days: no problem, no overtime, not one's own, and never a day the office sent back (M4).
   const easy = data.filter((r) => r.status === 'registered' && !r.anomalies.length && !r.overtime_minutes && r.collaborator_id !== me && !returned[r.work_day_id]);
-  const all = $('#all'); if (all) { all.hidden = !easy.length; all.onclick = () => validate(easy.map((r) => r.work_day_id), null); }
+  const all = $('#all'); if (all) { all.hidden = !easy.length; all.lastChild.textContent = `Validar ${easy.length} dia(s) sem problemas`; all.onclick = () => validate(easy.map((r) => r.work_day_id), null); }
   el.querySelectorAll('button[data-ok]').forEach((b) => b.onclick = () =>
     validate([b.dataset.ok], b.dataset.ot === undefined ? null : b.dataset.ot === '1'));
   el.querySelectorAll('button[data-fix], button[data-taps]').forEach((b) => b.onclick = () => fixDay(b.dataset.fix || b.dataset.taps, b.dataset.day, b.dataset.name));
@@ -1208,13 +1450,13 @@ async function fixDay(collabId, day, name) {
   const box = $('#fix'); if (!box) return;
   box.hidden = false;
   box.innerHTML = `<h2 style="margin-top:0">Picagens de ${esc(name || '')}, ${esc(fmtDate(day))}</h2>
-    <p class="small muted">Inclui o dia antes e o dia depois. Horas: ${esc(tzName(tz))}. Uma picagem errada (por exemplo uma ENTRADA picada em vez de SAÍDA)
-      anula-se aqui, com o motivo: fica no registo como anulada e as horas são recalculadas.</p>
-    ${taps.length ? `<table><tr><th>Dia e hora</th><th></th><th></th></tr>${taps.map((e) => `<tr${localDay(e.effective_time, tz) === day ? '' : ' class="muted"'}>
-      <td>${esc(fmtTime(e.effective_time, tz))}</td>
-      <td>${e.direction === 'in' ? 'Entrada' : e.direction === 'out' ? 'Saída' : esc(e.direction)}${e.manual ? `<div class="small muted">à mão: ${esc(e.manual_reason || '')}</div>` : ''}</td>
-      <td><button class="btn small ghost" data-void="${esc(e.event_id)}">Anular</button></td></tr>`).join('')}</table>` : '<p class="muted">Sem picagens.</p>'}
-    <p><button class="btn ghost small" id="fixclose">Fechar</button></p>`;
+    <p class="small muted">Com o dia antes e o dia depois · ${esc(tzName(tz))}.</p>
+    ${more('Anular uma picagem errada', '<p>Uma picagem errada (por exemplo uma ENTRADA picada em vez de SAÍDA) anula-se aqui, com o motivo: fica no registo como anulada e as horas são recalculadas.</p>')}
+    ${taps.length ? taps.map((e) => `<div class="day wk${localDay(e.effective_time, tz) === day ? '' : ' muted'}">
+      ${chip(e.direction === 'in' ? 'ok' : 'val', e.direction === 'in' ? 'Entrada' : e.direction === 'out' ? 'Saída' : e.direction)}
+      <div class="grow"><b class="tnum">${esc(fmtTime(e.effective_time, tz))}</b>${e.manual ? `<div class="small muted">à mão: ${esc(e.manual_reason || '')}</div>` : ''}</div>
+      <button class="btn small ghost" data-void="${esc(e.event_id)}">Anular</button></div>`).join('') : '<p class="muted">Sem picagens.</p>'}
+    <p><button class="btn ghost wide" id="fixclose">Fechar</button></p>`;
   $('#fixclose').onclick = () => { box.hidden = true; };
   box.querySelectorAll('button[data-void]').forEach((b) => b.onclick = () => voidTap(b.dataset.void, collabId, day, name));
   const f = $('#miss'); setWorker(collabId, name);
@@ -1237,9 +1479,8 @@ async function voidTap(eventId, collabId, day, name) {
 // ------------------------------------------------------------------ Secretariado (RH): todas as obras, aprovar, fechar o mês
 // The site validates, the office approves or sends a day back, and closes the month for payroll.
 // After closing, nobody can change those days (the database refuses).
-const OFFICE_STATUS = { registered: '<span class="pill warn">na obra: por validar</span>',
-  supervisor_validated: '<span class="pill">validado na obra</span>', hr_validated: '<span class="pill ok">aprovado</span>',
-  sent_to_payroll: '<span class="pill ok">fechado: salários</span>' };
+const OFFICE_STATUS = { registered: chip('reg', 'na obra: por validar'), supervisor_validated: chip('val', 'validado na obra', 'ok'),
+  hr_validated: chip('apr', 'aprovado', 'ok'), sent_to_payroll: chip('fech', 'fechado: salários') };
 function monthRange(ym) {
   const [y, m] = ym.split('-').map(Number);
   return { from: `${ym}-01`, to: isoDay(new Date(y, m, 0, 12)) };
@@ -1250,22 +1491,24 @@ function viewOffice() {
   const { from, to } = monthRange(state.officeMonth);
   const sites = state.sites;
   app.innerHTML = `<h1>Secretariado</h1>
-    <div class="card noprint"><div class="row"><div><label>Mês</label><input type="month" id="month" value="${esc(state.officeMonth)}"></div></div>
-      <p class="small muted">Todas as obras. O encarregado valida na obra, tu aprovas aqui, e no fim do mês fechas para os salários.
-        Olha com atenção para as picagens marcadas «à mão», «sem rede, chegou tarde» e «próprio cartão».</p>
-      <div id="sum"></div></div>
-    <div class="card" id="list"><p class="muted">A carregar…</p></div>
+    <div class="noprint"><label for="month">Mês</label><input type="month" id="month" value="${esc(state.officeMonth)}">
+      <p class="small muted">Todas as obras: a obra valida, tu aprovas, no fim do mês fechas.</p>
+      ${more('Em que reparar', '<p>Olha com atenção para as picagens marcadas «à mão», «sem rede, chegou tarde» e «próprio cartão»: aparecem a amarelo no dia.</p>')}
+      <div id="sum">${skel(1)}</div></div>
+    <div id="list">${skel(3)}</div>
     <div class="card noprint"><h2 style="margin-top:0">Salários</h2>
-      <p class="small muted">A folha tem uma linha por pessoa e obra, com as horas normais, as extra aprovadas, as noturnas e as de descanso ou feriado, mais um resumo por pessoa. Abre no Excel, no Google Sheets ou no telemóvel.</p>
-      <p><button class="btn ghost" id="sheet">Descarregar a folha do mês (Excel)</button></p>
-      <p><button class="btn ghost" id="prim">Ficheiro para o Primavera (Relógio de Ponto)</button></p>
-      <p class="small muted">Horas extra aprovadas, uma linha por pessoa, dia e tipo (1.ª hora, seguintes, descanso, feriado, e os mesmos acima das 100 h do ano). As noturnas não vão neste ficheiro. No Primavera: Recursos Humanos › Alterações Mensais › Relógio de Ponto. O "Nº de trabalhador" tem de ser o número do funcionário no Primavera.</p>
-      <details id="primcfg"><summary>Configurar o ficheiro do Primavera</summary><div id="primform"><p class="muted">A carregar…</p></div></details>
+      <p class="small muted">Folha Excel do mês e ficheiro para o Primavera.</p>
+      ${more('O que leva a folha', '<p>Uma linha por pessoa e obra, com as horas normais, as extra aprovadas, as noturnas e as de descanso ou feriado, mais um resumo por pessoa. Abre no Excel, no Google Sheets ou no telemóvel.</p>')}
+      <div class="acts"><button class="btn wide" id="sheet">Descarregar a folha do mês (Excel)</button>
+        <button class="btn ghost wide" id="prim">Ficheiro para o Primavera (Relógio de Ponto)</button></div>
+      ${more('Sobre o ficheiro do Primavera', '<p>Horas extra aprovadas, uma linha por pessoa, dia e tipo (1.ª hora, seguintes, descanso, feriado, e os mesmos acima das 100 h do ano). As noturnas não vão neste ficheiro. No Primavera: Recursos Humanos › Alterações Mensais › Relógio de Ponto. O "Nº de trabalhador" tem de ser o número do funcionário no Primavera.</p>')}
+      <details class="fold" id="primcfg"><summary><span>Configurar o ficheiro do Primavera<span class="sub">Códigos de horas extra, formato e posições</span></span></summary><div id="primform">${skel(1)}</div></details>
       <div id="close"></div></div>
     <div class="card noprint"><h2 style="margin-top:0">Registo de tempos (ACT)</h2>
-      <p class="small muted">O registo legal das entradas e saídas de uma obra (Código do Trabalho, art. 202). Guarda-o 5 anos e mostra-o se a inspeção pedir.</p>
-      <label>Obra</label><select id="actsite">${sites.map((s) => `<option value="${esc(s.id)}">${esc(s.title)} (${esc(s.cost_center_code)})</option>`).join('')}</select>
-      <p><button class="btn ghost" id="act">Descarregar o registo do mês (Excel)</button></p></div>`;
+      <p class="small muted">Registo legal das entradas e saídas de uma obra. Guardar 5 anos.</p>
+      ${more('Porquê', '<p>Código do Trabalho, art. 202. Mostra-o se a inspeção pedir.</p>')}
+      <label for="actsite">Obra</label><select id="actsite">${sites.map((s) => `<option value="${esc(s.id)}">${esc(s.title)} (${esc(s.cost_center_code)})</option>`).join('')}</select>
+      <div class="acts"><button class="btn ghost wide" id="act">Descarregar o registo do mês (Excel)</button></div></div>`;
   $('#month').onchange = (e) => { if (e.target.value) { state.officeMonth = e.target.value; viewOffice(); } };
   $('#sheet').onclick = () => downloadPayroll(from, to);
   $('#prim').onclick = () => downloadPrimavera(from, to);
@@ -1280,32 +1523,41 @@ async function loadOffice(from, to) {
   const el = $('#list'); if (!el) return;
   const [{ data, error }, man, per] = await Promise.all([sb.rpc('mini_hours_office', { p_from: from, p_to: to }),
     sb.rpc('mini_manual_taps', { p_from: from, p_to: to }), dayPeriods(from, to)]);
-  if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  if (!$('#list')) return;
+  if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; $('#sum').innerHTML = ''; return; }
   const manual = {};
   for (const m of (man && man.data) || []) (manual[m.work_day_id] = manual[m.work_day_id] || []).push(m);
   const n = (st) => data.filter((r) => r.status === st).length;
-  $('#sum').innerHTML = `<p>${n('registered')} por validar na obra · <b>${n('supervisor_validated')} à tua espera</b> · ${n('hr_validated')} aprovados · ${n('sent_to_payroll')} fechados</p>
-    ${n('supervisor_validated') ? '<p><button class="btn" id="approveAll">Aprovar todos os dias validados na obra</button></p>' : ''}`;
-  if (!data.length) el.innerHTML = '<p class="muted">Sem horas neste mês.</p>';
+  $('#sum').innerHTML = `<div class="kpis k4">
+      <div class="kpi"><b>${n('registered')}</b> <span>por validar na obra</span></div>
+      <div class="kpi ${n('supervisor_validated') ? 'hot' : ''}"><b>${n('supervisor_validated')}</b> <span>à tua espera</span></div>
+      <div class="kpi ok"><b>${n('hr_validated')}</b> <span>aprovados</span></div>
+      <div class="kpi"><b>${n('sent_to_payroll')}</b> <span>fechados</span></div></div>
+    ${n('supervisor_validated') ? `<p><button class="btn big acc" id="approveAll">${ic('ok')}Aprovar todos os dias validados na obra</button></p>` : ''}`;
+  if (!data.length) el.innerHTML = `<div class="card">${empty('calendar', 'Sem horas neste mês', 'Escolhe outro mês, ou espera que as obras piquem.')}</div>`;
   else {
     const byWorker = {};
     for (const r of data) (byWorker[r.collaborator_id] = byWorker[r.collaborator_id] || []).push(r);
     const me = state.me && state.me.collaborator_id;
     el.innerHTML = Object.values(byWorker).map((rows) => {
       const tot = rows.reduce((a, r) => a + r.worked_minutes, 0);
-      return `<h2>${esc(rows[0].full_name)} <span class="small muted">${esc(rows[0].employee_number || '')} · ${esc(fmtMin(tot))} no mês</span></h2>
-      <table><tr><th>Dia</th><th>Obra</th><th>Entrada / saída</th><th>Horas</th><th>Estado</th></tr>${rows.map((r) => `<tr>
-        <td>${esc(new Date(r.shift_date + 'T12:00:00').toLocaleDateString('pt-PT', { weekday: 'short', day: '2-digit', month: '2-digit' }))}</td>
-        <td>${esc(r.project_code)}</td>
-        <td>${periodList(per[r.work_day_id]).map((p) => `<div>${esc(p)}</div>`).join('') || `${esc(fmtHour(r.first_in, siteTz(r.project_id)))} – ${esc(fmtHour(r.last_out, siteTz(r.project_id)))}`}</td>
-        <td>${esc(fmtMin(r.worked_minutes))}${r.overtime_minutes ? `<div class="small">${esc(fmtMin(r.overtime_minutes))} extra ${r.overtime_approved ? 'aprovadas' : r.overtime_approved === false ? 'recusadas' : 'por decidir'}</div>` : ''}</td>
-        <td>${r.anomalies.length ? `<span class="pill bad">${esc(r.anomalies.map((a) => anomalyText(a, r.shift_date, siteTz(r.project_id))).join(', '))}</span>` : OFFICE_STATUS[r.status] || esc(r.status)}
-          ${r.supervisor_name && r.status !== 'registered' ? `<div class="small muted">por ${esc(r.supervisor_name)}</div>` : ''}
-          ${r.returned_reason ? `<div class="small">Devolvido: ${esc(r.returned_reason)}</div>` : ''}
-          ${(manual[r.work_day_id] || []).map((m) => `<div class="small"><span class="pill warn">${esc(tapKind(m.reason))}</span> ${m.direction === 'in' ? 'Entrada' : 'Saída'} ${esc(fmtHour(m.effective_time, siteTz(r.project_id)))}, por ${esc(m.added_by || '?')}: ${esc(m.reason || '')}</div>`).join('')}
-          ${['supervisor_validated', 'hr_validated'].includes(r.status) && r.collaborator_id !== me ? `<div class="noprint" style="margin-top:4px">
-            ${r.status === 'supervisor_validated' ? `<button class="btn small" data-approve="${esc(r.work_day_id)}">Aprovar</button>` : ''}
-            <button class="btn ghost small" data-back="${esc(r.work_day_id)}">Devolver</button></div>` : ''}</td></tr>`).join('')}</table>`;
+      const warn = rows.filter((r) => r.anomalies.length || (manual[r.work_day_id] || []).length || r.returned_reason).length;
+      return `<div class="card pcard"><div class="wk">${avatar(rows[0].full_name)}<div class="grow"><h2 style="margin:0;font-size:19px">${esc(rows[0].full_name)}</h2>
+        <div class="sub">${rows[0].employee_number ? 'nº ' + esc(rows[0].employee_number) + ' · ' : ''}${rows.length} dia(s)</div></div>
+        <div style="text-align:right"><div class="hrs" style="font-size:20px;font-weight:800">${esc(fmtMin(tot))}</div>${warn ? chip('warn', `${warn} aviso(s)`) : ''}</div></div>
+      ${rows.map((r) => { const tz = siteTz(r.project_id); const list = periodsOf(r, per[r.work_day_id], tz);
+        return `<div class="day"><div class="day-h"><span class="d">${esc(dayLabel(r.shift_date))}</span><span class="chip code">${esc(r.project_code)}</span>
+          <span class="hrs">${esc(fmtMin(r.worked_minutes))}</span></div>
+        <div class="per">${periodsHtml(list) || '<span class="muted">sem picagens</span>'}</div>
+        <div class="tags">${r.anomalies.length ? (onlyOpenToday(r, tz) ? chip('warn', r.anomalies.map((a) => anomalyText(a, r.shift_date, tz)).join(', '), 'clock') : chip('anom', r.anomalies.map((a) => anomalyText(a, r.shift_date, tz)).join(', '), 'warn')) : OFFICE_STATUS[r.status] || chip('', r.status)}
+          ${r.overtime_minutes ? chip(r.overtime_approved ? 'info' : r.overtime_approved === false ? '' : 'warn', `${fmtMin(r.overtime_minutes)} extra ${r.overtime_approved ? 'aprovadas' : r.overtime_approved === false ? 'recusadas' : 'por decidir'}`) : ''}
+          ${r.returned_reason ? chip('dev', 'devolvido') : ''}</div>
+        ${r.supervisor_name && r.status !== 'registered' ? `<div class="note">por ${esc(r.supervisor_name)}</div>` : ''}
+        ${r.returned_reason ? `<div class="note">Devolvido: ${esc(r.returned_reason)}</div>` : ''}
+        ${(manual[r.work_day_id] || []).map((m) => `<div class="note"><span class="chip warn">${esc(tapKind(m.reason))}</span> ${m.direction === 'in' ? 'Entrada' : 'Saída'} ${esc(fmtHour(m.effective_time, tz))}, por ${esc(m.added_by || '?')}: ${esc(m.reason || '')}</div>`).join('')}
+        ${['supervisor_validated', 'hr_validated'].includes(r.status) && r.collaborator_id !== me ? `<div class="acts noprint">
+          ${r.status === 'supervisor_validated' ? `<button class="btn small" data-approve="${esc(r.work_day_id)}">Aprovar</button>` : ''}
+          <button class="btn ghost small" data-back="${esc(r.work_day_id)}">Devolver</button></div>` : ''}</div>`; }).join('')}</div>`;
     }).join('');
   }
   const ready = data.filter((r) => r.status === 'supervisor_validated' && r.collaborator_id !== (state.me && state.me.collaborator_id));
@@ -1316,11 +1568,11 @@ async function loadOffice(from, to) {
   const box = $('#close'); if (!box) return;
   const pending = data.filter((r) => ['registered', 'supervisor_validated'].includes(r.status)).length;
   const toClose = data.filter((r) => r.status === 'hr_validated').length;
-  if (to >= isoDay(new Date())) box.innerHTML = '<p class="small muted">O mês ainda não acabou: só se fecha depois do último dia.</p>';
-  else if (pending) box.innerHTML = `<p class="small"><span class="pill warn">${pending} dia(s) por aprovar</span> Aprova ou devolve todos antes de fechar.</p>`;
-  else if (!toClose) box.innerHTML = data.length ? '<p class="small"><span class="pill ok">Mês fechado</span> Estas horas já seguiram para os salários.</p>' : '';
+  if (to >= isoDay(new Date())) box.innerHTML = `<div class="nonfc">${ic('clock')}<span>O mês ainda não acabou: só se fecha depois do último dia.</span></div>`;
+  else if (pending) box.innerHTML = `<div class="nonfc">${chip('warn', `${pending} dia(s) por aprovar`)}<span>Aprova ou devolve todos antes de fechar.</span></div>`;
+  else if (!toClose) box.innerHTML = data.length ? `<div class="nonfc">${chip('fech', 'Mês fechado')}<span>Estas horas já seguiram para os salários.</span></div>` : '';
   else {
-    box.innerHTML = `<p><button class="btn" id="closeMonth">Fechar o mês para os salários</button></p>
+    box.innerHTML = `<p style="margin-top:16px"><button class="btn big" id="closeMonth">Fechar o mês para os salários</button></p>
       <p class="small muted">Depois de fechar, ninguém pode mudar as horas deste mês.</p>`;
     $('#closeMonth').onclick = async () => {
       if (!confirm('Fechar o mês? Depois disto ninguém pode mudar as horas deste mês.')) return;
@@ -1369,22 +1621,24 @@ async function showPrimaveraSettings() {
   if (error) { box.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
   const sel = (name, opts, cur) => `<select name="${name}">${opts.map(([v, l]) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
   box.innerHTML = `<form id="primf">
-    <p class="small warn">Copia estes valores do ecrã do Primavera da tua empresa (Recursos Humanos › Tabelas › Horas Extra, e a configuração do Relógio de Ponto). Os códigos são inventados por cada empresa: o GestNow não adivinha nenhum.</p>
-    <h2>Códigos de horas extra da empresa</h2>
+    <p class="small muted">Copia estes valores do Primavera da tua empresa.</p>
+    ${more('Onde estão', '<p>Recursos Humanos › Tabelas › Horas Extra, e a configuração do Relógio de Ponto. Os códigos são inventados por cada empresa: o GestNow não adivinha nenhum.</p>')}
+    <h3>Códigos de horas extra da empresa</h3>
     ${PRIM_CATS.map(([k, label]) => `<label>${esc(label)}</label><input name="c_${k}" value="${esc(c.codes[k] || '')}" maxlength="10" autocapitalize="characters">`).join('')}
-    <p class="small muted">Um tipo sem código não sai no ficheiro: o GestNow avisa e não o deixa tirar enquanto houver horas desse tipo.</p>
-    <h2>Formato</h2>
+    <p class="small muted">Um tipo sem código não sai no ficheiro (o GestNow avisa).</p>
+    <h3>Formato</h3>
     <div class="row"><div><label>Data</label>${sel('date_format', PRIM_DATES.map((f) => [f, f]), c.date_format)}</div>
       <div><label>Decimais</label>${sel('decimal', [[',', 'vírgula (1,50)'], ['.', 'ponto (1.50)']], c.decimal)}</div></div>
     <div class="row"><div><label>Tempo: encher à esquerda com</label>${sel('time_pad', [['zeros', 'zeros (001,50)'], ['spaces', 'espaços (  1,50)']], c.time_pad)}</div>
-      <div><label><input type="checkbox" name="implied_decimals" ${c.implied_decimals ? 'checked' : ''}> Sem separador (150 = 1,50)</label></div></div>
+      <div><label class="check"><input type="checkbox" name="implied_decimals" ${c.implied_decimals ? 'checked' : ''}> Sem separador (150 = 1,50)</label></div></div>
     <div class="row"><div><label>Letra de hora extra</label><input name="overtime_marker" value="${esc(c.overtime_marker)}" maxlength="1"></div>
       <div><label>Letra de horas</label><input name="unit_marker" value="${esc(c.unit_marker)}" maxlength="1"></div></div>
-    <h2>Posições no ficheiro (coluna inicial e tamanho; tamanho 0 = não usa)</h2>
-    <table><tr><th>Campo</th><th>Início</th><th>Tamanho</th></tr>${PRIM_FIELDS.map(([k, label]) => `<tr><td>${esc(label)}</td>
-      <td><input name="p_${k}" type="number" min="1" max="199" value="${esc(c.fields[k][0])}"></td>
-      <td><input name="l_${k}" type="number" min="0" max="50" value="${esc(c.fields[k][1])}"></td></tr>`).join('')}</table>
-    <p><button class="btn">Guardar a configuração</button></p></form>`;
+    <h3>Posições no ficheiro</h3><p class="small muted">Coluna inicial e tamanho (0 = não usa).</p>
+    <div class="wk small muted"><div class="grow">Campo</div><span style="width:84px">Início</span><span style="width:84px">Tamanho</span></div>
+    ${PRIM_FIELDS.map(([k, label]) => `<div class="day wk"><div class="grow" style="font-weight:650">${esc(label)}</div>
+      <input name="p_${k}" type="number" min="1" max="199" value="${esc(c.fields[k][0])}" aria-label="${esc(label)}: início" style="width:84px;flex:0 0 auto">
+      <input name="l_${k}" type="number" min="0" max="50" value="${esc(c.fields[k][1])}" aria-label="${esc(label)}: tamanho" style="width:84px;flex:0 0 auto"></div>`).join('')}
+    <p><button class="btn wide">Guardar a configuração</button></p></form>`;
   $('#primf').onsubmit = async (e) => {
     e.preventDefault(); const f = new FormData(e.target);
     const settings = { codes: Object.fromEntries(PRIM_CATS.map(([k]) => [k, String(f.get('c_' + k) || '').trim().toUpperCase()])),
@@ -1870,22 +2124,28 @@ async function downloadAct(site, from, to) {
 
 // ------------------------------------------------------------------ Obras
 function viewSites() {
-  const label = { execution: '<span class="pill ok">em curso</span>', lead: '<span class="pill">rascunho</span>' };
+  const label = { execution: chip('ok', 'em curso', 'ok'), lead: chip('', 'rascunho') };
+  const flag = (c) => `<span class="chip" title="${c === 'ES' ? 'Espanha' : 'Portugal'}">${c === 'ES' ? '🇪🇸 ES' : '🇵🇹 PT'}</span>`;
+  // the address usually ends with the country already: never write it twice
+  const addr = (s) => String(s.address || '').replace(/[,·\s]*(Portugal|Espanha|España|Spain)\s*$/i, '');
   app.innerHTML = `<h1>Obras</h1>
-    ${isAdmin() || (state.me && state.me.role === 'project_manager') ? `<div class="card"><h2 style="margin-top:0">Abrir obra</h2>
+    ${state.sites.length ? `<div class="list">${state.sites.map((s) => `<div class="card">
+      <div class="wk"><span class="av a${s.country === 'ES' ? 7 : 0}" aria-hidden="true">${ic('crane')}</span><div class="grow"><div class="nm">${esc(s.title)}</div>
+        <div class="sub">${esc(addr(s))}${s.municipality && s.municipality.toLowerCase() !== addr(s).toLowerCase() ? (addr(s) ? ' · ' : '') + 'concelho ' + esc(s.municipality) : ''}</div></div></div>
+      <div class="tags"><span class="chip code">${esc(s.cost_center_code)}</span>${label[s.status] || chip('', s.status)}${flag(s.country)}</div></div>`).join('')}</div>`
+      : `<div class="card">${empty('helmet', 'Ainda não há obras', 'Abre a primeira obra aqui em baixo.')}</div>`}
+    ${isAdmin() || (state.me && state.me.role === 'project_manager') ? `<details class="fold" ${state.sites.length ? '' : 'open'}><summary><span>+ Abrir obra<span class="sub">Cliente, código e nome</span></span></summary><div>
     <form id="f"><div class="row"><div><label>Cliente *</label><input name="client" required placeholder="ex.: Refinaria de Sines"></div>
       <div><label>Código *</label><input name="code" required placeholder="ex.: OB-001"></div></div>
       <label>Nome da obra *</label><input name="title" required placeholder="ex.: Paragem 2026, unidade 3">
       <label>Morada</label><input name="addr">
-      <p class="small muted">A obra abre logo pronta para picar. Os trabalhadores têm de ser atribuídos a ela.</p>
-      <p><button class="btn">Abrir obra</button></p></form></div>` : ''}
-    <h2>Lista</h2><div class="card">${state.sites.length ? `<table><tr><th>Obra</th><th>Código</th><th>Estado</th></tr>${state.sites.map((s) => `<tr>
-      <td>${esc(s.title)}<div class="small muted">${esc(s.address || '')}${s.municipality ? ' · concelho ' + esc(s.municipality) : ''} · ${s.country === 'ES' ? 'Espanha' : 'Portugal'}</div></td><td>${esc(s.cost_center_code)}</td>
-      <td>${label[s.status] || `<span class="pill">${esc(s.status)}</span>`}</td></tr>`).join('')}</table>` : '<p class="muted">Ainda não há obras.</p>'}</div>
+      <p class="small muted">Abre logo pronta para picar. Depois atribui-lhe os trabalhadores.</p>
+      <p><button class="btn wide">Abrir obra</button></p></form></div></details>` : ''}
     ${canSiteDetails() && state.sites.length ? `<h2>País, concelho e feriados da obra</h2><div class="card" id="sitecfg">
-      <p class="small muted">O país decide os feriados nacionais e a hora da obra (Portugal: hora de Lisboa; Espanha: hora de Madrid). O concelho decide o feriado municipal.</p>
-      <label>Obra</label><select id="cfgsite">${state.sites.map((s) => `<option value="${esc(s.id)}" ${currentSite() && currentSite().id === s.id ? 'selected' : ''}>${esc(s.title)} (${esc(s.cost_center_code)})</option>`).join('')}</select>
-      <div id="cfgbody"><p class="muted">A carregar…</p></div></div>` : ''}`;
+      <p class="small muted">O país dá os feriados nacionais e a hora; o concelho, o feriado municipal.</p>
+      ${more('Mais', '<p>Portugal: hora de Lisboa. Espanha: hora de Madrid. Os feriados nacionais contam sozinhos; aqui só se põem os municipais e regionais.</p>')}
+      <label for="cfgsite">Obra</label><select id="cfgsite">${state.sites.map((s) => `<option value="${esc(s.id)}" ${currentSite() && currentSite().id === s.id ? 'selected' : ''}>${esc(s.title)} (${esc(s.cost_center_code)})</option>`).join('')}</select>
+      <div id="cfgbody">${skel(1)}</div></div>` : ''}`;
   if ($('#cfgsite')) { $('#cfgsite').onchange = () => loadSiteDetails($('#cfgsite').value); loadSiteDetails($('#cfgsite').value); }
   if ($('#f')) $('#f').onsubmit = async (e) => {
     e.preventDefault();
@@ -1910,20 +2170,20 @@ async function loadSiteDetails(id) {
   if (seq !== siteCfgSeq || !$('#cfgbody')) return;
   if (error) { box.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
   const hol = d.holidays || [];
-  box.innerHTML = `<p>País: <b>${d.country === 'ES' ? 'Espanha' : 'Portugal'}</b> · Concelho: <b>${esc(d.municipality || 'por escrever')}</b>
+  box.innerHTML = `<p style="margin-top:14px">País: <b>${d.country === 'ES' ? 'Espanha' : 'Portugal'}</b> · Concelho: <b>${esc(d.municipality || 'por escrever')}</b>
       <span class="small muted">· ${esc(tzName(d.timezone))}</span></p>
     ${canSetSite() ? `<form id="cfgf"><div class="row"><div><label>País</label><select name="country">
         <option value="PT" ${d.country !== 'ES' ? 'selected' : ''}>Portugal</option><option value="ES" ${d.country === 'ES' ? 'selected' : ''}>Espanha</option></select></div>
       <div><label>Concelho (município)</label><input name="mun" maxlength="128" value="${esc(d.municipality || '')}" placeholder="ex.: Sines"></div></div>
-      <p><button class="btn">Guardar país e concelho</button></p></form>` : ''}
+      <p><button class="btn wide">Guardar país e concelho</button></p></form>` : ''}
     <h3>Feriados municipais e regionais</h3>
-    ${hol.length ? `<table><tr><th>Dia</th><th>Feriado</th><th></th></tr>${hol.map((h) => `<tr><td>${esc(fmtDate(h.date))}</td><td>${esc(h.name)}</td>
-      <td>${canHolidays() ? `<button class="btn small ghost" data-delhol="${esc(h.id)}">Tirar</button>` : ''}</td></tr>`).join('')}</table>`
+    ${hol.length ? hol.map((h) => `<div class="day wk"><span class="chip code">${esc(fmtDate(h.date))}</span><div class="grow">${esc(h.name)}</div>
+      ${canHolidays() ? `<button class="btn small ghost" data-delhol="${esc(h.id)}">Tirar</button>` : ''}</div>`).join('')
       : '<p class="muted small">Nenhum. Os feriados nacionais (de Portugal ou de Espanha) já contam sozinhos.</p>'}
     ${canHolidays() ? (d.municipality ? `<form id="holf"><div class="row"><div><label>Dia</label><input name="date" type="date" required></div>
       <div><label>Nome</label><input name="name" required minlength="3" placeholder="ex.: Dia do Município"></div></div>
-      <p class="small muted">Vale para todas as obras deste concelho. As horas já picadas nesse dia são recalculadas (dia feriado).</p>
-      <p><button class="btn ghost">Acrescentar feriado</button></p></form>`
+      <p class="small muted">Vale para todas as obras deste concelho; as horas desse dia são recalculadas.</p>
+      <p><button class="btn ghost wide">Acrescentar feriado</button></p></form>`
       : '<p class="small muted">Para acrescentar o feriado municipal, escreve primeiro o concelho da obra.</p>') : ''}`;
   if ($('#cfgf')) $('#cfgf').onsubmit = async (e) => {
     e.preventDefault(); const f = new FormData(e.target);
