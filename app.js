@@ -330,7 +330,7 @@ function showWho() {
 async function loadBasics() {
   const [s, p] = await Promise.all([
     core().from('projects').select('id, title, cost_center_code, status, address').order('title'),
-    core().from('collaborators').select('id, full_name, employee_number, tax_number, job_title, onboarding_status, is_active, organization_id').order('full_name'),
+    core().from('collaborators').select('id, full_name, employee_number, job_title, onboarding_status, is_active, organization_id').order('full_name'),
   ]);
   if (s.error) toast(friendly(s.error));
   if (p.error) toast(friendly(p.error));
@@ -555,7 +555,7 @@ async function viewPeople() {
       if (half) return toast(`${half.name}: falta a data de emissão.`);
       for (const d of docs.filter((x) => x.issue)) { const bad = fileProblem(d.file); if (bad) return toast(`${d.name}: ${bad}`); }
       const nif = String(f.get('nif') || '').replace(/\s/g, '');
-      const dup = state.people.find((p) => p.tax_number === nif);
+      const dup = await findByNif(nif);
       if (dup) return offerExisting(dup);
       const btn = e.target.querySelector('.btn:not(.ghost)'); btn.disabled = true;
       const notes = String(f.get('notes') || '').trim();
@@ -565,7 +565,7 @@ async function viewPeople() {
         p_statement: 'Identificação e contrato vistos em papel.' + (notes ? ' ' + notes : ''), p_job_title: f.get('job') });
       if (error) {
         btn.disabled = false;
-        if (/tax_number/i.test(error.message || '')) { await loadBasics(); const d2 = state.people.find((p) => p.tax_number === nif); if (d2) return offerExisting(d2); }
+        if (/tax_number/i.test(error.message || '')) { const d2 = await findByNif(nif); if (d2) return offerExisting(d2); }
         return toast(friendly(error));
       }
       let failed = 0;
@@ -707,6 +707,13 @@ async function viewWorker() {
     if (error) return toast(friendly(error));
     toast(w.is_active ? 'Desativado.' : 'Reativado. Dá-lhe um cartão.'); await loadBasics(); viewWorker();
   };
+}
+
+// Who already has this NIF? Only admin and HR can ask: the NIF is never sent to the app in lists.
+async function findByNif(nif) {
+  if (!nif) return null;
+  const { data } = await sb.rpc('mini_find_by_nif', { p_nif: nif });
+  return data && data[0] ? { id: data[0].collaborator_id, full_name: data[0].full_name } : null;
 }
 
 // The person is already registered (same NIF): open their sheet instead of a dead-end error.
