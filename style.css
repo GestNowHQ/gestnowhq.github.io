@@ -60,3 +60,6 @@ label.check input { width: 22px; height: 22px; flex: 0 0 auto; }
 @media print { .top, .noprint { display: none !important; } body { background: #fff; color: #000; } .card { border: 0; } }
 fieldset.doc { border: 1px solid var(--line); border-radius: 10px; margin: 10px 0; padding: 4px 12px 10px; }
 fieldset.doc legend { font-weight: 600; padding: 0 6px; }
+
+.who{font-size:13px;opacity:.9;margin:2px 0 6px}
+.who.strong{display:inline-block;background:#f4c430;color:#111;opacity:1;padding:2px 8px;border-radius:6px;font-weight:600}

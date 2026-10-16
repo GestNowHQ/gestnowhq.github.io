@@ -198,7 +198,7 @@ boot();
 
 async function boot() {
   stopNfc(); clearInterval(state.timer);
-  state.ready = false; nav.hidden = true;
+  state.ready = false; nav.hidden = true; document.getElementById('whoami').hidden = true;
   const { data: { session } } = await sb.auth.getSession();
   if (!session) return showLogin();
   const { data: me, error } = await core().from('app_users')
@@ -216,6 +216,7 @@ async function boot() {
   state.ready = true; touch();
   nav.hidden = false;
   await loadBasics();
+  showWho();
   flushQueue();
   go(state.view);
 }
@@ -318,6 +319,14 @@ async function verifyCode(factorId, code) {
 }
 
 // ------------------------------------------------------------------ data
+// Always show who is logged in and with which role, so nobody mistakes one account for another.
+const ROLE_NAMES = { admin: 'Administrador', hr: 'Recursos Humanos', hse: 'Técnico de segurança', finance: 'Finanças',
+  project_manager: 'Diretor de obra', supervisor: 'Encarregado' };
+function showWho() {
+  const me = state.me; const p = me.collaborator_id && state.people.find((x) => x.id === me.collaborator_id);
+  const el = document.getElementById('whoami'); el.textContent = `${p ? p.full_name : me.email} · ${ROLE_NAMES[me.role] || me.role}`;
+  el.className = 'who' + (PRIVILEGED.includes(me.role) ? ' strong' : ''); el.hidden = false;
+}
 async function loadBasics() {
   const [s, p] = await Promise.all([
     core().from('projects').select('id, title, cost_center_code, status, address').order('title'),
@@ -743,7 +752,7 @@ async function loadSafety() {
     <td>${esc(r.full_name)}<div class="small muted">${esc(r.employee_number || '')}</div></td>
     <td>${esc(r.document)}${r.is_blocking ? '' : ' <span class="small muted">(não trava)</span>'}</td>
     <td><span class="pill ${r.state === 'a_caducar' || !r.is_blocking ? 'warn' : 'bad'}">${label[r.state]}${r.expiration_date ? ' ' + esc(fmtDate(r.expiration_date)) : ''}</span></td></tr>`).join('')}</table>
-    <p class="small muted noprint">Toca numa pessoa para registar o documento.</p>`;
+    ${canDocs() ? '<p class="small muted noprint">Toca numa pessoa para registar o documento.</p>' : ''}`;
   el.querySelectorAll('tr.link').forEach((tr) => tr.onclick = () => { state.worker = tr.dataset.id; go('ficha'); });
 }
 function showDocTypes() {
@@ -794,7 +803,7 @@ function viewHours() {
   loadHours(isoDay(from), isoDay(to));
 }
 async function fillWorkerSelect() {
-  const sel = $('#who'); const site = currentSite(); if (!sel || !site) return;
+  const sel = document.getElementById('who'); const site = currentSite(); if (!sel || !site) return;
   const { data } = await sb.rpc('mini_workers');
   const list = (data || []).filter((w) => w.is_active && w.site_ids.includes(site.id));
   sel.innerHTML = list.map((w) => `<option value="${esc(w.collaborator_id)}">${esc(w.full_name)}</option>`).join('')
