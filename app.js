@@ -5,7 +5,7 @@
 const cfg = window.GESTNOW_CONFIG || {};
 const app = document.getElementById('app');
 const nav = document.getElementById('nav');
-const PRIVILEGED = ['admin', 'hr', 'finance'];   // the database asks these roles for MFA (aal2)
+const PRIVILEGED = ['admin', 'hr', 'finance', 'hse', 'project_manager'];   // the database asks these roles for MFA (aal2)
 const QUEUE_KEY = 'gestnow.queue';
 const SITE_KEY = 'gestnow.site';
 
@@ -46,6 +46,8 @@ const ERRORS = [
   [/already sent to payroll|period is locked/i, 'Esse mês já foi fechado para os salários: já não se pode mudar.'],
   [/segregation of duties/i, 'Validaste este dia na obra: tem de ser outra pessoa a aprovar.'],
   [/only HR validates/i, 'Só o secretariado aprova.'],
+  [/too far in the past/i, 'A hora da picagem é antiga demais. Acrescenta-a como picagem esquecida, com o motivo.'],
+  [/more than 7 days old/i, 'Picagem guardada há mais de 7 dias: acrescenta-a como picagem esquecida, com o motivo.'],
   [/simple mode is off/i, 'O modo simples não está ligado nesta empresa.'],
   [/not allowed|insufficient_privilege|permission denied/i, 'Sem permissão. Confirma que entraste com a segunda verificação (código da app).'],
   [/already exists/i, 'Já existe uma obra com esse código.'],
@@ -188,7 +190,7 @@ document.addEventListener('visibilitychange', () => {
 // Inactivity lock: a phone left open (lost, lent, on a table) must not stay logged in.
 // Short for the roles that see personal and health data, a full shift for the site roles.
 const ACTIVE_KEY = 'gestnow.lastActive';
-const IDLE_MIN = (role) => (['admin', 'hr', 'hse', 'finance'].includes(role) ? 15 : 12 * 60);
+const IDLE_MIN = (role) => (['admin', 'hr', 'hse', 'finance', 'project_manager'].includes(role) ? 15 : 12 * 60);
 function touch() { try { localStorage.setItem(ACTIVE_KEY, String(Date.now())); } catch (_) {} }
 function idleTooLong(role) {
   let t = 0; try { t = Number(localStorage.getItem(ACTIVE_KEY)) || 0; } catch (_) {}
@@ -213,7 +215,7 @@ async function boot() {
   if (error || !me) return showMessage('Sem acesso', 'Este utilizador ainda não está ligado a nenhuma empresa. Corre o primeiro-admin.sql com este email.', true);
   if (!me.is_active) return showMessage('Conta desligada', 'A tua conta está desligada. Fala com o administrador.', true);
   if (idleTooLong(me.role)) return idleOut();   // nothing is shown before this check
-  state.me = { ...me, email: session.user.email };
+  state.me = { ...me, email: session.user.email, user_id: session.user.id };
   const { data: aal } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
   if (PRIVILEGED.includes(me.role) && aal.currentLevel !== 'aal2') {
     return aal.nextLevel === 'aal2' ? showMfaVerify() : showMfaEnroll();
@@ -454,12 +456,12 @@ async function sendEvent(ev) {
     if (error && /fetch|network/i.test(error.message || '')) throw error;
     if (error && AUTH_LOST.test(error.message || '') && await sessionGone()) {
       // Never lose a tap because the login ended: keep it and send it after the next login.
-      const q = load(QUEUE_KEY, []); q.push(ev); store(QUEUE_KEY, q);
+      const q = load(QUEUE_KEY, []); q.push({ ...ev, p_was_offline: true, _u: state.me && state.me.user_id }); store(QUEUE_KEY, q);
       return { authLost: true };
     }
     return { data, error };
   } catch (_) {
-    const q = load(QUEUE_KEY, []); q.push({ ...ev, p_was_offline: true }); store(QUEUE_KEY, q); showQueue();
+    const q = load(QUEUE_KEY, []); q.push({ ...ev, p_was_offline: true, _u: state.me && state.me.user_id }); store(QUEUE_KEY, q); showQueue();
     return { queued: true };
   }
 }
@@ -467,13 +469,16 @@ async function flushQueue() {
   if (!state.ready) return;   // only send saved taps when logged in, or they would be refused and lost
   const q = load(QUEUE_KEY, []); if (!q.length) return;
   const left = [];
-  for (const ev of q) {
+  for (const item of q) {
+    // A tap saved under another login waits for that person: never sent with someone else's account.
+    if (item._u && state.me && item._u !== state.me.user_id) { left.push(item); continue; }
+    const { _u, ...ev } = item;
     try {
       const { error } = await sb.rpc('clock_event', ev);
-      if (error && /fetch|network/i.test(error.message || '')) left.push(ev);
-      else if (error && AUTH_LOST.test(error.message || '') && await sessionGone()) left.push(ev);
+      if (error && /fetch|network/i.test(error.message || '')) left.push(item);
+      else if (error && AUTH_LOST.test(error.message || '') && await sessionGone()) left.push(item);
       else if (error) toast('Uma picagem guardada foi recusada: ' + friendly(error));
-    } catch (_) { left.push(ev); }
+    } catch (_) { left.push(item); }
   }
   store(QUEUE_KEY, left.length ? left : undefined); showQueue();
   if (left.length < q.length) toast(`${q.length - left.length} picagem(ns) guardada(s) enviada(s).`);
@@ -917,8 +922,11 @@ function viewOffice() {
 }
 async function loadOffice(from, to) {
   const el = $('#list'); if (!el) return;
-  const { data, error } = await sb.rpc('mini_hours_office', { p_from: from, p_to: to });
+  const [{ data, error }, man] = await Promise.all([sb.rpc('mini_hours_office', { p_from: from, p_to: to }),
+    sb.rpc('mini_manual_taps', { p_from: from, p_to: to })]);
   if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  const manual = {};
+  for (const m of (man && man.data) || []) (manual[m.work_day_id] = manual[m.work_day_id] || []).push(m);
   const n = (st) => data.filter((r) => r.status === st).length;
   $('#sum').innerHTML = `<p>${n('registered')} por validar na obra · <b>${n('supervisor_validated')} à tua espera</b> · ${n('hr_validated')} aprovados · ${n('sent_to_payroll')} fechados</p>
     ${n('supervisor_validated') ? '<p><button class="btn" id="approveAll">Aprovar todos os dias validados na obra</button></p>' : ''}`;
@@ -938,6 +946,7 @@ async function loadOffice(from, to) {
         <td>${r.anomalies.length ? `<span class="pill bad">${esc(r.anomalies.map((a) => ANOMALY[a] || a).join(', '))}</span>` : OFFICE_STATUS[r.status] || esc(r.status)}
           ${r.supervisor_name && r.status !== 'registered' ? `<div class="small muted">por ${esc(r.supervisor_name)}</div>` : ''}
           ${r.returned_reason ? `<div class="small">Devolvido: ${esc(r.returned_reason)}</div>` : ''}
+          ${(manual[r.work_day_id] || []).map((m) => `<div class="small"><span class="pill warn">à mão</span> ${m.direction === 'in' ? 'Entrada' : 'Saída'} ${esc(fmtHour(m.effective_time))}, por ${esc(m.added_by || '?')}: ${esc(m.reason || '')}</div>`).join('')}
           ${['supervisor_validated', 'hr_validated'].includes(r.status) && r.collaborator_id !== me ? `<div class="noprint" style="margin-top:4px">
             ${r.status === 'supervisor_validated' ? `<button class="btn small" data-approve="${esc(r.work_day_id)}">Aprovar</button>` : ''}
             <button class="btn ghost small" data-back="${esc(r.work_day_id)}">Devolver</button></div>` : ''}</td></tr>`).join('')}</table>`;
