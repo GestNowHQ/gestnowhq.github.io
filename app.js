@@ -44,7 +44,7 @@ const ERRORS = [
   [/Failed to fetch|NetworkError|network/i, 'Sem rede. Tenta outra vez.'],
 ];
 
-const state = { me: null, sites: [], people: [], view: 'picar', direction: 'in', nfc: null, timer: null };
+const state = { ready: false, me: null, sites: [], people: [], view: 'picar', direction: 'in', nfc: null, timer: null };
 
 // ------------------------------------------------------------------ helpers
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -104,6 +104,7 @@ boot();
 
 async function boot() {
   stopNfc(); clearInterval(state.timer);
+  state.ready = false; nav.hidden = true;
   const { data: { session } } = await sb.auth.getSession();
   if (!session) return showLogin();
   const { data: me, error } = await core().from('app_users')
@@ -114,13 +115,14 @@ async function boot() {
   if (PRIVILEGED.includes(me.role) && aal.currentLevel !== 'aal2') {
     return aal.nextLevel === 'aal2' ? showMfaVerify() : showMfaEnroll();
   }
+  state.ready = true;
   nav.hidden = false;
   await loadBasics();
   flushQueue();
   go(state.view);
 }
 
-async function signOut() { stopNfc(); nav.hidden = true; await sb.auth.signOut(); }
+async function signOut() { stopNfc(); state.ready = false; nav.hidden = true; await sb.auth.signOut(); }
 
 function showMessage(title, text, withLogout) {
   nav.hidden = true;
@@ -215,6 +217,7 @@ function bindSiteSelect(id, after) {
 }
 
 function go(view) {
+  if (!state.ready) return boot();   // never show a screen before login (and the phone code, when required)
   stopNfc(); clearInterval(state.timer);
   state.view = view;
   nav.querySelectorAll('button[data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === view));
