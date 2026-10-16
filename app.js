@@ -172,7 +172,27 @@ nav.addEventListener('click', (e) => {
 });
 sb.auth.onAuthStateChange((event) => { if (event === 'SIGNED_OUT') boot(); });
 // The session can end outside this tab (Sair in another tab, expired token). Re-check when the user comes back.
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkSession(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  if (state.ready && state.me && idleTooLong(state.me.role)) return idleOut();
+  checkSession();
+});
+
+// Inactivity lock: a phone left open (lost, lent, on a table) must not stay logged in.
+// Short for the roles that see personal and health data, a full shift for the site roles.
+const ACTIVE_KEY = 'gestnow.lastActive';
+const IDLE_MIN = (role) => (['admin', 'hr', 'hse', 'finance'].includes(role) ? 15 : 12 * 60);
+function touch() { try { localStorage.setItem(ACTIVE_KEY, String(Date.now())); } catch (_) {} }
+function idleTooLong(role) {
+  let t = 0; try { t = Number(localStorage.getItem(ACTIVE_KEY)) || 0; } catch (_) {}
+  return Date.now() - t > IDLE_MIN(role) * 60000;
+}
+async function idleOut() { state.idleOut = true; stopNfc(); state.ready = false; nav.hidden = true; await sb.auth.signOut({ scope: 'local' }); }
+let lastTouch = 0;
+['pointerdown', 'keydown'].forEach((ev) => document.addEventListener(ev, () => {
+  if (state.ready && Date.now() - lastTouch > 15000) { lastTouch = Date.now(); touch(); }
+}, { passive: true }));
+setInterval(() => { if (state.ready && state.me && idleTooLong(state.me.role)) idleOut(); }, 30000);
 window.addEventListener('online', flushQueue);
 boot();
 
@@ -185,6 +205,7 @@ async function boot() {
     .select('role, tenant_id, organization_id, collaborator_id, is_active').eq('user_id', session.user.id).maybeSingle();
   if (error || !me) return showMessage('Sem acesso', 'Este utilizador ainda não está ligado a nenhuma empresa. Corre o primeiro-admin.sql com este email.', true);
   if (!me.is_active) return showMessage('Conta desligada', 'A tua conta está desligada. Fala com o administrador.', true);
+  if (idleTooLong(me.role)) return idleOut();   // nothing is shown before this check
   state.me = { ...me, email: session.user.email };
   const { data: aal } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
   if (PRIVILEGED.includes(me.role) && aal.currentLevel !== 'aal2') {
@@ -192,7 +213,7 @@ async function boot() {
   }
   // A login made by the admin comes with a temporary password: the person chooses their own first.
   if (session.user.user_metadata && session.user.user_metadata.must_change_password) return showNewPassword();
-  state.ready = true;
+  state.ready = true; touch();
   nav.hidden = false;
   await loadBasics();
   flushQueue();
@@ -225,7 +246,7 @@ function showMessage(title, text, withLogout) {
 function showLogin() {
   nav.hidden = true;
   app.innerHTML = `<div class="card" style="max-width:420px;margin:30px auto">
-    <h1>Entrar</h1>
+    <h1>Entrar</h1>${state.idleOut ? '<p class="small muted">Saíste automaticamente por estares sem mexer na app. Entra outra vez.</p>' : ''}
     <form id="f"><label>Email</label><input name="email" type="email" autocomplete="username" required>
     <label>Palavra-passe</label><input name="password" type="password" autocomplete="current-password" required>
     <p><button class="btn" style="width:100%">Entrar</button></p></form></div>`;
@@ -234,7 +255,7 @@ function showLogin() {
     const f = new FormData(e.target);
     const { error } = await sb.auth.signInWithPassword({ email: f.get('email'), password: f.get('password') });
     if (error) return toast(friendly(error));
-    boot();
+    state.idleOut = false; touch(); boot();
   };
 }
 
