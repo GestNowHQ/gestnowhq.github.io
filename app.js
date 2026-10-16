@@ -1,4 +1,4 @@
-// GestNow Mini: picagem com cartão, obras, trabalhadores e quem está na obra.
+// GestNow Mini: picagem com cartão, obras, trabalhadores, quem está na obra, documentos e mapa de horas.
 // Sem passo de compilação: ficheiros estáticos, publicáveis em qualquer alojamento com HTTPS.
 'use strict';
 
@@ -38,13 +38,26 @@ const ERRORS = [
   [/duplicate key.*tax_number|tenant_id, tax_number/i, 'Já existe um trabalhador com esse NIF.'],
   [/duplicate key.*employee_number/i, 'Já existe um trabalhador com esse número.'],
   [/uq_credentials_active_uid|duplicate key.*uid/i, 'Esse cartão já pertence a outra pessoa.'],
+  [/write why \(at least (\d+)/i, 'Escreve o motivo (pelo menos umas palavras).'],
   [/at least 10 characters/i, 'Escreve o que foi verificado em papel (pelo menos 10 letras).'],
+  [/already belongs to another person/i, 'Esse cartão já pertence a outra pessoa.'],
+  [/issue date cannot be in the future/i, 'A data de emissão não pode ser no futuro.'],
+  [/expiry date is before the issue date/i, 'A validade não pode ser antes da data de emissão.'],
+  [/event time is in the future/i, 'A hora não pode ser no futuro.'],
+  [/too old for the Mini/i, 'Essa picagem tem mais de 35 dias. Fala com os Recursos Humanos.'],
+  [/cannot add clock-ins for yourself/i, 'Não podes acrescentar picagens a ti próprio.'],
+  [/cannot validate your own hours/i, 'Não podes validar as tuas próprias horas.'],
+  [/has anomalies/i, 'Esse dia tem picagens em falta. Corrige primeiro.'],
+  [/overtime: approve or refuse/i, 'Esse dia tem horas extra: aprova ou recusa.'],
+  [/cannot go to/i, 'Esse dia já foi validado.'],
+  [/up to 2 months/i, 'Escolhe um período até 2 meses.'],
   [/required/i, 'Falta preencher um campo obrigatório.'],
   [/Invalid login credentials/i, 'Email ou palavra-passe errados.'],
   [/Failed to fetch|NetworkError|network/i, 'Sem rede. Tenta outra vez.'],
 ];
 
-const state = { ready: false, me: null, sites: [], people: [], view: 'picar', direction: 'in', nfc: null, timer: null };
+const state = { ready: false, me: null, sites: [], people: [], docTypes: [], view: 'picar', direction: 'in', nfc: null, timer: null,
+  worker: null, weekStart: null };
 
 // ------------------------------------------------------------------ helpers
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -62,10 +75,21 @@ function friendly(err) {
 }
 function reasonText(code) {
   if (REASONS[code]) return REASONS[code];
+  if (code.startsWith('document_invalid:')) {
+    const t = state.docTypes.find((d) => d.code === code.slice(17));
+    if (t) return t.name + ' em falta ou caducado(a)';
+  }
   for (const p in REASON_PREFIX) if (code.startsWith(p)) return REASON_PREFIX[p] + code.slice(p.length);
   return code;
 }
 const fmtTime = (iso) => new Date(iso).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+const fmtDate = (d) => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+const fmtHour = (iso) => iso ? new Date(iso).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }) : '';
+const fmtMin = (m) => { m = m || 0; return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}`; };
+const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const isAdmin = () => state.me && state.me.role === 'admin';
+const canPeople = () => state.me && ['admin', 'hr'].includes(state.me.role);
+const canDocs = () => state.me && ['admin', 'hr', 'hse'].includes(state.me.role);
 const normUid = (v) => String(v || '').replace(/[\s:\-]/g, '').toUpperCase();
 function uuid() {
   if (crypto.randomUUID) return crypto.randomUUID();
@@ -214,6 +238,8 @@ async function loadBasics() {
   if (p.error) toast(friendly(p.error));
   state.sites = s.data || [];
   state.people = p.data || [];
+  const t = await sb.rpc('mini_document_types');
+  state.docTypes = t.error ? [] : (t.data || []);
 }
 const activeSites = () => state.sites.filter((s) => s.status === 'execution');
 function currentSite() {
@@ -236,8 +262,10 @@ function go(view) {
   if (!state.ready) return boot();   // never show a screen before login (and the phone code, when required)
   stopNfc(); clearInterval(state.timer);
   state.view = view;
-  nav.querySelectorAll('button[data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === view));
-  ({ picar: viewClock, naobra: viewOnSite, trabalhadores: viewPeople, obras: viewSites }[view] || viewClock)();
+  const tab = view === 'ficha' ? 'trabalhadores' : view;
+  nav.querySelectorAll('button[data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === tab));
+  ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
+     ficha: viewWorker, obras: viewSites }[view] || viewClock)();
 }
 
 // ------------------------------------------------------------------ Picar
@@ -299,10 +327,20 @@ async function clock(rawUid) {
   if (r.error) { showResult('bad', 'Erro', friendly(r.error)); beep(false); return; }
   const d = r.data; const who = d.name || 'Cartão ' + ev.p_raw;
   const word = state.direction === 'in' ? 'ENTRADA' : 'SAÍDA';
-  if (d.status === 'accepted') { showResult('ok', who, `${word} aceite`); beep(true); }
+  if (d.status === 'accepted') { showResult('ok', who, `${word} aceite`); beep(true); if (state.direction === 'in' && d.collaborator_id) warnExpiring(d.collaborator_id, who, word); }
   else if (d.status === 'duplicate') { showResult('warn', who, 'Já picou há instantes'); beep(true); }
   else { showResult('bad', `${who}: NÃO ENTRA`, (d.reasons || []).map(reasonText).join(' · ')); beep(false); }
   loadRecent();
+}
+// After an accepted entry: say which documents are about to expire (the entry itself is never held up by this).
+async function warnExpiring(collabId, who, word) {
+  const { data, error } = await sb.rpc('mini_worker_documents', { p_collab: collabId });
+  if (error || !data) return;
+  const soon = data.filter((x) => x.state === 'a_caducar');
+  if (!soon.length) return;
+  const el = $('#result'); if (!el) return;
+  el.innerHTML = `<div class="result warn"><b>${esc(who)}</b>${esc(word)} aceite<div class="small" style="margin-top:6px">Atenção: ${soon.map((x) =>
+    `${esc(x.name)} caduca ${x.days_left === 0 ? 'hoje' : `daqui a ${x.days_left} dia(s)`}`).join(' · ')}</div></div>`;
 }
 async function sendEvent(ev) {
   try {
@@ -382,11 +420,9 @@ async function loadOnSite() {
 }
 
 // ------------------------------------------------------------------ Trabalhadores
-function viewPeople() {
-  const status = (p) => !p.is_active ? '<span class="pill">saiu</span>'
-    : p.onboarding_status === 'active' ? '<span class="pill ok">ativo</span>' : '<span class="pill warn">acolhimento</span>';
+async function viewPeople() {
   app.innerHTML = `<h1>Trabalhadores</h1>
-    <div class="card"><h2 style="margin-top:0">Novo trabalhador</h2>
+    ${canPeople() ? `<div class="card"><h2 style="margin-top:0">Novo trabalhador</h2>
     <form id="f"><div class="row"><div><label>Nome completo *</label><input name="name" required></div>
       <div><label>NIF *</label><input name="nif" inputmode="numeric" required></div></div>
       <div class="row"><div><label>Nº de trabalhador</label><input name="num"></div>
@@ -395,35 +431,254 @@ function viewPeople() {
       ${'NDEFReader' in window ? '<div style="flex:0 0 auto"><button type="button" class="btn ghost" id="read">Ler cartão</button></div>' : ''}</div>
       ${siteSelect('site')}
       <label>O que verificaste em papel? *</label>
-      <textarea name="stmt" required placeholder="ex.: Acolhimento de segurança feito a 12/10, ficha médica válida até 03/2027, contrato na CPS."></textarea>
-      <p class="small muted">Fica guardado como prova do acolhimento. Escreve só o que viste mesmo.</p>
-      <p><button class="btn">Guardar</button></p></form></div>
-    <h2>Lista (${state.people.length})</h2>
-    <div class="card">${state.people.length ? `<table><tr><th>Nome</th><th>Nº</th><th>Função</th><th>Estado</th></tr>${state.people.map((p) => `<tr>
-      <td>${esc(p.full_name)}</td><td>${esc(p.employee_number || '')}</td><td>${esc(p.job_title || '')}</td><td>${status(p)}</td></tr>`).join('')}</table>`
-      : '<p class="muted">Ainda ninguém.</p>'}</div>`;
-  bindSiteSelect('site');
-  if ($('#read')) $('#read').onclick = readOneCard;
-  $('#f').onsubmit = async (e) => {
-    e.preventDefault();
-    const f = new FormData(e.target); const btn = e.target.querySelector('.btn:not(.ghost)'); btn.disabled = true;
-    const { error } = await sb.rpc('mini_add_worker', {
-      p_full_name: f.get('name'), p_tax_number: f.get('nif'), p_employee_number: f.get('num'),
-      p_card_uid: normUid(f.get('card')), p_project: $('#site') ? $('#site').value : null,
-      p_statement: f.get('stmt'), p_job_title: f.get('job') });
-    btn.disabled = false;
+      <textarea name="stmt" required placeholder="ex.: Acolhimento de segurança feito a 12/10, ficha médica válida até 03/2027, contrato assinado."></textarea>
+      <p class="small muted">Fica guardado como prova do acolhimento. Escreve só o que viste mesmo. Depois abre a ficha da pessoa para registar a aptidão médica e o acolhimento, senão a entrada é recusada.</p>
+      <p><button class="btn">Guardar</button></p></form></div>` : ''}
+    <h2>Lista</h2><div class="card" id="list"><p class="muted">A carregar…</p></div>`;
+  if ($('#f')) {
+    bindSiteSelect('site');
+    if ($('#read')) $('#read').onclick = () => readOneCard('input[name=card]');
+    $('#f').onsubmit = async (e) => {
+      e.preventDefault();
+      const f = new FormData(e.target); const btn = e.target.querySelector('.btn:not(.ghost)'); btn.disabled = true;
+      const { data, error } = await sb.rpc('mini_add_worker', {
+        p_full_name: f.get('name'), p_tax_number: f.get('nif'), p_employee_number: f.get('num'),
+        p_card_uid: normUid(f.get('card')), p_project: $('#site') ? $('#site').value : null,
+        p_statement: f.get('stmt'), p_job_title: f.get('job') });
+      btn.disabled = false;
+      if (error) return toast(friendly(error));
+      toast('Trabalhador guardado. Regista agora os documentos.');
+      await loadBasics(); state.worker = data; go('ficha');
+    };
+  }
+  const { data, error } = await sb.rpc('mini_workers');
+  const el = $('#list'); if (!el) return;
+  if (error) { el.innerHTML = `<p class="muted">${esc(friendly(error))}</p>`; return; }
+  if (!data.length) { el.innerHTML = '<p class="muted">Ainda ninguém.</p>'; return; }
+  const siteCodes = (ids) => ids.map((id) => (state.sites.find((s) => s.id === id) || {}).cost_center_code).filter(Boolean).join(', ');
+  el.innerHTML = `<p class="small muted">Toca num nome para ver os documentos, o cartão e as obras.</p>
+    <table><tr><th>Nome</th><th>Obras</th><th>Estado</th></tr>${data.map((w) => `<tr class="link" data-id="${esc(w.collaborator_id)}">
+    <td><b>${esc(w.full_name)}</b><div class="small muted">${esc(w.employee_number || '')}${w.card_uid ? ' · cartão ' + esc(w.card_uid) : ' · sem cartão'}</div></td>
+    <td>${esc(siteCodes(w.site_ids)) || '<span class="muted">nenhuma</span>'}</td>
+    <td>${!w.is_active ? '<span class="pill">inativo</span>'
+      : w.blocking_problems ? `<span class="pill bad">não entra: ${w.blocking_problems} doc.</span>`
+      : !w.card_uid ? '<span class="pill warn">sem cartão</span>' : '<span class="pill ok">pode entrar</span>'}</td></tr>`).join('')}</table>`;
+  el.querySelectorAll('tr.link').forEach((tr) => tr.onclick = () => { state.worker = tr.dataset.id; go('ficha'); });
+}
+
+// One worker: documents, card, sites, active.
+async function viewWorker() {
+  const id = state.worker; if (!id) return go('trabalhadores');
+  app.innerHTML = `<p class="noprint"><button class="btn ghost" id="back">‹ Trabalhadores</button></p><div id="w"><p class="muted">A carregar…</p></div>`;
+  $('#back').onclick = () => go('trabalhadores');
+  const [ws, ds] = await Promise.all([sb.rpc('mini_workers'), sb.rpc('mini_worker_documents', { p_collab: id })]);
+  const el = $('#w'); if (!el) return;
+  if (ws.error || ds.error) { el.innerHTML = `<p>${esc(friendly(ws.error || ds.error))}</p>`; return; }
+  const w = ws.data.find((x) => x.collaborator_id === id); if (!w) { el.innerHTML = '<p>Não encontrado.</p>'; return; }
+  const docState = (d) => ({ ok: '<span class="pill ok">válido</span>', a_caducar: `<span class="pill warn">caduca em ${d.days_left} dia(s)</span>`,
+    caducado: '<span class="pill bad">caducado</span>', em_falta: d.is_blocking ? '<span class="pill bad">em falta</span>' : '<span class="pill">não tem</span>' }[d.state]);
+  el.innerHTML = `<h1>${esc(w.full_name)}</h1>
+    <p class="muted">${esc(w.employee_number || '')} · ${esc(w.organization)} · ${w.is_active ? 'ativo' : '<b>inativo</b>'}</p>
+    <div class="card"><h2 style="margin-top:0">Documentos e formação</h2>
+      <table><tr><th>Documento</th><th>Validade</th><th>Estado</th></tr>${ds.data.map((d) => `<tr>
+        <td>${esc(d.name)}${d.is_blocking ? ' <span class="small muted">(trava a entrada)</span>' : ''}
+          ${d.document_number ? `<div class="small muted">nº ${esc(d.document_number)}</div>` : ''}</td>
+        <td>${d.issue_date ? (d.expiration_date ? 'até ' + esc(fmtDate(d.expiration_date)) : 'sem validade') : ''}</td>
+        <td>${docState(d)}</td></tr>`).join('')}</table>
+      ${canDocs() ? `<h2>Registar ou renovar</h2>
+      <form id="doc"><label>Documento</label><select name="type">${ds.data.map((d) => `<option value="${esc(d.type_id)}">${esc(d.name)}</option>`).join('')}</select>
+        <div class="row"><div><label>Data de emissão *</label><input name="issue" type="date" required max="${isoDay(new Date())}"></div>
+        <div><label>Válido até (vazio = não caduca)</label><input name="expiry" type="date"></div></div>
+        <label>Número (opcional)</label><input name="num">
+        <p class="small muted">Regista só o que viste em papel. Fica escrito que foste tu a verificar, e quando.</p>
+        <p><button class="btn">Guardar documento</button></p></form>` : ''}
+    </div>
+    ${canPeople() ? `<div class="card"><h2 style="margin-top:0">Cartão</h2>
+      <p>${w.card_uid ? 'Cartão atual: <b>' + esc(w.card_uid) + '</b>' : '<b>Sem cartão.</b> Não consegue picar.'}</p>
+      <form id="card"><div class="row"><div><label>Cartão novo</label><input name="card" autocomplete="off" placeholder="Encosta o cartão ou escreve o número" required></div>
+        ${'NDEFReader' in window ? '<div style="flex:0 0 auto"><button type="button" class="btn ghost" id="read">Ler cartão</button></div>' : ''}</div>
+        <label>Porquê? *</label><input name="why" required placeholder="ex.: cartão perdido">
+        <p class="small muted">O cartão antigo deixa de funcionar logo.</p>
+        <p><button class="btn">Trocar cartão</button></p></form></div>` : ''}
+    ${isAdmin() || (state.me && ['hr', 'project_manager'].includes(state.me.role)) ? `<div class="card"><h2 style="margin-top:0">Obras</h2>
+      ${activeSites().map((s) => `<label class="check"><input type="checkbox" data-site="${esc(s.id)}" ${w.site_ids.includes(s.id) ? 'checked' : ''}>
+        ${esc(s.title)} (${esc(s.cost_center_code)})</label>`).join('') || '<p class="muted">Sem obras abertas.</p>'}
+      <p class="small muted">Só pode picar nas obras marcadas.</p></div>` : ''}
+    ${canPeople() ? `<div class="card"><h2 style="margin-top:0">${w.is_active ? 'Desativar' : 'Reativar'}</h2>
+      <form id="act"><label>Porquê? *</label><input name="why" required placeholder="${w.is_active ? 'ex.: terminou o contrato' : 'ex.: voltou a ser contratado'}">
+      <p class="small muted">${w.is_active ? 'Deixa de poder entrar em qualquer obra e o cartão é anulado. O histórico fica guardado.' : 'Depois de reativar, dá-lhe um cartão.'}</p>
+      <p><button class="btn ${w.is_active ? 'danger' : ''}">${w.is_active ? 'Desativar' : 'Reativar'}</button></p></form></div>` : ''}`;
+  if ($('#doc')) $('#doc').onsubmit = async (e) => {
+    e.preventDefault(); const f = new FormData(e.target);
+    const { error } = await sb.rpc('mini_add_document', { p_collab: id, p_type: f.get('type'), p_issue: f.get('issue'),
+      p_expiry: f.get('expiry') || null, p_number: f.get('num') || null });
     if (error) return toast(friendly(error));
-    toast('Trabalhador guardado e ativo.');
-    await loadBasics(); viewPeople();
+    toast('Documento guardado.'); viewWorker();
+  };
+  if ($('#read')) $('#read').onclick = () => readOneCard('#card input[name=card]');
+  if ($('#card')) $('#card').onsubmit = async (e) => {
+    e.preventDefault(); const f = new FormData(e.target);
+    const { error } = await sb.rpc('mini_set_card', { p_collab: id, p_card_uid: normUid(f.get('card')), p_reason: f.get('why') });
+    if (error) return toast(friendly(error));
+    toast('Cartão trocado.'); viewWorker();
+  };
+  app.querySelectorAll('input[data-site]').forEach((cb) => cb.onchange = async () => {
+    const { data, error } = await sb.rpc('mini_assign_worker', { p_collab: id, p_project: cb.dataset.site, p_on: cb.checked });
+    if (error) { cb.checked = !cb.checked; return toast(friendly(error)); }
+    toast(cb.checked ? 'Pode picar nesta obra a partir de hoje.' : data === 'amanha'
+      ? 'Foi posto nesta obra hoje: só deixa de poder picar a partir de amanhã.' : 'Já não pode picar nesta obra.');
+  });
+  if ($('#act')) $('#act').onsubmit = async (e) => {
+    e.preventDefault(); const f = new FormData(e.target);
+    if (w.is_active && !confirm(`Desativar ${w.full_name}? Deixa de poder entrar em qualquer obra.`)) return;
+    const { error } = await sb.rpc('mini_set_worker_active', { p_collab: id, p_active: !w.is_active, p_reason: f.get('why') });
+    if (error) return toast(friendly(error));
+    toast(w.is_active ? 'Desativado.' : 'Reativado. Dá-lhe um cartão.'); await loadBasics(); viewWorker();
   };
 }
-async function readOneCard() {
+
+async function readOneCard(sel) {
   try {
     const ctrl = new AbortController(); const reader = new NDEFReader();
     await reader.scan({ signal: ctrl.signal }); toast('Encosta o cartão ao telemóvel.');
-    reader.onreading = (ev) => { app.querySelector('input[name=card]').value = normUid(ev.serialNumber); ctrl.abort(); toast('Cartão lido.'); };
+    reader.onreading = (ev) => { app.querySelector(sel).value = normUid(ev.serialNumber); ctrl.abort(); toast('Cartão lido.'); };
     setTimeout(() => ctrl.abort(), 20000);
   } catch (err) { toast('O NFC não arrancou: ' + err.message); }
+}
+
+// ------------------------------------------------------------------ Segurança
+function viewSafety() {
+  app.innerHTML = `<h1>Segurança</h1>
+    <div class="card"><div class="noprint">${siteSelect('site')}</div><div id="list"><p class="muted">A carregar…</p></div>
+    <p class="noprint"><button class="btn ghost" id="print">Imprimir</button></p></div>
+    ${isAdmin() ? `<h2 class="noprint">O que trava a entrada</h2><div class="card noprint" id="types"></div>` : ''}`;
+  bindSiteSelect('site', loadSafety);
+  $('#print').onclick = () => window.print();
+  loadSafety();
+  if (isAdmin()) showDocTypes();
+}
+async function loadSafety() {
+  const el = $('#list'); const site = currentSite(); if (!el) return;
+  if (!site) { el.innerHTML = ''; return; }
+  const { data, error } = await sb.rpc('mini_safety_alerts', { p_project: site.id });
+  if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  const blocked = new Set(data.filter((r) => r.is_blocking && r.state !== 'a_caducar').map((r) => r.collaborator_id));
+  if (!data.length) { el.innerHTML = `<p class="result ok" style="font-size:17px"><b>Tudo em dia</b>Ninguém atribuído a ${esc(site.title)} tem documentos em falta ou a caducar.</p>`; return; }
+  const label = { em_falta: 'em falta', caducado: 'caducado', a_caducar: 'a caducar' };
+  el.innerHTML = `<p><span class="big-count">${blocked.size}</span> pessoa(s) <b>não podem entrar</b> em ${esc(site.title)}</p>
+    <table><tr><th>Quem</th><th>Documento</th><th>Estado</th></tr>${data.map((r) => `<tr class="link" data-id="${esc(r.collaborator_id)}">
+    <td>${esc(r.full_name)}<div class="small muted">${esc(r.employee_number || '')}</div></td>
+    <td>${esc(r.document)}${r.is_blocking ? '' : ' <span class="small muted">(não trava)</span>'}</td>
+    <td><span class="pill ${r.state === 'a_caducar' || !r.is_blocking ? 'warn' : 'bad'}">${label[r.state]}${r.expiration_date ? ' ' + esc(fmtDate(r.expiration_date)) : ''}</span></td></tr>`).join('')}</table>
+    <p class="small muted noprint">Toca numa pessoa para registar o documento.</p>`;
+  el.querySelectorAll('tr.link').forEach((tr) => tr.onclick = () => { state.worker = tr.dataset.id; go('ficha'); });
+}
+function showDocTypes() {
+  const el = $('#types'); if (!el) return;
+  el.innerHTML = `<p class="small muted">Um documento que trava é obrigatório para todos: sem ele válido, a entrada é recusada.</p>
+    ${state.docTypes.map((t) => `<label class="check"><input type="checkbox" data-type="${esc(t.id)}" ${t.is_blocking ? 'checked' : ''}> ${esc(t.name)}</label>`).join('')}`;
+  el.querySelectorAll('input[data-type]').forEach((cb) => cb.onchange = async () => {
+    const why = prompt(cb.checked ? 'Porque é que este documento passa a travar a entrada?' : 'Porque é que este documento deixa de travar a entrada?');
+    if (!why) { cb.checked = !cb.checked; return; }
+    const { error } = await sb.rpc('mini_set_document_blocking', { p_type: cb.dataset.type, p_blocking: cb.checked, p_reason: why });
+    if (error) { cb.checked = !cb.checked; return toast(friendly(error)); }
+    await loadBasics(); toast('Guardado.'); loadSafety();
+  });
+}
+
+// ------------------------------------------------------------------ Horas
+function monday(d) { const x = new Date(d); x.setHours(12, 0, 0, 0); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; }
+function viewHours() {
+  if (!state.weekStart) state.weekStart = monday(new Date());
+  const from = state.weekStart; const to = new Date(from); to.setDate(to.getDate() + 6);
+  app.innerHTML = `<h1>Mapa de horas</h1>
+    <div class="card"><div class="noprint">${siteSelect('site')}</div>
+      <div class="row noprint" style="margin-top:10px"><div style="flex:0 0 auto"><button class="btn ghost" id="prev">‹ Semana anterior</button></div>
+        <div style="flex:0 0 auto"><button class="btn ghost" id="next">Semana seguinte ›</button></div></div>
+      <p><b>Semana de ${esc(fmtDate(isoDay(from)))} a ${esc(fmtDate(isoDay(to)))}</b></p>
+      <div id="list"><p class="muted">A carregar…</p></div>
+      <p class="noprint"><button class="btn" id="all" hidden>Validar todos os dias sem problemas</button>
+        <button class="btn ghost" id="print">Imprimir</button></p></div>
+    <div class="card noprint"><h2 style="margin-top:0">Picagem esquecida</h2>
+      <form id="miss"><label>Trabalhador</label><select name="who" id="who"></select>
+        <div class="row"><div><label>Entrada ou saída</label><select name="dir"><option value="in">Entrada</option><option value="out">Saída</option></select></div>
+        <div><label>Dia e hora *</label><input name="at" type="datetime-local" required></div></div>
+        <label>Porquê? *</label><input name="why" required placeholder="ex.: esqueceu-se de picar à saída, confirmado por mim">
+        <p class="small muted">Fica marcada como acrescentada à mão, com o teu nome e o motivo. Não podes acrescentar picagens a ti próprio.</p>
+        <p><button class="btn">Acrescentar</button></p></form></div>`;
+  bindSiteSelect('site', viewHours);
+  $('#prev').onclick = () => { state.weekStart.setDate(state.weekStart.getDate() - 7); viewHours(); };
+  $('#next').onclick = () => { state.weekStart.setDate(state.weekStart.getDate() + 7); viewHours(); };
+  $('#print').onclick = () => window.print();
+  $('#miss').onsubmit = async (e) => {
+    e.preventDefault(); const f = new FormData(e.target); const site = currentSite(); if (!site) return;
+    const { error } = await sb.rpc('mini_add_missed_tap', { p_collab: f.get('who'), p_project: site.id, p_direction: f.get('dir'),
+      p_time: new Date(f.get('at')).toISOString(), p_reason: f.get('why') });
+    if (error) return toast(friendly(error));
+    toast('Picagem acrescentada.'); viewHours();
+  };
+  fillWorkerSelect();
+  loadHours(isoDay(from), isoDay(to));
+}
+async function fillWorkerSelect() {
+  const sel = $('#who'); const site = currentSite(); if (!sel || !site) return;
+  const { data } = await sb.rpc('mini_workers');
+  const list = (data || []).filter((w) => w.is_active && w.site_ids.includes(site.id));
+  sel.innerHTML = list.map((w) => `<option value="${esc(w.collaborator_id)}">${esc(w.full_name)}</option>`).join('')
+    || '<option value="">Ninguém atribuído a esta obra</option>';
+}
+const ANOMALY = { double_in: 'duas entradas seguidas', out_without_in: 'saída sem entrada', missing_out: 'falta a saída' };
+const DAY_STATUS = { registered: '<span class="pill">por validar</span>', supervisor_validated: '<span class="pill ok">validado</span>',
+  hr_validated: '<span class="pill ok">validado RH</span>', sent_to_payroll: '<span class="pill ok">salários</span>' };
+async function loadHours(from, to) {
+  const el = $('#list'); const site = currentSite(); if (!el) return;
+  if (!site) { el.innerHTML = ''; return; }
+  const { data, error } = await sb.rpc('mini_hours', { p_project: site.id, p_from: from, p_to: to });
+  if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  if (!data.length) { el.innerHTML = '<p class="muted">Sem horas nesta semana.</p>'; return; }
+  const byWorker = {};
+  for (const r of data) (byWorker[r.collaborator_id] = byWorker[r.collaborator_id] || []).push(r);
+  const me = state.me && state.me.collaborator_id;
+  el.innerHTML = Object.values(byWorker).map((rows) => {
+    const tot = rows.reduce((a, r) => ({ w: a.w + r.worked_minutes, o: a.o + r.overtime_minutes }), { w: 0, o: 0 });
+    return `<h2>${esc(rows[0].full_name)} <span class="small muted">${esc(rows[0].employee_number || '')}</span></h2>
+    <table><tr><th>Dia</th><th>Entrada</th><th>Saída</th><th>Horas</th><th>Estado</th></tr>${rows.map((r) => `<tr>
+      <td>${esc(new Date(r.shift_date + 'T12:00:00').toLocaleDateString('pt-PT', { weekday: 'short', day: '2-digit', month: '2-digit' }))}</td>
+      <td>${esc(fmtHour(r.first_in))}</td><td>${esc(fmtHour(r.last_out))}</td>
+      <td>${esc(fmtMin(r.worked_minutes))}${r.overtime_minutes ? `<div class="small">${esc(fmtMin(r.overtime_minutes))} extra${r.overtime_approved === false ? ' (recusadas)' : ''}</div>` : ''}
+        ${r.has_manual ? '<div class="small muted">tem picagem à mão</div>' : ''}</td>
+      <td>${r.anomalies.length ? `<span class="pill bad">${esc(r.anomalies.map((a) => ANOMALY[a] || a).join(', '))}</span>` : DAY_STATUS[r.status] || esc(r.status)}
+        ${r.status === 'registered' && r.collaborator_id !== me ? `<div class="noprint" style="margin-top:4px">${r.anomalies.length
+          ? `<button class="btn ghost small" data-fix="${esc(r.collaborator_id)}" data-day="${esc(r.shift_date)}">Corrigir</button>`
+          : r.overtime_minutes ? `<button class="btn small" data-ok="${esc(r.work_day_id)}" data-ot="1">Validar com extra</button>
+              <button class="btn ghost small" data-ok="${esc(r.work_day_id)}" data-ot="0">Sem extra</button>`
+          : `<button class="btn small" data-ok="${esc(r.work_day_id)}">Validar</button>`}</div>` : ''}</td></tr>`).join('')}
+      <tr><td colspan="3"><b>Total da semana</b></td><td colspan="2"><b>${esc(fmtMin(tot.w))}</b>${tot.o ? ` <span class="small">(${esc(fmtMin(tot.o))} extra)</span>` : ''}</td></tr></table>`;
+  }).join('') + '<p class="small muted print-only">Assinatura do encarregado: ______________________</p>';
+  const easy = data.filter((r) => r.status === 'registered' && !r.anomalies.length && !r.overtime_minutes && r.collaborator_id !== me);
+  const all = $('#all'); if (all) { all.hidden = !easy.length; all.onclick = () => validate(easy.map((r) => r.work_day_id), null); }
+  el.querySelectorAll('button[data-ok]').forEach((b) => b.onclick = () =>
+    validate([b.dataset.ok], b.dataset.ot === undefined ? null : b.dataset.ot === '1'));
+  el.querySelectorAll('button[data-fix]').forEach((b) => b.onclick = () => fixDay(b.dataset.fix, b.dataset.day));
+}
+async function validate(ids, overtime) {
+  const { data, error } = await sb.rpc('advance_work_days', { p_ids: ids, p_to: 'supervisor_validated', p_overtime_approved: overtime });
+  if (error) return toast(friendly(error));
+  toast(`${data} dia(s) validado(s).`); viewHours();
+}
+// Show the taps of the day and point the form at the missing one.
+async function fixDay(collabId, day) {
+  const site = currentSite(); if (!site) return;
+  const { data, error } = await sb.rpc('mini_day_events', { p_collab: collabId, p_project: site.id, p_day: day });
+  if (error) return toast(friendly(error));
+  const taps = (data || []).filter((e) => e.effective_time.slice(0, 10) >= day).map((e) =>
+    `${e.direction === 'in' ? 'Entrada' : e.direction === 'out' ? 'Saída' : e.direction} ${fmtTime(e.effective_time)}`).join(' · ');
+  const f = $('#miss'); f.who.value = collabId;
+  const hasIn = (data || []).some((e) => e.direction === 'in' && e.effective_time.slice(0, 10) === day);
+  f.dir.value = hasIn ? 'out' : 'in';
+  f.at.value = day + (hasIn ? 'T17:00' : 'T08:00');
+  f.scrollIntoView({ behavior: 'smooth' });
+  toast('Picagens deste dia: ' + (taps || 'nenhuma') + '. Acerta a hora e o motivo.');
 }
 
 // ------------------------------------------------------------------ Obras
