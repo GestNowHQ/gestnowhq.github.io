@@ -56,6 +56,7 @@ function toast(msg) {
 }
 function friendly(err) {
   const msg = (err && (err.message || err.error_description || err.hint)) || String(err);
+  if (AUTH_LOST.test(msg)) checkSession();
   for (const [re, pt] of ERRORS) if (re.test(msg)) return pt;
   return 'Erro: ' + msg;
 }
@@ -99,6 +100,8 @@ nav.addEventListener('click', (e) => {
   go(b.dataset.view);
 });
 sb.auth.onAuthStateChange((event) => { if (event === 'SIGNED_OUT') boot(); });
+// The session can end outside this tab (Sair in another tab, expired token). Re-check when the user comes back.
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkSession(); });
 window.addEventListener('online', flushQueue);
 boot();
 
@@ -120,6 +123,19 @@ async function boot() {
   await loadBasics();
   flushQueue();
   go(state.view);
+}
+
+const AUTH_LOST = /permission denied|JWT|not authenticated|401/i;
+async function sessionGone() {
+  const { data: { session } } = await sb.auth.getSession();
+  return !session;
+}
+// If the screen is open but the login is gone, go back to "Entrar" instead of showing errors.
+async function checkSession() {
+  if (!state.ready || !(await sessionGone())) return false;
+  toast('A sessão terminou. Entra outra vez.');
+  boot();
+  return true;
 }
 
 async function signOut() { stopNfc(); state.ready = false; nav.hidden = true; await sb.auth.signOut(); }
@@ -278,6 +294,7 @@ async function clock(rawUid) {
   const ev = { p_project: site.id, p_capture: 'card_on_supervisor_phone', p_raw: normUid(rawUid), p_direction: state.direction,
     p_event_time: new Date().toISOString(), p_client_event_id: uuid(), p_device_time: new Date().toISOString() };
   const r = await sendEvent(ev);
+  if (r.authLost) { showResult('warn', 'Picagem guardada', 'A sessão terminou. Entra outra vez e ela é enviada.'); beep(false); checkSession(); return; }
   if (r.queued) { showResult('warn', 'Guardada sem rede', 'Vai ser enviada quando a rede voltar.'); beep(true); return; }
   if (r.error) { showResult('bad', 'Erro', friendly(r.error)); beep(false); return; }
   const d = r.data; const who = d.name || 'Cartão ' + ev.p_raw;
@@ -291,6 +308,11 @@ async function sendEvent(ev) {
   try {
     const { data, error } = await sb.rpc('clock_event', ev);
     if (error && /fetch|network/i.test(error.message || '')) throw error;
+    if (error && AUTH_LOST.test(error.message || '') && await sessionGone()) {
+      // Never lose a tap because the login ended: keep it and send it after the next login.
+      const q = load(QUEUE_KEY, []); q.push(ev); store(QUEUE_KEY, q);
+      return { authLost: true };
+    }
     return { data, error };
   } catch (_) {
     const q = load(QUEUE_KEY, []); q.push({ ...ev, p_was_offline: true }); store(QUEUE_KEY, q); showQueue();
@@ -298,12 +320,14 @@ async function sendEvent(ev) {
   }
 }
 async function flushQueue() {
+  if (!state.ready) return;   // only send saved taps when logged in, or they would be refused and lost
   const q = load(QUEUE_KEY, []); if (!q.length) return;
   const left = [];
   for (const ev of q) {
     try {
       const { error } = await sb.rpc('clock_event', ev);
       if (error && /fetch|network/i.test(error.message || '')) left.push(ev);
+      else if (error && AUTH_LOST.test(error.message || '') && await sessionGone()) left.push(ev);
       else if (error) toast('Uma picagem guardada foi recusada: ' + friendly(error));
     } catch (_) { left.push(ev); }
   }
