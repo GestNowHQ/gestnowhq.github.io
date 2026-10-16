@@ -51,6 +51,12 @@ const ERRORS = [
   [/overtime: approve or refuse/i, 'Esse dia tem horas extra: aprova ou recusa.'],
   [/cannot go to/i, 'Esse dia já foi validado.'],
   [/up to 2 months/i, 'Escolhe um período até 2 meses.'],
+  [/e-mail already has a login/i, 'Esse email já tem conta.'],
+  [/person already has a login/i, 'Esta pessoa já tem conta.'],
+  [/invalid e-mail/i, 'O email não parece válido.'],
+  [/this person is inactive/i, 'Esta pessoa está inativa.'],
+  [/your own login/i, 'Não podes desligar a tua própria conta.'],
+  [/could not create the login/i, 'Não consegui criar a conta. Tenta outra vez.'],
   [/required/i, 'Falta preencher um campo obrigatório.'],
   [/Invalid login credentials/i, 'Email ou palavra-passe errados.'],
   [/Failed to fetch|NetworkError|network/i, 'Sem rede. Tenta outra vez.'],
@@ -137,11 +143,14 @@ async function boot() {
   const { data: me, error } = await core().from('app_users')
     .select('role, tenant_id, organization_id, collaborator_id, is_active').eq('user_id', session.user.id).maybeSingle();
   if (error || !me) return showMessage('Sem acesso', 'Este utilizador ainda não está ligado a nenhuma empresa. Corre o primeiro-admin.sql com este email.', true);
+  if (!me.is_active) return showMessage('Conta desligada', 'A tua conta está desligada. Fala com o administrador.', true);
   state.me = { ...me, email: session.user.email };
   const { data: aal } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
   if (PRIVILEGED.includes(me.role) && aal.currentLevel !== 'aal2') {
     return aal.nextLevel === 'aal2' ? showMfaVerify() : showMfaEnroll();
   }
+  // A login made by the admin comes with a temporary password: the person chooses their own first.
+  if (session.user.user_metadata && session.user.user_metadata.must_change_password) return showNewPassword();
   state.ready = true;
   nav.hidden = false;
   await loadBasics();
@@ -220,6 +229,24 @@ async function showMfaVerify() {
     <p><button class="btn">Confirmar</button> <button type="button" class="btn ghost" id="out">Sair</button></p></form></div>`;
   $('#out').onclick = signOut;
   $('#f').onsubmit = (e) => { e.preventDefault(); verifyCode(factor.id, new FormData(e.target).get('code')); };
+}
+
+function showNewPassword() {
+  nav.hidden = true;
+  app.innerHTML = `<div class="card" style="max-width:420px;margin:30px auto"><h1>Escolhe a tua palavra-passe</h1>
+    <p>Entraste com uma palavra-passe temporária. Escolhe agora a tua. Não a digas a ninguém.</p>
+    <form id="f"><label>Palavra-passe nova (pelo menos 10 caracteres)</label>
+    <input name="p1" type="password" autocomplete="new-password" minlength="10" required>
+    <label>Repete a palavra-passe</label><input name="p2" type="password" autocomplete="new-password" minlength="10" required>
+    <p><button class="btn">Guardar</button> <button type="button" class="btn ghost" id="out">Sair</button></p></form></div>`;
+  $('#out').onclick = signOut;
+  $('#f').onsubmit = async (e) => {
+    e.preventDefault(); const f = new FormData(e.target);
+    if (f.get('p1') !== f.get('p2')) return toast('As duas palavras-passe não são iguais.');
+    const { error } = await sb.auth.updateUser({ password: f.get('p1'), data: { must_change_password: false } });
+    if (error) return toast(/same|different/i.test(error.message) ? 'Escolhe uma palavra-passe diferente da temporária.' : friendly(error));
+    toast('Palavra-passe guardada.'); boot();
+  };
 }
 
 async function verifyCode(factorId, code) {
@@ -471,7 +498,9 @@ async function viewWorker() {
   const id = state.worker; if (!id) return go('trabalhadores');
   app.innerHTML = `<p class="noprint"><button class="btn ghost" id="back">‹ Trabalhadores</button></p><div id="w"><p class="muted">A carregar…</p></div>`;
   $('#back').onclick = () => go('trabalhadores');
-  const [ws, ds] = await Promise.all([sb.rpc('mini_workers'), sb.rpc('mini_worker_documents', { p_collab: id })]);
+  const [ws, ds, us] = await Promise.all([sb.rpc('mini_workers'), sb.rpc('mini_worker_documents', { p_collab: id }),
+    isAdmin() ? sb.rpc('mini_app_users') : Promise.resolve({ data: [] })]);
+  const login = ((us && us.data) || []).find((u) => u.collaborator_id === id);
   const el = $('#w'); if (!el) return;
   if (ws.error || ds.error) { el.innerHTML = `<p>${esc(friendly(ws.error || ds.error))}</p>`; return; }
   const w = ws.data.find((x) => x.collaborator_id === id); if (!w) { el.innerHTML = '<p>Não encontrado.</p>'; return; }
@@ -504,6 +533,14 @@ async function viewWorker() {
       ${activeSites().map((s) => `<label class="check"><input type="checkbox" data-site="${esc(s.id)}" ${w.site_ids.includes(s.id) ? 'checked' : ''}>
         ${esc(s.title)} (${esc(s.cost_center_code)})</label>`).join('') || '<p class="muted">Sem obras abertas.</p>'}
       <p class="small muted">Só pode picar nas obras marcadas.</p></div>` : ''}
+    ${isAdmin() ? `<div class="card"><h2 style="margin-top:0">Conta na app</h2>${login ? `
+      <p>${esc(login.email)} · ${login.role === 'hse' ? 'Técnico de segurança' : 'Encarregado'} ·
+        ${login.is_active ? '<span class="pill ok">ligada</span>' : '<span class="pill">desligada</span>'}</p>
+      <p><button class="btn ghost" id="toggleLogin">${login.is_active ? 'Desligar a conta' : 'Ligar a conta'}</button></p>` : w.is_active ? `
+      <p class="small muted">Dá a esta pessoa acesso à app para picar, ver quem está na obra e validar horas.</p>
+      <form id="login"><label>Email *</label><input name="email" type="email" required autocomplete="off">
+        <label>Papel</label><select name="role"><option value="supervisor">Encarregado</option><option value="hse">Técnico de segurança</option></select>
+        <p><button class="btn">Criar conta</button></p></form><div id="newpw"></div>` : '<p class="muted">Pessoa inativa: sem conta.</p>'}</div>` : ''}
     ${canPeople() ? `<div class="card"><h2 style="margin-top:0">${w.is_active ? 'Desativar' : 'Reativar'}</h2>
       <form id="act"><label>Porquê? *</label><input name="why" required placeholder="${w.is_active ? 'ex.: terminou o contrato' : 'ex.: voltou a ser contratado'}">
       <p class="small muted">${w.is_active ? 'Deixa de poder entrar em qualquer obra e o cartão é anulado. O histórico fica guardado.' : 'Depois de reativar, dá-lhe um cartão.'}</p>
@@ -528,6 +565,26 @@ async function viewWorker() {
     toast(cb.checked ? 'Pode picar nesta obra a partir de hoje.' : data === 'amanha'
       ? 'Foi posto nesta obra hoje: só deixa de poder picar a partir de amanhã.' : 'Já não pode picar nesta obra.');
   });
+  if ($('#login')) $('#login').onsubmit = async (e) => {
+    e.preventDefault(); const f = new FormData(e.target); const btn = e.target.querySelector('.btn'); btn.disabled = true;
+    const { data, error } = await sb.functions.invoke('mini-criar-conta', { body: { email: f.get('email'), collaborator_id: id, role: f.get('role') } });
+    btn.disabled = false;
+    let msg = error && error.message;
+    if (error && error.context && error.context.json) { try { msg = (await error.context.json()).error || msg; } catch (_) {} }
+    if (error) return toast(friendly({ message: msg }));
+    e.target.hidden = true;
+    $('#newpw').innerHTML = `<div class="result warn"><b>${esc(data.password)}</b>Palavra-passe temporária de ${esc(data.email)}</div>
+      <p><b>Dá-a à pessoa em mão ou diz-lha de viva voz.</b> Não a envies por mensagem nem email. Só aparece agora.
+      No primeiro login, a pessoa escolhe a sua palavra-passe.</p><p><button class="btn ghost" id="pwdone">Já entreguei</button></p>`;
+    $('#pwdone').onclick = () => viewWorker();
+  };
+  if ($('#toggleLogin')) $('#toggleLogin').onclick = async () => {
+    const why = prompt(login.is_active ? 'Porque é que desligas esta conta?' : 'Porque é que ligas outra vez esta conta?');
+    if (!why) return;
+    const { error } = await sb.rpc('mini_set_user_active', { p_user: login.user_id, p_active: !login.is_active, p_reason: why });
+    if (error) return toast(friendly(error));
+    toast(login.is_active ? 'Conta desligada.' : 'Conta ligada.'); viewWorker();
+  };
   if ($('#act')) $('#act').onsubmit = async (e) => {
     e.preventDefault(); const f = new FormData(e.target);
     if (w.is_active && !confirm(`Desativar ${w.full_name}? Deixa de poder entrar em qualquer obra.`)) return;
@@ -685,17 +742,17 @@ async function fixDay(collabId, day) {
 function viewSites() {
   const label = { execution: '<span class="pill ok">em curso</span>', lead: '<span class="pill">rascunho</span>' };
   app.innerHTML = `<h1>Obras</h1>
-    <div class="card"><h2 style="margin-top:0">Abrir obra</h2>
+    ${isAdmin() || (state.me && state.me.role === 'project_manager') ? `<div class="card"><h2 style="margin-top:0">Abrir obra</h2>
     <form id="f"><div class="row"><div><label>Cliente *</label><input name="client" required placeholder="ex.: Refinaria de Sines"></div>
       <div><label>Código *</label><input name="code" required placeholder="ex.: OB-001"></div></div>
       <label>Nome da obra *</label><input name="title" required placeholder="ex.: Paragem 2026, unidade 3">
       <label>Morada</label><input name="addr">
       <p class="small muted">A obra abre logo pronta para picar. Os trabalhadores têm de ser atribuídos a ela.</p>
-      <p><button class="btn">Abrir obra</button></p></form></div>
+      <p><button class="btn">Abrir obra</button></p></form></div>` : ''}
     <h2>Lista</h2><div class="card">${state.sites.length ? `<table><tr><th>Obra</th><th>Código</th><th>Estado</th></tr>${state.sites.map((s) => `<tr>
       <td>${esc(s.title)}<div class="small muted">${esc(s.address || '')}</div></td><td>${esc(s.cost_center_code)}</td>
       <td>${label[s.status] || `<span class="pill">${esc(s.status)}</span>`}</td></tr>`).join('')}</table>` : '<p class="muted">Ainda não há obras.</p>'}</div>`;
-  $('#f').onsubmit = async (e) => {
+  if ($('#f')) $('#f').onsubmit = async (e) => {
     e.preventDefault();
     const f = new FormData(e.target);
     const { data, error } = await sb.rpc('mini_open_site', { p_client: f.get('client'), p_title: f.get('title'),
