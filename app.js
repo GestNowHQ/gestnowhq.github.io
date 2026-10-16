@@ -39,6 +39,13 @@ const ERRORS = [
   [/invalid file fingerprint/i, 'Não consegui ler o ficheiro. Tenta outra vez.'],
   [/mime type|invalid_mime_type/i, 'Só aceito fotos (JPG, PNG) ou PDF.'],
   [/maximum allowed size|payload too large|entity too large/i, 'O ficheiro é grande demais (máximo 10 MB).'],
+  [/(\d+) day\(s\) still to approve/i, 'Ainda há dias por aprovar neste mês. Aprova ou devolve todos antes de fechar.'],
+  [/period is not over yet/i, 'O mês ainda não acabou.'],
+  [/nothing to close/i, 'Não há nada para fechar neste mês.'],
+  [/cannot be sent back/i, 'Esse dia já está fechado para os salários.'],
+  [/already sent to payroll|period is locked/i, 'Esse mês já foi fechado para os salários: já não se pode mudar.'],
+  [/segregation of duties/i, 'Validaste este dia na obra: tem de ser outra pessoa a aprovar.'],
+  [/only HR validates/i, 'Só o secretariado aprova.'],
   [/simple mode is off/i, 'O modo simples não está ligado nesta empresa.'],
   [/not allowed|insufficient_privilege|permission denied/i, 'Sem permissão. Confirma que entraste com a segunda verificação (código da app).'],
   [/already exists/i, 'Já existe uma obra com esse código.'],
@@ -215,6 +222,7 @@ async function boot() {
   if (session.user.user_metadata && session.user.user_metadata.must_change_password) return showNewPassword();
   state.ready = true; touch();
   nav.hidden = false;
+  nav.querySelector('[data-view=secretariado]').hidden = !canPeople();
   await loadBasics();
   showWho();
   flushQueue();
@@ -320,7 +328,7 @@ async function verifyCode(factorId, code) {
 
 // ------------------------------------------------------------------ data
 // Always show who is logged in and with which role, so nobody mistakes one account for another.
-const ROLE_NAMES = { admin: 'Administrador', hr: 'Recursos Humanos', hse: 'Técnico de segurança', finance: 'Finanças',
+const ROLE_NAMES = { admin: 'Administrador', hr: 'Secretariado / RH', hse: 'Técnico de segurança', finance: 'Finanças',
   project_manager: 'Diretor de obra', supervisor: 'Encarregado' };
 function showWho() {
   const me = state.me; const p = me.collaborator_id && state.people.find((x) => x.id === me.collaborator_id);
@@ -363,7 +371,7 @@ function go(view) {
   const tab = view === 'ficha' ? 'trabalhadores' : view;
   nav.querySelectorAll('button[data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === tab));
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
-     ficha: viewWorker, obras: viewSites }[view] || viewClock)();
+     ficha: viewWorker, obras: viewSites, secretariado: viewOffice }[view] || viewClock)();
 }
 
 // ------------------------------------------------------------------ Picar
@@ -647,12 +655,13 @@ async function viewWorker() {
         ${esc(s.title)} (${esc(s.cost_center_code)})</label>`).join('') || '<p class="muted">Sem obras abertas.</p>'}
       <p class="small muted">Só pode picar nas obras marcadas.</p></div>` : ''}
     ${isAdmin() ? `<div class="card"><h2 style="margin-top:0">Conta na app</h2>${login ? `
-      <p>${esc(login.email)} · ${login.role === 'hse' ? 'Técnico de segurança' : 'Encarregado'} ·
+      <p>${esc(login.email)} · ${esc(ROLE_NAMES[login.role] || login.role)} ·
         ${login.is_active ? '<span class="pill ok">ligada</span>' : '<span class="pill">desligada</span>'}</p>
       <p><button class="btn ghost" id="toggleLogin">${login.is_active ? 'Desligar a conta' : 'Ligar a conta'}</button></p>` : w.is_active ? `
       <p class="small muted">Dá a esta pessoa acesso à app para picar, ver quem está na obra e validar horas.</p>
       <form id="login"><label>Email *</label><input name="email" type="email" required autocomplete="off">
-        <label>Papel</label><select name="role"><option value="supervisor">Encarregado</option><option value="hse">Técnico de segurança</option></select>
+        <label>Papel</label><select name="role"><option value="supervisor">Encarregado</option><option value="hse">Técnico de segurança</option><option value="hr">Secretariado / RH</option></select>
+        <p class="small muted">O secretariado vê os NIFs, os documentos e as horas de todas as obras, e tem de usar a app de códigos.</p>
         <p><button class="btn">Criar conta</button></p></form><div id="newpw"></div>` : '<p class="muted">Pessoa inativa: sem conta.</p>'}</div>` : ''}
     ${canPeople() ? `<div class="card"><h2 style="margin-top:0">${w.is_active ? 'Desativar' : 'Reativar'}</h2>
       <form id="act"><label>Porquê? *</label><input name="why" required placeholder="${w.is_active ? 'ex.: terminou o contrato' : 'ex.: voltou a ser contratado'}">
@@ -822,8 +831,10 @@ const DAY_STATUS = { registered: '<span class="pill">por validar</span>', superv
 async function loadHours(from, to) {
   const el = $('#list'); const site = currentSite(); if (!el) return;
   if (!site) { el.innerHTML = ''; return; }
-  const { data, error } = await sb.rpc('mini_hours', { p_project: site.id, p_from: from, p_to: to });
+  const [{ data, error }, back] = await Promise.all([sb.rpc('mini_hours', { p_project: site.id, p_from: from, p_to: to }),
+    sb.rpc('mini_returned_days', { p_project: site.id, p_from: from, p_to: to })]);
   if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  const returned = Object.fromEntries(((back && back.data) || []).map((b) => [b.work_day_id, b.reason]));
   if (!data.length) { el.innerHTML = '<p class="muted">Sem horas nesta semana.</p>'; return; }
   const byWorker = {};
   for (const r of data) (byWorker[r.collaborator_id] = byWorker[r.collaborator_id] || []).push(r);
@@ -837,6 +848,7 @@ async function loadHours(from, to) {
       <td>${esc(fmtMin(r.worked_minutes))}${r.overtime_minutes ? `<div class="small">${esc(fmtMin(r.overtime_minutes))} extra${r.overtime_approved === false ? ' (recusadas)' : ''}</div>` : ''}
         ${r.has_manual ? '<div class="small muted">tem picagem à mão</div>' : ''}</td>
       <td>${r.anomalies.length ? `<span class="pill bad">${esc(r.anomalies.map((a) => ANOMALY[a] || a).join(', '))}</span>` : DAY_STATUS[r.status] || esc(r.status)}
+        ${returned[r.work_day_id] ? `<div class="small"><span class="pill warn">devolvido pelo secretariado</span> ${esc(returned[r.work_day_id])}</div>` : ''}
         ${r.status === 'registered' && r.collaborator_id !== me ? `<div class="noprint" style="margin-top:4px">${r.anomalies.length
           ? `<button class="btn ghost small" data-fix="${esc(r.collaborator_id)}" data-day="${esc(r.shift_date)}">Corrigir</button>`
           : r.overtime_minutes ? `<button class="btn small" data-ok="${esc(r.work_day_id)}" data-ot="1">Validar com extra</button>
@@ -868,6 +880,145 @@ async function fixDay(collabId, day) {
   f.at.value = day + (hasIn ? 'T17:00' : 'T08:00');
   f.scrollIntoView({ behavior: 'smooth' });
   toast('Picagens deste dia: ' + (taps || 'nenhuma') + '. Acerta a hora e o motivo.');
+}
+
+// ------------------------------------------------------------------ Secretariado (RH): todas as obras, aprovar, fechar o mês
+// The site validates, the office approves or sends a day back, and closes the month for payroll.
+// After closing, nobody can change those days (the database refuses).
+const OFFICE_STATUS = { registered: '<span class="pill warn">na obra: por validar</span>',
+  supervisor_validated: '<span class="pill">validado na obra</span>', hr_validated: '<span class="pill ok">aprovado</span>',
+  sent_to_payroll: '<span class="pill ok">fechado: salários</span>' };
+function monthRange(ym) {
+  const [y, m] = ym.split('-').map(Number);
+  return { from: `${ym}-01`, to: isoDay(new Date(y, m, 0, 12)) };
+}
+function viewOffice() {
+  if (!canPeople()) return viewClock();   // code guard as well as the database's
+  if (!state.officeMonth) state.officeMonth = isoDay(new Date()).slice(0, 7);
+  const { from, to } = monthRange(state.officeMonth);
+  const sites = state.sites;
+  app.innerHTML = `<h1>Secretariado</h1>
+    <div class="card noprint"><div class="row"><div><label>Mês</label><input type="month" id="month" value="${esc(state.officeMonth)}"></div></div>
+      <p class="small muted">Todas as obras. O encarregado valida na obra, tu aprovas aqui, e no fim do mês fechas para os salários.</p>
+      <div id="sum"></div></div>
+    <div class="card" id="list"><p class="muted">A carregar…</p></div>
+    <div class="card noprint"><h2 style="margin-top:0">Salários</h2>
+      <p class="small muted">A folha tem uma linha por pessoa e obra, com as horas normais, as extra aprovadas, as noturnas e as de descanso ou feriado. Abre no Excel.</p>
+      <p><button class="btn ghost" id="sheet">Descarregar a folha do mês</button></p>
+      <div id="close"></div></div>
+    <div class="card noprint"><h2 style="margin-top:0">Registo de tempos (ACT)</h2>
+      <p class="small muted">O registo legal das entradas e saídas de uma obra (Código do Trabalho, art. 202). Guarda-o 5 anos e mostra-o se a inspeção pedir.</p>
+      <label>Obra</label><select id="actsite">${sites.map((s) => `<option value="${esc(s.id)}">${esc(s.title)} (${esc(s.cost_center_code)})</option>`).join('')}</select>
+      <p><button class="btn ghost" id="act">Descarregar o registo do mês</button></p></div>`;
+  $('#month').onchange = (e) => { if (e.target.value) { state.officeMonth = e.target.value; viewOffice(); } };
+  $('#sheet').onclick = () => downloadPayroll(from, to);
+  $('#act').onclick = () => downloadAct($('#actsite').value, from, to);
+  loadOffice(from, to);
+}
+async function loadOffice(from, to) {
+  const el = $('#list'); if (!el) return;
+  const { data, error } = await sb.rpc('mini_hours_office', { p_from: from, p_to: to });
+  if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  const n = (st) => data.filter((r) => r.status === st).length;
+  $('#sum').innerHTML = `<p>${n('registered')} por validar na obra · <b>${n('supervisor_validated')} à tua espera</b> · ${n('hr_validated')} aprovados · ${n('sent_to_payroll')} fechados</p>
+    ${n('supervisor_validated') ? '<p><button class="btn" id="approveAll">Aprovar todos os dias validados na obra</button></p>' : ''}`;
+  if (!data.length) el.innerHTML = '<p class="muted">Sem horas neste mês.</p>';
+  else {
+    const byWorker = {};
+    for (const r of data) (byWorker[r.collaborator_id] = byWorker[r.collaborator_id] || []).push(r);
+    const me = state.me && state.me.collaborator_id;
+    el.innerHTML = Object.values(byWorker).map((rows) => {
+      const tot = rows.reduce((a, r) => a + r.worked_minutes, 0);
+      return `<h2>${esc(rows[0].full_name)} <span class="small muted">${esc(rows[0].employee_number || '')} · ${esc(fmtMin(tot))} no mês</span></h2>
+      <table><tr><th>Dia</th><th>Obra</th><th>Entrada / saída</th><th>Horas</th><th>Estado</th></tr>${rows.map((r) => `<tr>
+        <td>${esc(new Date(r.shift_date + 'T12:00:00').toLocaleDateString('pt-PT', { weekday: 'short', day: '2-digit', month: '2-digit' }))}</td>
+        <td>${esc(r.project_code)}</td>
+        <td>${esc(fmtHour(r.first_in))} – ${esc(fmtHour(r.last_out))}</td>
+        <td>${esc(fmtMin(r.worked_minutes))}${r.overtime_minutes ? `<div class="small">${esc(fmtMin(r.overtime_minutes))} extra ${r.overtime_approved ? 'aprovadas' : r.overtime_approved === false ? 'recusadas' : 'por decidir'}</div>` : ''}</td>
+        <td>${r.anomalies.length ? `<span class="pill bad">${esc(r.anomalies.map((a) => ANOMALY[a] || a).join(', '))}</span>` : OFFICE_STATUS[r.status] || esc(r.status)}
+          ${r.supervisor_name && r.status !== 'registered' ? `<div class="small muted">por ${esc(r.supervisor_name)}</div>` : ''}
+          ${r.returned_reason ? `<div class="small">Devolvido: ${esc(r.returned_reason)}</div>` : ''}
+          ${['supervisor_validated', 'hr_validated'].includes(r.status) && r.collaborator_id !== me ? `<div class="noprint" style="margin-top:4px">
+            ${r.status === 'supervisor_validated' ? `<button class="btn small" data-approve="${esc(r.work_day_id)}">Aprovar</button>` : ''}
+            <button class="btn ghost small" data-back="${esc(r.work_day_id)}">Devolver</button></div>` : ''}</td></tr>`).join('')}</table>`;
+    }).join('');
+  }
+  const ready = data.filter((r) => r.status === 'supervisor_validated' && r.collaborator_id !== (state.me && state.me.collaborator_id));
+  if ($('#approveAll')) $('#approveAll').onclick = () => approveDays(ready.map((r) => r.work_day_id));
+  el.querySelectorAll('button[data-approve]').forEach((b) => b.onclick = () => approveDays([b.dataset.approve]));
+  el.querySelectorAll('button[data-back]').forEach((b) => b.onclick = () => returnDay(b.dataset.back));
+  // Closing: only a month that is over, with every day approved.
+  const box = $('#close'); if (!box) return;
+  const pending = data.filter((r) => ['registered', 'supervisor_validated'].includes(r.status)).length;
+  const toClose = data.filter((r) => r.status === 'hr_validated').length;
+  if (to >= isoDay(new Date())) box.innerHTML = '<p class="small muted">O mês ainda não acabou: só se fecha depois do último dia.</p>';
+  else if (pending) box.innerHTML = `<p class="small"><span class="pill warn">${pending} dia(s) por aprovar</span> Aprova ou devolve todos antes de fechar.</p>`;
+  else if (!toClose) box.innerHTML = data.length ? '<p class="small"><span class="pill ok">Mês fechado</span> Estas horas já seguiram para os salários.</p>' : '';
+  else {
+    box.innerHTML = `<p><button class="btn" id="closeMonth">Fechar o mês para os salários</button></p>
+      <p class="small muted">Depois de fechar, ninguém pode mudar as horas deste mês.</p>`;
+    $('#closeMonth').onclick = async () => {
+      if (!confirm('Fechar o mês? Depois disto ninguém pode mudar as horas deste mês.')) return;
+      const { data: n, error: e } = await sb.rpc('mini_close_period', { p_from: from, p_to: to });
+      if (e) return toast(friendly(e));
+      toast(`Mês fechado: ${n} dia(s) seguiram para os salários.`); viewOffice();
+    };
+  }
+}
+async function approveDays(ids) {
+  if (!ids.length) return;
+  const { data, error } = await sb.rpc('advance_work_days', { p_ids: ids, p_to: 'hr_validated' });
+  if (error) return toast(friendly(error));
+  toast(`${data} dia(s) aprovado(s).`); viewOffice();
+}
+async function returnDay(id) {
+  const why = prompt('Porque é que devolves este dia ao encarregado? (ele vai ver o motivo)');
+  if (!why) return;
+  const { error } = await sb.rpc('mini_return_days', { p_ids: [id], p_reason: why });
+  if (error) return toast(friendly(error));
+  toast('Dia devolvido ao encarregado.'); viewOffice();
+}
+// A CSV that Excel in Portugal opens directly: ";" between columns, decimal comma, UTF-8 with BOM.
+const hrs = (m) => ((m || 0) / 60).toFixed(2).replace('.', ',');
+function csvCell(v) {
+  let s = String(v ?? '');
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;   // never let a cell run as a formula in Excel
+  return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+function downloadCsv(name, header, rows) {
+  const text = '﻿' + [header, ...rows].map((r) => r.map(csvCell).join(';')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
+  a.download = name; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  if (globalThis.GESTNOW_TEST) globalThis.LAST_CSV = { name, text };   // only in the automatic tests: payroll holds NIFs
+}
+async function downloadPayroll(from, to) {
+  const { data, error } = await sb.rpc('mini_payroll_sheet', { p_from: from, p_to: to });
+  if (error) return toast(friendly(error));
+  if (!data.length) return toast('Sem horas neste mês.');
+  const pending = data.reduce((a, r) => a + r.days_pending, 0);
+  downloadCsv(`gestnow-salarios-${from.slice(0, 7)}${data.every((r) => r.all_closed) ? '' : '-provisorio'}.csv`,
+    ['Nº', 'Nome', 'NIF', 'Empresa', 'Obra', 'Nome da obra', 'Dias', 'Horas normais', 'Horas extra aprovadas', 'Horas extra recusadas',
+     'Horas noturnas', 'Horas em dia de descanso', 'Horas em feriado', 'Dias por aprovar', 'Fechado'],
+    data.map((r) => [r.employee_number, r.full_name, r.tax_number, r.organization, r.project_code, r.project_title, r.days_worked,
+      hrs(r.normal_minutes), hrs(r.overtime_approved_minutes), hrs(r.overtime_refused_minutes), hrs(r.night_minutes),
+      hrs(r.rest_day_minutes), hrs(r.holiday_minutes), r.days_pending, r.all_closed ? 'sim' : 'não']));
+  toast(pending ? `Folha provisória: ainda há ${pending} dia(s) por aprovar.` : 'Folha descarregada.');
+}
+async function downloadAct(site, from, to) {
+  if (!site) return toast('Escolhe a obra.');
+  const { data, error } = await sb.rpc('mini_act_record', { p_project: site, p_from: from, p_to: to });
+  if (error) return toast(friendly(error));
+  if (!data.length) return toast('Sem picagens nesta obra neste mês.');
+  const s = state.sites.find((x) => x.id === site);
+  downloadCsv(`gestnow-registo-tempos-${s ? s.cost_center_code : 'obra'}-${from.slice(0, 7)}.csv`,
+    ['Nº', 'Nome', 'NIF', 'Empresa', 'Dia', 'Entrada', 'Saída', 'Pausa (h)', 'Horas trabalhadas', 'Horas extra', 'Horas noturnas',
+     'Descanso', 'Feriado', 'Estado'],
+    data.map((r) => [r.employee_number, r.full_name, r.tax_number, r.organization, fmtDate(r.shift_date), fmtHour(r.first_in), fmtHour(r.last_out),
+      hrs(r.break_minutes), hrs(r.worked_minutes), hrs(r.overtime_minutes), hrs(r.night_minutes), r.rest_day ? 'sim' : '', r.holiday ? 'sim' : '',
+      { registered: 'por validar', supervisor_validated: 'validado na obra', hr_validated: 'aprovado', sent_to_payroll: 'fechado' }[r.status] || r.status]));
+  toast('Registo descarregado.');
 }
 
 // ------------------------------------------------------------------ Obras
