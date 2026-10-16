@@ -449,7 +449,10 @@ async function loadOnSite() {
 // ------------------------------------------------------------------ Trabalhadores
 async function viewPeople() {
   app.innerHTML = `<h1>Trabalhadores</h1>
-    ${canPeople() ? `<div class="card"><h2 style="margin-top:0">Novo trabalhador</h2>
+    <div class="card" id="list"><p class="muted">A carregar…</p></div>
+    ${canPeople() ? `<p><button class="btn" id="new">+ Novo trabalhador</button></p>
+    <div class="card" id="newcard" hidden><h2 style="margin-top:0">Novo trabalhador</h2>
+    <p class="small muted">Só para quem ainda não está na lista. Se a pessoa já está, toca no nome dela.</p>
     <form id="f"><div class="row"><div><label>Nome completo *</label><input name="name" required></div>
       <div><label>NIF *</label><input name="nif" inputmode="numeric" required></div></div>
       <div class="row"><div><label>Nº de trabalhador</label><input name="num"></div>
@@ -457,24 +460,48 @@ async function viewPeople() {
       <div class="row"><div><label>Cartão</label><input name="card" autocomplete="off" placeholder="Encosta o cartão ou escreve o número"></div>
       ${'NDEFReader' in window ? '<div style="flex:0 0 auto"><button type="button" class="btn ghost" id="read">Ler cartão</button></div>' : ''}</div>
       ${siteSelect('site')}
-      <label>O que verificaste em papel? *</label>
-      <textarea name="stmt" required placeholder="ex.: Acolhimento de segurança feito a 12/10, ficha médica válida até 03/2027, contrato assinado."></textarea>
-      <p class="small muted">Fica guardado como prova do acolhimento. Escreve só o que viste mesmo. Depois abre a ficha da pessoa para registar a aptidão médica e o acolhimento, senão a entrada é recusada.</p>
-      <p><button class="btn">Guardar</button></p></form></div>` : ''}
-    <h2>Lista</h2><div class="card" id="list"><p class="muted">A carregar…</p></div>`;
+      <h2>Documentos que travam a entrada</h2>
+      <p class="small muted">Copia as datas do papel. Sem estes dois válidos, a pessoa não entra na obra. Se ainda não os tens, deixa em branco e regista depois na ficha.</p>
+      ${state.docTypes.filter((t) => t.is_blocking).map((t) => `<fieldset class="doc" data-type="${esc(t.id)}"><legend>${esc(t.name)}</legend>
+        <div class="row"><div><label>Data de emissão</label><input name="i_${esc(t.id)}" type="date" max="${isoDay(new Date())}"></div>
+        <div><label>Válido até (vazio = não caduca)</label><input name="e_${esc(t.id)}" type="date"></div></div></fieldset>`).join('')}
+      <label class="check"><input type="checkbox" name="seen" required> Vi em papel a identificação e o contrato desta pessoa *</label>
+      <label>Notas (opcional)</label><input name="notes" placeholder="ex.: contrato a termo até 12/2026">
+      <p class="small muted">Fica guardado, com o teu nome, como prova do que verificaste.</p>
+      <p><button class="btn">Guardar</button></p></form></div>` : ''}`;
   if ($('#f')) {
+    $('#new').onclick = () => { $('#newcard').hidden = false; $('#new').hidden = true; $('#newcard').scrollIntoView({ behavior: 'smooth' }); };
     bindSiteSelect('site');
     if ($('#read')) $('#read').onclick = () => readOneCard('input[name=card]');
     $('#f').onsubmit = async (e) => {
       e.preventDefault();
-      const f = new FormData(e.target); const btn = e.target.querySelector('.btn:not(.ghost)'); btn.disabled = true;
+      const f = new FormData(e.target);
+      const docs = [...e.target.querySelectorAll('fieldset.doc')].map((fs) => ({ type: fs.dataset.type,
+        name: fs.querySelector('legend').textContent, issue: f.get('i_' + fs.dataset.type), expiry: f.get('e_' + fs.dataset.type) }));
+      const half = docs.find((d) => !d.issue && d.expiry);
+      if (half) return toast(`${half.name}: falta a data de emissão.`);
+      const nif = String(f.get('nif') || '').replace(/\s/g, '');
+      const dup = state.people.find((p) => p.tax_number === nif);
+      if (dup) return offerExisting(dup);
+      const btn = e.target.querySelector('.btn:not(.ghost)'); btn.disabled = true;
+      const notes = String(f.get('notes') || '').trim();
       const { data, error } = await sb.rpc('mini_add_worker', {
-        p_full_name: f.get('name'), p_tax_number: f.get('nif'), p_employee_number: f.get('num'),
+        p_full_name: f.get('name'), p_tax_number: nif, p_employee_number: f.get('num'),
         p_card_uid: normUid(f.get('card')), p_project: $('#site') ? $('#site').value : null,
-        p_statement: f.get('stmt'), p_job_title: f.get('job') });
+        p_statement: 'Identificação e contrato vistos em papel.' + (notes ? ' ' + notes : ''), p_job_title: f.get('job') });
+      if (error) {
+        btn.disabled = false;
+        if (/tax_number/i.test(error.message || '')) { await loadBasics(); const d2 = state.people.find((p) => p.tax_number === nif); if (d2) return offerExisting(d2); }
+        return toast(friendly(error));
+      }
+      let failed = 0;
+      for (const d of docs.filter((x) => x.issue)) {
+        const r = await sb.rpc('mini_add_document', { p_collab: data, p_type: d.type, p_issue: d.issue, p_expiry: d.expiry || null, p_number: null });
+        if (r.error) { failed++; toast(d.name + ': ' + friendly(r.error)); }
+      }
       btn.disabled = false;
-      if (error) return toast(friendly(error));
-      toast('Trabalhador guardado. Regista agora os documentos.');
+      const missing = docs.filter((x) => !x.issue).length + failed;
+      toast(missing ? 'Trabalhador guardado. Faltam documentos: regista-os na ficha.' : 'Trabalhador guardado, pronto para picar.');
       await loadBasics(); state.worker = data; go('ficha');
     };
   }
@@ -592,6 +619,16 @@ async function viewWorker() {
     if (error) return toast(friendly(error));
     toast(w.is_active ? 'Desativado.' : 'Reativado. Dá-lhe um cartão.'); await loadBasics(); viewWorker();
   };
+}
+
+// The person is already registered (same NIF): open their sheet instead of a dead-end error.
+function offerExisting(p) {
+  const card = $('#newcard'); if (!card) return;
+  let box = $('#dup'); if (!box) { box = document.createElement('div'); box.id = 'dup'; card.prepend(box); }
+  box.innerHTML = `<div class="result warn" style="font-size:16px"><b>Já existe</b>${esc(p.full_name)} já está registado com esse NIF.
+    <p><button class="btn" id="opendup">Abrir a ficha de ${esc(p.full_name)}</button></p></div>`;
+  $('#opendup').onclick = () => { state.worker = p.id; go('ficha'); };
+  box.scrollIntoView({ behavior: 'smooth' });
 }
 
 async function readOneCard(sel) {
