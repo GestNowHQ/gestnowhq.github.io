@@ -596,7 +596,7 @@ async function viewWorker() {
           <td>${x.expiration_date ? 'até ' + esc(fmtDate(x.expiration_date)) : 'sem validade'}</td>
           <td>${x.file_path ? `<button class="btn small ghost" data-file="${esc(x.file_path)}">Ver</button>` : '<span class="small muted">só em papel</span>'}</td></tr>`).join('')}</table></details>` : ''}
       ${canDocs() ? `<h2>Registar ou renovar</h2>
-      <form id="doc"><label>Documento</label><select name="type">${ds.data.map((d) => `<option value="${esc(d.type_id)}">${esc(d.name)}</option>`).join('')}</select>
+      <form id="doc"><label>Documento *</label><select name="type" required><option value="">Escolhe o documento…</option>${ds.data.map((d) => `<option value="${esc(d.type_id)}">${esc(d.name)}</option>`).join('')}</select>
         <div class="row"><div><label>Data de emissão *</label><input name="issue" type="date" required max="${isoDay(new Date())}"></div>
         <div><label>Válido até (vazio = não caduca)</label><input name="expiry" type="date"></div></div>
         <label>Número (opcional)</label><input name="num">
