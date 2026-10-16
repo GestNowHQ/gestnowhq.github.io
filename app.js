@@ -32,6 +32,13 @@ const REASON_PREFIX = {
   'skill_missing:': 'Falta a competência: ',
 };
 const ERRORS = [
+  [/attach the photo or PDF/i, 'Falta a foto ou o PDF do documento.'],
+  [/file not allowed for this person|row-level security/i, 'Sem permissão para guardar este ficheiro. Confirma que entraste com a segunda verificação.'],
+  [/file not found, send it again/i, 'O ficheiro não chegou ao servidor. Tenta outra vez.'],
+  [/already used by another document/i, 'Esse ficheiro já está noutro documento.'],
+  [/invalid file fingerprint/i, 'Não consegui ler o ficheiro. Tenta outra vez.'],
+  [/mime type|invalid_mime_type/i, 'Só aceito fotos (JPG, PNG) ou PDF.'],
+  [/maximum allowed size|payload too large|entity too large/i, 'O ficheiro é grande demais (máximo 10 MB).'],
   [/simple mode is off/i, 'O modo simples não está ligado nesta empresa.'],
   [/not allowed|insufficient_privilege|permission denied/i, 'Sem permissão. Confirma que entraste com a segunda verificação (código da app).'],
   [/already exists/i, 'Já existe uma obra com esse código.'],
@@ -96,6 +103,40 @@ const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,
 const isAdmin = () => state.me && state.me.role === 'admin';
 const canPeople = () => state.me && ['admin', 'hr'].includes(state.me.role);
 const canDocs = () => state.me && ['admin', 'hr', 'hse'].includes(state.me.role);
+
+// ------------------------------------------------------------------ Comprovativos (foto ou PDF de cada documento)
+// Private bucket: only admin, HR and safety send or open files, and a file is never replaced or deleted.
+const FILE_TYPES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'application/pdf': 'pdf' };
+const FILE_MAX = 10 * 1024 * 1024;
+const FILE_ACCEPT = Object.keys(FILE_TYPES).join(',');
+function fileProblem(file) {
+  if (!file || !file.size) return 'Falta a foto ou o PDF do documento.';
+  if (!FILE_TYPES[file.type]) return 'Só aceito fotos (JPG, PNG) ou PDF.';
+  if (file.size > FILE_MAX) return 'O ficheiro é grande demais (máximo 10 MB). Tira a foto com menos qualidade.';
+  return null;
+}
+async function sha256Hex(file) {
+  const buf = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+// Send the file, then register the document pointing to it. Returns { error } like an rpc.
+async function addDocument(collab, type, issue, expiry, number, file) {
+  const bad = fileProblem(file); if (bad) return { error: { message: bad } };
+  const path = `${state.me.tenant_id}/${collab}/${crypto.randomUUID()}.${FILE_TYPES[file.type]}`;
+  const sha = await sha256Hex(file);
+  const up = await sb.storage.from('documentos').upload(path, file, { contentType: file.type, upsert: false });
+  if (up.error) return { error: up.error };
+  return sb.rpc('mini_add_document', { p_collab: collab, p_type: type, p_issue: issue, p_expiry: expiry || null,
+    p_number: number || null, p_file: path, p_sha256: sha });
+}
+// Open a file with a link that only works for 2 minutes.
+async function openDocFile(path) {
+  const win = window.open('', '_blank');
+  if (win) win.opener = null;
+  const { data, error } = await sb.storage.from('documentos').createSignedUrl(path, 120);
+  if (error || !data) { if (win) win.close(); return toast(friendly(error || 'sem link')); }
+  if (win) win.location = data.signedUrl; else location.href = data.signedUrl;
+}
 const normUid = (v) => String(v || '').replace(/[\s:\-]/g, '').toUpperCase();
 function uuid() {
   if (crypto.randomUUID) return crypto.randomUUID();
@@ -461,10 +502,11 @@ async function viewPeople() {
       ${'NDEFReader' in window ? '<div style="flex:0 0 auto"><button type="button" class="btn ghost" id="read">Ler cartão</button></div>' : ''}</div>
       ${siteSelect('site')}
       <h2>Documentos que travam a entrada</h2>
-      <p class="small muted">Copia as datas do papel. Sem estes dois válidos, a pessoa não entra na obra. Se ainda não os tens, deixa em branco e regista depois na ficha.</p>
+      <p class="small muted">Copia as datas do papel e tira uma foto ao documento (ou escolhe o PDF). Sem estes dois válidos, a pessoa não entra na obra. Se ainda não os tens, deixa em branco e regista depois na ficha.</p>
       ${state.docTypes.filter((t) => t.is_blocking).map((t) => `<fieldset class="doc" data-type="${esc(t.id)}"><legend>${esc(t.name)}</legend>
         <div class="row"><div><label>Data de emissão</label><input name="i_${esc(t.id)}" type="date" max="${isoDay(new Date())}"></div>
-        <div><label>Válido até (vazio = não caduca)</label><input name="e_${esc(t.id)}" type="date"></div></div></fieldset>`).join('')}
+        <div><label>Válido até (vazio = não caduca)</label><input name="e_${esc(t.id)}" type="date"></div></div>
+        <label>Foto ou PDF do documento</label><input name="f_${esc(t.id)}" type="file" accept="${FILE_ACCEPT}"></fieldset>`).join('')}
       <label class="check"><input type="checkbox" name="seen" required> Vi em papel a identificação e o contrato desta pessoa *</label>
       <label>Notas (opcional)</label><input name="notes" placeholder="ex.: contrato a termo até 12/2026">
       <p class="small muted">Fica guardado, com o teu nome, como prova do que verificaste.</p>
@@ -477,9 +519,11 @@ async function viewPeople() {
       e.preventDefault();
       const f = new FormData(e.target);
       const docs = [...e.target.querySelectorAll('fieldset.doc')].map((fs) => ({ type: fs.dataset.type,
-        name: fs.querySelector('legend').textContent, issue: f.get('i_' + fs.dataset.type), expiry: f.get('e_' + fs.dataset.type) }));
-      const half = docs.find((d) => !d.issue && d.expiry);
+        name: fs.querySelector('legend').textContent, issue: f.get('i_' + fs.dataset.type), expiry: f.get('e_' + fs.dataset.type),
+        file: fs.querySelector('input[type=file]').files[0] }));
+      const half = docs.find((d) => !d.issue && (d.expiry || d.file));
       if (half) return toast(`${half.name}: falta a data de emissão.`);
+      for (const d of docs.filter((x) => x.issue)) { const bad = fileProblem(d.file); if (bad) return toast(`${d.name}: ${bad}`); }
       const nif = String(f.get('nif') || '').replace(/\s/g, '');
       const dup = state.people.find((p) => p.tax_number === nif);
       if (dup) return offerExisting(dup);
@@ -496,7 +540,7 @@ async function viewPeople() {
       }
       let failed = 0;
       for (const d of docs.filter((x) => x.issue)) {
-        const r = await sb.rpc('mini_add_document', { p_collab: data, p_type: d.type, p_issue: d.issue, p_expiry: d.expiry || null, p_number: null });
+        const r = await addDocument(data, d.type, d.issue, d.expiry, null, d.file);
         if (r.error) { failed++; toast(d.name + ': ' + friendly(r.error)); }
       }
       btn.disabled = false;
@@ -525,8 +569,12 @@ async function viewWorker() {
   const id = state.worker; if (!id) return go('trabalhadores');
   app.innerHTML = `<p class="noprint"><button class="btn ghost" id="back">‹ Trabalhadores</button></p><div id="w"><p class="muted">A carregar…</p></div>`;
   $('#back').onclick = () => go('trabalhadores');
-  const [ws, ds, us] = await Promise.all([sb.rpc('mini_workers'), sb.rpc('mini_worker_documents', { p_collab: id }),
-    isAdmin() ? sb.rpc('mini_app_users') : Promise.resolve({ data: [] })]);
+  const [ws, ds, us, fs] = await Promise.all([sb.rpc('mini_workers'), sb.rpc('mini_worker_documents', { p_collab: id }),
+    isAdmin() ? sb.rpc('mini_app_users') : Promise.resolve({ data: [] }),
+    canDocs() ? sb.rpc('mini_document_files', { p_collab: id }) : Promise.resolve({ data: [] })]);
+  const files = (fs && fs.data) || [];
+  const current = (typeId) => files.find((x) => x.type_id === typeId && x.is_current);
+  const older = files.filter((x) => !x.is_current);
   const login = ((us && us.data) || []).find((u) => u.collaborator_id === id);
   const el = $('#w'); if (!el) return;
   if (ws.error || ds.error) { el.innerHTML = `<p>${esc(friendly(ws.error || ds.error))}</p>`; return; }
@@ -540,13 +588,21 @@ async function viewWorker() {
         <td>${esc(d.name)}${d.is_blocking ? ' <span class="small muted">(trava a entrada)</span>' : ''}
           ${d.document_number ? `<div class="small muted">nº ${esc(d.document_number)}</div>` : ''}</td>
         <td>${d.issue_date ? (d.expiration_date ? 'até ' + esc(fmtDate(d.expiration_date)) : 'sem validade') : ''}</td>
-        <td>${docState(d)}</td></tr>`).join('')}</table>
+        <td>${docState(d)}${canDocs() && d.issue_date ? (current(d.type_id) && current(d.type_id).file_path
+          ? `<div><button class="btn small ghost" data-file="${esc(current(d.type_id).file_path)}">Ver comprovativo</button></div>`
+          : '<div><span class="pill warn">sem comprovativo</span></div>') : ''}</td></tr>`).join('')}</table>
+      ${canDocs() && older.length ? `<details><summary class="small">Versões antigas (${older.length})</summary>
+        <table>${older.map((x) => `<tr><td>${esc(x.type_name)}<div class="small muted">registado ${esc(fmtDate(x.registered_at))}${x.registered_by ? ' por ' + esc(x.registered_by) : ''}</div></td>
+          <td>${x.expiration_date ? 'até ' + esc(fmtDate(x.expiration_date)) : 'sem validade'}</td>
+          <td>${x.file_path ? `<button class="btn small ghost" data-file="${esc(x.file_path)}">Ver</button>` : '<span class="small muted">só em papel</span>'}</td></tr>`).join('')}</table></details>` : ''}
       ${canDocs() ? `<h2>Registar ou renovar</h2>
       <form id="doc"><label>Documento</label><select name="type">${ds.data.map((d) => `<option value="${esc(d.type_id)}">${esc(d.name)}</option>`).join('')}</select>
         <div class="row"><div><label>Data de emissão *</label><input name="issue" type="date" required max="${isoDay(new Date())}"></div>
         <div><label>Válido até (vazio = não caduca)</label><input name="expiry" type="date"></div></div>
         <label>Número (opcional)</label><input name="num">
-        <p class="small muted">Regista só o que viste em papel. Fica escrito que foste tu a verificar, e quando.</p>
+        <label>Foto ou PDF do documento *</label><input name="file" type="file" accept="${FILE_ACCEPT}" required>
+        <p class="small muted">Tira uma foto nítida ao documento ou escolhe o PDF (até 10 MB). Fica guardado em privado, nunca se apaga,
+          e só o administrador, o RH e a segurança o podem abrir. Fica escrito que foste tu a verificar, e quando.</p>
         <p><button class="btn">Guardar documento</button></p></form>` : ''}
     </div>
     ${canPeople() ? `<div class="card"><h2 style="margin-top:0">Cartão</h2>
@@ -573,12 +629,14 @@ async function viewWorker() {
       <p class="small muted">${w.is_active ? 'Deixa de poder entrar em qualquer obra e o cartão é anulado. O histórico fica guardado.' : 'Depois de reativar, dá-lhe um cartão.'}</p>
       <p><button class="btn ${w.is_active ? 'danger' : ''}">${w.is_active ? 'Desativar' : 'Reativar'}</button></p></form></div>` : ''}`;
   if ($('#doc')) $('#doc').onsubmit = async (e) => {
-    e.preventDefault(); const f = new FormData(e.target);
-    const { error } = await sb.rpc('mini_add_document', { p_collab: id, p_type: f.get('type'), p_issue: f.get('issue'),
-      p_expiry: f.get('expiry') || null, p_number: f.get('num') || null });
+    e.preventDefault(); const f = new FormData(e.target); const btn = e.target.querySelector('.btn'); btn.disabled = true;
+    btn.textContent = 'A enviar…';
+    const { error } = await addDocument(id, f.get('type'), f.get('issue'), f.get('expiry'), f.get('num'), f.get('file'));
+    btn.disabled = false; btn.textContent = 'Guardar documento';
     if (error) return toast(friendly(error));
-    toast('Documento guardado.'); viewWorker();
+    toast('Documento guardado com o comprovativo.'); viewWorker();
   };
+  app.querySelectorAll('[data-file]').forEach((b) => b.onclick = () => openDocFile(b.dataset.file));
   if ($('#read')) $('#read').onclick = () => readOneCard('#card input[name=card]');
   if ($('#card')) $('#card').onsubmit = async (e) => {
     e.preventDefault(); const f = new FormData(e.target);
