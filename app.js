@@ -48,6 +48,10 @@ const ERRORS = [
   [/only HR validates/i, 'Só o secretariado aprova.'],
   [/too far in the past/i, 'A hora da picagem é antiga demais. Acrescenta-a como picagem esquecida, com o motivo.'],
   [/more than 7 days old/i, 'Picagem guardada há mais de 7 dias: acrescenta-a como picagem esquecida, com o motivo.'],
+  [/invalid Primavera code/i, 'Um código do Primavera só pode ter letras, números, ponto, traço ou _ (até 10).'],
+  [/two fields overlap/i, 'Dois campos ocupam as mesmas colunas do ficheiro. Acerta as posições.'],
+  [/invalid position for/i, 'Uma posição não é válida.'],
+  [/invalid marker/i, 'A letra tem de ser uma só letra ou número.'],
   [/simple mode is off/i, 'O modo simples não está ligado nesta empresa.'],
   [/not allowed|insufficient_privilege|permission denied/i, 'Sem permissão. Confirma que entraste com a segunda verificação (código da app).'],
   [/already exists/i, 'Já existe uma obra com esse código.'],
@@ -910,6 +914,9 @@ function viewOffice() {
     <div class="card noprint"><h2 style="margin-top:0">Salários</h2>
       <p class="small muted">A folha tem uma linha por pessoa e obra, com as horas normais, as extra aprovadas, as noturnas e as de descanso ou feriado. Abre no Excel.</p>
       <p><button class="btn ghost" id="sheet">Descarregar a folha do mês</button></p>
+      <p><button class="btn ghost" id="prim">Ficheiro para o Primavera (Relógio de Ponto)</button></p>
+      <p class="small muted">Horas extra aprovadas, uma linha por pessoa, dia e tipo (1.ª hora, seguintes, descanso, feriado). No Primavera: Recursos Humanos › Alterações Mensais › Relógio de Ponto. O "Nº de trabalhador" tem de ser o número do funcionário no Primavera.</p>
+      <details id="primcfg"><summary>Configurar o ficheiro do Primavera</summary><div id="primform"><p class="muted">A carregar…</p></div></details>
       <div id="close"></div></div>
     <div class="card noprint"><h2 style="margin-top:0">Registo de tempos (ACT)</h2>
       <p class="small muted">O registo legal das entradas e saídas de uma obra (Código do Trabalho, art. 202). Guarda-o 5 anos e mostra-o se a inspeção pedir.</p>
@@ -917,6 +924,8 @@ function viewOffice() {
       <p><button class="btn ghost" id="act">Descarregar o registo do mês</button></p></div>`;
   $('#month').onchange = (e) => { if (e.target.value) { state.officeMonth = e.target.value; viewOffice(); } };
   $('#sheet').onclick = () => downloadPayroll(from, to);
+  $('#prim').onclick = () => downloadPrimavera(from, to);
+  $('#primcfg').ontoggle = () => { if ($('#primcfg').open) showPrimaveraSettings(); };
   $('#act').onclick = () => downloadAct($('#actsite').value, from, to);
   loadOffice(from, to);
 }
@@ -1014,6 +1023,84 @@ async function downloadPayroll(from, to) {
       hrs(r.normal_minutes), hrs(r.overtime_approved_minutes), hrs(r.overtime_refused_minutes), hrs(r.night_minutes),
       hrs(r.rest_day_minutes), hrs(r.holiday_minutes), r.days_pending, r.all_closed ? 'sim' : 'não']));
   toast(pending ? `Folha provisória: ainda há ${pending} dia(s) por aprovar.` : 'Folha descarregada.');
+}
+// ------------------------------------------------------------------ Primavera: Relógio de Ponto (fixed-width text)
+// Each company sets the positions in its Primavera; GestNow copies the same positions here.
+const PRIM_CATS = [['ot_first', '1.ª hora extra (dia útil)'], ['ot_next', 'Horas extra seguintes (dia útil)'],
+  ['rest_day', 'Trabalho em dia de descanso'], ['holiday', 'Trabalho em feriado'], ['night', 'Horas noturnas (vazio = não exporta)']];
+const PRIM_FIELDS = [['employee', 'Funcionário'], ['date', 'Data'], ['kind', 'Falta ou hora extra'], ['code', 'Código'],
+  ['time', 'Tempo'], ['unit', 'Horas ou dias'], ['exclude_proc', 'Exclui processamento'], ['exclude_stat', 'Exclui estatística'],
+  ['meal', 'Subsídio de alimentação'], ['shift', 'Turno']];
+const PRIM_DATES = ['dd-mm-yyyy', 'dd/mm/yyyy', 'ddmmyyyy', 'yyyy-mm-dd', 'yyyymmdd'];
+function primDate(iso, f) {
+  const [y, m, d] = iso.split('-');
+  return { 'dd-mm-yyyy': `${d}-${m}-${y}`, 'dd/mm/yyyy': `${d}/${m}/${y}`, ddmmyyyy: d + m + y, 'yyyy-mm-dd': iso, yyyymmdd: y + m + d }[f];
+}
+async function showPrimaveraSettings() {
+  const box = $('#primform'); if (!box) return;
+  const { data: c, error } = await sb.rpc('mini_payroll_settings');
+  if (error) { box.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  box.innerHTML = `<form id="primf">
+    <h2>Códigos de horas extra da empresa</h2>
+    ${PRIM_CATS.map(([k, label]) => `<label>${esc(label)}</label><input name="c_${k}" value="${esc(c.codes[k])}" maxlength="10">`).join('')}
+    <h2>Formato</h2>
+    <div class="row"><div><label>Data</label><select name="date_format">${PRIM_DATES.map((f) => `<option ${f === c.date_format ? 'selected' : ''}>${f}</option>`).join('')}</select></div>
+      <div><label>Decimais</label><select name="decimal"><option value="," ${c.decimal === ',' ? 'selected' : ''}>vírgula (1,50)</option><option value="." ${c.decimal === '.' ? 'selected' : ''}>ponto (1.50)</option></select></div></div>
+    <div class="row"><div><label>Letra de hora extra</label><input name="overtime_marker" value="${esc(c.overtime_marker)}" maxlength="1"></div>
+      <div><label>Letra de horas</label><input name="unit_marker" value="${esc(c.unit_marker)}" maxlength="1"></div></div>
+    <h2>Posições no ficheiro (coluna inicial e tamanho; tamanho 0 = não usa)</h2>
+    <table><tr><th>Campo</th><th>Início</th><th>Tamanho</th></tr>${PRIM_FIELDS.map(([k, label]) => `<tr><td>${esc(label)}</td>
+      <td><input name="p_${k}" type="number" min="1" max="199" value="${esc(c.fields[k][0])}"></td>
+      <td><input name="l_${k}" type="number" min="0" max="50" value="${esc(c.fields[k][1])}"></td></tr>`).join('')}</table>
+    <p class="small muted">Copia estes valores do ecrã de configuração do Relógio de Ponto no Primavera da tua empresa.</p>
+    <p><button class="btn">Guardar a configuração</button></p></form>`;
+  $('#primf').onsubmit = async (e) => {
+    e.preventDefault(); const f = new FormData(e.target);
+    const settings = { codes: Object.fromEntries(PRIM_CATS.map(([k]) => [k, String(f.get('c_' + k) || '').trim()])),
+      date_format: f.get('date_format'), decimal: f.get('decimal'),
+      overtime_marker: String(f.get('overtime_marker') || '').trim(), unit_marker: String(f.get('unit_marker') || '').trim(),
+      fields: Object.fromEntries(PRIM_FIELDS.map(([k]) => [k, [Number(f.get('p_' + k)), Number(f.get('l_' + k))]])) };
+    const { error: e2 } = await sb.rpc('mini_set_payroll_settings', { p_settings: settings });
+    if (e2) return toast(friendly(e2));
+    toast('Configuração do Primavera guardada.');
+  };
+}
+async function downloadPrimavera(from, to) {
+  const [{ data: c, error: e1 }, { data: rows, error: e2 }] = await Promise.all([sb.rpc('mini_payroll_settings'),
+    sb.rpc('mini_primavera_lines', { p_from: from, p_to: to })]);
+  if (e1 || e2) return toast(friendly(e1 || e2));
+  if (!rows.length) return toast('Sem horas extra aprovadas neste mês.');
+  const noCode = [...new Set(rows.filter((r) => !r.employee_number).map((r) => r.full_name))];
+  if (noCode.length) return toast(`Falta o Nº de trabalhador (código do Primavera) de: ${noCode.join(', ')}.`);
+  const width = Math.max(...Object.values(c.fields).map(([p, l]) => p + l - 1));
+  const put = (line, key, value, right) => {
+    const [p, l] = c.fields[key]; if (!l) return true;
+    const v = String(value);
+    if (v.length > l) return false;
+    const txt = right ? v.padStart(l, '0') : v.padEnd(l, ' ');
+    for (let i = 0; i < l; i++) line[p - 1 + i] = txt[i];
+    return true;
+  };
+  const lines = []; const tooLong = new Set();
+  for (const r of rows) {
+    const code = c.codes[r.category]; if (!code) continue;   // e.g. night hours with no code: not exported
+    const line = new Array(width).fill(' ');
+    const ok = [put(line, 'employee', r.employee_number), put(line, 'date', primDate(r.shift_date, c.date_format)),
+      put(line, 'kind', c.overtime_marker), put(line, 'code', code),
+      put(line, 'time', (r.minutes / 60).toFixed(2).replace('.', c.decimal), true), put(line, 'unit', c.unit_marker),
+      put(line, 'exclude_proc', '0'), put(line, 'exclude_stat', '0'), put(line, 'meal', '0'), put(line, 'shift', '0')];
+    if (ok.includes(false)) { tooLong.add(r.full_name); continue; }
+    lines.push(line.join('').replace(/\s+$/, ''));
+  }
+  if (tooLong.size) return toast(`Um valor não cabe nas posições configuradas (${[...tooLong].join(', ')}). Aumenta o tamanho do campo.`);
+  const closed = rows.every((r) => r.all_closed);
+  const a = document.createElement('a');
+  const text = lines.join('\r\n') + '\r\n';
+  a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+  a.download = `gestnow-primavera-${from.slice(0, 7)}${closed ? '' : '-provisorio'}.txt`;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  if (globalThis.GESTNOW_TEST) globalThis.LAST_CSV = { name: a.download, text };
+  toast(closed ? `Ficheiro do Primavera: ${lines.length} linha(s).` : `Ficheiro provisório: o mês ainda não está fechado (${lines.length} linha(s)).`);
 }
 async function downloadAct(site, from, to) {
   if (!site) return toast('Escolhe a obra.');
