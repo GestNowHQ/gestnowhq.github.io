@@ -111,6 +111,12 @@ function reasonText(code) {
 const fmtTime = (iso) => new Date(iso).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 const fmtDate = (d) => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
 const fmtHour = (iso) => iso ? new Date(iso).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }) : '';
+// Every in/out period of a day, as the server wrote it in the site's time zone ("08:00–12:00 · 13:00–17:00").
+const periodList = (p) => (p ? p.split(' · ') : []);
+async function dayPeriods(from, to, project) {
+  const { data } = await sb.rpc('mini_day_periods', project ? { p_from: from, p_to: to, p_project: project } : { p_from: from, p_to: to });
+  return Object.fromEntries((data || []).map((r) => [r.work_day_id, r.periods]));
+}
 const fmtMin = (m) => { m = m || 0; return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}`; };
 const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const isAdmin = () => state.me && state.me.role === 'admin';
@@ -834,14 +840,21 @@ async function fillWorkerSelect() {
   sel.innerHTML = list.map((w) => `<option value="${esc(w.collaborator_id)}">${esc(w.full_name)}</option>`).join('')
     || '<option value="">Ninguém atribuído a esta obra</option>';
 }
+// One period: entry and exit in their columns. Several: each period on its own line across both columns.
+function inOutCells(r, periods) {
+  const list = periodList(periods);
+  if (list.length > 1) return `<td colspan="2">${list.map((p) => `<div>${esc(p)}</div>`).join('')}<div class="small muted">${list.length} períodos</div></td>`;
+  if (list.length === 1) { const [a, b] = list[0].split('–'); return `<td>${esc(a)}</td><td>${esc(b)}</td>`; }
+  return `<td>${esc(fmtHour(r.first_in))}</td><td>${esc(fmtHour(r.last_out))}</td>`;
+}
 const ANOMALY = { double_in: 'duas entradas seguidas', out_without_in: 'saída sem entrada', missing_out: 'falta a saída' };
 const DAY_STATUS = { registered: '<span class="pill">por validar</span>', supervisor_validated: '<span class="pill ok">validado</span>',
   hr_validated: '<span class="pill ok">validado RH</span>', sent_to_payroll: '<span class="pill ok">salários</span>' };
 async function loadHours(from, to) {
   const el = $('#list'); const site = currentSite(); if (!el) return;
   if (!site) { el.innerHTML = ''; return; }
-  const [{ data, error }, back] = await Promise.all([sb.rpc('mini_hours', { p_project: site.id, p_from: from, p_to: to }),
-    sb.rpc('mini_returned_days', { p_project: site.id, p_from: from, p_to: to })]);
+  const [{ data, error }, back, per] = await Promise.all([sb.rpc('mini_hours', { p_project: site.id, p_from: from, p_to: to }),
+    sb.rpc('mini_returned_days', { p_project: site.id, p_from: from, p_to: to }), dayPeriods(from, to, site.id)]);
   if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
   const returned = Object.fromEntries(((back && back.data) || []).map((b) => [b.work_day_id, b.reason]));
   if (!data.length) { el.innerHTML = '<p class="muted">Sem horas nesta semana.</p>'; return; }
@@ -853,7 +866,7 @@ async function loadHours(from, to) {
     return `<h2>${esc(rows[0].full_name)} <span class="small muted">${esc(rows[0].employee_number || '')}</span></h2>
     <table><tr><th>Dia</th><th>Entrada</th><th>Saída</th><th>Horas</th><th>Estado</th></tr>${rows.map((r) => `<tr>
       <td>${esc(new Date(r.shift_date + 'T12:00:00').toLocaleDateString('pt-PT', { weekday: 'short', day: '2-digit', month: '2-digit' }))}</td>
-      <td>${esc(fmtHour(r.first_in))}</td><td>${esc(fmtHour(r.last_out))}</td>
+      ${inOutCells(r, per[r.work_day_id])}
       <td>${esc(fmtMin(r.worked_minutes))}${r.overtime_minutes ? `<div class="small">${esc(fmtMin(r.overtime_minutes))} extra${r.overtime_approved === false ? ' (recusadas)' : ''}</div>` : ''}
         ${r.has_manual ? '<div class="small muted">tem picagem à mão</div>' : ''}</td>
       <td>${r.anomalies.length ? `<span class="pill bad">${esc(r.anomalies.map((a) => ANOMALY[a] || a).join(', '))}</span>` : DAY_STATUS[r.status] || esc(r.status)}
@@ -931,8 +944,8 @@ function viewOffice() {
 }
 async function loadOffice(from, to) {
   const el = $('#list'); if (!el) return;
-  const [{ data, error }, man] = await Promise.all([sb.rpc('mini_hours_office', { p_from: from, p_to: to }),
-    sb.rpc('mini_manual_taps', { p_from: from, p_to: to })]);
+  const [{ data, error }, man, per] = await Promise.all([sb.rpc('mini_hours_office', { p_from: from, p_to: to }),
+    sb.rpc('mini_manual_taps', { p_from: from, p_to: to }), dayPeriods(from, to)]);
   if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
   const manual = {};
   for (const m of (man && man.data) || []) (manual[m.work_day_id] = manual[m.work_day_id] || []).push(m);
@@ -950,7 +963,7 @@ async function loadOffice(from, to) {
       <table><tr><th>Dia</th><th>Obra</th><th>Entrada / saída</th><th>Horas</th><th>Estado</th></tr>${rows.map((r) => `<tr>
         <td>${esc(new Date(r.shift_date + 'T12:00:00').toLocaleDateString('pt-PT', { weekday: 'short', day: '2-digit', month: '2-digit' }))}</td>
         <td>${esc(r.project_code)}</td>
-        <td>${esc(fmtHour(r.first_in))} – ${esc(fmtHour(r.last_out))}</td>
+        <td>${periodList(per[r.work_day_id]).map((p) => `<div>${esc(p)}</div>`).join('') || `${esc(fmtHour(r.first_in))} – ${esc(fmtHour(r.last_out))}`}</td>
         <td>${esc(fmtMin(r.worked_minutes))}${r.overtime_minutes ? `<div class="small">${esc(fmtMin(r.overtime_minutes))} extra ${r.overtime_approved ? 'aprovadas' : r.overtime_approved === false ? 'recusadas' : 'por decidir'}</div>` : ''}</td>
         <td>${r.anomalies.length ? `<span class="pill bad">${esc(r.anomalies.map((a) => ANOMALY[a] || a).join(', '))}</span>` : OFFICE_STATUS[r.status] || esc(r.status)}
           ${r.supervisor_name && r.status !== 'registered' ? `<div class="small muted">por ${esc(r.supervisor_name)}</div>` : ''}
@@ -998,7 +1011,14 @@ async function returnDay(id) {
 }
 // A CSV that Excel in Portugal opens directly: ";" between columns, decimal comma, UTF-8 with BOM.
 const hrs = (m) => ((m || 0) / 60).toFixed(2).replace('.', ',');
+// Text Excel must not turn into a number or a date: NIF (2,5E+08), Nº "0002" (2), the day (######).
+const asText = (v) => ({ text: String(v ?? '') });
 function csvCell(v) {
+  if (v && typeof v === 'object' && 'text' in v) {
+    if (v.text === '') return '';
+    if (/^[A-Za-z0-9 ./:_-]+$/.test(v.text)) return `"=""${v.text}"""`;
+    v = v.text;
+  }
   let s = String(v ?? '');
   if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;   // never let a cell run as a formula in Excel
   return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -1019,7 +1039,7 @@ async function downloadPayroll(from, to) {
   downloadCsv(`gestnow-salarios-${from.slice(0, 7)}${data.every((r) => r.all_closed) ? '' : '-provisorio'}.csv`,
     ['Nº', 'Nome', 'NIF', 'Empresa', 'Obra', 'Nome da obra', 'Dias', 'Horas normais', 'Horas extra aprovadas', 'Horas extra recusadas',
      'Horas noturnas', 'Horas em dia de descanso', 'Horas em feriado', 'Dias por aprovar', 'Fechado'],
-    data.map((r) => [r.employee_number, r.full_name, r.tax_number, r.organization, r.project_code, r.project_title, r.days_worked,
+    data.map((r) => [asText(r.employee_number), r.full_name, asText(r.tax_number), r.organization, r.project_code, r.project_title, r.days_worked,
       hrs(r.normal_minutes), hrs(r.overtime_approved_minutes), hrs(r.overtime_refused_minutes), hrs(r.night_minutes),
       hrs(r.rest_day_minutes), hrs(r.holiday_minutes), r.days_pending, r.all_closed ? 'sim' : 'não']));
   toast(pending ? `Folha provisória: ainda há ${pending} dia(s) por aprovar.` : 'Folha descarregada.');
@@ -1108,10 +1128,15 @@ async function downloadAct(site, from, to) {
   if (error) return toast(friendly(error));
   if (!data.length) return toast('Sem picagens nesta obra neste mês.');
   const s = state.sites.find((x) => x.id === site);
+  // The legal record shows every period of the day, in the site's time zone.
+  const per = await sb.rpc('mini_day_periods', { p_from: from, p_to: to, p_project: site });
+  const pmap = Object.fromEntries(((per && per.data) || []).map((p) => [`${p.employee_number}|${p.full_name}|${p.shift_date}`, periodList(p.periods)]));
+  const firstLast = (r) => { const l = pmap[`${r.employee_number}|${r.full_name}|${r.shift_date}`] || [];
+    return l.length ? [l[0].split('–')[0], l[l.length - 1].split('–')[1], l.join(' · ')] : [fmtHour(r.first_in), fmtHour(r.last_out), '']; };
   downloadCsv(`gestnow-registo-tempos-${s ? s.cost_center_code : 'obra'}-${from.slice(0, 7)}.csv`,
-    ['Nº', 'Nome', 'NIF', 'Empresa', 'Dia', 'Entrada', 'Saída', 'Pausa (h)', 'Horas trabalhadas', 'Horas extra', 'Horas noturnas',
+    ['Nº', 'Nome', 'NIF', 'Empresa', 'Dia', 'Entrada', 'Saída', 'Períodos (entrada–saída)', 'Pausa (h)', 'Horas trabalhadas', 'Horas extra', 'Horas noturnas',
      'Descanso', 'Feriado', 'Estado'],
-    data.map((r) => [r.employee_number, r.full_name, r.tax_number, r.organization, fmtDate(r.shift_date), fmtHour(r.first_in), fmtHour(r.last_out),
+    data.map((r) => [asText(r.employee_number), r.full_name, asText(r.tax_number), r.organization, asText(fmtDate(r.shift_date)), ...firstLast(r),
       hrs(r.break_minutes), hrs(r.worked_minutes), hrs(r.overtime_minutes), hrs(r.night_minutes), r.rest_day ? 'sim' : '', r.holiday ? 'sim' : '',
       { registered: 'por validar', supervisor_validated: 'validado na obra', hr_validated: 'aprovado', sent_to_payroll: 'fechado' }[r.status] || r.status]));
   toast('Registo descarregado.');
