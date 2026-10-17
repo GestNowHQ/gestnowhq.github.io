@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.gestnowhq.app",
+    "sha256_cert_fingerprints": ["9A:54:2C:F7:EA:1C:3B:B9:99:4B:99:FF:F7:0F:57:4E:D3:DE:C2:5D:68:00:8F:2E:11:92:4B:4B:76:37:B7:F0"]
+  }
+}]

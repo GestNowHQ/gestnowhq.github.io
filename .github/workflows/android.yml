@@ -1,0 +1,41 @@
+# Builds the GestNow Android app (the frame around the site) and leaves the unsigned bundle (.aab) on the
+# branch "android-build". It is signed outside GitHub with the upload key, then uploaded to Google Play.
+name: Android app
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['android/**', '.github/workflows/android.yml']
+permissions:
+  contents: write
+concurrency: android
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - uses: actions/setup-java@v4
+        with: { distribution: 'temurin', java-version: '17' }
+      - name: Wait for the icons on the live site
+        run: for i in $(seq 1 30); do curl -sf -o /dev/null https://gestnowhq.github.io/icons/icon-512.png && exit 0; sleep 10; done; exit 1
+      - name: Generate the Android project
+        run: |
+          mkdir -p /tmp/gen && cd /tmp/gen && npm init -y >/dev/null && npm i @bubblewrap/core@1.27.0 --no-audit --no-fund
+          NODE_PATH=/tmp/gen/node_modules node "$GITHUB_WORKSPACE/android/gerar.js" /tmp/twa "$((100 + GITHUB_RUN_NUMBER))"
+      - name: Build the bundle (unsigned)
+        working-directory: /tmp/twa
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon bundleRelease
+          ls -la app/build/outputs/bundle/release/
+      - name: Put the bundle on the android-build branch
+        run: |
+          mkdir /tmp/out && cp /tmp/twa/app/build/outputs/bundle/release/*.aab /tmp/out/gestnow-unsigned.aab
+          cp /tmp/twa/store_icon.png /tmp/out/ 2>/dev/null || true
+          echo "version code $((100 + GITHUB_RUN_NUMBER)) from ${GITHUB_SHA}" > /tmp/out/VERSION.txt
+          cd /tmp/out && git init -q && git checkout -q -b android-build
+          git config user.name "github-actions" && git config user.email "github-actions@users.noreply.github.com"
+          git add -A && git commit -qm "Android bundle $((100 + GITHUB_RUN_NUMBER)) from ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" android-build
