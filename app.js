@@ -727,6 +727,7 @@ function go(view) {
   if (state.me.role === 'worker') view = 'minhas';   // the worker profile has one screen (the database checks the same)
   else if (state.offline && view !== 'picar') { toast('Sem rede: por agora só podes picar.'); view = 'picar'; }
   stopNfc(); clearInterval(state.timer); clearInterval(state.tick); hideFlash(); openMore(false);
+  if (state.uiEl && window.GNUI) { window.GNUI.unmount(state.uiEl); state.uiEl = null; }
   state.view = view;
   app.classList.toggle('wide', view === 'secretariado' || view === 'painel');
   const tab = view === 'ficha' ? 'trabalhadores' : view;
@@ -3082,10 +3083,35 @@ async function loadSiteDetails(id) {
 const PROVIDER = { company: 'Empresa', client: 'Cliente', other: 'Outro', none: 'Não precisa' };
 const telLink = (t) => t ? `<a href="tel:${esc(String(t).replace(/ /g, ''))}">${esc(t)}</a>` : '';
 const fmtHours = (m) => `${Math.round((m || 0) / 6) / 10}`.replace('.', ',') + ' h';
+let uiLoading = null;
+function loadUI() {
+  if (window.GNUI) return Promise.resolve(window.GNUI);
+  if (!uiLoading) uiLoading = new Promise((resolve) => {
+    const css = Object.assign(document.createElement('link'), { rel: 'stylesheet', href: 'ui/gnui.css' });
+    document.head.appendChild(css);
+    const js = Object.assign(document.createElement('script'), { src: 'ui/gnui.js' });
+    js.onload = () => resolve(window.GNUI || null);
+    js.onerror = () => { uiLoading = null; resolve(null); };
+    document.head.appendChild(js);
+  });
+  return uiLoading;
+}
 async function viewSitePanel() {
   const id = state.panelSite || (currentSite() && currentSite().id);
   if (!id) { app.innerHTML = `<h1>Painel da obra</h1><div class="card">${empty('helmet', 'Ainda não há obras', 'Abre a primeira obra em Obras.')}</div>`; return; }
   if (activeSites().some((x) => x.id === id)) store(SITE_KEY, id);
+  app.innerHTML = `<div id="gnp" class="gnpage">${skel(4)}</div>`;
+  // The new look (React + Tailwind, ui/gnui.*), loaded the first time; the old screen stays as the fallback.
+  const ui = await loadUI();
+  const host = $('#gnp'); if (!host || !host.isConnected || state.view !== 'painel') return;
+  if (ui) {
+    host.innerHTML = ''; state.uiEl = host;
+    const api = { rpc: (fn, args) => sb.rpc(fn, args), friendly, toast,
+      sites: activeSites().map((x) => ({ id: x.id, title: x.title, code: x.cost_center_code })),
+      onSite: (sid) => { state.panelSite = sid; store(SITE_KEY, sid); ui.mountPainel(host, api, sid); } };
+    ui.mountPainel(host, api, id);
+    return;
+  }
   app.innerHTML = `<div class="noprint">${siteSelect('psite')}</div><div id="pnl" style="margin-top:14px">${skel(4)}</div>`;
   bindSiteSelect('psite', () => { state.panelSite = $('#psite').value; $('#pnl').innerHTML = skel(4); loadSitePanel(state.panelSite); });
   loadSitePanel(id);

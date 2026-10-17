@@ -1,5 +1,7 @@
 /* GestNow Mini: "ferramenta de obra". Petróleo da marca + amarelo de segurança. Grande, firme, legível ao sol e com luvas.
    Tokens em :root (claro), modo escuro pelo sistema, modo "Sol" (alto contraste) por botão ou prefers-contrast. */
+/* Everything below is the lowest cascade layer, so the new screens (ui/gnui.css) win inside .gn. */
+@layer legacy {
 [hidden] { display: none !important; }
 :root {
   color-scheme: light;
@@ -472,3 +474,5 @@ dl.kv a { color: var(--brand); }
 .logi .none span { color: var(--warn); }
 .painel-grid { display: grid; gap: 0 16px; }
 @media (min-width: 900px) { .painel-grid { grid-template-columns: 1fr 1fr; align-items: start; } .painel-grid .span2 { grid-column: 1 / -1; } }
+
+}
