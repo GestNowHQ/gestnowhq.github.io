@@ -1706,7 +1706,11 @@ const canPdCases = () => can('diarias.decidir_faltas');
 const PD_PROBLEM = { site_without_amount: 'obra sem valor de diária: põe-no em Obras', site_pays_none: 'esta obra não paga diária',
   no_days: 'sem dias para pagar nesta semana' };
 const PD_CASE = { to_decide: chip('warn', 'por decidir', 'warn'), deduct: chip('anom', 'a descontar'), excused: chip('ok', 'justificada', 'ok') };
-const pdKind = (c) => (c.kind === 'absent' ? 'faltou' : `só ${fmtMin(c.worked_minutes ?? c.minutes)}`);
+// A rest day abroad follows the working day around it: 'rest:<day>' names it (missed the day before, or did not come back).
+const pdRestOf = (c) => (String(c.kind).startsWith('rest:') ? c.kind.slice(5) : null);
+const pdKind = (c) => { const r = pdRestOf(c);
+  if (r) return r < c.day ? `dia de descanso, faltou ${dayLabel(r)}` : `dia de descanso, não voltou ${dayLabel(r)}`;
+  return c.kind === 'absent' ? 'faltou' : `só ${fmtMin(c.worked_minutes ?? c.minutes)}`; };
 const pdDays = (days) => (days || []).map((d) => dayLabel(d)).join(' · ');
 let pdSeq = 0;
 async function loadPerDiems() {
@@ -1821,18 +1825,22 @@ async function showPerDiemSettings() {
 async function loadPdCases(boxSel, project) {
   const box = $(boxSel); if (!box || !canPdCases()) return;
   const { data, error } = await sb.rpc('mini_per_diem_cases', { p_project: project || null });
-  if (!$(boxSel)) return;
+  if (!box.isConnected) return;
   if (error) { box.innerHTML = `<p class="small">${esc(friendly(error))}</p>`; return; }
   const card = box.closest('[data-pdcases]');
   const open = data.filter((c) => c.status === 'to_decide');
   if (card && card.dataset.pdcases === 'auto') card.hidden = !data.length;
   if (!data.length) { box.innerHTML = '<p class="muted small" style="margin:0">Nenhuma falta nas diárias pagas.</p>'; return; }
-  box.innerHTML = `${open.length ? `<p class="small" style="margin-top:0"><b>${open.length} por decidir.</b> A diária destes dias já foi paga.</p>` : ''}
+  // A rest day whose working day is also waiting is decided with it: no buttons of its own.
+  const follows = (c) => { const r = pdRestOf(c); return r && open.some((o) => o.collaborator_id === c.collaborator_id && o.day === r && !pdRestOf(o)); };
+  box.innerHTML = `${open.length ? `<p class="small" style="margin-top:0"><b>${open.length} por decidir.</b> A diária destes dias já foi paga.
+      No estrangeiro, quem falta ao dia de trabalho antes do descanso, ou não volta depois, perde também os dias de descanso. Baixa médica desconta: quem paga é o seguro.</p>` : ''}
     ${data.map((c) => `<div class="day"><div class="day-h"><span class="d">${esc(c.full_name)}</span><span class="chip code">${esc(c.project_code)}</span>
       <span class="hrs">${esc(euro(c.amount))}</span></div>
       <div class="per">${esc(dayLabel(c.day))}: ${esc(pdKind(c))}${c.reason ? ` · <span class="muted">${esc(c.reason)}</span>` : ''}</div>
       <div class="tags">${PD_CASE[c.status] || chip('', c.status)}${c.settled ? chip('', 'descontado: ' + c.settled) : ''}${c.decided_by_name ? chip('', c.decided_by_name) : ''}</div>
-      ${c.status === 'to_decide' && !c.is_me ? `<div class="acts"><button class="btn small" data-pdded="${esc(c.case_id)}">Descontar ${esc(euro(c.amount))}</button>
+      ${c.status === 'to_decide' && follows(c) ? `<p class="small muted" style="margin:6px 0 0">Decide-se com ${esc(dayLabel(pdRestOf(c)))}.</p>` : ''}
+      ${c.status === 'to_decide' && !c.is_me && !follows(c) ? `<div class="acts"><button class="btn small" data-pdded="${esc(c.case_id)}">Descontar ${esc(euro(c.amount))}</button>
         <button class="btn ghost small" data-pdok="${esc(c.case_id)}" data-name="${esc(c.full_name)}">Justificada</button></div>` : ''}</div>`).join('')}`;
   const decide = async (id, deduct, reason) => {
     const { error: e2 } = await sb.rpc('mini_per_diem_decide', { p_case: id, p_deduct: deduct, p_reason: reason || null });
@@ -1844,7 +1852,7 @@ async function loadPdCases(boxSel, project) {
   box.querySelectorAll('[data-pdok]').forEach((b) => b.onclick = async () => {
     const fd = await askSheet(`Diária de ${b.dataset.name}: justificada`, `<label for="pdwhy">Porquê? *</label>
       <input id="pdwhy" name="why" required minlength="5" maxlength="300" autofocus placeholder="ex.: foi ao médico, avisou antes">
-      <p class="small muted">A pessoa recebe a diária inteira deste dia. Fica escrito com o teu nome.</p>`, 'Aceitar justificação');
+      <p class="small muted">A pessoa recebe a diária inteira deste dia (e dos dias de descanso que dependem dele). Fica escrito com o teu nome. Baixa médica não se justifica aqui: desconta, quem paga é o seguro.</p>`, 'Aceitar justificação');
     if (fd) decide(b.dataset.pdok, false, String(fd.get('why') || '').trim());
   });
 }
