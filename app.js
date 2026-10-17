@@ -381,7 +381,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '17';
+const APP_VERSION = '18';
 const TABS = { supervisor: ['picar', 'naobra', 'horas', 'trabalhadores'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['seguranca', 'naobra', 'trabalhadores', 'picar'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -442,7 +442,7 @@ function idleTooLong(role) {
   let t = 0; try { t = Number(localStorage.getItem(ACTIVE_KEY)) || 0; } catch (_) {}
   return Date.now() - t > IDLE_MIN(role) * 60000;
 }
-async function idleOut() { state.idleOut = true; stopNfc(); state.ready = false; nav.hidden = true; await sb.auth.signOut({ scope: 'local' }); }
+async function idleOut() { state.idleOut = true; stopNfc(); state.ready = false; nav.hidden = true; closePalette(); await sb.auth.signOut({ scope: 'local' }); }
 let lastTouch = 0;
 ['pointerdown', 'keydown'].forEach((ev) => document.addEventListener(ev, () => {
   if (state.ready && Date.now() - lastTouch > 15000) { lastTouch = Date.now(); touch(); }
@@ -477,7 +477,7 @@ boot();
 async function boot() {
   stopNfc(); clearInterval(state.timer); clearInterval(state.tick); hideFlash(); openMore(false);
   state.ready = false; state.offline = false; nav.hidden = true; document.getElementById('whoami').hidden = true;
-  document.getElementById('sol').hidden = true; signedOut(true); showNet();
+  document.getElementById('sol').hidden = true; document.getElementById('search').hidden = true; closePalette(); signedOut(true); showNet();
   let session = null; let sErr = null;
   try { const r = await sb.auth.getSession(); session = r.data.session; sErr = r.error; } catch (e) { sErr = e; }
   if (!session) return (sErr && isNetErr(sErr)) || (navigator.onLine === false && storedSessionExists()) ? showNetworkError() : showLogin();
@@ -519,7 +519,7 @@ async function boot() {
   nav.querySelector('[data-view=painel]').hidden = worker || !canSiteDetails();
   if (state.view === 'minhas' && !me.collaborator_id) state.view = (TABS[me.role] || TABS.supervisor)[0];
   layoutNav(me.role);
-  signedOut(false); nav.hidden = false; document.getElementById('sol').hidden = false; showNet();
+  signedOut(false); nav.hidden = false; document.getElementById('sol').hidden = false; document.getElementById('search').hidden = me.role === 'worker'; showNet();
   await loadBasics();
   showWho();
   if (state.offline) { go('picar'); return; }
@@ -686,11 +686,70 @@ function showWho() {
   const el = document.getElementById('whoami');
   const many = me.profiles && me.profiles.length > 1;
   // Two lines: the role (never cut off) and, under it, whose account this is.
-  el.innerHTML = `<b>${esc(roleLabel(me.role))}${many ? ' ▾' : ''}</b><small>${esc(p ? p.full_name.split(' ')[0] + ' ' + p.full_name.split(' ').slice(-1)[0] : me.email)}</small>`;
+  const nm = p ? p.full_name.split(' ')[0] + ' ' + p.full_name.split(' ').slice(-1)[0] : me.email;
+  el.innerHTML = `${avatar(p ? p.full_name : me.email).replace('class="av ', 'class="av wav ')}<span class="wtx"><b>${esc(roleLabel(me.role))}${many ? ' ▾' : ''}</b><small>${esc(nm)}</small></span>`;
   el.setAttribute('aria-label', `${roleLabel(me.role)}, ${p ? p.full_name : me.email}${many ? '. Mudar de perfil' : ''}`);
   el.title = (p ? p.full_name : me.email) + (many ? ' · toca para mudar de perfil' : ''); el.className = 'who' + (PRIVILEGED.includes(me.role) ? ' strong' : '') + (many ? ' sw' : '');
   el.disabled = !many; el.hidden = false;
 }
+// Search everything (Ctrl+K or the magnifier in the top bar): the screens this login can open, and the people and sites
+// already loaded for it. Nothing new is fetched, and go() and each screen still check who may open what.
+const cmdk = document.getElementById('cmdk'); const cmdq = document.getElementById('cmdq'); const cmdl = document.getElementById('cmdl');
+const fold = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+function paletteItems(q) {
+  const n = fold(q.trim()); const has = (t) => fold(t).includes(n);
+  const open = (v) => { const b = nav.querySelector(`button[data-view="${v}"]`); return !!b && !b.hidden; };
+  const out = [];
+  nav.querySelectorAll('button[data-view]').forEach((b) => {
+    if (!b.hidden && (!n || has(b.textContent))) out.push({ g: 'Ecrãs', label: b.textContent.trim(), icon: b.querySelector('use').getAttribute('href').slice(3), run: () => go(b.dataset.view) });
+  });
+  if (n && open('trabalhadores')) for (const p of state.people) if (has(p.full_name) || has(p.employee_number)) {
+    out.push({ g: 'Pessoas', label: p.full_name, sub: [p.employee_number && 'nº ' + p.employee_number, p.job_title].filter(Boolean).join(' · '), av: true,
+      run: () => { state.worker = p.id; go('ficha'); } });
+  }
+  if (n) for (const st of state.sites) if (has(st.title) || has(st.cost_center_code)) {
+    const panel = open('painel') && st.status === 'execution';
+    out.push({ g: 'Obras', label: st.title, sub: st.cost_center_code + (panel ? ' · abrir painel' : ''), icon: 'crane',
+      run: () => { if (panel) { state.panelSite = st.id; go('painel'); } else go('obras'); } });
+  }
+  const acts = [];
+  if (state.me.profiles && state.me.profiles.length > 1 && !state.offline) acts.push({ label: 'Mudar de perfil', icon: 'users', run: switchProfile });
+  acts.push({ label: document.documentElement.dataset.theme === 'sol' ? 'Desligar modo sol' : 'Modo sol (mais contraste ao sol)', icon: 'sun', run: () => document.getElementById('sol').click() });
+  acts.push({ label: 'Sair', icon: 'out', run: signOut });
+  for (const a of acts) if (!n || has(a.label)) out.push({ g: 'Ações', ...a });
+  return out.slice(0, 40);
+}
+function renderPalette() {
+  const items = paletteItems(cmdq.value); cmdl._items = items; cmdl._sel = 0;
+  if (!items.length) { cmdl.innerHTML = `<p class="cmdk-none">Nada encontrado para “${esc(cmdq.value)}”.</p>`; return; }
+  let g = ''; cmdl.innerHTML = items.map((x, i) => (x.g !== g ? `<p class="cmdk-g">${esc(g = x.g)}</p>` : '') +
+    `<button type="button" role="option" data-i="${i}" aria-selected="${i === 0}">${x.av ? avatar(x.label) : `<span class="cmdk-ic">${ic(x.icon || 'go')}</span>`}
+      <span class="grow"><b>${esc(x.label)}</b>${x.sub ? `<small>${esc(x.sub)}</small>` : ''}</span>${ic('go', 'cmdk-go')}</button>`).join('');
+}
+function markPalette(i) {
+  const all = cmdl.querySelectorAll('button[data-i]'); if (!all.length) return;
+  cmdl._sel = (i + all.length) % all.length;
+  all.forEach((b, k) => b.setAttribute('aria-selected', String(k === cmdl._sel)));
+  all[cmdl._sel].scrollIntoView({ block: 'nearest' });
+}
+function runPalette(i) { const x = (cmdl._items || [])[i]; if (!x) return; closePalette(); x.run(); }
+function openPalette() {
+  if (!state.ready || !state.me || state.me.role === 'worker' || cmdk.open) return;
+  openMore(false); cmdq.value = ''; renderPalette(); cmdk.showModal(); cmdq.focus();
+}
+function closePalette() { const d = document.getElementById('cmdk'); if (d && d.open) d.close(); }   // also runs from boot(), before the consts above exist
+document.getElementById('search').addEventListener('click', openPalette);
+cmdq.addEventListener('input', renderPalette);
+cmdq.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowDown') { e.preventDefault(); markPalette(cmdl._sel + 1); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); markPalette(cmdl._sel - 1); }
+  else if (e.key === 'Enter') { e.preventDefault(); runPalette(cmdl._sel); }
+});
+cmdl.addEventListener('click', (e) => { const b = e.target.closest('button[data-i]'); if (b) runPalette(Number(b.dataset.i)); });
+cmdk.addEventListener('click', (e) => { if (e.target === cmdk) closePalette(); });   // tap outside the box
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); cmdk.open ? closePalette() : openPalette(); }
+});
 async function loadBasics() {
   const [s, p] = await Promise.all([
     core().from('projects').select('id, title, cost_center_code, status, address, timezone, country, municipality').order('title').retry(!state.offline),

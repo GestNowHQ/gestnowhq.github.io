@@ -33,12 +33,16 @@
     <symbol id="i-auto" viewBox="0 0 24 24"><path d="M4 9h13l-3-3M20 15H7l3 3"/></symbol>
     <symbol id="i-print" viewBox="0 0 24 24"><path d="M7 9V3h10v6M7 17H4v-7h16v7h-3M7 14h10v7H7z"/></symbol>
     <symbol id="i-card" viewBox="0 0 24 24"><path d="M3 6h18v12H3zM7 14h4"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><path d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4"/></symbol>
+    <symbol id="i-go" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0"/></symbol>
   </svg>
   <header class="top">
     <div class="brand"><svg class="logo" viewBox="0 0 44 44" aria-hidden="true"><rect width="44" height="44" rx="12" fill="#f5b301"/><path d="M11 26a11 11 0 0 1 22 0v3H11z" fill="#0f1d1c"/><rect x="9" y="28" width="26" height="4" rx="2" fill="#0f1d1c"/></svg><strong>GestNow <span>Mini</span></strong></div>
     <div id="net" class="net" hidden></div>
-    <button id="whoami" class="who" type="button" hidden></button>
+    <button id="search" class="search" type="button" hidden aria-label="Procurar pessoas, obras e ecrãs"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg><span>Procurar…</span><kbd>Ctrl K</kbd></button>
     <button id="sol" class="iconbtn" type="button" hidden aria-pressed="false" aria-label="Modo sol (alto contraste)" title="Modo sol (alto contraste)"><svg class="i"><use href="#i-sun"/></svg></button>
+    <button id="whoami" class="who" type="button" hidden></button>
   </header>
   <main id="app"><div class="skel" aria-busy="true"><div class="card"><span class="av"></span><div class="grow"><div class="sk" style="width:60%"></div><div class="sk" style="width:35%;margin-top:10px"></div></div></div></div></main>
   <nav id="nav" hidden aria-label="Menu">
@@ -58,6 +62,10 @@
       <button data-more aria-expanded="false" aria-controls="more"><svg class="i" aria-hidden="true"><use href="#i-more"/></svg><span>Mais</span></button>
     </div>
   </nav>
+  <dialog id="cmdk" class="cmdk" aria-label="Procurar">
+    <div class="cmdk-in"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg><input id="cmdq" type="search" placeholder="Procurar pessoa, obra ou ecrã…" autocomplete="off" aria-controls="cmdl"><kbd>Esc</kbd></div>
+    <div id="cmdl" class="cmdk-list" role="listbox"></div>
+  </dialog>
   <div id="flash" role="alert" aria-live="assertive" hidden></div>
   <div id="toast" role="status" aria-live="polite"></div>
   <script src="vendor/supabase-2.117.2.js"></script>
