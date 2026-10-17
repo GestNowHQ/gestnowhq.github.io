@@ -1003,7 +1003,7 @@ async function loadOnSite() {
 }
 function renderOnSite() {
   const el = $('#list'); const o = state.onsite; if (!el || !o) return;
-  const { site, list, tz, nowMin } = o;
+  const { site, list, tz, nowMin } = o; const me = state.me && state.me.collaborator_id;
   const n = (st) => list.filter((p) => p.st === st).length;
   const f = state.onsiteFilter;
   const shown = list.filter((p) => f === 'all' || p.st === f || (f === 'in' && p.st === 'miss' && p.since));
@@ -1023,9 +1023,18 @@ function renderOnSite() {
       return `<div class="card"><div class="wk">${avatar(p.name)}<div class="grow"><div class="nm">${esc(p.name)}</div>
         <div class="sub">${esc(sub)}</div>${p.org ? `<div class="sub">${esc(p.org)}${p.num ? ' · nº ' + esc(p.num) : ''}</div>` : ''}</div>
         ${chip(kind, LABEL[p.st], p.st === 'in' ? 'ok' : p.st === 'miss' ? 'warn' : '')}</div>
-        ${p.periods ? dayline(p.periods, p.today && p.st !== 'miss' ? { now: nowMin, axis: true } : { axis: true }) : ''}</div>`; }).join('')}</div>`
+        ${p.periods ? dayline(p.periods, p.today && p.st !== 'miss' ? { now: nowMin, axis: true } : { axis: true }) : ''}
+        ${['in', 'miss'].includes(p.st) && p.id !== me ? `<div class="acts noprint"><button class="btn small ${p.st === 'miss' ? '' : 'ghost'}" data-out="${esc(p.id)}">${ic('out')}Marcar saída</button></div>` : ''}</div>`; }).join('')}</div>`
     : `<div class="card">${empty('helmet', f === 'all' ? 'Ainda ninguém picou hoje' : 'Ninguém neste filtro', f === 'all' ? 'Quando alguém picar a entrada, aparece aqui.' : '')}</div>`}`;
   el.querySelectorAll('[data-f]').forEach((b) => b.onclick = () => { state.onsiteFilter = b.dataset.f; renderOnSite(); });
+  el.querySelectorAll('button[data-out]').forEach((b) => b.onclick = async () => {
+    const p = list.find((x) => x.id === b.dataset.out); if (!p) return;
+    // the day that lacks the exit: an earlier day first, otherwise today's open shift
+    const d = p.missDay || (p.st === 'in' && p.since ? null : p.today);
+    const since = d ? d.first_in : p.since;
+    const day = d ? d.shift_date : localDay(p.since || new Date().toISOString(), tz);
+    if (await markOut({ id: p.id, name: p.name, day, since, project: site.id })) loadOnSite();
+  });
 }
 
 // ------------------------------------------------------------------ Trabalhadores
@@ -1398,6 +1407,7 @@ async function loadHours(from, to) {
     if (!['registered', 'supervisor_validated'].includes(r.status) || r.collaborator_id === me) return '';
     let b;
     if (r.status !== 'registered' || onlyOpenToday(r, tz)) b = fixBtn(r, 'Picagens', 'ghost');
+    else if (r.anomalies.length && r.anomalies.every((a) => a === 'missing_out' || a === 'open_shift')) b = `<button class="btn small" data-out="${esc(r.work_day_id)}">${ic('out')}Marcar saída</button>` + fixBtn(r, 'Picagens', 'ghost');
     else if (r.anomalies.length) b = fixBtn(r, 'Corrigir', '');
     else if (r.overtime_minutes) b = `<button class="btn small" data-ok="${esc(r.work_day_id)}" data-ot="1">Validar com extra</button>
               <button class="btn ghost small" data-ok="${esc(r.work_day_id)}" data-ot="0">Sem extra</button>` + fixBtn(r, 'Picagens', 'ghost');
@@ -1434,6 +1444,10 @@ async function loadHours(from, to) {
   el.querySelectorAll('button[data-ok]').forEach((b) => b.onclick = () =>
     validate([b.dataset.ok], b.dataset.ot === undefined ? null : b.dataset.ot === '1'));
   el.querySelectorAll('button[data-fix], button[data-taps]').forEach((b) => b.onclick = () => fixDay(b.dataset.fix || b.dataset.taps, b.dataset.day, b.dataset.name));
+  el.querySelectorAll('button[data-out]').forEach((b) => b.onclick = async () => {
+    const r = data.find((x) => x.work_day_id === b.dataset.out); if (!r) return;
+    if (await markOut({ id: r.collaborator_id, name: r.full_name, day: r.shift_date, since: r.first_in, project: site.id })) viewHours();
+  });
   return data;
 }
 async function validate(ids, overtime) {
@@ -1476,6 +1490,52 @@ async function voidTap(eventId, collabId, day, name) {
   viewHours(); fixDay(collabId, day, name);
 }
 
+// ------------------------------------------------------------------ Folha de baixo (dialog) e "Marcar saída"
+// A sheet from the bottom with a small form. Resolves with the FormData, or null if cancelled.
+function askSheet(title, body, okLabel, onOpen) {
+  return new Promise((resolve) => {
+    const d = document.createElement('dialog'); d.className = 'dlg';
+    d.innerHTML = `<form method="dialog"><h2>${esc(title)}</h2>${body}
+      <div class="acts"><button class="btn big" value="ok">${esc(okLabel)}</button>
+      <button class="btn ghost wide" value="cancel" formnovalidate>Cancelar</button></div></form>`;
+    const form = d.querySelector('form'); let fd = null;
+    form.addEventListener('submit', (e) => { if (e.submitter && e.submitter.value === 'ok') fd = new FormData(form); });
+    d.addEventListener('close', () => { d.remove(); resolve(fd); });
+    d.addEventListener('click', (e) => { if (e.target === d) d.close(); });   // tap outside = cancel
+    document.body.appendChild(d); d.showModal(); if (onOpen) onOpen(d);
+  });
+}
+// The usual reasons, one tap; "Outro" asks for the words. Each one is long enough for the server (10 letters).
+const OUT_REASONS = ['Esqueceu-se de picar a saída', 'O cartão não leu à saída', 'Saiu mais cedo, com autorização', 'Saiu na hora normal, confirmado por mim'];
+// An exit someone forgot, in two taps: the time (the site's clock) and why. p = { id, name, day, since, project }.
+async function markOut(p) {
+  const tz = siteTz(p.project); const today = localDay(new Date().toISOString(), tz);
+  const nowIn = localInput(new Date().toISOString(), tz);
+  const sinceTxt = p.since ? `Entrou ${p.day === localDay(p.since, tz) ? 'às ' + fmtHour(p.since, tz) : fmtTime(p.since, tz)}.` : '';
+  const fd = await askSheet(`Marcar saída de ${p.name}`, `
+    <p class="small muted">${esc(fmtDate(p.day))}${sinceTxt ? ' · ' + esc(sinceTxt) : ''} Hora da obra (${esc(tzName(tz))}).</p>
+    <div class="row"><div><label for="od">Dia</label><input id="od" name="d" type="date" required value="${esc(p.day)}" max="${esc(today)}"></div>
+      <div><label for="ot">Hora da saída *</label><input id="ot" name="t" type="time" required autofocus value="${p.day === today ? esc(nowIn.slice(11)) : ''}"></div></div>
+    <label>Porquê? *</label><div class="chips reasons" role="radiogroup">${OUT_REASONS.map((r, i) => `<label class="chip"><input type="radio" name="r" value="${esc(r)}" ${i ? '' : 'required'}>${esc(r)}</label>`).join('')}
+      <label class="chip"><input type="radio" name="r" value="">Outro motivo</label></div>
+    <input name="x" id="ox" placeholder="Escreve o motivo" hidden maxlength="200">
+    <p class="small muted">Fica marcada como posta à mão, com o teu nome e o motivo. O escritório vê-a.</p>`, 'Marcar saída', (d) => {
+    const x = d.querySelector('#ox');
+    d.querySelectorAll('input[name=r]').forEach((r) => r.onchange = () => { x.hidden = r.value !== ''; x.required = r.value === ''; if (!x.hidden) x.focus(); });
+  });
+  if (!fd) return false;
+  const at = zonedToUtc(`${fd.get('d')}T${fd.get('t')}`, tz);
+  const why = String(fd.get('r') || fd.get('x') || '').trim();
+  if (!at) { toast('Escreve a hora da saída.'); return false; }
+  if (new Date(at) > new Date(Date.now() + 60000)) { toast('A hora da saída não pode ser depois de agora.'); return false; }
+  if (p.since && new Date(at) <= new Date(p.since)) { toast(`A saída tem de ser depois da entrada (${fmtTime(p.since, tz)}).`); return false; }
+  if (why.length < 10) { toast('Escreve o motivo (pelo menos 10 letras).'); return false; }
+  const { error } = await sb.rpc('mini_add_missed_tap', { p_collab: p.id, p_project: p.project, p_direction: 'out', p_time: at, p_reason: why });
+  if (error) { toast(friendly(error)); return false; }
+  toast(`Saída marcada: ${p.name}, ${fmtTime(at, tz)}.`);
+  return true;
+}
+
 // ------------------------------------------------------------------ Secretariado (RH): todas as obras, aprovar, fechar o mês
 // The site validates, the office approves or sends a day back, and closes the month for payroll.
 // After closing, nobody can change those days (the database refuses).
@@ -1503,7 +1563,7 @@ function viewOffice() {
         <button class="btn ghost wide" id="prim">Ficheiro para o Primavera (Relógio de Ponto)</button></div>
       ${more('Sobre o ficheiro do Primavera', '<p>Horas extra aprovadas, uma linha por pessoa, dia e tipo (1.ª hora, seguintes, descanso, feriado, e os mesmos acima das 100 h do ano). As noturnas não vão neste ficheiro. No Primavera: Recursos Humanos › Alterações Mensais › Relógio de Ponto. O "Nº de trabalhador" tem de ser o número do funcionário no Primavera.</p>')}
       <details class="fold" id="primcfg"><summary><span>Configurar o ficheiro do Primavera<span class="sub">Códigos de horas extra, formato e posições</span></span></summary><div id="primform">${skel(1)}</div></details>
-      <div id="close"></div></div>
+</div>
     <div class="card noprint"><h2 style="margin-top:0">Registo de tempos (ACT)</h2>
       <p class="small muted">Registo legal das entradas e saídas de uma obra. Guardar 5 anos.</p>
       ${more('Porquê', '<p>Código do Trabalho, art. 202. Mostra-o se a inspeção pedir.</p>')}
@@ -1527,60 +1587,136 @@ async function loadOffice(from, to) {
   if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; $('#sum').innerHTML = ''; return; }
   const manual = {};
   for (const m of (man && man.data) || []) (manual[m.work_day_id] = manual[m.work_day_id] || []).push(m);
+  const me = state.me && state.me.collaborator_id;
   const n = (st) => data.filter((r) => r.status === st).length;
+  for (const r of data) r.flags = dayFlags(r, manual[r.work_day_id]);
+  const open = (r) => ['registered', 'supervisor_validated'].includes(r.status);
+  const noExit = (r) => open(r) && r.anomalies.some((a) => a === 'missing_out' || a === 'open_shift') && !onlyOpenToday(r, siteTz(r.project_id));
+  // Approve by exception: the office looks only at the days with a reason to look; the rest go in one tap.
+  const look = data.filter((r) => (r.status === 'supervisor_validated' && r.flags.length) || noExit(r));
+  const clean = data.filter((r) => r.status === 'supervisor_validated' && !r.flags.length && !noExit(r) && r.collaborator_id !== me);
   $('#sum').innerHTML = `<div class="kpis k4">
       <div class="kpi"><b>${n('registered')}</b> <span>por validar na obra</span></div>
-      <div class="kpi ${n('supervisor_validated') ? 'hot' : ''}"><b>${n('supervisor_validated')}</b> <span>à tua espera</span></div>
+      <div class="kpi ${look.length ? 'warn' : ''}"><b>${look.length}</b> <span>precisam de ti</span></div>
       <div class="kpi ok"><b>${n('hr_validated')}</b> <span>aprovados</span></div>
       <div class="kpi"><b>${n('sent_to_payroll')}</b> <span>fechados</span></div></div>
-    ${n('supervisor_validated') ? `<p><button class="btn big acc" id="approveAll">${ic('ok')}Aprovar todos os dias validados na obra</button></p>` : ''}`;
-  if (!data.length) el.innerHTML = `<div class="card">${empty('calendar', 'Sem horas neste mês', 'Escolhe outro mês, ou espera que as obras piquem.')}</div>`;
+    <div id="checklist"></div>`;
+  if (!data.length) { el.innerHTML = `<div class="card">${empty('calendar', 'Sem horas neste mês', 'Escolhe outro mês, ou espera que as obras piquem.')}</div>`; }
   else {
-    const byWorker = {};
-    for (const r of data) (byWorker[r.collaborator_id] = byWorker[r.collaborator_id] || []).push(r);
-    const me = state.me && state.me.collaborator_id;
-    el.innerHTML = Object.values(byWorker).map((rows) => {
+    const byWorker = (rows) => { const g = {}; for (const r of rows) (g[r.collaborator_id] = g[r.collaborator_id] || []).push(r); return Object.values(g); };
+    const card = (rows, withFlags) => {
       const tot = rows.reduce((a, r) => a + r.worked_minutes, 0);
-      const warn = rows.filter((r) => r.anomalies.length || (manual[r.work_day_id] || []).length || r.returned_reason).length;
       return `<div class="card pcard"><div class="wk">${avatar(rows[0].full_name)}<div class="grow"><h2 style="margin:0;font-size:19px">${esc(rows[0].full_name)}</h2>
         <div class="sub">${rows[0].employee_number ? 'nº ' + esc(rows[0].employee_number) + ' · ' : ''}${rows.length} dia(s)</div></div>
-        <div style="text-align:right"><div class="hrs" style="font-size:20px;font-weight:800">${esc(fmtMin(tot))}</div>${warn ? chip('warn', `${warn} aviso(s)`) : ''}</div></div>
-      ${rows.map((r) => { const tz = siteTz(r.project_id); const list = periodsOf(r, per[r.work_day_id], tz);
-        return `<div class="day"><div class="day-h"><span class="d">${esc(dayLabel(r.shift_date))}</span><span class="chip code">${esc(r.project_code)}</span>
-          <span class="hrs">${esc(fmtMin(r.worked_minutes))}</span></div>
-        <div class="per">${periodsHtml(list) || '<span class="muted">sem picagens</span>'}</div>
-        <div class="tags">${r.anomalies.length ? (onlyOpenToday(r, tz) ? chip('warn', r.anomalies.map((a) => anomalyText(a, r.shift_date, tz)).join(', '), 'clock') : chip('anom', r.anomalies.map((a) => anomalyText(a, r.shift_date, tz)).join(', '), 'warn')) : OFFICE_STATUS[r.status] || chip('', r.status)}
-          ${r.overtime_minutes ? chip(r.overtime_approved ? 'info' : r.overtime_approved === false ? '' : 'warn', `${fmtMin(r.overtime_minutes)} extra ${r.overtime_approved ? 'aprovadas' : r.overtime_approved === false ? 'recusadas' : 'por decidir'}`) : ''}
-          ${r.returned_reason ? chip('dev', 'devolvido') : ''}</div>
-        ${r.supervisor_name && r.status !== 'registered' ? `<div class="note">por ${esc(r.supervisor_name)}</div>` : ''}
-        ${r.returned_reason ? `<div class="note">Devolvido: ${esc(r.returned_reason)}</div>` : ''}
-        ${(manual[r.work_day_id] || []).map((m) => `<div class="note"><span class="chip warn">${esc(tapKind(m.reason))}</span> ${m.direction === 'in' ? 'Entrada' : 'Saída'} ${esc(fmtHour(m.effective_time, tz))}, por ${esc(m.added_by || '?')}: ${esc(m.reason || '')}</div>`).join('')}
-        ${['supervisor_validated', 'hr_validated'].includes(r.status) && r.collaborator_id !== me ? `<div class="acts noprint">
-          ${r.status === 'supervisor_validated' ? `<button class="btn small" data-approve="${esc(r.work_day_id)}">Aprovar</button>` : ''}
-          <button class="btn ghost small" data-back="${esc(r.work_day_id)}">Devolver</button></div>` : ''}</div>`; }).join('')}</div>`;
-    }).join('');
-  }
-  const ready = data.filter((r) => r.status === 'supervisor_validated' && r.collaborator_id !== (state.me && state.me.collaborator_id));
-  if ($('#approveAll')) $('#approveAll').onclick = () => approveDays(ready.map((r) => r.work_day_id));
-  el.querySelectorAll('button[data-approve]').forEach((b) => b.onclick = () => approveDays([b.dataset.approve]));
-  el.querySelectorAll('button[data-back]').forEach((b) => b.onclick = () => returnDay(b.dataset.back));
-  // Closing: only a month that is over, with every day approved.
-  const box = $('#close'); if (!box) return;
-  const pending = data.filter((r) => ['registered', 'supervisor_validated'].includes(r.status)).length;
-  const toClose = data.filter((r) => r.status === 'hr_validated').length;
-  if (to >= isoDay(new Date())) box.innerHTML = `<div class="nonfc">${ic('clock')}<span>O mês ainda não acabou: só se fecha depois do último dia.</span></div>`;
-  else if (pending) box.innerHTML = `<div class="nonfc">${chip('warn', `${pending} dia(s) por aprovar`)}<span>Aprova ou devolve todos antes de fechar.</span></div>`;
-  else if (!toClose) box.innerHTML = data.length ? `<div class="nonfc">${chip('fech', 'Mês fechado')}<span>Estas horas já seguiram para os salários.</span></div>` : '';
-  else {
-    box.innerHTML = `<p style="margin-top:16px"><button class="btn big" id="closeMonth">Fechar o mês para os salários</button></p>
-      <p class="small muted">Depois de fechar, ninguém pode mudar as horas deste mês.</p>`;
-    $('#closeMonth').onclick = async () => {
-      if (!confirm('Fechar o mês? Depois disto ninguém pode mudar as horas deste mês.')) return;
-      const { data: n, error: e } = await sb.rpc('mini_close_period', { p_from: from, p_to: to });
-      if (e) return toast(friendly(e));
-      toast(`Mês fechado: ${n} dia(s) seguiram para os salários.`); viewOffice();
+        <div class="hrs" style="font-size:20px;font-weight:800">${esc(fmtMin(tot))}</div></div>
+        ${rows.map((r) => officeDay(r, manual[r.work_day_id], per, me, withFlags, noExit(r))).join('')}</div>`;
     };
+    el.innerHTML = `<div class="sec-h"><h2>Precisam de ti</h2>${chip(look.length ? 'warn' : 'ok', String(look.length))}</div>
+      ${look.length ? byWorker(look).map((rows) => card(rows, true)).join('')
+        : `<div class="card">${empty('check', 'Nada para rever', 'Não há dias com problemas, picagens à mão ou horas fora do normal.')}</div>`}
+      <div class="sec-h"><h2>Sem problemas</h2>${chip(clean.length ? 'ok' : '', String(clean.length))}</div>
+      <div class="card">${clean.length ? `<p class="small muted" style="margin-top:0">Validados na obra, sem avisos: picagens do cartão, sem extra longa, sem descanso nem feriado.</p>
+        <p><button class="btn big acc" id="approveClean">${ic('ok')}Aprovar ${clean.length} dia(s) sem problemas</button></p>
+        <details class="fold"><summary><span>Ver os ${clean.length} dia(s)<span class="sub">${byWorker(clean).length} pessoa(s)</span></span></summary><div>
+          ${byWorker(clean).map((rows) => `<div class="day"><div class="day-h"><span class="d">${esc(rows[0].full_name)}</span>
+            <span class="hrs">${esc(fmtMin(rows.reduce((a, r) => a + r.worked_minutes, 0)))}</span></div>
+            <div class="per small">${rows.map((r) => `${esc(dayLabel(r.shift_date))} ${esc(r.project_code)} ${esc(fmtMin(r.worked_minutes))}`).join(' · ')}</div></div>`).join('')}</div></details>`
+        : '<p class="muted" style="margin:0">Nenhum dia à espera de aprovação simples.</p>'}</div>
+      <details class="fold card" style="margin-top:16px"><summary><span>Todos os dias do mês<span class="sub">${data.length} dia(s), todos os estados</span></span></summary><div id="alldays"></div></details>`;
+    const all = el.querySelector('details.fold.card');
+    all.ontoggle = () => { if (all.open && !$('#alldays').innerHTML) $('#alldays').innerHTML = byWorker(data).map((rows) => card(rows, false)).join(''), bindDays(); };
   }
+  const bindDays = () => {
+    el.querySelectorAll('button[data-approve]').forEach((b) => b.onclick = () => approveDays([b.dataset.approve]));
+    el.querySelectorAll('button[data-back]').forEach((b) => b.onclick = () => returnDay(b.dataset.back));
+    el.querySelectorAll('button[data-out]').forEach((b) => b.onclick = async () => {
+      const r = data.find((x) => x.work_day_id === b.dataset.out); if (!r) return;
+      if (await markOut({ id: r.collaborator_id, name: r.full_name, day: r.shift_date, since: r.first_in, project: r.project_id })) viewOffice();
+    });
+  };
+  bindDays();
+  if ($('#approveClean')) $('#approveClean').onclick = () => approveDays(clean.map((r) => r.work_day_id));
+  closeChecklist(data, from, to, noExit);
+}
+// Why a day needs the office's eye. Empty = approve without looking.
+function dayFlags(r, manual) {
+  const tz = siteTz(r.project_id); const f = [];
+  if (r.anomalies.length && !onlyOpenToday(r, tz)) f.push(['anom', r.anomalies.map((a) => anomalyText(a, r.shift_date, tz)).join(', ')]);
+  for (const k of new Set((manual || []).map((m) => tapKind(m.reason)))) f.push(['warn', k === 'à mão' ? 'picagem à mão' : k]);
+  if (r.returned_reason) f.push(['dev', 'já foi devolvido']);
+  if (r.special_day_minutes) f.push(['info', r.is_holiday ? 'trabalhou em feriado' : 'trabalhou em dia de descanso']);
+  if (r.overtime_minutes && r.overtime_approved == null) f.push(['warn', 'extra por decidir']);
+  else if (r.overtime_minutes > 120) f.push(['info', `${fmtMin(r.overtime_minutes)} extra${r.overtime_approved ? ' aprovadas' : ''}`]);
+  if (r.worked_minutes > 12 * 60) f.push(['warn', 'mais de 12 h no dia']);
+  return f;
+}
+// One day in the office lists: site, periods, status, why it is here, who validated, and the actions.
+function officeDay(r, manual, per, me, withFlags, noExit) {
+  const tz = siteTz(r.project_id); const list = periodsOf(r, per[r.work_day_id], tz);
+  const mine = r.collaborator_id === me;
+  return `<div class="day"><div class="day-h"><span class="d">${esc(dayLabel(r.shift_date))}</span><span class="chip code">${esc(r.project_code)}</span>
+      <span class="hrs">${esc(fmtMin(r.worked_minutes))}</span></div>
+    <div class="per">${periodsHtml(list) || '<span class="muted">sem picagens</span>'}</div>
+    <div class="tags">${OFFICE_STATUS[r.status] || chip('', r.status)}
+      ${r.overtime_minutes && !(withFlags && r.flags.some(([, t]) => / extra|extra /.test(t))) ? chip(r.overtime_approved ? 'info' : r.overtime_approved === false ? '' : 'warn', `${fmtMin(r.overtime_minutes)} extra ${r.overtime_approved ? 'aprovadas' : r.overtime_approved === false ? 'recusadas' : 'por decidir'}`) : ''}</div>
+    ${withFlags && r.flags.length ? `<div class="why">${r.flags.map(([k, t]) => chip(k, t, k === 'anom' || k === 'warn' ? 'warn' : '')).join('')}</div>` : ''}
+    ${!withFlags && r.anomalies.length ? `<div class="why">${chip(onlyOpenToday(r, tz) ? 'warn' : 'anom', r.anomalies.map((a) => anomalyText(a, r.shift_date, tz)).join(', '), onlyOpenToday(r, tz) ? 'clock' : 'warn')}</div>` : ''}
+    ${r.supervisor_name && r.status !== 'registered' ? `<div class="note">validado por ${esc(r.supervisor_name)}</div>` : ''}
+    ${r.returned_reason ? `<div class="note">Devolvido: ${esc(r.returned_reason)}</div>` : ''}
+    ${(manual || []).map((m) => `<div class="note"><span class="chip warn">${esc(tapKind(m.reason))}</span> ${m.direction === 'in' ? 'Entrada' : 'Saída'} ${esc(fmtHour(m.effective_time, tz))}, por ${esc(m.added_by || '?')}: ${esc(m.reason || '')}</div>`).join('')}
+    ${mine ? '' : `<div class="acts noprint">
+      ${noExit ? `<button class="btn small" data-out="${esc(r.work_day_id)}">${ic('out')}Marcar saída</button>` : ''}
+      ${r.status === 'supervisor_validated' && !noExit ? `<button class="btn small" data-approve="${esc(r.work_day_id)}">Aprovar</button>` : ''}
+      ${['supervisor_validated', 'hr_validated'].includes(r.status) ? `<button class="btn ghost small" data-back="${esc(r.work_day_id)}">Devolver</button>` : ''}</div>`}</div>`;
+}
+// The month close as a checklist: what is still missing, where, and the button only when nothing is.
+async function closeChecklist(data, from, to, noExit) {
+  const box = $('#checklist'); if (!box) return;
+  const today = isoDay(new Date()); const me = state.me && state.me.collaborator_id;
+  const bySite = (rows) => { const g = {}; for (const r of rows) g[r.project_code + ' ' + r.project_title] = (g[r.project_code + ' ' + r.project_title] || 0) + 1;
+    return Object.entries(g).map(([k, v]) => `${k}: ${v}`).join(' · '); };
+  const names = (rows) => { const u = [...new Set(rows.map((r) => r.full_name))]; return u.slice(0, 4).join(', ') + (u.length > 4 ? ` e mais ${u.length - 4}` : ''); };
+  const atSite = data.filter((r) => r.status === 'registered' && !noExit(r));
+  const exits = data.filter(noExit);
+  const toApprove = data.filter((r) => r.status === 'supervisor_validated' && !noExit(r));
+  const ownDays = toApprove.filter((r) => r.collaborator_id === me);
+  const toClose = data.filter((r) => r.status === 'hr_validated').length;
+  const closed = data.length > 0 && data.every((r) => r.status === 'sent_to_payroll');
+  const noNum = [...new Set(data.filter((r) => (r.overtime_minutes || r.special_day_minutes) && !r.employee_number).map((r) => r.full_name))];
+  const steps = [
+    { ok: to < today, t: 'O mês acabou', s: to < today ? `Último dia: ${fmtDate(to)}.` : `Só se fecha depois de ${fmtDate(to)}.` },
+    { ok: !exits.length, t: 'Nenhuma saída em falta', s: exits.length ? `${exits.length} dia(s): ${names(exits)}. Usa «Marcar saída» em «Precisam de ti».` : 'Todas as entradas têm saída.' },
+    { ok: !atSite.length, t: 'As obras validaram tudo', s: atSite.length ? `Faltam ${atSite.length} dia(s). ${bySite(atSite)}. O encarregado valida em «Horas».` : 'Todos os dias foram validados na obra.' },
+    { ok: !toApprove.length, t: 'Aprovaste tudo', s: toApprove.length ? `${toApprove.length} dia(s) à tua espera.${ownDays.length ? ` ${ownDays.length} são teus: outra pessoa do escritório tem de os aprovar.` : ''}` : 'Nada à tua espera.' },
+  ];
+  const done = steps.filter((x) => x.ok).length;
+  // Primavera: not needed to close, but the file will not come out without it (only approved days count there).
+  let prim = null;
+  try {
+    const [{ data: c }, { data: lines }] = await Promise.all([sb.rpc('mini_payroll_settings'), sb.rpc('mini_primavera_lines', { p_from: from, p_to: to })]);
+    const labels = Object.fromEntries(PRIM_CATS);
+    const noCode = c && lines ? [...new Set(lines.filter((l) => !c.codes[l.category]).map((l) => labels[l.category] || l.category))] : [];
+    const issues = [];
+    if (noNum.length) issues.push(`Falta o Nº de trabalhador de: ${noNum.join(', ')}.`);
+    if (noCode.length) issues.push(`Falta o código para: ${noCode.join('; ')}.`);
+    prim = { ok: !issues.length, t: 'Pronto para o Primavera', s: issues.length ? issues.join(' ') : 'Números e códigos completos para as horas aprovadas.' };
+  } catch (_) { /* the list still works without it */ }
+  if (!$('#checklist')) return;
+  const li = (x, cls) => `<li class="${cls}"><span class="dot">${ic(cls === 'done' ? 'ok' : cls === 'info' ? 'warn' : 'clock')}</span><div><b>${esc(x.t)}</b><div class="sub">${esc(x.s)}</div></div></li>`;
+  box.innerHTML = `<div class="card"><h2 style="margin-top:0">${closed ? 'Mês fechado' : 'Fechar o mês'}</h2>
+    ${closed ? `<div class="nonfc">${chip('fech', 'Mês fechado')}<span>Estas horas já seguiram para os salários. Ninguém as pode mudar.</span></div>`
+    : `<div class="prog" role="progressbar" aria-valuemin="0" aria-valuemax="4" aria-valuenow="${done}"><i style="width:${done * 25}%"></i></div>
+      <p class="small muted" style="margin:0">${done} de 4 passos feitos</p>
+      <ol class="steps">${steps.map((x) => li(x, x.ok ? 'done' : 'todo')).join('')}${prim ? li(prim, prim.ok ? 'done' : 'info') : ''}</ol>
+      ${done === 4 && toClose ? `<p style="margin-top:12px"><button class="btn big" id="closeMonth">${ic('ok')}Fechar o mês para os salários</button></p>
+        <p class="small muted">${toClose} dia(s) seguem para os salários. Depois de fechar, ninguém pode mudar as horas deste mês.</p>` : ''}`}</div>`;
+  const b = $('#closeMonth');
+  if (b) b.onclick = async () => {
+    if (!confirm(`Fechar ${fmtDate(from)} a ${fmtDate(to)}? Depois disto ninguém pode mudar as horas deste mês.`)) return;
+    const { data: k, error: e } = await sb.rpc('mini_close_period', { p_from: from, p_to: to });
+    if (e) return toast(friendly(e));
+    toast(`Mês fechado: ${k} dia(s) seguiram para os salários.`); viewOffice();
+  };
 }
 async function approveDays(ids) {
   if (!ids.length) return;

@@ -317,6 +317,33 @@ body.signed-out { background: var(--top-bg); }
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
 
+/* ---------------------------------------------------------------- folha de baixo (Marcar saída) */
+dialog.dlg { position: fixed; inset: auto 0 0 0; margin: 0 auto; width: 100%; max-width: 560px; max-height: 92vh; overflow: auto; border: 0; padding: 20px 16px calc(16px + env(safe-area-inset-bottom));
+  background: var(--surface); color: var(--ink); border-radius: var(--r-lg) var(--r-lg) 0 0; box-shadow: var(--sh-2); animation: up .22s var(--ease); }
+dialog.dlg::backdrop { background: rgba(5,12,12,.55); }
+dialog.dlg h2 { margin: 0 0 4px; }
+.chips.reasons { flex-wrap: wrap; overflow: visible; }
+.chips.reasons label.chip { display: inline-flex; margin: 0; min-height: 44px; padding: 8px 14px; font-size: 15px; font-weight: 650; cursor: pointer; white-space: normal; border: var(--bw) solid var(--line); background: var(--surface); position: relative; }
+.chips.reasons input { position: absolute; opacity: 0; pointer-events: none; }
+.chips.reasons .chip:has(input:checked) { background: var(--brand); color: var(--on-brand); border-color: var(--brand); }
+.chips.reasons .chip:has(input:focus-visible) { outline: 3px solid var(--accent); outline-offset: 2px; }
+/* ---------------------------------------------------------------- fecho do mês (lista) */
+.steps { list-style: none; margin: 8px 0 0; padding: 0; }
+.steps li { display: flex; gap: 12px; align-items: flex-start; padding: 12px 0; border-top: var(--bw) solid var(--line); }
+.steps li:first-child { border-top: 0; }
+.steps .dot { flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); color: var(--ink-2); }
+.steps .dot .i { width: 18px; height: 18px; }
+.steps li.done .dot { background: var(--ok-fill); color: #fff; }
+.steps li.todo .dot { background: var(--warn-fill); color: var(--on-warn-fill); }
+.steps li.info .dot { background: var(--info-bg); color: var(--info); }
+.steps b { display: block; font-size: 16px; }
+.steps .sub { font-size: 14px; color: var(--ink-2); margin-top: 2px; }
+.steps .acts { margin-top: 8px; }
+.prog { height: 10px; border-radius: 999px; background: var(--surface-2); overflow: hidden; margin: 10px 0 4px; }
+.prog > i { display: block; height: 100%; background: var(--ok-fill); border-radius: 999px; transition: width .4s var(--ease); }
+.sec-h { display: flex; align-items: baseline; gap: 10px; margin: 22px 0 8px; }
+.sec-h h2 { margin: 0; }
+.why { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 /* ---------------------------------------------------------------- print (emergency list, hours sheet) */
 .print-only { display: none; }
 @media print {
