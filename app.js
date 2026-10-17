@@ -381,7 +381,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '20';
+const APP_VERSION = '21';
 const TABS = { supervisor: ['picar', 'naobra', 'horas', 'trabalhadores'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['seguranca', 'naobra', 'trabalhadores', 'picar'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -528,6 +528,32 @@ async function boot() {
   const other = queue().filter((x) => x._u && x._u !== state.me.user_id);
   if (other.length) toast(`Há ${other.length} picagem(ns) de outra conta neste telemóvel, ainda por enviar.`);
   go(state.view);
+  showBrief();
+}
+// Once a day, on the first screen: what needs this person today, in one line, from the control room's numbers.
+// Only for logins that can see the site panels (the same check as the control room's database function).
+const BRIEF_KEY = 'gestnow.brief';
+async function showBrief() {
+  if (state.offline || !state.me || state.me.role === 'worker' || !canSiteDetails()) return;
+  const key = state.me.user_id + ':' + isoDay(new Date());
+  if (load(BRIEF_KEY, '') === key || state.view === 'painel') return;
+  const { data, error } = await sb.rpc('mini_control_room');
+  if (error || !data || !Array.isArray(data.sites) || !state.ready || state.view === 'painel' || $('#brief')) return;
+  store(BRIEF_KEY, key);
+  const sum = (k) => data.sites.reduce((a, x) => a + (x[k] || 0), 0);
+  const parts = [[sum('blocked'), 'pessoa(s) não podem entrar'], [sum('missing_out'), 'saída(s) em falta'], [sum('to_validate'), 'dia(s) por validar na obra'],
+    [sum('to_approve'), 'dia(s) por aprovar no escritório'], [sum('expiring'), 'documento(s) a caducar em 30 dias']].filter(([n]) => n > 0);
+  const me = state.people.find((x) => x.id === state.me.collaborator_id);
+  const h = tzParts(Date.now(), DEFAULT_TZ).hour % 24;
+  const hello = (h >= 6 && h < 13 ? 'Bom dia' : h >= 13 && h < 20 ? 'Boa tarde' : 'Boa noite') + (me ? ', ' + me.full_name.split(' ')[0] : '');
+  const text = parts.length ? 'Hoje: ' + parts.map(([n, t]) => `<b>${n}</b> ${esc(t)}`).join(' · ') + '.'
+    : `Tudo em ordem nas tuas ${data.sites.length} obra(s).`;
+  const el = document.createElement('div'); el.id = 'brief'; el.className = 'brief' + (parts.length ? '' : ' ok'); el.setAttribute('role', 'status');
+  el.innerHTML = `<span class="brief-ic">${ic(parts.length ? 'warn' : 'ok')}</span><div class="grow"><b>${esc(hello)}.</b> <span>${text}</span></div>
+    ${parts.length ? '<button class="btn small" data-go>Ver o painel</button>' : ''}<button class="iconbtn" data-x aria-label="Fechar">${ic('x')}</button>`;
+  app.prepend(el);
+  el.querySelector('[data-x]').onclick = () => el.remove();
+  if (el.querySelector('[data-go]')) el.querySelector('[data-go]').onclick = () => go('painel');
 }
 // No network at all (and nothing to open offline): say it plainly, never "no access", and try again by itself.
 function showNetworkError() {
