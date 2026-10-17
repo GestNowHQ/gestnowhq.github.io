@@ -62,6 +62,16 @@ const ERRORS = [
   [/this profile is not yours/i, 'Esse perfil não é teu. Pede ao administrador.'],
   [/admin is given only/i, 'O perfil de administrador só se dá com aprovação de uma segunda pessoa.'],
   [/an admin keeps the admin profile/i, 'Um administrador mantém sempre o perfil de administrador.'],
+  [/department name needs/i, 'O nome do departamento tem de ter entre 2 e 60 letras.'],
+  [/choose the type of access/i, 'Escolhe o tipo de acesso: escritório, segurança, encarregado ou colaborador.'],
+  [/takes no permissions/i, 'O tipo colaborador só vê as próprias horas: não leva permissões.'],
+  [/department with this name already exists/i, 'Já existe um departamento com este nome.'],
+  [/administration department cannot be changed/i, 'A Administração tem tudo e não se altera.'],
+  [/keeps its type of access/i, 'Um departamento base mantém o tipo de acesso.'],
+  [/base department is not archived/i, 'Os departamentos base não se arquivam.'],
+  [/choose at least one department/i, 'Escolhe pelo menos um departamento.'],
+  [/department not found/i, 'Departamento não encontrado (pode ter sido arquivado).'],
+  [/unknown permission/i, 'Permissão desconhecida.'],
   [/link this login to a person first/i, 'Esta conta não está ligada a uma pessoa: não pode ser encarregado nem colaborador.'],
   [/choose at least one profile/i, 'Escolhe pelo menos um perfil.'],
   [/only administrator: another admin/i, 'Esta pessoa é o único administrador. Cria outro administrador primeiro.'],
@@ -268,9 +278,12 @@ async function dayPeriods(from, to, project) {
 }
 const fmtMin = (m) => { m = m || 0; return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}`; };
 const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-const isAdmin = () => state.me && state.me.role === 'admin';
-const canPeople = () => state.me && ['admin', 'hr'].includes(state.me.role);
-const canDocs = () => state.me && ['admin', 'hr', 'hse'].includes(state.me.role);
+// What this login may do in its current profile, from its departments (mini_my_access). The database checks the
+// same permission in every function; the app only hides what would be refused.
+const can = (perm) => !!(state.me && (state.me.role === 'admin' || (state.me.perms || []).includes(perm)));
+const canOffice = () => can('horas.aprovar') || can('salarios.exportar') || can('diarias.emitir');
+const canPeople = () => can('pessoas.gerir');
+const canDocs = () => can('documentos.gerir');
 
 // ------------------------------------------------------------------ Comprovativos (foto ou PDF de cada documento)
 // Private bucket: only admin, HR and safety send or open files, and a file is never replaced or deleted.
@@ -446,8 +459,8 @@ async function boot() {
   }
   if (!me.is_active) return showMessage('Conta desligada', 'A tua conta está desligada. Fala com o administrador.', true);
   if (idleTooLong(me.role)) return idleOut();   // nothing is shown before this check
-  state.me = { role: me.role, profiles: me.allowed_roles || [me.role], tenant_id: me.tenant_id, organization_id: me.organization_id, collaborator_id: me.collaborator_id,
-    is_active: me.is_active, email: session.user.email, user_id: session.user.id };
+  state.me = { role: me.role, profiles: me.allowed_roles || me.profiles || [me.role], tenant_id: me.tenant_id, organization_id: me.organization_id, collaborator_id: me.collaborator_id,
+    is_active: me.is_active, email: session.user.email, user_id: session.user.id, perms: me.perms || [], depts: me.depts || [] };
   const { data: aal } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
   if (PRIVILEGED.includes(me.role) && (!aal || aal.currentLevel !== 'aal2')) {
     if (state.offline) return showNetworkError();
@@ -455,9 +468,13 @@ async function boot() {
   }
   // A login made by the admin comes with a temporary password: the person chooses their own first.
   if (session.user.user_metadata && session.user.user_metadata.must_change_password) return state.offline ? showNetworkError() : showNewPassword();
-  if (!state.offline) store(ME_KEY, { ...state.me });
+  if (!state.offline) {
+    const { data: acc } = await sb.rpc('mini_my_access');
+    if (acc) { state.me.perms = acc.permissions || []; state.me.depts = acc.departments || []; state.me.profiles = acc.profiles || state.me.profiles; }
+    store(ME_KEY, { ...state.me });
+  }
   state.ready = true; touch();
-  nav.querySelector('[data-view=secretariado]').hidden = !canPeople();
+  nav.querySelector('[data-view=secretariado]').hidden = !canOffice();
   // The worker profile sees only their own hours; anyone with a person behind the login has them under Mais.
   const worker = me.role === 'worker';
   nav.querySelectorAll('button[data-view]').forEach((b) => { if (b.dataset.view !== 'minhas' && b.dataset.view !== 'secretariado') b.hidden = worker; });
@@ -598,6 +615,18 @@ const ROLE_NAMES = { admin: 'Administrador', hr: 'Secretariado / RH', hse: 'Téc
 const PROFILE_HELP = { admin: 'Tudo: obras, pessoas, contas e escritório. Pede o código do telemóvel.', supervisor: 'Picar, quem está na obra e validar as horas da equipa.',
   hr: 'Escritório: horas de todas as obras, documentos e fecho do mês.', hse: 'Segurança: documentos e quem está na obra.', worker: 'Só as tuas horas, como qualquer colaborador.' };
 const PROFILE_ORDER = ['admin', 'hr', 'hse', 'supervisor', 'worker'];
+// The type of access a department gives (its profile), in the admin's words.
+const KIND_NAMES = { admin: 'administração', hr: 'escritório', hse: 'segurança', supervisor: 'encarregado', worker: 'colaborador' };
+const KIND_HELP = { hr: 'Trabalha no escritório. Pede sempre o código do telemóvel.', hse: 'Segurança. Pede sempre o código do telemóvel.',
+  supervisor: 'Trabalha na obra: só vê as obras onde está. Permissões sensíveis pedem o código do telemóvel.', worker: 'Só vê as próprias horas e diárias.' };
+// A profile is named after the login's departments of that type ("Secretariado", "Armazém"), else the role.
+// The base Segurança, Encarregados and Colaboradores keep the singular role names ("Encarregado").
+const ROLE_KEYS = ['seguranca', 'encarregados', 'colaboradores'];
+const roleLabel = (r, me = state.me) => {
+  const d = r === 'admin' ? [] : [...new Set(((me && me.depts) || []).filter((x) => x.kind === r)
+    .map((x) => (ROLE_KEYS.includes(x.key) ? ROLE_NAMES[r] : x.name)))];
+  return d.length ? d.join(' · ') : ROLE_NAMES[r] || r;
+};
 // One login, several hats (Diogo is admin, team leader and worker). Changing hat never mixes data: the database
 // decides what each profile sees, and nobody validates their own hours in any of them.
 async function switchProfile() {
@@ -605,12 +634,12 @@ async function switchProfile() {
   const opts = PROFILE_ORDER.filter((r) => me.profiles.includes(r));
   const fd = await askSheet('Mudar de perfil', `<p class="small muted">A mesma conta, outro papel. Os dados e as regras de cada papel não se misturam.</p>
     <div class="profiles" role="radiogroup">${opts.map((r) => `<label class="check prof"><input type="radio" name="p" value="${esc(r)}" ${r === me.role ? 'checked' : ''} required>
-      <span><b>${esc(ROLE_NAMES[r] || r)}</b>${r === me.role ? ' <span class="small muted">(agora)</span>' : ''}<br><span class="small muted">${esc(PROFILE_HELP[r] || '')}</span></span></label>`).join('')}</div>`, 'Mudar');
+      <span><b>${esc(roleLabel(r))}</b>${r === me.role ? ' <span class="small muted">(agora)</span>' : ''}<br><span class="small muted">${esc(PROFILE_HELP[r] || '')}</span></span></label>`).join('')}</div>`, 'Mudar');
   if (!fd || fd.get('p') === me.role) return;
   const { error } = await sb.rpc('mini_switch_role', { p_role: fd.get('p') });
   if (error) return toast(friendly(error));
   state.view = (TABS[fd.get('p')] || TABS.supervisor)[0];
-  toast(`Agora estás como ${ROLE_NAMES[fd.get('p')] || fd.get('p')}.`);
+  toast(`Agora estás como ${roleLabel(fd.get('p'))}.`);
   boot();   // asks for the phone code when the new profile needs it
 }
 document.getElementById('whoami').addEventListener('click', switchProfile);
@@ -619,8 +648,8 @@ function showWho() {
   const el = document.getElementById('whoami');
   const many = me.profiles && me.profiles.length > 1;
   // Two lines: the role (never cut off) and, under it, whose account this is.
-  el.innerHTML = `<b>${esc(ROLE_NAMES[me.role] || me.role)}${many ? ' ▾' : ''}</b><small>${esc(p ? p.full_name.split(' ')[0] + ' ' + p.full_name.split(' ').slice(-1)[0] : me.email)}</small>`;
-  el.setAttribute('aria-label', `${ROLE_NAMES[me.role] || me.role}, ${p ? p.full_name : me.email}${many ? '. Mudar de perfil' : ''}`);
+  el.innerHTML = `<b>${esc(roleLabel(me.role))}${many ? ' ▾' : ''}</b><small>${esc(p ? p.full_name.split(' ')[0] + ' ' + p.full_name.split(' ').slice(-1)[0] : me.email)}</small>`;
+  el.setAttribute('aria-label', `${roleLabel(me.role)}, ${p ? p.full_name : me.email}${many ? '. Mudar de perfil' : ''}`);
   el.title = (p ? p.full_name : me.email) + (many ? ' · toca para mudar de perfil' : ''); el.className = 'who' + (PRIVILEGED.includes(me.role) ? ' strong' : '') + (many ? ' sw' : '');
   el.disabled = !many; el.hidden = false;
 }
@@ -1179,14 +1208,21 @@ async function viewWorker() {
   app.innerHTML = `<p class="noprint"><button class="btn ghost small" id="back">‹ Trabalhadores</button></p><div id="w">${skel(3)}</div>`;
   $('#back').onclick = () => go('trabalhadores');
   const [ws, ds, us, fs] = await Promise.all([sb.rpc('mini_workers'), sb.rpc('mini_worker_documents', { p_collab: id }),
-    isAdmin() ? sb.rpc('mini_app_users') : Promise.resolve({ data: [] }),
+    can('contas.gerir') ? sb.rpc('mini_app_users') : Promise.resolve({ data: [] }),
     canDocs() ? sb.rpc('mini_document_files', { p_collab: id }) : Promise.resolve({ data: [] })]);
   const files = (fs && fs.data) || [];
   const current = (typeId) => files.find((x) => x.type_id === typeId && x.is_current);
   const older = files.filter((x) => !x.is_current);
   const login = ((us && us.data) || []).find((u) => u.collaborator_id === id);
-  let prof = null;
-  if (login) { const r = await core().from('app_users').select('allowed_roles').eq('user_id', login.user_id).maybeSingle(); prof = r.data && r.data.allowed_roles; }
+  // Departments the admin can give (Administração only goes with the admin role) and the ones this login is in.
+  let depts = []; let mine = []; let adminDept = null;
+  if (can('contas.gerir')) {
+    const [d, m] = await Promise.all([sb.rpc('mini_departments'), login ? sb.rpc('mini_user_departments') : Promise.resolve({ data: [] })]);
+    adminDept = (d.data || []).find((x) => x.kind === 'admin');
+    depts = (d.data || []).filter((x) => x.is_active && x.kind !== 'admin');
+    mine = ((m.data || []).filter((x) => login && x.user_id === login.user_id)).map((x) => x.department_id);
+  }
+  const loginAdmin = login && (login.role === 'admin' || (adminDept && mine.includes(adminDept.id)));
   const el = $('#w'); if (!el) return;
   if (ws.error || ds.error) { el.innerHTML = `<p>${esc(friendly(ws.error || ds.error))}</p>`; return; }
   const w = ws.data.find((x) => x.collaborator_id === id); if (!w) { el.innerHTML = '<p>Não encontrado.</p>'; return; }
@@ -1226,22 +1262,22 @@ async function viewWorker() {
         <label>Porquê? *</label><input name="why" required placeholder="ex.: cartão perdido">
         <p class="small muted">O cartão antigo deixa de funcionar logo.</p>
         <p><button class="btn wide">Trocar cartão</button></p></form></div>` : ''}
-    ${isAdmin() || (state.me && ['hr', 'project_manager'].includes(state.me.role)) ? `<div class="card"><h2 style="margin-top:0">Obras</h2>
+    ${can('pessoas.atribuir_obras') ? `<div class="card"><h2 style="margin-top:0">Obras</h2>
       ${activeSites().map((s) => `<label class="check"><input type="checkbox" data-site="${esc(s.id)}" ${w.site_ids.includes(s.id) ? 'checked' : ''}>
         ${esc(s.title)} (${esc(s.cost_center_code)})</label>`).join('') || '<p class="muted">Sem obras abertas.</p>'}
       <p class="small muted">Só pode picar nas obras marcadas.</p></div>` : ''}
-    ${isAdmin() ? `<div class="card"><h2 style="margin-top:0">Conta na app</h2>${login ? `
+    ${can('contas.gerir') ? `<div class="card"><h2 style="margin-top:0">Conta na app</h2>${login ? `
       <p>${esc(login.email)} · ${esc(ROLE_NAMES[login.role] || login.role)} ·
         ${login.is_active ? chip('ok', 'ligada', 'ok') : chip('', 'desligada')}</p>
-      ${login.is_active ? `<form id="profs"><label>Perfis desta conta</label><div class="chips reasons">${PROFILE_ORDER.filter((r) => r !== 'admin' || (prof || []).includes('admin')).map((r) =>
-        `<label class="chip"><input type="checkbox" name="p" value="${esc(r)}" ${(prof || [login.role]).includes(r) ? 'checked' : ''} ${r === 'admin' ? 'disabled' : ''}>${esc(ROLE_NAMES[r])}</label>`).join('')}</div>
-        <p class="small muted">A pessoa muda de perfil no nome lá em cima. Nunca valida as próprias horas, em nenhum perfil.</p>
-        <p><button class="btn ghost wide">Guardar perfis</button></p></form>` : ''}
+      ${login.is_active ? `<form id="profs"><label>Departamentos</label><div class="chips reasons">${loginAdmin ? `<label class="chip"><input type="checkbox" checked disabled>Administração</label>` : ''}${depts.map((d) =>
+        `<label class="chip"><input type="checkbox" name="d" value="${esc(d.id)}" ${mine.includes(d.id) ? 'checked' : ''}>${esc(d.name)}</label>`).join('')}</div>
+        <p class="small muted">Cada departamento dá as suas permissões. Com departamentos de tipos diferentes, a pessoa muda de perfil no nome lá em cima. Nunca valida as próprias horas.</p>
+        <p><button class="btn ghost wide">Guardar departamentos</button></p></form>` : ''}
       ${login.is_me ? '' : `<p><button class="btn ghost wide" id="toggleLogin">${login.is_active ? 'Desligar a conta' : 'Ligar a conta'}</button></p>`}` : w.is_active ? `
       <p class="small muted">Dá a esta pessoa acesso à app para picar, ver quem está na obra e validar horas.</p>
       <form id="login"><label>Email *</label><input name="email" type="email" required autocomplete="off">
-        <label>Papel</label><select name="role"><option value="supervisor">Encarregado</option><option value="hse">Técnico de segurança</option><option value="hr">Secretariado / RH</option><option value="worker">Colaborador (só as horas e diárias dele)</option></select>
-        ${more('O que cada papel vê', '<p>O colaborador só vê as horas dele, as diárias e os avisos de desconto. O secretariado vê os NIFs, os documentos e as horas de todas as obras, e tem de usar a app de códigos.</p>')}
+        <label>Departamento *</label><select name="dept" required><option value="">Escolhe…</option>${depts.map((d) => `<option value="${esc(d.id)}">${esc(d.name)} (${esc(KIND_NAMES[d.kind] || d.kind)})</option>`).join('')}</select>
+        ${more('O que cada departamento vê', '<p>Cada departamento só faz o que as suas permissões dizem (vê-as no Secretariado, em «Departamentos e acessos»). O colaborador só vê as horas dele, as diárias e os avisos de desconto. Escritório e segurança usam sempre a app de códigos.</p>')}
         <p><button class="btn wide">Criar conta</button></p></form><div id="newpw"></div>` : '<p class="muted">Pessoa inativa: sem conta.</p>'}</div>` : ''}
     ${canPeople() ? `<div class="card"><h2 style="margin-top:0">${w.is_active ? 'Desativar' : 'Reativar'}</h2>
       <form id="act"><label>Porquê? *</label><input name="why" required placeholder="${w.is_active ? 'ex.: terminou o contrato' : 'ex.: voltou a ser contratado'}">
@@ -1271,11 +1307,14 @@ async function viewWorker() {
   });
   if ($('#login')) $('#login').onsubmit = async (e) => {
     e.preventDefault(); const f = new FormData(e.target); const btn = e.target.querySelector('.btn'); btn.disabled = true;
-    const { data, error } = await sb.functions.invoke('mini-criar-conta', { body: { email: f.get('email'), collaborator_id: id, role: f.get('role') } });
+    const dept = depts.find((d) => d.id === f.get('dept')); if (!dept) { btn.disabled = false; return toast('Escolhe o departamento.'); }
+    const { data, error } = await sb.functions.invoke('mini-criar-conta', { body: { email: f.get('email'), collaborator_id: id, role: dept.kind } });
     btn.disabled = false;
     let msg = error && error.message;
     if (error && error.context && error.context.json) { try { msg = (await error.context.json()).error || msg; } catch (_) {} }
     if (error) return toast(friendly({ message: msg }));
+    const { error: de } = await sb.rpc('mini_set_user_departments', { p_user: data.user_id, p_depts: [dept.id] });
+    if (de) toast('Conta criada, mas o departamento não ficou guardado: ' + friendly(de));
     e.target.hidden = true;
     $('#newpw').innerHTML = `<div class="result warn">${ic('key')}<div><b>${esc(data.password)}</b>Palavra-passe temporária de ${esc(data.email)}</div></div>
       <p><b>Dá-a à pessoa em mão ou diz-lha de viva voz.</b> Não a envies por mensagem nem email. Só aparece agora.
@@ -1284,10 +1323,10 @@ async function viewWorker() {
   };
   if ($('#profs')) $('#profs').onsubmit = async (e) => {
     e.preventDefault();
-    const roles = [...e.target.querySelectorAll('input[name=p]')].filter((c) => c.checked).map((c) => c.value);
-    const { error } = await sb.rpc('mini_set_user_profiles', { p_user: login.user_id, p_roles: roles });
+    const ids = [...e.target.querySelectorAll('input[name=d]')].filter((c) => c.checked).map((c) => c.value);
+    const { error } = await sb.rpc('mini_set_user_departments', { p_user: login.user_id, p_depts: ids });
     if (error) return toast(friendly(error));
-    toast('Perfis guardados.');
+    toast('Departamentos guardados.');
     if (login.is_me) return boot();
     viewWorker();
   };
@@ -1338,11 +1377,11 @@ function viewSafety() {
   app.innerHTML = `<h1>Segurança</h1>
     <div class="noprint">${siteSelect('site')}</div><div id="list" style="margin-top:14px">${skel(3)}</div>
     <p class="noprint"><button class="btn ghost wide" id="print">${ic('print')}Imprimir</button></p>
-    ${isAdmin() ? `<h2 class="noprint">O que trava a entrada</h2><div class="card noprint" id="types"></div>` : ''}`;
+    ${can('documentos.regras') ? `<h2 class="noprint">O que trava a entrada</h2><div class="card noprint" id="types"></div>` : ''}`;
   bindSiteSelect('site', loadSafety);
   $('#print').onclick = () => window.print();
   loadSafety();
-  if (isAdmin()) showDocTypes();
+  if (can('documentos.regras')) showDocTypes();
 }
 async function loadSafety() {
   const el = $('#list'); const site = currentSite(); if (!el) return;
@@ -1651,7 +1690,7 @@ async function loadMine() {
 // comes off the next diária or, if the month closes first, off the salary. The worker sees every step in As minhas horas.
 // The last state is "emitida para pagamento": the app never knows whether the money reached the account.
 const euro = (v) => (v == null ? '–' : `${Number(v).toFixed(2).replace('.', ',')} €`);
-const canPdCases = () => state.me && ['admin', 'hr', 'project_manager', 'supervisor'].includes(state.me.role);
+const canPdCases = () => can('diarias.decidir_faltas');
 const PD_PROBLEM = { site_without_amount: 'obra sem valor de diária: põe-no em Obras', site_pays_none: 'esta obra não paga diária',
   no_days: 'sem dias para pagar nesta semana' };
 const PD_CASE = { to_decide: chip('warn', 'por decidir', 'warn'), deduct: chip('anom', 'a descontar'), excused: chip('ok', 'justificada', 'ok') };
@@ -1830,42 +1869,102 @@ function monthRange(ym) {
   return { from: `${ym}-01`, to: isoDay(new Date(y, m, 0, 12)) };
 }
 function viewOffice() {
-  if (!canPeople()) return viewClock();   // code guard as well as the database's
+  if (!canOffice()) return viewClock();   // code guard as well as the database's
   if (!state.officeMonth) state.officeMonth = isoDay(new Date()).slice(0, 7);
   const { from, to } = monthRange(state.officeMonth);
   const sites = state.sites;
   app.innerHTML = `<h1>Secretariado</h1>
     <div class="noprint"><label for="month">Mês</label><input type="month" id="month" value="${esc(state.officeMonth)}">
-      <p class="small muted">Todas as obras: a obra valida, tu aprovas, no fim do mês fechas.</p>
+      ${can('horas.aprovar') ? `<p class="small muted">Todas as obras: a obra valida, tu aprovas, no fim do mês fechas.</p>
       ${more('Em que reparar', '<p>Olha com atenção para as picagens marcadas «à mão», «sem rede, chegou tarde» e «próprio cartão»: aparecem a amarelo no dia.</p>')}
-      <div id="sum">${skel(1)}</div></div>
-    <div id="list">${skel(3)}</div>
-    <div class="card noprint"><h2 style="margin-top:0">Salários</h2>
+      <div id="sum">${skel(1)}</div>` : ''}</div>
+    ${can('horas.aprovar') ? `<div id="list">${skel(3)}</div>` : ''}
+    ${can('salarios.exportar') ? `<div class="card noprint"><h2 style="margin-top:0">Salários</h2>
       <p class="small muted">Folha Excel do mês e ficheiro para o Primavera.</p>
       ${more('O que leva a folha', '<p>Uma linha por pessoa e obra, com as horas normais, as extra aprovadas, as noturnas e as de descanso ou feriado, mais um resumo por pessoa. Abre no Excel, no Google Sheets ou no telemóvel.</p>')}
       <div class="acts"><button class="btn wide" id="sheet">Descarregar a folha do mês (Excel)</button>
         <button class="btn ghost wide" id="prim">Ficheiro para o Primavera (Relógio de Ponto)</button></div>
       ${more('Sobre o ficheiro do Primavera', '<p>Horas extra aprovadas, uma linha por pessoa, dia e tipo (1.ª hora, seguintes, descanso, feriado, e os mesmos acima das 100 h do ano). As noturnas não vão neste ficheiro. No Primavera: Recursos Humanos › Alterações Mensais › Relógio de Ponto. O "Nº de trabalhador" tem de ser o número do funcionário no Primavera.</p>')}
-      <details class="fold" id="primcfg"><summary><span>Configurar o ficheiro do Primavera<span class="sub">Códigos de horas extra, formato e posições</span></span></summary><div id="primform">${skel(1)}</div></details>
-</div>
-    <div class="card noprint" id="pdcard"><h2 style="margin-top:0">Diárias</h2>
+      ${can('salarios.configurar') ? `<details class="fold" id="primcfg"><summary><span>Configurar o ficheiro do Primavera<span class="sub">Códigos de horas extra, formato e posições</span></span></summary><div id="primform">${skel(1)}</div></details>` : ''}
+</div>` : ''}
+    ${can('diarias.emitir') ? `<div class="card noprint" id="pdcard"><h2 style="margin-top:0">Diárias</h2>
       <p class="small muted">Pagas à quinta, adiantadas, para a semana toda. Escolhe quem e emite para pagamento.</p>
       <div id="pdbody">${skel(2)}</div>
-      <details class="fold" id="pdcases"><summary><span>Faltas nas diárias pagas<span class="sub">Descontar ou justificar, em todas as obras</span></span></summary><div data-pdcases="all"><div id="pdcasebox">${skel(1)}</div></div></details>
-      <details class="fold" id="pdcfg"><summary><span>Valores e regra da empresa<span class="sub">Portugal, estrangeiro, mínimo de horas</span></span></summary><div id="pdform">${skel(1)}</div></details></div>
-    <div class="card noprint"><h2 style="margin-top:0">Registo de tempos (ACT)</h2>
+      ${can('diarias.decidir_faltas') ? `<details class="fold" id="pdcases"><summary><span>Faltas nas diárias pagas<span class="sub">Descontar ou justificar, em todas as obras</span></span></summary><div data-pdcases="all"><div id="pdcasebox">${skel(1)}</div></div></details>` : ''}
+      ${can('diarias.configurar') ? `<details class="fold" id="pdcfg"><summary><span>Valores e regra da empresa<span class="sub">Portugal, estrangeiro, mínimo de horas</span></span></summary><div id="pdform">${skel(1)}</div></details>` : ''}</div>` : ''}
+    ${can('salarios.exportar') ? `<div class="card noprint"><h2 style="margin-top:0">Registo de tempos (ACT)</h2>
       <p class="small muted">Registo legal das entradas e saídas de uma obra. Guardar 5 anos.</p>
       ${more('Porquê', '<p>Código do Trabalho, art. 202. Mostra-o se a inspeção pedir.</p>')}
       <label for="actsite">Obra</label><select id="actsite">${sites.map((s) => `<option value="${esc(s.id)}">${esc(s.title)} (${esc(s.cost_center_code)})</option>`).join('')}</select>
-      <div class="acts"><button class="btn ghost wide" id="act">Descarregar o registo do mês (Excel)</button></div></div>`;
-  $('#month').onchange = (e) => { if (e.target.value) { state.officeMonth = e.target.value; viewOffice(); } };
-  $('#sheet').onclick = () => downloadPayroll(from, to);
-  $('#prim').onclick = () => downloadPrimavera(from, to);
-  $('#primcfg').ontoggle = () => { if ($('#primcfg').open) showPrimaveraSettings(); };
-  $('#act').onclick = () => downloadAct($('#actsite').value, from, to);
-  $('#pdcfg').ontoggle = () => { if ($('#pdcfg').open) showPerDiemSettings(); };
-  $('#pdcases').ontoggle = () => { if ($('#pdcases').open) loadPdCases('#pdcasebox'); };
-  loadOffice(from, to); loadPerDiems();
+      <div class="acts"><button class="btn ghost wide" id="act">Descarregar o registo do mês (Excel)</button></div></div>` : ''}
+    ${can('contas.gerir') ? `<div class="card noprint"><h2 style="margin-top:0">Departamentos e acessos</h2>
+      <p class="small muted">Quem faz o quê na empresa. Cada conta pertence a um ou mais departamentos e só faz o que eles permitem.</p>
+      <div id="depts">${skel(2)}</div></div>` : ''}`;
+  const on = (sel, ev, fn) => { const x = $(sel); if (x) x[ev] = fn; };
+  on('#month', 'onchange', (e) => { if (e.target.value) { state.officeMonth = e.target.value; viewOffice(); } });
+  on('#sheet', 'onclick', () => downloadPayroll(from, to));
+  on('#prim', 'onclick', () => downloadPrimavera(from, to));
+  on('#primcfg', 'ontoggle', () => { if ($('#primcfg').open) showPrimaveraSettings(); });
+  on('#act', 'onclick', () => downloadAct($('#actsite').value, from, to));
+  on('#pdcfg', 'ontoggle', () => { if ($('#pdcfg').open) showPerDiemSettings(); });
+  on('#pdcases', 'ontoggle', () => { if ($('#pdcases').open) loadPdCases('#pdcasebox'); });
+  if (can('horas.aprovar')) loadOffice(from, to);
+  if (can('diarias.emitir')) loadPerDiems();
+  if (can('contas.gerir')) loadDepartments();
+}
+
+// ------------------------------------------------------------------ Departamentos (admin)
+// Each company shapes its own departments; the base ones (Secretariado, Recursos Humanos, Segurança, Encarregados,
+// Colaboradores) come ready. A department = a name, the type of access (its profile) and the permissions it gives.
+async function loadDepartments() {
+  const box = $('#depts'); if (!box) return;
+  const [d, p] = await Promise.all([sb.rpc('mini_departments'), sb.rpc('mini_permissions')]);
+  if (!$('#depts')) return;
+  if (d.error || p.error) { box.innerHTML = `<p>${esc(friendly(d.error || p.error))}</p>`; return; }
+  const perms = p.data;
+  // "Horas (5) · Salários (2)": the areas a department touches, in the catalog's order; the detail is one tap away.
+  const areasOf = (codes) => [...new Set(perms.map((q) => q.area))].map((a) => [a, perms.filter((q) => q.area === a && codes.includes(q.code)).length])
+    .filter(([, n]) => n).map(([a, n]) => `${a} (${n})`).join(' · ');
+  box.innerHTML = `<div class="list">${d.data.map((x) => `<div class="card link dept${x.is_active ? '' : ' off'}" role="button" tabindex="0" data-dept="${esc(x.id)}">
+      <div class="wk"><div class="grow"><b>${esc(x.name)}</b>${x.is_active ? '' : ' ' + chip('', 'arquivado')}
+        <div class="sub">${esc(KIND_NAMES[x.kind] || x.kind)} · ${x.members} conta${x.members === 1 ? '' : 's'}</div>
+        <div class="small muted">${x.kind === 'admin' ? 'Tudo. Só se dá com aprovação de uma segunda pessoa.' : x.kind === 'worker' ? 'Só as próprias horas e diárias.'
+          : x.permissions.length ? esc(areasOf(x.permissions)) : 'Sem permissões.'}</div></div></div></div>`).join('')}</div>
+    <p><button class="btn ghost wide" id="newdept">+ Novo departamento</button></p>
+    ${more('Como funciona', '<p>Ex.: «Compras» do tipo escritório, só com «Ver trabalhadores». Para dar um departamento a alguém, abre a pessoa em Trabalhadores › Conta na app. Os departamentos não se apagam: arquivam-se, e quem lá estava perde essas permissões.</p>')}`;
+  box.querySelectorAll('[data-dept]').forEach((el) => {
+    const open = () => editDepartment(d.data.find((x) => x.id === el.dataset.dept), perms);
+    el.onclick = open; el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } };
+  });
+  $('#newdept').onclick = () => editDepartment(null, perms);
+}
+async function editDepartment(x, perms) {
+  if (x && x.kind === 'admin') return toast('A Administração tem tudo e não se altera.');
+  const kinds = ['hr', 'hse', 'supervisor', 'worker'];
+  const areas = [...new Set(perms.map((p) => p.area))];
+  const fd = await askSheet(x ? x.name : 'Novo departamento', `
+    <label for="dn">Nome *</label><input id="dn" name="name" required minlength="2" maxlength="60" value="${esc(x ? x.name : '')}" placeholder="ex.: Compras e armazém">
+    <label>Tipo de acesso *</label><div class="chips reasons" role="radiogroup">${kinds.map((k) => `<label class="chip"><input type="radio" name="kind" value="${k}" required
+      ${(x ? x.kind : 'hr') === k ? 'checked' : ''} ${x && x.system_key && x.kind !== k ? 'disabled' : ''}>${esc(KIND_NAMES[k])}</label>`).join('')}</div>
+    <p class="small muted" id="kh">${esc(KIND_HELP[x ? x.kind : 'hr'])}</p>
+    <div id="pp">${areas.map((a) => `<h3 style="margin:12px 0 4px">${esc(a)}</h3>${perms.filter((p) => p.area === a).map((p) => `<label class="check">
+      <input type="checkbox" name="perm" value="${esc(p.code)}" ${x && x.permissions.includes(p.code) ? 'checked' : ''}><span>${esc(p.label)}${p.sensitive ? ' <span class="small muted">· pede código</span>' : ''}</span></label>`).join('')}`).join('')}</div>
+    ${x && !x.system_key ? `<p><label class="check"><input type="checkbox" name="arch" ${x.is_active ? '' : 'checked'}>Arquivado (ninguém usa estas permissões)</label></p>` : ''}`,
+  'Guardar', (dl) => {
+    const pp = dl.querySelector('#pp'); const kh = dl.querySelector('#kh');
+    const sync = () => { const k = (dl.querySelector('input[name=kind]:checked') || {}).value; pp.hidden = k === 'worker'; kh.textContent = KIND_HELP[k] || ''; };
+    dl.querySelectorAll('input[name=kind]').forEach((r) => r.onchange = sync); sync();
+  });
+  if (!fd) return;
+  const kind = fd.get('kind');
+  const { error } = await sb.rpc('mini_save_department', { p_id: x ? x.id : null, p_name: fd.get('name'), p_kind: kind,
+    p_perms: kind === 'worker' ? [] : fd.getAll('perm') });
+  if (error) return toast(friendly(error));
+  if (x && !x.system_key && (fd.get('arch') === 'on') === x.is_active) {
+    const { error: e2 } = await sb.rpc('mini_set_department_active', { p_id: x.id, p_active: !x.is_active });
+    if (e2) return toast(friendly(e2));
+  }
+  toast('Departamento guardado.'); loadDepartments();
 }
 // What the office must look at: taps added by hand, taps that arrived late from a phone without network, and
 // supervisors' own taps (mini_manual_taps gives the reason; these two texts come from the server as written).
@@ -2001,7 +2100,7 @@ async function closeChecklist(data, from, to, noExit) {
     : `<div class="prog" role="progressbar" aria-valuemin="0" aria-valuemax="4" aria-valuenow="${done}"><i style="width:${done * 25}%"></i></div>
       <p class="small muted" style="margin:0">${done} de 4 passos feitos</p>
       <ol class="steps">${steps.map((x) => li(x, x.ok ? 'done' : 'todo')).join('')}${prim ? li(prim, prim.ok ? 'done' : 'info') : ''}</ol>
-      ${done === 4 && toClose ? `<p style="margin-top:12px"><button class="btn big" id="closeMonth">${ic('ok')}Fechar o mês para os salários</button></p>
+      ${done === 4 && toClose && can('horas.fechar_mes') ? `<p style="margin-top:12px"><button class="btn big" id="closeMonth">${ic('ok')}Fechar o mês para os salários</button></p>
         <p class="small muted">${toClose} dia(s) seguem para os salários. Depois de fechar, ninguém pode mudar as horas deste mês.</p>` : ''}`}</div>`;
   const b = $('#closeMonth');
   if (b) b.onclick = async () => {
@@ -2583,7 +2682,7 @@ function viewSites() {
         <div class="sub">${esc(addr(s))}${s.municipality && s.municipality.toLowerCase() !== addr(s).toLowerCase() ? (addr(s) ? ' · ' : '') + 'concelho ' + esc(s.municipality) : ''}</div></div></div>
       <div class="tags"><span class="chip code">${esc(s.cost_center_code)}</span>${label[s.status] || chip('', s.status)}${flag(s.country, s.id)}</div></div>`).join('')}</div>`
       : `<div class="card">${empty('helmet', 'Ainda não há obras', 'Abre a primeira obra aqui em baixo.')}</div>`}
-    ${isAdmin() || (state.me && state.me.role === 'project_manager') ? `<details class="fold" ${state.sites.length ? '' : 'open'}><summary><span>+ Abrir obra<span class="sub">Cliente, código e nome</span></span></summary><div>
+    ${can('obras.gerir') ? `<details class="fold" ${state.sites.length ? '' : 'open'}><summary><span>+ Abrir obra<span class="sub">Cliente, código e nome</span></span></summary><div>
     <form id="f"><div class="row"><div><label>Cliente *</label><input name="client" required placeholder="ex.: Refinaria de Sines"></div>
       <div><label>Código *</label><input name="code" required placeholder="ex.: OB-001"></div></div>
       <label>Nome da obra *</label><input name="title" required placeholder="ex.: Paragem 2026, unidade 3">
@@ -2610,11 +2709,11 @@ function viewSites() {
 // admin and HR add or remove the site's own holidays, the supervisor only reads.
 const COUNTRY = { PT: 'Portugal', ES: 'Espanha', FR: 'França' };
 const flag = (c, id) => `<span class="chip" data-flag="${esc(id || '')}" title="${esc(COUNTRY[c] || 'Portugal')}">${{ ES: '🇪🇸 ES', FR: '🇫🇷 FR' }[c] || '🇵🇹 PT'}</span>`;
-const canSiteDetails = () => state.me && ['admin', 'hr', 'project_manager', 'supervisor'].includes(state.me.role);
-const canSetSite = () => state.me && ['admin', 'project_manager'].includes(state.me.role);
-const canHolidays = () => state.me && ['admin', 'hr'].includes(state.me.role);
-const canSitePd = () => state.me && ['admin', 'hr', 'project_manager'].includes(state.me.role);
-const canRestDays = () => state.me && ['admin', 'hr', 'project_manager'].includes(state.me.role);
+const canSiteDetails = () => can('obras.ver_detalhes');
+const canSetSite = () => can('obras.gerir');
+const canHolidays = () => can('obras.feriados');
+const canSitePd = () => can('obras.descanso_diaria');
+const canRestDays = () => can('obras.descanso_diaria');
 const WEEKDAYS = [[1, 'Seg'], [2, 'Ter'], [3, 'Qua'], [4, 'Qui'], [5, 'Sex'], [6, 'Sáb'], [7, 'Dom']];
 let siteCfgSeq = 0;
 async function loadSiteDetails(id) {
