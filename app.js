@@ -381,7 +381,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '18';
+const APP_VERSION = '19';
 const TABS = { supervisor: ['picar', 'naobra', 'horas', 'trabalhadores'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['seguranca', 'naobra', 'trabalhadores', 'picar'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -804,25 +804,31 @@ function go(view) {
 // ------------------------------------------------------------------ Picar
 function viewClock() {
   const nfcOk = 'NDEFReader' in window;
-  app.innerHTML = `<div class="pic-head"><div><h1>Picar</h1><div class="clock" id="clk"></div><div class="small muted" id="clkday"></div></div></div>
-    ${state.offline ? `<div class="result warn">${ic('cloud')}<div><b>Sem rede</b>Só podes picar. As picagens ficam guardadas neste telemóvel e são enviadas quando a rede voltar.</div></div>` : ''}
-    <div id="clockwarn"></div>
-    <div class="card">${siteSelect('site')}
-      <div class="dir"><button class="auto" data-d="auto">${ic('auto')}AUTOMÁTICO</button>
-      <button class="in" data-d="in">ENTRADA</button>
-      <button class="out" data-d="out">SAÍDA</button></div>
-      <p class="small muted" id="dirhelp"></p>
+  // One dark "terminal" panel: clock, site, the card reader and the direction. Everything else sits beside it (computer) or under it (phone).
+  app.innerHTML = `<div class="pic-grid"><div>
+    <section class="pic-hero">
+      <div class="pic-top"><h1>Picar</h1><span class="live" id="live" hidden></span></div>
+      <div class="clock" id="clk"></div><div class="clkday" id="clkday"></div>
+      ${state.offline ? `<div class="result warn">${ic('cloud')}<div><b>Sem rede</b>Só podes picar. As picagens ficam guardadas neste telemóvel e são enviadas quando a rede voltar.</div></div>` : ''}
+      <div id="clockwarn"></div>
+      <div class="pic-site">${siteSelect('site')}</div>
       ${nfcOk ? `<button class="tapzone" id="nfc" aria-pressed="false"><span class="ring">${ic('tap')}</span><b id="nfclbl">Tocar para ligar o leitor</b>
           <span class="small" id="nfchelp">Depois é só encostar o cartão às costas do telemóvel.</span></button>`
         : `<div class="nonfc">${ic('key')}<span>Este aparelho não lê cartões pelo browser (só o Chrome em Android). Usa o leitor USB ou escreve o número.</span></div>`}
-      <form id="manual" class="manual"><div><label for="uid">Número do cartão (ou leitor USB)</label>
-        <input id="uid" name="uid" autocomplete="off" autocapitalize="characters" placeholder="ex.: 04:A1:B2:C3"></div>
-        <button class="btn ghost">Picar</button></form>
-      <div id="result" aria-live="polite"></div><div id="taplog" class="taplog"></div><div id="queue"></div>
-    </div>
+      <div class="dir" role="group" aria-label="Direção da próxima picagem"><button class="auto" data-d="auto">${ic('auto')}AUTOMÁTICO</button>
+      <button class="in" data-d="in">${ic('in')}ENTRADA</button>
+      <button class="out" data-d="out">${ic('out')}SAÍDA</button></div>
+      <p class="small" id="dirhelp"></p>
+    </section>
+    <div id="result" aria-live="polite"></div><div id="taplog" class="taplog"></div><div id="queue"></div>
+    <form id="manual" class="manual card"><div><label for="uid">Número do cartão (ou leitor USB)</label>
+      <input id="uid" name="uid" autocomplete="off" autocapitalize="characters" placeholder="ex.: 04:A1:B2:C3"></div>
+      <button class="btn ghost">Picar</button></form>
     <div id="rejected"></div>
-    <h2 class="eyebrow">Últimas picagens nesta obra</h2><div id="recent">${skel(3)}</div>`;
-  bindSiteSelect('site', () => { loadRecent(); tickClock(); });
+    </div><div>
+    <div class="sec-h"><h2 class="eyebrow">Últimas picagens nesta obra</h2></div><div id="recent">${skel(3)}</div>
+    </div></div>`;
+  bindSiteSelect('site', () => { loadRecent(); loadLive(); tickClock(); });
   app.querySelectorAll('.dir button').forEach((b) => b.onclick = () => {
     state.dirOverride = b.dataset.d === 'auto' ? null : b.dataset.d; renderDir();
   });
@@ -831,8 +837,23 @@ function viewClock() {
     if (normUid(input.value)) clock(input.value); input.value = ''; input.focus();
   };
   if (nfcOk) $('#nfc').onclick = toggleNfc;
-  renderDir(); renderTapLog(); showQueue(); showRejected(); showClockWarn(); loadRecent();
+  renderDir(); renderTapLog(); showQueue(); showRejected(); showClockWarn(); loadRecent(); loadLive();
   tickClock(); state.tick = setInterval(tickClock, 1000);
+  state.timer = setInterval(() => { loadRecent(); loadLive(); }, 60000);
+}
+// "N dentro agora", live: who is inside this site right now (the same list as Na obra). Hidden when this profile cannot see it.
+let liveSeq = 0;
+async function loadLive() {
+  const el = $('#live'); const site = currentSite(); if (!el) return;
+  if (!site || state.offline) { el.hidden = true; return; }
+  const seq = ++liveSeq;
+  const { data, error } = await sb.rpc('mini_on_site', { p_project: site.id });
+  if (seq !== liveSeq || !$('#live')) return;
+  if (error || !Array.isArray(data)) { el.hidden = true; return; }
+  const n = data.length;
+  el.innerHTML = `${data.slice(0, 4).map((r) => avatar(r.full_name)).join('')}<span><i></i><b>${n}</b> dentro agora</span>`;
+  el.classList.toggle('none', !n); el.hidden = false;
+  el.title = n ? data.map((r) => r.full_name).join(', ') : 'Ninguém dentro desta obra agora';
 }
 // The big clock: the server's time, in the site's time zone (what the tap will record).
 function tickClock() {
@@ -945,7 +966,7 @@ async function clock(rawUid) {
     if (dir === 'in' && d.collaborator_id) warnExpiring(d.collaborator_id, who, word, seq);
   } else if (d.status === 'duplicate') { showResult('warn', who, `Já picou há instantes (${word})`, seq); beep(true); }
   else { showResult('bad', `${who}: NÃO ENTRA`, (d.reasons || []).map(reasonText).join(' · '), seq); beep(false); }
-  loadRecent();
+  loadRecent(); loadLive();
 }
 // After an accepted entry: say which documents are about to expire (the entry itself is never held up by this).
 // Only if the screen still shows this tap: a slow answer never covers the result of the next person (A5).
@@ -1122,10 +1143,10 @@ async function loadRecent() {
   if (!data.length) { el.innerHTML = `<div class="card">${empty('card', 'Ainda ninguém picou nesta obra', 'Escolhe ENTRADA ou AUTOMÁTICO e encosta o primeiro cartão.')}</div>`; return; }
   const name = (id) => (state.people.find((p) => p.id === id) || {}).full_name;
   const today = localDay(new Date().toISOString(), site.timezone);
-  el.innerHTML = `<div class="list">${data.slice(0, 8).map((e) => { const who = name(e.collaborator_id) || 'Cartão ' + (e.raw_uid || '?');
+  el.innerHTML = `<div class="list feed">${data.slice(0, 8).map((e) => { const who = name(e.collaborator_id) || 'Cartão ' + (e.raw_uid || '?');
     const when = localDay(e.event_time, site.timezone) === today ? fmtHour(e.event_time, site.timezone) : fmtTime(e.event_time, site.timezone);
     const dir = e.direction === 'in' ? 'Entrada' : e.direction === 'out' ? 'Saída' : e.direction;
-    return `<div class="card"><div class="wk">${avatar(who)}<div class="grow"><div class="nm">${esc(who)}</div><div class="sub">${esc(dir)} · ${esc(when)}</div></div>
+    return `<div class="card ${e.direction === 'in' ? 'd-in' : 'd-out'}"><div class="wk">${avatar(who)}<div class="grow"><div class="nm">${esc(who)}</div><div class="sub">${ic(e.direction === 'in' ? 'in' : 'out')}${esc(dir)} · ${esc(when)}</div></div>
       ${e.status === 'accepted' ? chip('ok', 'aceite', 'ok') : e.status === 'duplicate' ? chip('warn', 'repetida') : chip('bad', 'recusada', 'x')}</div>
       ${e.status !== 'accepted' && e.status !== 'duplicate' && (e.reasons || []).length ? `<div class="note small muted" style="margin:6px 0 0 56px">${esc(e.reasons.map(reasonText).join(' · '))}</div>` : ''}</div>`; }).join('')}</div>
     <p class="small muted">Horas: ${esc(tzName(site.timezone || DEFAULT_TZ))}.</p>`;
@@ -1610,17 +1631,17 @@ function viewHours() {
   const from = state.weekStart; const to = new Date(from); to.setDate(to.getDate() + 6);
   const site = currentSite(); const tz = site ? siteTz(site.id) : DEFAULT_TZ;
   const short = (d) => d.toLocaleDateString('pt-PT', { day: 'numeric', month: 'short' });
-  app.innerHTML = `<h1>Mapa de horas</h1>
-    <div class="noprint">${siteSelect('site')}</div>
-    <div class="row noprint" style="margin:12px 0 4px;flex-wrap:nowrap;align-items:center">
-      <button class="btn ghost small" id="prev" style="flex:0 0 auto" aria-label="Semana anterior">‹</button>
-      <div style="text-align:center;flex:1 1 auto"><b>${esc(short(from))} – ${esc(short(to))}</b><div class="small muted">${esc(tzName(tz))}</div></div>
-      <button class="btn ghost small" id="next" style="flex:0 0 auto" aria-label="Semana seguinte">›</button></div>
+  const thisWeek = isoDay(from) === isoDay(monday(new Date()));
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Horas da obra</p><h1>Mapa de horas</h1></div></div>
+    <div class="toolbar noprint"><div class="tb-site">${siteSelect('site')}</div>
+      <div class="weeknav"><button class="iconbtn" id="prev" aria-label="Semana anterior">‹</button>
+      <div class="wk-l"><b>${esc(short(from))} – ${esc(short(to))}</b><span>${thisWeek ? 'Esta semana' : esc(tzName(tz))}</span></div>
+      <button class="iconbtn" id="next" aria-label="Semana seguinte">›</button></div></div>
     <p class="print-only"><b>Semana de ${esc(fmtDate(isoDay(from)))} a ${esc(fmtDate(isoDay(to)))}</b></p>
     <div id="hsum"></div>
     <div id="list">${skel(3)}</div>
-    <div class="acts noprint"><button class="btn big" id="all" hidden>${ic('ok')}Validar todos os dias sem problemas</button>
-      <button class="btn ghost wide" id="print">${ic('print')}Imprimir</button></div>
+    <div class="hacts noprint"><button class="btn big" id="all" hidden>${ic('ok')}Validar todos os dias sem problemas</button>
+      <button class="btn ghost" id="print">${ic('print')}Imprimir</button></div>
     <div class="card noprint" id="fix" hidden></div>
     ${canPdCases() ? `<div class="card noprint" data-pdcases="auto" hidden style="margin-top:16px"><h2 style="margin-top:0">Diárias: faltas</h2>
       <p class="small muted">Dias com diária já paga em que a pessoa faltou ou fez menos horas que o mínimo. Desconta, ou aceita a justificação.</p>
@@ -1684,6 +1705,18 @@ function periodsOf(r, periods, tz) {
   const list = periodList(periods);
   return list.length ? list : (r.first_in || r.last_out ? [`${fmtHour(r.first_in, tz) || '?'}–${fmtHour(r.last_out, tz) || '?'}`] : []);
 }
+// The week at a glance: one bar per day, its height the hours worked and its colour the state of that day.
+function weekStrip(rows, from, tz, today) {
+  const days = Array.from({ length: 7 }, (_, i) => { const d = new Date(from + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + i); return d.toISOString().slice(0, 10); });
+  const max = Math.max(600, ...rows.map((r) => r.worked_minutes));
+  return `<div class="wstrip noprint" aria-hidden="true">${days.map((d, i) => {
+    const r = rows.find((x) => x.shift_date === d);
+    const k = !r ? 'none' : onlyOpenToday(r, tz) ? 'open' : r.anomalies.length ? 'bad' : r.status === 'registered' ? 'todo' : 'ok';
+    const h = r ? Math.max(6, Math.round((r.worked_minutes / max) * 100)) : 0;
+    return `<div class="ws ${k}${d === today ? ' today' : ''}"><div class="ws-bar"><i style="height:${h}%"></i></div>
+      <b>${r ? esc(fmtMin(r.worked_minutes).replace('h00', 'h')) : '–'}</b><span>${['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'][i]}</span></div>`;
+  }).join('')}</div>`;
+}
 let hoursSeq = 0;
 async function loadHours(from, to) {
   const el = $('#list'); const site = currentSite(); if (!el) return [];
@@ -1717,8 +1750,10 @@ async function loadHours(from, to) {
   const n = { todo: 0, anom: 0, ok: 0, open: 0 };
   el.innerHTML = Object.values(byWorker).map((rows) => {
     const tot = rows.reduce((a, r) => ({ w: a.w + r.worked_minutes, o: a.o + r.overtime_minutes }), { w: 0, o: 0 });
-    return `<div class="card pcard"><div class="wk">${avatar(rows[0].full_name)}<div class="grow"><h2 style="margin:0;font-size:19px">${esc(rows[0].full_name)}</h2>
-      <div class="sub">${rows[0].employee_number ? 'nº ' + esc(rows[0].employee_number) : ''}</div></div></div>
+    return `<div class="card pcard"><div class="wk">${avatar(rows[0].full_name)}<div class="grow"><h2 style="margin:0;font-size:18px">${esc(rows[0].full_name)}</h2>
+      <div class="sub">${rows[0].employee_number ? 'nº ' + esc(rows[0].employee_number) : ''}</div></div>
+      <div class="ptop"><b class="tnum">${esc(fmtMin(tot.w))}</b><span>${tot.o ? esc(fmtMin(tot.o)) + ' extra' : 'na semana'}</span></div></div>
+    ${weekStrip(rows, from, tz, today)}
     ${rows.map((r) => {
       const anom = r.anomalies.length; if (onlyOpenToday(r, tz)) n.open++; else if (anom) n.anom++; else if (r.status === 'registered') n.todo++; else n.ok++;
       const list = periodsOf(r, per[r.work_day_id], tz);
