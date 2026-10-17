@@ -90,6 +90,9 @@ const ERRORS = [
   [/cannot validate your own hours/i, 'Não podes validar as tuas próprias horas.'],
   [/has anomalies/i, 'Esse dia tem picagens em falta. Corrige primeiro.'],
   [/overtime: approve or refuse/i, 'Esse dia tem horas extra: aprova ou recusa.'],
+  [/rest day or holiday: approve or refuse/i, 'Esse dia tem horas em dia de descanso ou feriado: aprova ou não aprova.'],
+  [/rest days must be week days/i, 'Escolhe dias da semana válidos.'],
+  [/at least one working day/i, 'A obra precisa de pelo menos um dia de trabalho.'],
   [/cannot go to/i, 'Esse dia já foi validado.'],
   [/up to 2 months/i, 'Escolhe um período até 2 meses.'],
   [/e-mail already has a login/i, 'Esse email já tem conta.'],
@@ -1411,6 +1414,9 @@ async function loadHours(from, to) {
     else if (r.anomalies.length) b = fixBtn(r, 'Corrigir', '');
     else if (r.overtime_minutes) b = `<button class="btn small" data-ok="${esc(r.work_day_id)}" data-ot="1">Validar com extra</button>
               <button class="btn ghost small" data-ok="${esc(r.work_day_id)}" data-ot="0">Sem extra</button>` + fixBtn(r, 'Picagens', 'ghost');
+    // hours on a rest day or holiday enter the timesheet (pay and client billing) only if the team leader approves them
+    else if (r.special_day_minutes) b = `<button class="btn small" data-ok="${esc(r.work_day_id)}" data-ot="1">Aprovar as ${esc(fmtMin(r.special_day_minutes))}</button>
+              <button class="btn ghost small" data-ok="${esc(r.work_day_id)}" data-ot="0">Não aprovar</button>` + fixBtn(r, 'Picagens', 'ghost');
     else b = `<button class="btn small" data-ok="${esc(r.work_day_id)}">Validar</button>` + fixBtn(r, 'Picagens', 'ghost');
     return `<div class="acts noprint">${b}</div>`;
   };
@@ -1427,8 +1433,9 @@ async function loadHours(from, to) {
         <span class="hrs">${esc(fmtMin(r.worked_minutes))}</span></div>
       <div class="per">${periodsHtml(list) || '<span class="muted">sem picagens</span>'}</div>
       ${list.length ? dayline(list.join(' · '), r.shift_date === today ? { now: (nowP.hour % 24) * 60 + nowP.minute } : {}) : ''}
-      ${r.overtime_minutes || r.has_manual || returned[r.work_day_id] ? `<div class="tags">
+      ${r.overtime_minutes || r.special_day_minutes || r.has_manual || returned[r.work_day_id] ? `<div class="tags">
         ${r.overtime_minutes ? chip(r.overtime_approved === false ? '' : 'info', `${fmtMin(r.overtime_minutes)} extra${r.overtime_approved === false ? ' (recusadas)' : ''}`) : ''}
+        ${r.special_day_minutes ? chip(r.overtime_approved ? 'info' : r.overtime_approved === false ? '' : 'warn', `${fmtMin(r.special_day_minutes)} em descanso ou feriado${r.overtime_approved ? ' (aprovadas)' : r.overtime_approved === false ? ' (não aprovadas)' : ': por aprovar'}`) : ''}
         ${r.has_manual ? chip('', 'tem picagem à mão') : ''}
         ${returned[r.work_day_id] ? chip('dev', 'devolvido pelo secretariado') : ''}</div>` : ''}
       ${returned[r.work_day_id] ? `<div class="note">${esc(returned[r.work_day_id])}</div>` : ''}
@@ -1439,7 +1446,7 @@ async function loadHours(from, to) {
   if (sum) sum.innerHTML = `<div class="kpis noprint"><div class="kpi ${n.todo ? 'hot' : ''}"><b>${n.todo}</b><span>dias a validar</span></div>
     <div class="kpi ${n.anom ? 'warn' : ''}"><b>${n.anom}</b><span>com problemas</span></div><div class="kpi ok"><b>${n.ok}</b><span>validados</span></div></div>`;
   // Bulk validation only for plain days: no problem, no overtime, not one's own, and never a day the office sent back (M4).
-  const easy = data.filter((r) => r.status === 'registered' && !r.anomalies.length && !r.overtime_minutes && r.collaborator_id !== me && !returned[r.work_day_id]);
+  const easy = data.filter((r) => r.status === 'registered' && !r.anomalies.length && !r.overtime_minutes && !r.special_day_minutes && r.collaborator_id !== me && !returned[r.work_day_id]);
   const all = $('#all'); if (all) { all.hidden = !easy.length; all.lastChild.textContent = `Validar ${easy.length} dia(s) sem problemas`; all.onclick = () => validate(easy.map((r) => r.work_day_id), null); }
   el.querySelectorAll('button[data-ok]').forEach((b) => b.onclick = () =>
     validate([b.dataset.ok], b.dataset.ot === undefined ? null : b.dataset.ot === '1'));
@@ -1645,7 +1652,8 @@ function dayFlags(r, manual) {
   for (const k of new Set((manual || []).map((m) => tapKind(m.reason)))) f.push(['warn', k === 'à mão' ? 'picagem à mão' : k]);
   if (r.returned_reason) f.push(['dev', 'já foi devolvido']);
   if (r.special_day_minutes) f.push(['info', r.is_holiday ? 'trabalhou em feriado' : 'trabalhou em dia de descanso']);
-  if (r.overtime_minutes && r.overtime_approved == null) f.push(['warn', 'extra por decidir']);
+  if ((r.overtime_minutes || r.special_day_minutes) && r.overtime_approved == null) f.push(['warn', r.overtime_minutes ? 'extra por decidir' : 'por aprovar pelo chefe']);
+  if (r.special_day_minutes && r.overtime_approved === false) f.push(['info', 'chefe não aprovou']);
   else if (r.overtime_minutes > 120) f.push(['info', `${fmtMin(r.overtime_minutes)} extra${r.overtime_approved ? ' aprovadas' : ''}`]);
   if (r.worked_minutes > 12 * 60) f.push(['warn', 'mais de 12 h no dia']);
   return f;
@@ -1659,6 +1667,7 @@ function officeDay(r, manual, per, me, withFlags, noExit) {
     <div class="per">${periodsHtml(list) || '<span class="muted">sem picagens</span>'}</div>
     <div class="tags">${OFFICE_STATUS[r.status] || chip('', r.status)}
       ${r.overtime_minutes && !(withFlags && r.flags.some(([, t]) => / extra|extra /.test(t))) ? chip(r.overtime_approved ? 'info' : r.overtime_approved === false ? '' : 'warn', `${fmtMin(r.overtime_minutes)} extra ${r.overtime_approved ? 'aprovadas' : r.overtime_approved === false ? 'recusadas' : 'por decidir'}`) : ''}</div>
+    ${r.special_day_minutes ? `<div class="tags">${chip(r.overtime_approved ? 'info' : r.overtime_approved === false ? '' : 'warn', `${fmtMin(r.special_day_minutes)} em ${r.is_holiday ? 'feriado' : 'dia de descanso'} ${r.overtime_approved ? 'aprovadas pelo chefe' : r.overtime_approved === false ? 'não aprovadas' : 'por aprovar'}`)}</div>` : ''}
     ${withFlags && r.flags.length ? `<div class="why">${r.flags.map(([k, t]) => chip(k, t, k === 'anom' || k === 'warn' ? 'warn' : '')).join('')}</div>` : ''}
     ${!withFlags && r.anomalies.length ? `<div class="why">${chip(onlyOpenToday(r, tz) ? 'warn' : 'anom', r.anomalies.map((a) => anomalyText(a, r.shift_date, tz)).join(', '), onlyOpenToday(r, tz) ? 'clock' : 'warn')}</div>` : ''}
     ${r.supervisor_name && r.status !== 'registered' ? `<div class="note">validado por ${esc(r.supervisor_name)}</div>` : ''}
@@ -2041,10 +2050,10 @@ const PAY_HELP = [
   ['Dias', 'Dias com horas trabalhadas. Na folha «Por obra» são os dias nessa obra. No resumo por pessoa cada dia conta uma vez, mesmo que a pessoa tenha passado por duas obras nesse dia.'],
   ['Horas normais', 'Horas em dias úteis até ao limite diário normal.'],
   ['Extra aprovadas', 'Horas em dias úteis acima do limite diário, aprovadas. São as que seguem para o Primavera como trabalho suplementar.'],
-  ['Extra recusadas', 'Horas acima do limite diário que o encarregado recusou. Aparecem a cinzento: não contam como trabalho suplementar.'],
-  ['Extra por decidir', 'Horas acima do limite diário que ainda ninguém aprovou nem recusou. A amarelo quando há alguma: decide-as antes de pagar. Num mês fechado ficam a zero.'],
-  ['Em dia de descanso', 'Todas as horas feitas ao sábado ou ao domingo.'],
-  ['Em feriado', 'Todas as horas feitas em dia feriado.'],
+  ['Extra recusadas', 'Horas que o chefe de equipa recusou: acima do limite diário, ou em dia de descanso ou feriado. Aparecem a cinzento: não se pagam nem se faturam como trabalho suplementar.'],
+  ['Extra por decidir', 'Horas acima do limite diário, ou em dia de descanso ou feriado, que o chefe de equipa ainda não aprovou nem recusou. A amarelo quando há alguma: decide-as antes de pagar. Num mês fechado ficam a zero.'],
+  ['Em dia de descanso', 'Horas feitas num dia de descanso da obra (cada obra tem os seus, conforme o cliente), aprovadas pelo chefe de equipa.'],
+  ['Em feriado', 'Horas feitas em dia feriado, aprovadas pelo chefe de equipa.'],
   ['Total trabalhado (h)', 'Normais + extra aprovadas + extra recusadas + extra por decidir + descanso + feriado. É o tempo picado, já sem a pausa descontada.'],
   ['Total (h:mm)', 'O mesmo total em horas e minutos: 7:30 são sete horas e meia.'],
   ['Das quais noturnas (h)', 'A parte do total feita de noite (por defeito entre as 22:00 e as 7:00). Já está contada nas colunas anteriores: não somar outra vez.'],
@@ -2298,6 +2307,8 @@ function viewSites() {
 const canSiteDetails = () => state.me && ['admin', 'hr', 'project_manager', 'supervisor'].includes(state.me.role);
 const canSetSite = () => state.me && ['admin', 'project_manager'].includes(state.me.role);
 const canHolidays = () => state.me && ['admin', 'hr'].includes(state.me.role);
+const canRestDays = () => state.me && ['admin', 'hr', 'project_manager'].includes(state.me.role);
+const WEEKDAYS = [[1, 'Seg'], [2, 'Ter'], [3, 'Qua'], [4, 'Qui'], [5, 'Sex'], [6, 'Sáb'], [7, 'Dom']];
 let siteCfgSeq = 0;
 async function loadSiteDetails(id) {
   const box = $('#cfgbody'); if (!box || !canSiteDetails()) return;
@@ -2312,6 +2323,12 @@ async function loadSiteDetails(id) {
         <option value="PT" ${d.country !== 'ES' ? 'selected' : ''}>Portugal</option><option value="ES" ${d.country === 'ES' ? 'selected' : ''}>Espanha</option></select></div>
       <div><label>Concelho (município)</label><input name="mun" maxlength="128" value="${esc(d.municipality || '')}" placeholder="ex.: Sines"></div></div>
       <p><button class="btn wide">Guardar país e concelho</button></p></form>` : ''}
+    <h3>Dias de descanso</h3>
+    <p class="small muted" style="margin-top:0">Depende do cliente. As horas feitas nestes dias só entram na folha se o chefe de equipa as aprovar.</p>
+    ${canRestDays() ? `<form id="restf"><div class="chips reasons" role="group" aria-label="Dias de descanso">${WEEKDAYS.map(([n, l]) =>
+        `<label class="chip"><input type="checkbox" name="rd" value="${n}" ${(d.rest_days || [6, 7]).includes(n) ? 'checked' : ''}>${esc(l)}</label>`).join('')}</div>
+      <p><button class="btn ghost wide">Guardar dias de descanso</button></p></form>`
+    : `<p><b>${esc(WEEKDAYS.filter(([n]) => (d.rest_days || [6, 7]).includes(n)).map(([, l]) => l).join(', ') || 'Nenhum')}</b></p>`}
     <h3>Feriados municipais e regionais</h3>
     ${hol.length ? hol.map((h) => `<div class="day wk"><span class="chip code">${esc(fmtDate(h.date))}</span><div class="grow">${esc(h.name)}</div>
       ${canHolidays() ? `<button class="btn small ghost" data-delhol="${esc(h.id)}">Tirar</button>` : ''}</div>`).join('')
@@ -2326,6 +2343,13 @@ async function loadSiteDetails(id) {
     const { error: e2 } = await sb.rpc('mini_set_site_details', { p_project: id, p_country: f.get('country'), p_municipality: String(f.get('mun') || '').trim() });
     if (e2) return toast(friendly(e2));
     toast('País e concelho guardados.'); await loadBasics(); loadSiteDetails(id);
+  };
+  if ($('#restf')) $('#restf').onsubmit = async (e) => {
+    e.preventDefault(); const days = new FormData(e.target).getAll('rd').map(Number);
+    if (days.length > 6) return toast('A obra precisa de pelo menos um dia de trabalho.');
+    const { data: n, error: e2 } = await sb.rpc('mini_set_site_rest_days', { p_project: id, p_days: days });
+    if (e2) return toast(friendly(e2));
+    toast(`Dias de descanso guardados.${n ? ` ${n} dia(s) recalculado(s).` : ''}`); loadSiteDetails(id);
   };
   if ($('#holf')) $('#holf').onsubmit = async (e) => {
     e.preventDefault(); const f = new FormData(e.target);
