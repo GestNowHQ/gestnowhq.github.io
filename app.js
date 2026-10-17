@@ -37,6 +37,22 @@ const REASON_PREFIX = {
   'skill_missing:': 'Falta a competência: ',
 };
 const ERRORS = [
+  [/end date is before the start/i, 'A data de fim é antes do início.'],
+  [/team leader must be on the site team/i, 'O responsável de equipa tem de estar atribuído a esta obra.'],
+  [/site manager not found/i, 'Escolhe o gestor de obra da lista.'],
+  [/client phone: digits only/i, 'O telefone do cliente só leva números (9 a 20), pode começar por +.'],
+  [/client email is not valid/i, 'O email do cliente não parece válido.'],
+  [/^phone: digits only/i, 'O telefone só leva números (9 a 20), pode começar por +.'],
+  [/emergency phone: digits only/i, 'O telefone de emergência só leva números (9 a 20), pode começar por +.'],
+  [/email is not valid/i, 'O email não parece válido.'],
+  [/shirt size/i, 'Tamanho de camisola: de XS a XXXL.'],
+  [/trousers size/i, 'Tamanho de calça: de XS a XXL.'],
+  [/boots size/i, 'Número de botas: de 34 a 50.'],
+  [/must be 16 to 90 years old/i, 'Data de nascimento: a pessoa tem de ter entre 16 e 90 anos.'],
+  [/nationality: country code/i, 'Escolhe a nacionalidade da lista.'],
+  [/dependents: 0 to 20/i, 'Dependentes: de 0 a 20.'],
+  [/profession up to 80 letters/i, 'Profissão até 80 letras, categoria até 40.'],
+  [/a field is too long/i, 'Um dos campos é comprido demais.'],
   [/cannot record your own clock-in late/i, 'Não podes registar a tua própria picagem com atraso (ficou sem rede). Pede a outro encarregado ou ao escritório para a acrescentar como picagem esquecida.'],
   [/tap not found/i, 'Essa picagem já não existe ou já foi anulada.'],
   [/close a whole month/i, 'Só se fecha o mês inteiro, do dia 1 ao último dia.'],
@@ -704,14 +720,14 @@ function go(view) {
   else if (state.offline && view !== 'picar') { toast('Sem rede: por agora só podes picar.'); view = 'picar'; }
   stopNfc(); clearInterval(state.timer); clearInterval(state.tick); hideFlash(); openMore(false);
   state.view = view;
-  app.classList.toggle('wide', view === 'secretariado');
-  const tab = view === 'ficha' ? 'trabalhadores' : view;
+  app.classList.toggle('wide', view === 'secretariado' || view === 'painel');
+  const tab = view === 'ficha' ? 'trabalhadores' : view === 'painel' ? 'obras' : view;
   nav.querySelectorAll('button[data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === tab));
   const cur = nav.querySelector(`button[data-view="${tab}"]`);
   nav.querySelector('button[data-more]').classList.toggle('on', !!cur && cur.parentElement.id === 'more');
   window.scrollTo(0, 0);
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
-     ficha: viewWorker, obras: viewSites, secretariado: viewOffice, minhas: viewMine }[view] || viewClock)();
+     ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine }[view] || viewClock)();
 }
 
 // ------------------------------------------------------------------ Picar
@@ -1245,6 +1261,7 @@ async function viewWorker() {
       <div class="sub">${w.employee_number ? 'nº ' + esc(w.employee_number) + ' · ' : ''}${esc(w.organization)}</div></div></div>
       <div class="tags">${!w.is_active ? chip('', 'inativo') : blocked ? chip('bad', `não entra: ${blocked} documento${blocked > 1 ? 's' : ''}`, 'x') : chip('ok', 'ativo', 'ok')}
         ${w.card_uid ? chip('', 'cartão ' + w.card_uid, 'card') : chip('warn', 'sem cartão', 'card')}</div></div>
+    <div class="card" id="ficha">${skel(2)}</div>
     <div class="card"><h2 style="margin-top:0">Documentos e formação</h2>
       <table class="rt"><tr><th>Documento</th><th>Validade</th><th>Estado</th></tr>${ds.data.map((d) => `<tr>
         <td><b>${esc(d.name)}</b>${d.is_blocking ? ' <span class="small muted">(trava a entrada)</span>' : ''}
@@ -1355,6 +1372,90 @@ async function viewWorker() {
     const { error } = await sb.rpc('mini_set_worker_active', { p_collab: id, p_active: !w.is_active, p_reason: f.get('why') });
     if (error) return toast(friendly(error));
     toast(w.is_active ? 'Desativado.' : 'Reativado. Dá-lhe um cartão.'); await loadBasics(); viewWorker();
+  };
+  loadWorkerProfile(id);
+}
+
+// ------------------------------------------------------------------ Ficha do colaborador (a ficha de papel da empresa)
+// Work data and uniform sizes: whoever sees people. Personal data: only with pessoas.dados_pessoais (the server
+// does not even send it otherwise). Uniform sizes will feed the PPE module.
+const SIZES_TOP = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
+const SIZES_BOTTOM = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
+const SIZES_SHOES = Array.from({ length: 17 }, (_, i) => String(34 + i));
+const COUNTRIES = { PT: 'Portugal', BR: 'Brasil', CV: 'Cabo Verde', AO: 'Angola', GW: 'Guiné-Bissau', ST: 'São Tomé e Príncipe',
+  MZ: 'Moçambique', ES: 'Espanha', FR: 'França', RO: 'Roménia', UA: 'Ucrânia', MD: 'Moldávia', BG: 'Bulgária', PL: 'Polónia',
+  IN: 'Índia', NP: 'Nepal', PK: 'Paquistão', BD: 'Bangladesh', MA: 'Marrocos', VE: 'Venezuela', CO: 'Colômbia', TL: 'Timor-Leste' };
+const SEXES = { M: 'Masculino', F: 'Feminino' };
+const MARITAL = { single: 'Solteiro(a)', married: 'Casado(a)', civil_union: 'União de facto', divorced: 'Divorciado(a)', widowed: 'Viúvo(a)' };
+const EDUCATION = { basic: 'Ensino básico', secondary: 'Secundário (12.º ano)', vocational: 'Curso profissional', higher: 'Superior', other: 'Outra' };
+const ID_TYPES = { citizen_card: 'Cartão de Cidadão', passport: 'Passaporte', residence_permit: 'Autorização de residência', other: 'Outro' };
+
+async function loadWorkerProfile(id, editing) {
+  const box = $('#ficha'); if (!box) return;
+  const { data, error } = await sb.rpc('mini_worker_profile', { p_collab: id });
+  if (!box.isConnected) return;
+  if (error) { box.remove(); return; }
+  const wk = data.work || {}; const p = data.personal;
+  const v = (x) => (x === null || x === undefined || x === '') ? '<span class="muted">—</span>' : esc(String(x));
+  const item = (label, html) => `<div><dt>${esc(label)}</dt><dd>${html}</dd></div>`;
+  const opts = (map, cur, empty = '—') => `<option value="">${empty}</option>` + (Array.isArray(map) ? map.map((k) => [k, k]) : Object.entries(map))
+    .map(([k, t]) => `<option value="${esc(k)}" ${k === cur ? 'selected' : ''}>${esc(t)}</option>`).join('')
+    + (cur && !(Array.isArray(map) ? map.includes(cur) : map[cur]) ? `<option value="${esc(cur)}" selected>${esc(cur)}</option>` : '');
+  const age = p && p.birth_date ? Math.floor((Date.now() - new Date(p.birth_date + 'T12:00:00')) / 31557600000) : null;
+  const farda = [['Camisola', wk.size_top], ['Calça', wk.size_bottom], ['Botas', wk.size_shoes]];
+  if (!editing) {
+    box.innerHTML = `<div class="fhead"><h2 style="margin:0">Ficha do colaborador</h2>
+        ${data.can_edit ? '<button class="btn small ghost" id="fedit">Editar ficha</button>' : ''}</div>
+      <div class="farda">${farda.map(([l, x]) => `<div class="${x ? '' : 'none'}"><span>${l}</span><b>${x ? esc(x) : '?'}</b></div>`).join('')}</div>
+      ${farda.some(([, x]) => !x) ? '<p class="small muted">Faltam tamanhos da farda: vão ser precisos para entregar EPIs.</p>' : ''}
+      <dl class="kv">${item('Telefone', wk.phone ? `<a href="tel:${esc(wk.phone.replace(/ /g, ''))}">${esc(wk.phone)}</a>` : v(null))}
+        ${item('Email', v(wk.email))}${item('Profissão', v(wk.job_title))}${item('Categoria profissional', v(wk.category))}</dl>
+      ${p ? `<h3>Dados pessoais</h3><dl class="kv">
+        ${item('Morada', v([p.address, [p.postal_code, p.locality].filter(Boolean).join(' ')].filter(Boolean).join(', ')))}
+        ${item('Concelho', v(p.municipality))}
+        ${item('Data de nascimento', p.birth_date ? esc(fmtDate(p.birth_date)) + ` <span class="muted">(${age} anos)</span>` : v(null))}
+        ${item('Naturalidade', v(p.birthplace))}${item('Nacionalidade', v(COUNTRIES[p.nationality] || p.nationality))}
+        ${item('Sexo', v(SEXES[p.sex]))}${item('Estado civil', v(MARITAL[p.marital_status]))}
+        ${item('Dependentes', v(p.dependents))}${item('Habilitações', v(EDUCATION[p.education]))}
+        ${item('Documento', p.id_type || p.id_number ? esc([ID_TYPES[p.id_type], p.id_number].filter(Boolean).join(' nº ')) : v(null))}
+        ${item('Validade do documento', p.id_expiry ? esc(fmtDate(p.id_expiry)) + (p.id_expiry < isoDay(new Date()) ? ' ' + chip('bad', 'caducado', 'x') : '') : v(null))}
+        ${item('Contacto de emergência', p.emergency_name || p.emergency_phone ? esc([p.emergency_name, p.emergency_relation && `(${p.emergency_relation})`].filter(Boolean).join(' '))
+          + (p.emergency_phone ? ` · <a href="tel:${esc(p.emergency_phone.replace(/ /g, ''))}">${esc(p.emergency_phone)}</a>` : '') : v(null))}
+        </dl>${p.notes ? `<p class="small"><b>Observações:</b> ${esc(p.notes)}</p>` : ''}`
+      : '<p class="small muted">Os dados pessoais só aparecem a quem tem a permissão «dados pessoais» (Recursos Humanos).</p>'}`;
+    if ($('#fedit')) $('#fedit').onclick = () => loadWorkerProfile(id, true);
+    return;
+  }
+  const inp = (name, label, val, extra = '') => `<div><label>${esc(label)}</label><input name="${name}" value="${esc(val ?? '')}" ${extra}></div>`;
+  const sel = (name, label, map, cur) => `<div><label>${esc(label)}</label><select name="${name}">${opts(map, cur)}</select></div>`;
+  box.innerHTML = `<h2 style="margin-top:0">Editar ficha</h2><form id="fform">
+    <h3>Farda</h3><div class="row">${sel('size_top', 'Camisola', SIZES_TOP, wk.size_top)}${sel('size_bottom', 'Calça', SIZES_BOTTOM, wk.size_bottom)}
+      ${sel('size_shoes', 'Botas (nº)', SIZES_SHOES, wk.size_shoes)}</div>
+    <h3>Trabalho</h3><div class="row">${inp('phone', 'Telefone', wk.phone, 'type="tel" inputmode="tel" maxlength="20"')}${inp('email', 'Email', wk.email, 'type="email" maxlength="120"')}</div>
+    <div class="row">${inp('job_title', 'Profissão', wk.job_title, 'maxlength="80" placeholder="ex.: Serralheiro"')}${inp('category', 'Categoria profissional', wk.category, 'maxlength="40" placeholder="ex.: Oficial 1ª"')}</div>
+    ${p ? `<h3>Dados pessoais</h3>
+    <label>Morada</label><input name="address" value="${esc(p.address || '')}" maxlength="200">
+    <div class="row">${inp('postal_code', 'Código postal', p.postal_code, 'maxlength="12" placeholder="0000-000"')}${inp('locality', 'Localidade', p.locality, 'maxlength="80"')}${inp('municipality', 'Concelho', p.municipality, 'maxlength="80"')}</div>
+    <div class="row">${inp('birth_date', 'Data de nascimento', p.birth_date, 'type="date"')}${inp('birthplace', 'Naturalidade', p.birthplace, 'maxlength="80"')}${sel('nationality', 'Nacionalidade', COUNTRIES, p.nationality)}</div>
+    <div class="row">${sel('sex', 'Sexo', SEXES, p.sex)}${sel('marital_status', 'Estado civil', MARITAL, p.marital_status)}${inp('dependents', 'Dependentes', p.dependents, 'type="number" min="0" max="20" inputmode="numeric"')}</div>
+    <div class="row">${sel('education', 'Habilitações', EDUCATION, p.education)}</div>
+    <div class="row">${sel('id_type', 'Documento', ID_TYPES, p.id_type)}${inp('id_number', 'Número do documento', p.id_number, 'maxlength="30"')}${inp('id_expiry', 'Válido até', p.id_expiry, 'type="date"')}</div>
+    <h3>Contacto de emergência</h3>
+    <div class="row">${inp('emergency_name', 'Nome', p.emergency_name, 'maxlength="80"')}${inp('emergency_relation', 'Parentesco', p.emergency_relation, 'maxlength="40" placeholder="ex.: Mulher, Pai"')}${inp('emergency_phone', 'Telefone', p.emergency_phone, 'type="tel" inputmode="tel" maxlength="20"')}</div>
+    <label>Observações</label><textarea name="notes" maxlength="2000" rows="3">${esc(p.notes || '')}</textarea>
+    ${more('Quem vê estes dados', '<p>Só quem tem a permissão «dados pessoais» (Recursos Humanos e administração). Cada alteração fica registada com quem a fez, mas os valores pessoais não ficam escritos no registo.</p>')}` : ''}
+    <div class="row" style="margin-top:12px"><button type="button" class="btn ghost" id="fcancel">Cancelar</button><button class="btn">Guardar ficha</button></div></form>`;
+  $('#fcancel').onclick = () => loadWorkerProfile(id);
+  $('#fform').onsubmit = async (e) => {
+    e.preventDefault(); const f = new FormData(e.target); const btn = e.target.querySelector('button:not([type])'); btn.disabled = true;
+    const pick = (keys) => Object.fromEntries(keys.map((k) => [k, (f.get(k) || '').trim()]));
+    const body = { work: pick(['phone', 'email', 'job_title', 'category', 'size_top', 'size_bottom', 'size_shoes']) };
+    if (p) body.personal = pick(['address', 'postal_code', 'locality', 'municipality', 'birth_date', 'birthplace', 'nationality', 'sex',
+      'marital_status', 'dependents', 'education', 'id_type', 'id_number', 'id_expiry', 'emergency_name', 'emergency_relation', 'emergency_phone', 'notes']);
+    const { error: se } = await sb.rpc('mini_save_worker_profile', { p_collab: id, p_data: body });
+    btn.disabled = false;
+    if (se) return toast(friendly(se));
+    toast('Ficha guardada.'); loadWorkerProfile(id);
   };
 }
 
@@ -2841,10 +2942,11 @@ function viewSites() {
   // the address usually ends with the country already: never write it twice
   const addr = (s) => String(s.address || '').replace(/[,·\s]*(Portugal|Espanha|España|Spain|França|France)\s*$/i, '');
   app.innerHTML = `<h1>Obras</h1>
-    ${state.sites.length ? `<div class="list">${state.sites.map((s) => `<div class="card">
+    ${state.sites.length ? `<div class="list">${state.sites.map((s) => `<div class="card${canSiteDetails() ? ' link' : ''}" data-id="${esc(s.id)}" ${canSiteDetails() ? 'role="button" tabindex="0"' : ''}>
       <div class="wk"><span class="av a${s.country === 'ES' ? 7 : s.country === 'FR' ? 3 : 0}" aria-hidden="true">${ic('crane')}</span><div class="grow"><div class="nm">${esc(s.title)}</div>
         <div class="sub">${esc(addr(s))}${s.municipality && s.municipality.toLowerCase() !== addr(s).toLowerCase() ? (addr(s) ? ' · ' : '') + 'concelho ' + esc(s.municipality) : ''}</div></div></div>
-      <div class="tags"><span class="chip code">${esc(s.cost_center_code)}</span>${label[s.status] || chip('', s.status)}${flag(s.country, s.id)}</div></div>`).join('')}</div>`
+      <div class="tags"><span class="chip code">${esc(s.cost_center_code)}</span>${label[s.status] || chip('', s.status)}${flag(s.country, s.id)}</div>
+      ${canSiteDetails() ? '<p class="small muted" style="margin:8px 0 0">Toca para abrir o painel da obra ›</p>' : ''}</div>`).join('')}</div>`
       : `<div class="card">${empty('helmet', 'Ainda não há obras', 'Abre a primeira obra aqui em baixo.')}</div>`}
     ${can('obras.gerir') ? `<details class="fold" ${state.sites.length ? '' : 'open'}><summary><span>+ Abrir obra<span class="sub">Cliente, código e nome</span></span></summary><div>
     <form id="f"><div class="row"><div><label>Cliente *</label><input name="client" required placeholder="ex.: Refinaria de Sines"></div>
@@ -2858,6 +2960,11 @@ function viewSites() {
       ${more('Mais', '<p>Portugal: hora de Lisboa. Espanha: hora de Madrid. França: hora de Paris. Os feriados nacionais contam sozinhos; aqui só se põem os municipais e regionais.</p>')}
       <label for="cfgsite">Obra</label><select id="cfgsite">${state.sites.map((s) => `<option value="${esc(s.id)}" ${currentSite() && currentSite().id === s.id ? 'selected' : ''}>${esc(s.title)} (${esc(s.cost_center_code)})</option>`).join('')}</select>
       <div id="cfgbody">${skel(1)}</div></div>` : ''}`;
+  if (canSiteDetails()) app.querySelectorAll('.list .card.link').forEach((c) => {
+    const open = () => { state.panelSite = c.dataset.id; go('painel'); };
+    c.onclick = (e) => { if (!e.target.closest('a,button,select,input')) open(); };
+    c.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } };
+  });
   if ($('#cfgsite')) { $('#cfgsite').onchange = () => loadSiteDetails($('#cfgsite').value); loadSiteDetails($('#cfgsite').value); }
   if ($('#f')) $('#f').onsubmit = async (e) => {
     e.preventDefault();
@@ -2957,4 +3064,111 @@ async function loadSiteDetails(id) {
     if (e2) return toast(friendly(e2));
     toast('Feriado tirado.'); loadSiteDetails(id);
   });
+}
+
+// ------------------------------------------------------------------ Painel da obra
+// Everything the base already knows about one site, on one screen. Phones only with pessoas.ver, hours only with
+// horas.ver (the server leaves them out otherwise). Housing, vehicle, tools and PPE say only who provides them for now.
+const PROVIDER = { company: 'Empresa', client: 'Cliente', other: 'Outro', none: 'Não precisa' };
+const telLink = (t) => t ? `<a href="tel:${esc(String(t).replace(/ /g, ''))}">${esc(t)}</a>` : '';
+const fmtHours = (m) => `${Math.round((m || 0) / 6) / 10}`.replace('.', ',') + ' h';
+async function viewSitePanel() {
+  const id = state.panelSite; if (!id) return go('obras');
+  app.innerHTML = `<p class="noprint"><button class="btn ghost small" id="back">‹ Obras</button></p><div id="pnl">${skel(4)}</div>`;
+  $('#back').onclick = () => go('obras');
+  loadSitePanel(id);
+}
+async function loadSitePanel(id, editing) {
+  const box = $('#pnl'); if (!box) return;
+  const { data: d, error } = await sb.rpc('mini_site_sheet', { p_project: id });
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
+  if (editing && d.can_edit) return sitePanelForm(box, d);
+  const team = d.team || []; const onSite = team.filter((t) => t.on_site).length; const blocked = team.filter((t) => t.missing.length).length;
+  const today = isoDay(new Date());
+  let timeline = '';
+  if (d.start && d.finish) {
+    const total = (new Date(d.finish) - new Date(d.start)) / 864e5 + 1; const done = Math.min(total, Math.max(0, (new Date(today) - new Date(d.start)) / 864e5 + 1));
+    timeline = `<div class="tl"><div class="tl-bar"><i style="width:${Math.round(done / total * 100)}%"></i></div>
+      <div class="tl-txt"><span>${esc(fmtDate(d.start))}</span><b>${today < d.start ? 'começa em ' + Math.round((new Date(d.start) - new Date(today)) / 864e5) + ' dias'
+        : today > d.finish ? 'prazo passou' : `dia ${Math.round(done)} de ${Math.round(total)}`}</b><span>${esc(fmtDate(d.finish))}</span></div></div>`;
+  }
+  const person = (label, p) => `<div><dt>${esc(label)}</dt><dd>${p && p.name ? esc(p.name) + (p.phone ? `<div class="small">${telLink(p.phone)}</div>` : '') : '<span class="muted">por definir</span>'}</dd></div>`;
+  const cc = d.client_contact || {};
+  const h = d.hours;
+  box.innerHTML = `<div class="card"><div class="fhead"><div><h1 style="margin:0">${esc(d.title)}</h1>
+        <div class="sub muted">${esc(d.client || '')}${d.address ? ' · ' + esc(d.address) : ''}</div></div>
+        ${d.can_edit ? '<button class="btn small ghost" id="pedit">Editar ficha da obra</button>' : ''}</div>
+      <div class="tags"><span class="chip code">${esc(d.code)}</span>${d.status === 'execution' ? chip('ok', 'em curso', 'ok') : chip('', d.status)}${flag(d.country, d.id)}
+        ${d.municipality ? chip('', 'concelho ' + d.municipality) : ''}</div>
+      ${timeline || (d.can_edit ? '<p class="small muted">Sem datas: escreve o início e o fim previsto em «Editar ficha da obra».</p>' : '')}</div>
+    <div class="kpis k4">
+      <div class="kpi"><b>${team.length}</b><span>na equipa</span></div>
+      <div class="kpi ok"><b>${onSite}</b><span>na obra agora</span></div>
+      <div class="kpi ${blocked ? 'warn' : ''}"><b>${blocked}</b><span>não podem entrar</span></div>
+      <div class="kpi info"><b>${h ? fmtHours(h.worked).replace(' h', '') : '–'}</b><span>horas este mês</span></div></div>
+    <div class="painel-grid">
+    <div class="card"><h2 style="margin-top:0">Responsáveis</h2><dl class="kv">
+      ${person('Responsável de equipa', d.supervisor)}${person('Gestor de obra', d.manager)}
+      <div><dt>Contacto do cliente</dt><dd>${cc.name ? esc(cc.name) + (cc.role ? ` <span class="muted">(${esc(cc.role)})</span>` : '')
+        + (cc.phone ? `<div class="small">${telLink(cc.phone)}</div>` : '') + (cc.email ? `<div class="small"><a href="mailto:${esc(cc.email)}">${esc(cc.email)}</a></div>` : '') : '<span class="muted">por definir</span>'}</dd></div>
+      <div><dt>Diária</dt><dd>${d.per_diem == null ? '<span class="muted">sem valor</span>' : Number(d.per_diem) === 0 ? 'não paga' : esc(euro(d.per_diem)) + ' por dia'}</dd></div></dl></div>
+    <div class="card"><h2 style="margin-top:0">Logística</h2><div class="logi">
+      ${[['Alojamento', d.housing_by], ['Viatura', d.vehicle_by], ['Ferramentas', d.tools_by], ['EPIs', d.ppe_by]].map(([l, x]) =>
+        `<div class="${x ? '' : 'none'}"><span>${l}</span><b>${x ? esc(PROVIDER[x]) : 'por definir'}</b></div>`).join('')}</div>
+      ${d.logistics_note ? `<p class="small" style="margin-bottom:0">${esc(d.logistics_note)}</p>` : ''}</div>
+    <div class="card span2"><h2 style="margin-top:0">Equipa</h2>
+      ${team.length ? team.map((t) => `<div class="day wk">${avatar(t.name)}<div class="grow"><div class="nm">${esc(t.name)}${d.supervisor && d.supervisor.id === t.id ? ' <span class="small muted">· responsável</span>' : ''}</div>
+          <div class="sub">${esc(t.job_title || 'sem profissão')}${t.phone ? ' · ' + telLink(t.phone) : ''}</div>
+          ${t.missing.length ? `<div class="sub" style="color:var(--bad)">Falta: ${esc(t.missing.join(', '))}</div>` : ''}</div>
+        ${t.missing.length ? chip('bad', 'não entra', 'x') : t.on_site ? chip('ok', 'na obra', 'ok') : chip('', 'fora')}</div>`).join('')
+        : '<p class="muted">Ninguém atribuído. Atribui pessoas em Trabalhadores › Obras.</p>'}</div>
+    <div class="card"><h2 style="margin-top:0">Trabalhos</h2>
+      <h3 style="margin-top:0">Descrição</h3><p style="margin-top:0">${d.work_scope ? esc(d.work_scope) : '<span class="muted">por escrever</span>'}</p>
+      <h3>Formações obrigatórias</h3><div class="tags">${(d.mandatory || []).map((m) => chip('', m)).join('') || '<span class="muted">nenhuma</span>'}</div>
+      ${d.extra_requirements ? `<h3>Requisitos adicionais</h3><p style="margin-top:0">${esc(d.extra_requirements)}</p>` : ''}
+      ${d.platform ? `<h3>Plataforma</h3><p style="margin:0">${esc(d.platform)}</p>` : ''}</div>
+    ${h ? `<div class="card"><h2 style="margin-top:0">Horas de ${esc(new Date(h.from + 'T12:00:00').toLocaleDateString('pt-PT', { month: 'long' }))}</h2>
+      <dl class="kv"><div><dt>Trabalhadas</dt><dd>${fmtHours(h.worked)}</dd></div><div><dt>Extra</dt><dd>${fmtHours(h.overtime)}</dd></div>
+        <div><dt>Noturnas</dt><dd>${fmtHours(h.night)}</dd></div><div><dt>Pessoas</dt><dd>${h.people}</dd></div></dl>
+      <h3>Dias</h3><div class="tags">${chip(h.registered ? 'warn' : '', `${h.registered} por validar na obra`)}${chip('', `${h.site_validated} por aprovar`)}${chip('ok', `${h.approved} aprovados`)}</div></div>` : ''}
+    </div>`;
+  if ($('#pedit')) $('#pedit').onclick = () => loadSitePanel(id, true);
+}
+function sitePanelForm(box, d) {
+  const team = d.team || []; const cc = d.client_contact || {};
+  const who = (name, label, cur) => `<div><label>${esc(label)}</label><select name="${name}">${Object.entries(PROVIDER).map(([k, t]) =>
+    `<option value="${k}" ${cur === k ? 'selected' : ''}>${esc(t)}</option>`).join('')}<option value="" ${cur ? '' : 'selected'}>Por definir</option></select></div>`;
+  box.innerHTML = `<div class="card"><h2 style="margin-top:0">Ficha da obra: ${esc(d.title)}</h2><form id="pform">
+    <div class="row"><div><label>Início</label><input name="start" type="date" value="${esc(d.start || '')}"></div>
+      <div><label>Fim previsto</label><input name="finish" type="date" value="${esc(d.finish || '')}"></div></div>
+    <div class="row"><div><label>Responsável de equipa</label><select name="supervisor_id"><option value="">Por definir</option>${team.map((t) =>
+        `<option value="${esc(t.id)}" ${d.supervisor && d.supervisor.id === t.id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></div>
+      <div><label>Gestor de obra</label><select name="manager_id"><option value="">Por definir</option>${(d.people || []).map((t) =>
+        `<option value="${esc(t.id)}" ${d.manager && d.manager.id === t.id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></div></div>
+    <p class="small muted">O responsável de equipa escolhe-se entre as pessoas desta obra.</p>
+    <h3>Contacto do cliente</h3>
+    <div class="row"><div><label>Nome</label><input name="client_contact_name" maxlength="120" value="${esc(cc.name || '')}"></div>
+      <div><label>Função</label><input name="client_contact_role" maxlength="80" value="${esc(cc.role || '')}" placeholder="ex.: Fiscal, Gestor de contrato"></div></div>
+    <div class="row"><div><label>Telefone</label><input name="client_contact_phone" type="tel" inputmode="tel" maxlength="20" value="${esc(cc.phone || '')}"></div>
+      <div><label>Email</label><input name="client_contact_email" type="email" maxlength="120" value="${esc(cc.email || '')}"></div></div>
+    <h3>Logística: quem fornece</h3>
+    <div class="row">${who('housing_by', 'Alojamento', d.housing_by)}${who('vehicle_by', 'Viatura', d.vehicle_by)}</div>
+    <div class="row">${who('tools_by', 'Ferramentas', d.tools_by)}${who('ppe_by', 'EPIs', d.ppe_by)}</div>
+    <label>Nota de logística</label><input name="logistics_note" maxlength="500" value="${esc(d.logistics_note || '')}" placeholder="ex.: casa em Sines para 6 pessoas">
+    <h3>Trabalhos</h3>
+    <label>Descrição dos trabalhos</label><textarea name="work_scope" maxlength="2000" rows="3">${esc(d.work_scope || '')}</textarea>
+    <label>Requisitos adicionais</label><textarea name="extra_requirements" maxlength="2000" rows="2">${esc(d.extra_requirements || '')}</textarea>
+    <label>Plataforma</label><input name="platform" maxlength="200" value="${esc(d.platform || '')}" placeholder="ex.: portal de acessos do cliente">
+    <p class="small muted">As formações obrigatórias são os documentos que «travam a entrada» (em Segurança).</p>
+    <div class="row" style="margin-top:12px"><button type="button" class="btn ghost" id="pcancel">Cancelar</button><button class="btn">Guardar ficha da obra</button></div></form></div>`;
+  $('#pcancel').onclick = () => loadSitePanel(d.id);
+  $('#pform').onsubmit = async (e) => {
+    e.preventDefault(); const f = new FormData(e.target); const btn = e.target.querySelector('button:not([type])'); btn.disabled = true;
+    const body = Object.fromEntries([...f.entries()].map(([k, v]) => [k, String(v).trim()]));
+    const { error: se } = await sb.rpc('mini_save_site_sheet', { p_project: d.id, p_data: body });
+    btn.disabled = false;
+    if (se) return toast(friendly(se));
+    toast('Ficha da obra guardada.'); loadSitePanel(d.id);
+  };
 }
