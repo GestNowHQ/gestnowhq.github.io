@@ -360,6 +360,14 @@ button.who { background: none; border: 0; color: inherit; font: inherit; cursor:
 button.who.sw { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
 button.who.strong { background: var(--accent); color: var(--on-accent); }
 .profiles { display: grid; gap: 8px; margin: 10px 0; }
-.check.prof { align-items: flex-start; padding: 10px; border: 1px solid var(--line); border-radius: 12px; }
+.check.prof { align-items: flex-start; padding: 12px; margin: 0; border: var(--bw) solid var(--line); border-radius: 12px; cursor: pointer; }
+.check.prof input { width: 22px; height: 22px; min-height: 0; margin: 2px 0 0; padding: 0; accent-color: var(--brand); }
+.check.prof > span { flex: 1 1 auto; min-width: 0; line-height: 1.35; }
 .check.prof:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
 .chips.reasons .chip:has(input:disabled) { opacity: .8; cursor: default; }
+button.who { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.15; padding: 3px 10px; }
+button.who b { font-weight: 700; white-space: nowrap; }
+button.who small { font-size: 12px; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+button.who.sw { text-decoration: none; }
+button.who.sw b { text-decoration: underline dotted; text-underline-offset: 3px; }
+button.who.strong { border-radius: 14px; }

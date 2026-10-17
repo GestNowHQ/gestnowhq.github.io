@@ -603,10 +603,12 @@ async function switchProfile() {
 document.getElementById('whoami').addEventListener('click', switchProfile);
 function showWho() {
   const me = state.me; const p = me.collaborator_id && state.people.find((x) => x.id === me.collaborator_id);
-  const el = document.getElementById('whoami'); el.textContent = `${p ? p.full_name : me.email} · ${ROLE_NAMES[me.role] || me.role}`;
+  const el = document.getElementById('whoami');
   const many = me.profiles && me.profiles.length > 1;
-  if (many) el.textContent += ' ▾';
-  el.title = many ? 'Mudar de perfil' : el.textContent; el.className = 'who' + (PRIVILEGED.includes(me.role) ? ' strong' : '') + (many ? ' sw' : '');
+  // Two lines: the role (never cut off) and, under it, whose account this is.
+  el.innerHTML = `<b>${esc(ROLE_NAMES[me.role] || me.role)}${many ? ' ▾' : ''}</b><small>${esc(p ? p.full_name.split(' ')[0] + ' ' + p.full_name.split(' ').slice(-1)[0] : me.email)}</small>`;
+  el.setAttribute('aria-label', `${ROLE_NAMES[me.role] || me.role}, ${p ? p.full_name : me.email}${many ? '. Mudar de perfil' : ''}`);
+  el.title = (p ? p.full_name : me.email) + (many ? ' · toca para mudar de perfil' : ''); el.className = 'who' + (PRIVILEGED.includes(me.role) ? ' strong' : '') + (many ? ' sw' : '');
   el.disabled = !many; el.hidden = false;
 }
 async function loadBasics() {
@@ -1614,14 +1616,14 @@ async function loadMine() {
   if (!data.length) { el.innerHTML = `<div class="card">${empty('clock', 'Sem horas neste mês', 'Os dias aparecem aqui depois de picares na obra.')}</div>`; return; }
   const tot = data.reduce((a, r) => ({ w: a.w + r.worked_minutes, o: a.o + r.overtime_minutes, s: a.s + r.special_day_minutes }), { w: 0, o: 0, s: 0 });
   const done = data.filter((r) => r.status !== 'registered').length;
-  el.innerHTML = `<div class="card"><div class="ptotal"><span>Total do mês</span><span class="hrs">${esc(fmtMin(tot.w))}</span></div>
+  el.innerHTML = `<div class="card"><div class="day-h"><span class="d">Total do mês</span><span class="hrs">${esc(fmtMin(tot.w))}</span></div>
       <p class="small muted">${tot.o ? esc(fmtMin(tot.o)) + ' extra · ' : ''}${tot.s ? esc(fmtMin(tot.s)) + ' em descanso ou feriado · ' : ''}${done} de ${data.length} dia(s) já validado(s)</p></div>
-    <div class="card list">${data.map((r) => { const tz = r.timezone || DEFAULT_TZ; return `<div class="pday">
-      <div class="ph"><b>${esc(dayLabel(r.shift_date))}</b> <span class="chip code">${esc(r.project_code)}</span>
-        ${r.anomalies.length ? chip('anom', 'falta uma picagem', 'warn') : DAY_STATUS[r.status] || chip('', r.status)}
+    <div class="card">${data.map((r) => { const tz = r.timezone || DEFAULT_TZ; return `<div class="day">
+      <div class="day-h"><span class="d">${esc(dayLabel(r.shift_date))}</span><span class="chip code">${esc(r.project_code)}</span>
         <span class="hrs">${esc(fmtMin(r.worked_minutes))}</span></div>
-      <div class="per small">${esc(r.project_title)} · ${esc(fmtHour(r.first_in, tz) || '?')}–${esc(fmtHour(r.last_out, tz) || '?')}
-        ${r.overtime_minutes ? ' · ' + esc(fmtMin(r.overtime_minutes)) + ' extra' : ''}${r.is_holiday ? ' · feriado' : r.is_rest_day ? ' · dia de descanso' : ''}</div></div>`; }).join('')}</div>
+      <div class="per">${esc(fmtHour(r.first_in, tz) || '?')}–${esc(fmtHour(r.last_out, tz) || '?')} <span class="small muted">· ${esc(r.project_title)}</span></div>
+      <div class="tags">${r.anomalies.length ? chip('anom', 'falta uma picagem', 'warn') : DAY_STATUS[r.status] || chip('', r.status)}
+        ${r.overtime_minutes ? chip('info', fmtMin(r.overtime_minutes) + ' extra') : ''}${r.is_holiday ? chip('info', 'feriado') : r.is_rest_day ? chip('info', 'dia de descanso') : ''}</div></div>`; }).join('')}</div>
     <p class="small muted">Se faltar um dia ou uma hora estiver errada, fala com o teu encarregado: ele corrige com o motivo.</p>`;
 }
 
