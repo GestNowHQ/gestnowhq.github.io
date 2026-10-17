@@ -381,7 +381,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '19';
+const APP_VERSION = '20';
 const TABS = { supervisor: ['picar', 'naobra', 'horas', 'trabalhadores'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['seguranca', 'naobra', 'trabalhadores', 'picar'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -695,7 +695,7 @@ function showWho() {
 // Search everything (Ctrl+K or the magnifier in the top bar): the screens this login can open, and the people and sites
 // already loaded for it. Nothing new is fetched, and go() and each screen still check who may open what.
 const cmdk = document.getElementById('cmdk'); const cmdq = document.getElementById('cmdq'); const cmdl = document.getElementById('cmdl');
-const fold = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const fold = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 function paletteItems(q) {
   const n = fold(q.trim()); const has = (t) => fold(t).includes(n);
   const open = (v) => { const b = nav.querySelector(`button[data-view="${v}"]`); return !!b && !b.hidden; };
@@ -1155,9 +1155,9 @@ async function loadRecent() {
 // ------------------------------------------------------------------ Na obra
 function viewOnSite() {
   if (!state.onsiteFilter) state.onsiteFilter = 'all';
-  app.innerHTML = `<h1>Na obra agora</h1>
-    <div class="noprint">${siteSelect('site')}</div>
-    ${canSiteDetails() ? `<p class="noprint"><button class="btn wide" id="openPanel">${ic('crane')}Painel da obra</button></p>` : ''}
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Ao vivo</p><h1>Na obra agora</h1></div></div>
+    <div class="toolbar noprint"><div class="tb-site">${siteSelect('site')}</div>
+    ${canSiteDetails() ? `<button class="btn ghost" id="openPanel">${ic('crane')}Painel da obra</button>` : ''}</div>
     <div id="list" style="margin-top:14px">${skel(4)}</div>
     <p class="noprint"><button class="btn ghost wide" id="print">${ic('print')}Imprimir lista (emergência)</button></p>`;
   bindSiteSelect('site', () => { $('#list').innerHTML = skel(4); loadOnSite(); });
@@ -1243,8 +1243,8 @@ function renderOnSite() {
 
 // ------------------------------------------------------------------ Trabalhadores
 async function viewPeople() {
-  app.innerHTML = `<h1>Trabalhadores</h1>
-    ${canPeople() ? `<p><button class="btn big" id="new">+ Novo trabalhador</button></p>` : ''}
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Equipa</p><h1>Trabalhadores</h1></div>
+    ${canPeople() ? `<button class="btn" id="new">+ Novo trabalhador</button>` : ''}</div>
     <div id="list">${skel(4)}</div>
     ${canPeople() ? `
     <div class="card" id="newcard" hidden><h2 style="margin-top:0">Novo trabalhador</h2>
@@ -1312,14 +1312,34 @@ async function viewPeople() {
   if (!data.length) { el.innerHTML = `<div class="card">${empty('helmet', 'Ainda não há trabalhadores', canPeople() ? 'Toca em «+ Novo trabalhador» para registar o primeiro.' : 'O escritório regista as pessoas.')}</div>`; return; }
   const codes = (ids) => ids.map((id) => (state.sites.find((s) => s.id === id) || {}).cost_center_code).filter(Boolean);
   const okN = data.filter((w) => w.is_active && !w.blocking_problems && w.card_uid).length;
-  el.innerHTML = `<p class="small muted">${data.length} pessoa(s) · ${okN} pode(m) entrar. Toca numa pessoa para ver a ficha.</p>
-    <div class="list">${data.map((w) => `<div class="card link" role="button" tabindex="0" data-id="${esc(w.collaborator_id)}">
+  // Quick filters by state, plus search: with 50 people nobody scrolls the whole list.
+  const stOf = (w) => (!w.is_active ? 'off' : w.blocking_problems ? 'bad' : !w.card_uid ? 'card' : 'ok');
+  const count = (k) => data.filter((w) => stOf(w) === k).length;
+  const F = [['all', 'Todos', data.length], ['ok', 'Podem entrar', okN], ['bad', 'Bloqueados', count('bad')], ['card', 'Sem cartão', count('card')], ['off', 'Inativos', count('off')]]
+    .filter(([k, , n]) => k === 'all' || n);
+  if (!F.some(([k]) => k === state.peopleF)) state.peopleF = 'all';
+  el.innerHTML = `<div class="pfilters"><div class="chips" role="group" aria-label="Filtrar">${F.map(([k, t, n]) =>
+      `<button class="chip ${k}" data-f="${k}" aria-pressed="${state.peopleF === k}">${esc(t)} <b>${n}</b></button>`).join('')}</div>
+    ${data.length > 6 ? '<input type="search" id="pq" placeholder="Procurar nome, nº ou cartão" autocomplete="off">' : ''}</div>
+    <p class="small muted">${data.length} pessoa(s) · ${okN} pode(m) entrar. Toca numa pessoa para ver a ficha.</p>
+    <div class="list people">${data.map((w) => `<div class="card link st-${stOf(w)}" role="button" tabindex="0" data-id="${esc(w.collaborator_id)}" data-st="${stOf(w)}"
+      data-q="${esc(fold(`${w.full_name} ${w.employee_number || ''} ${w.card_uid || ''}`))}">
     <div class="wk">${avatar(w.full_name)}<div class="grow"><div class="nm">${esc(w.full_name)}</div>
       <div class="sub">${w.employee_number ? 'nº ' + esc(w.employee_number) + ' · ' : ''}${w.card_uid ? 'cartão ' + esc(w.card_uid) : 'sem cartão'}</div></div></div>
     <div class="tags">${!w.is_active ? chip('', 'inativo')
       : w.blocking_problems ? chip('bad', `não entra: ${w.blocking_problems} documento${w.blocking_problems > 1 ? 's' : ''}`, 'x')
       : !w.card_uid ? chip('warn', 'sem cartão', 'card') : chip('ok', 'pode entrar', 'ok')}
-      ${codes(w.site_ids).map((c) => `<span class="chip code">${esc(c)}</span>`).join('') || '<span class="chip">sem obra</span>'}</div></div>`).join('')}</div>`;
+      ${codes(w.site_ids).map((c) => `<span class="chip code">${esc(c)}</span>`).join('') || '<span class="chip">sem obra</span>'}</div></div>`).join('')}</div>
+    <p class="muted small" id="pnone" hidden>Ninguém com este filtro.</p>`;
+  const apply = () => {
+    const qv = fold(($('#pq') || {}).value || ''); let n = 0;
+    el.querySelectorAll('.people > .card').forEach((c) => { const show = (state.peopleF === 'all' || c.dataset.st === state.peopleF) && c.dataset.q.includes(qv); c.hidden = !show; n += show; });
+    el.querySelectorAll('.pfilters .chip').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.f === state.peopleF)));
+    $('#pnone').hidden = !!n;
+  };
+  el.querySelectorAll('.pfilters .chip').forEach((b) => b.onclick = () => { state.peopleF = b.dataset.f; apply(); });
+  if ($('#pq')) $('#pq').oninput = apply;
+  apply();
   el.querySelectorAll('.link').forEach((c) => { c.onclick = () => { state.worker = c.dataset.id; go('ficha'); };
     c.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); c.onclick(); } }; });
 }
@@ -1351,10 +1371,16 @@ async function viewWorker() {
   const docState = (d) => ({ ok: chip('ok', 'válido', 'ok'), a_caducar: chip('warn', `caduca em ${d.days_left} dia(s)`, 'clock'),
     caducado: chip('bad', 'caducado', 'x'), em_falta: d.is_blocking ? chip('bad', 'em falta', 'x') : chip('', 'não tem') }[d.state]);
   const blocked = ds.data.filter((d) => d.is_blocking && ['caducado', 'em_falta'].includes(d.state)).length;
-  el.innerHTML = `<div class="card"><div class="wk">${avatar(w.full_name)}<div class="grow"><h1 style="margin:0">${esc(w.full_name)}</h1>
-      <div class="sub">${w.employee_number ? 'nº ' + esc(w.employee_number) + ' · ' : ''}${esc(w.organization)}</div></div></div>
+  // Ready to enter: the documents that stop the entry, how many are in order.
+  const need = ds.data.filter((d) => d.is_blocking); const fine = need.filter((d) => !['caducado', 'em_falta'].includes(d.state)).length;
+  const pct = need.length ? Math.round((fine / need.length) * 100) : 100;
+  el.innerHTML = `<div class="card prof-hero"><div class="prof-band"></div><div class="prof-body">
+      <div class="wk">${avatar(w.full_name)}<div class="grow"><h1 style="margin:0">${esc(w.full_name)}</h1>
+      <div class="sub">${w.employee_number ? 'nº ' + esc(w.employee_number) + ' · ' : ''}${esc(w.organization)}${w.job_title ? ' · ' + esc(w.job_title) : ''}</div></div></div>
       <div class="tags">${!w.is_active ? chip('', 'inativo') : blocked ? chip('bad', `não entra: ${blocked} documento${blocked > 1 ? 's' : ''}`, 'x') : chip('ok', 'ativo', 'ok')}
-        ${w.card_uid ? chip('', 'cartão ' + w.card_uid, 'card') : chip('warn', 'sem cartão', 'card')}</div></div>
+        ${w.card_uid ? chip('', 'cartão ' + w.card_uid, 'card') : chip('warn', 'sem cartão', 'card')}</div>
+      ${need.length ? `<div class="ready ${pct === 100 ? 'ok' : 'bad'}"><div class="ready-t"><span>Pronto para entrar na obra</span><b>${fine} de ${need.length} documentos</b></div>
+        <div class="prog"><i style="width:${pct}%"></i></div></div>` : ''}</div></div>
     <div class="card" id="ficha">${skel(2)}</div>
     <div class="card"><h2 style="margin-top:0">Documentos e formação</h2>
       <table class="rt"><tr><th>Documento</th><th>Validade</th><th>Estado</th></tr>${ds.data.map((d) => `<tr>
@@ -1581,8 +1607,8 @@ async function readOneCard(sel) {
 
 // ------------------------------------------------------------------ Segurança
 function viewSafety() {
-  app.innerHTML = `<h1>Segurança</h1>
-    <div class="noprint">${siteSelect('site')}</div><div id="list" style="margin-top:14px">${skel(3)}</div>
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Documentos e acessos</p><h1>Segurança</h1></div></div>
+    <div class="toolbar noprint"><div class="tb-site">${siteSelect('site')}</div></div><div id="list" style="margin-top:14px">${skel(3)}</div>
     <p class="noprint"><button class="btn ghost wide" id="print">${ic('print')}Imprimir</button></p>
     ${can('documentos.regras') ? `<h2 class="noprint">O que trava a entrada</h2><div class="card noprint" id="types"></div>` : ''}`;
   bindSiteSelect('site', loadSafety);
@@ -1879,7 +1905,7 @@ function viewMine() {
   if (!state.mineMonth) state.mineMonth = isoDay(new Date()).slice(0, 7);
   const months = [0, 1, 2].map((k) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - k); return isoDay(d).slice(0, 7); });
   const mName = (ym) => new Date(ym + '-15T12:00:00').toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' });
-  app.innerHTML = `<h1>As minhas horas</h1>
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">${esc(((state.people.find((x) => x.id === state.me.collaborator_id) || {}).full_name) || '')}</p><h1>As minhas horas</h1></div></div>
     <div class="chips" style="margin-bottom:12px">${months.map((m) => `<button class="chip" data-m="${m}" aria-pressed="${m === state.mineMonth}">${esc(mName(m))}</button>`).join('')}</div>
     <div id="pdmine"></div>
     <div id="mine">${skel(3)}</div>`;
@@ -2102,9 +2128,10 @@ function viewOffice() {
   if (!state.officeMonth) state.officeMonth = isoDay(new Date()).slice(0, 7);
   const { from, to } = monthRange(state.officeMonth);
   const sites = state.sites;
-  const main = `<h1>Secretariado</h1>
-    <div class="noprint"><label for="month">Mês</label><input type="month" id="month" value="${esc(state.officeMonth)}">
-      ${can('horas.aprovar') ? `<p class="small muted">Todas as obras: a obra valida, tu aprovas, no fim do mês fechas.</p>
+  const main = `<div class="ph"><div><p class="ph-k">Escritório · todas as obras</p><h1>Secretariado</h1></div>
+    <div class="monthnav noprint"><button class="iconbtn" id="mprev" aria-label="Mês anterior">‹</button><label for="month">Mês</label><input type="month" id="month" value="${esc(state.officeMonth)}"><button class="iconbtn" id="mnext" aria-label="Mês seguinte">›</button></div></div>
+    <div class="noprint">
+      ${can('horas.aprovar') ? `<p class="small muted">A obra valida, tu aprovas, no fim do mês fechas.</p>
       ${more('Em que reparar', '<p>Olha com atenção para as picagens marcadas «à mão», «sem rede, chegou tarde» e «próprio cartão»: aparecem a amarelo no dia.</p>')}
       <div id="sum">${skel(1)}</div>` : ''}</div>
     ${can('horas.aprovar') ? `<div id="list">${skel(3)}</div>` : ''}`;
@@ -2134,6 +2161,8 @@ function viewOffice() {
       <aside class="office-side">${can('horas.aprovar') ? '<div id="checklist"></div>' : ''}${side}</aside></div>` : main + side;
   const on = (sel, ev, fn) => { const x = $(sel); if (x) x[ev] = fn; };
   on('#month', 'onchange', (e) => { if (e.target.value) { state.officeMonth = e.target.value; viewOffice(); } });
+  const step = (n) => { const [y, m] = state.officeMonth.split('-').map(Number); const d = new Date(Date.UTC(y, m - 1 + n, 1)); state.officeMonth = d.toISOString().slice(0, 7); viewOffice(); };
+  on('#mprev', 'onclick', () => step(-1)); on('#mnext', 'onclick', () => step(1));
   on('#sheet', 'onclick', () => downloadPayroll(from, to));
   on('#prim', 'onclick', () => downloadPrimavera(from, to));
   on('#primcfg', 'ontoggle', () => { if ($('#primcfg').open) showPrimaveraSettings(); });
@@ -2316,7 +2345,7 @@ function officeTable(el, data, manual, per, me, noExit, look) {
       const warn = r.flags.length ? r.flags : r.anomalies.length ? [['anom', r.anomalies.map((a) => anomalyText(a, r.shift_date, tz)).join(', ')]] : [];
       return `<tr class="${lookIds.has(r.work_day_id) ? 'look' : ''}" data-id="${esc(r.work_day_id)}">
         <td class="sel">${canApprove(r) ? `<input type="checkbox" data-sel="${esc(r.work_day_id)}" ${chosen.has(r.work_day_id) ? 'checked' : ''} aria-label="Escolher ${esc(r.full_name)} ${esc(dayLabel(r.shift_date))}">` : ''}</td>
-        <td class="name"><b>${esc(r.full_name)}</b>${r.employee_number ? `<div class="small muted">nº ${esc(r.employee_number)}</div>` : ''}</td>
+        <td class="name"><div class="wk">${avatar(r.full_name)}<div><b>${esc(r.full_name)}</b>${r.employee_number ? `<div class="small muted">nº ${esc(r.employee_number)}</div>` : ''}</div></div></td>
         <td class="nowrap">${esc(dayLabel(r.shift_date))}</td>
         <td><span class="chip code" title="${esc(r.project_title)}">${esc(r.project_code)}</span></td>
         <td class="per">${periodsHtml(periodsOf(r, per[r.work_day_id], tz)) || '<span class="muted">sem picagens</span>'}</td>
@@ -3049,12 +3078,12 @@ function viewSites() {
   const label = { execution: chip('ok', 'em curso', 'ok'), lead: chip('', 'rascunho') };
   // the address usually ends with the country already: never write it twice
   const addr = (s) => String(s.address || '').replace(/[,·\s]*(Portugal|Espanha|España|Spain|França|France)\s*$/i, '');
-  app.innerHTML = `<h1>Obras</h1>
-    ${state.sites.length ? `<div class="list">${state.sites.map((s) => `<div class="card${canSiteDetails() ? ' link' : ''}" data-id="${esc(s.id)}" ${canSiteDetails() ? 'role="button" tabindex="0"' : ''}>
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">${state.sites.filter((x) => x.status === 'execution').length} em curso · ${state.sites.length} no total</p><h1>Obras</h1></div></div>
+    ${state.sites.length ? `<div class="list sites">${state.sites.map((s) => `<div class="card${canSiteDetails() ? ' link' : ''}" data-id="${esc(s.id)}" ${canSiteDetails() ? 'role="button" tabindex="0"' : ''}>
       <div class="wk"><span class="av a${s.country === 'ES' ? 7 : s.country === 'FR' ? 3 : 0}" aria-hidden="true">${ic('crane')}</span><div class="grow"><div class="nm">${esc(s.title)}</div>
         <div class="sub">${esc(addr(s))}${s.municipality && s.municipality.toLowerCase() !== addr(s).toLowerCase() ? (addr(s) ? ' · ' : '') + 'concelho ' + esc(s.municipality) : ''}</div></div></div>
       <div class="tags"><span class="chip code">${esc(s.cost_center_code)}</span>${label[s.status] || chip('', s.status)}${flag(s.country, s.id)}</div>
-      ${canSiteDetails() ? `<p style="margin:12px 0 0"><button class="btn wide" data-panel="${esc(s.id)}">${ic('crane')}Abrir painel da obra</button></p>` : ''}</div>`).join('')}</div>`
+      ${canSiteDetails() ? `<p class="site-go"><button class="btn ghost small" data-panel="${esc(s.id)}">${ic('crane')}Abrir painel da obra</button></p>` : ''}</div>`).join('')}</div>`
       : `<div class="card">${empty('helmet', 'Ainda não há obras', 'Abre a primeira obra aqui em baixo.')}</div>`}
     ${can('obras.gerir') ? `<details class="fold" ${state.sites.length ? '' : 'open'}><summary><span>+ Abrir obra<span class="sub">Cliente, código e nome</span></span></summary><div>
     <form id="f"><div class="row"><div><label>Cliente *</label><input name="client" required placeholder="ex.: Refinaria de Sines"></div>

@@ -643,4 +643,53 @@ dialog.cmdk::backdrop { background: rgba(5,12,12,.4); -webkit-backdrop-filter: b
   .hacts { position: sticky; bottom: 16px; z-index: 5; }
   .hacts .btn.big { box-shadow: 0 14px 30px -12px rgba(14,74,75,.6); }
 }
+
+/* ---------------------------------------------------------------- Secretariado v19 */
+.monthnav { display: flex; align-items: center; gap: 2px; height: 46px; padding: 0 2px; border: 1.5px solid var(--field); border-radius: var(--r-md); background: var(--surface); flex: 0 0 auto; }
+.monthnav label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); margin: 0; }
+.monthnav input { border: 0; min-height: 40px; width: 170px; padding: 0 6px; font-weight: 650; text-align: center; background: none; box-shadow: none !important; }
+.monthnav .iconbtn { width: 38px; height: 38px; font-size: 22px; color: var(--ink); }
+@media (max-width: 560px) { .ph { flex-wrap: wrap; } .monthnav { width: 100%; } .monthnav input { flex: 1 1 auto; } }
+table.grid td.name .wk { gap: 10px; }
+table.grid td.name .av { width: 32px; height: 32px; font-size: 12px; }
+table.grid tbody tr { transition: background .12s; }
+.office-main .tbl-card, .office-main .card { border-radius: var(--r-lg); }
+.office-side .card h2 { font-size: 17px; }
+
+/* ---------------------------------------------------------------- Pessoas v19 */
+.pfilters { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 0 0 6px; }
+.pfilters .chips { margin: 0; }
+.pfilters .chip b { font-weight: 700; opacity: .7; margin-left: 2px; }
+.pfilters input { flex: 1 1 220px; min-height: 42px; padding: 0 14px; font-size: 15px; }
+.people { display: grid; gap: 10px; }
+.people > .card { margin: 0; position: relative; overflow: hidden; }
+.people > .card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--line); }
+.people > .card.st-ok::before { background: var(--ok-fill); } .people > .card.st-bad::before { background: var(--bad-fill); }
+.people > .card.st-card::before { background: var(--warn-fill); }
+@media (min-width: 720px) { .people { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1500px) { .people { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* ---------------------------------------------------------------- Ficha v19: profile header */
+.prof-hero { padding: 0; overflow: hidden; }
+.prof-band { height: 76px; background: radial-gradient(300px 120px at 90% 0%, rgba(245,179,1,.35), transparent 70%), linear-gradient(120deg, #14706c, #0e4a4b 55%, #062728); }
+.prof-body { padding: 0 18px 18px; }
+.prof-hero .wk { align-items: flex-end; margin-top: -30px; }
+.prof-hero .wk .av { width: 72px; height: 72px; font-size: 24px; box-shadow: 0 0 0 4px var(--surface), 0 8px 20px -8px rgba(0,0,0,.4); }
+.prof-hero h1 { font-size: 24px; padding-top: 34px; }
+.prof-hero .tags { margin-top: 10px; }
+.ready { margin-top: 14px; padding: 12px 14px; border-radius: 14px; background: var(--surface-2); }
+.ready-t { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--ink-2); }
+.ready-t b { color: var(--ink); }
+.ready.bad .prog > i { background: linear-gradient(90deg, #f87171, var(--bad-fill)); }
+.ready .prog { margin: 8px 0 0; height: 8px; }
+:root[data-theme="sol"] .prof-band { background: #000; }
+
+/* ---------------------------------------------------------------- Obras v19 */
+.sites { display: grid; gap: 10px; }
+.sites > .card { margin: 0; }
+.sites .av { border-radius: 12px; }
+.sites .av .i { width: 22px; height: 22px; }
+.site-go { margin: 12px 0 0; }
+@media (min-width: 720px) { .sites { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.toolbar > .btn { flex: 0 0 auto; min-height: 48px; }
 }
