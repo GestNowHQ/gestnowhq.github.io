@@ -382,3 +382,63 @@ button.who b { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .day-h > .chip, .day-h .hrs { flex: 0 0 auto; }
 @media (max-width: 400px) { .brand span { display: none; } .top { gap: 6px; } .day-h { gap: 6px; } .day-h .hrs { font-size: 17px; } }
 .card.dept.off { opacity: .6; }
+/* ---------------------------------------------------------------- computer mode (wide screens): side menu, wide tables */
+.office-grid { display: grid; gap: 24px; align-items: start; }
+.office-side { columns: 340px; column-gap: 16px; }
+.office-side > * { break-inside: avoid; margin: 0 0 16px; }
+.office-side > :empty { display: none; }
+.office-main input[type=month] { max-width: 280px; }
+@media (min-width: 1760px) {
+  .office-grid { grid-template-columns: minmax(0, 1fr) 380px; }
+  .office-side { columns: auto; position: sticky; top: 72px; max-height: calc(100vh - 88px); overflow-y: auto; }
+}
+.filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 0 0 12px; }
+.filters input, .filters select { width: auto; min-height: 44px; padding: 0 12px; font-size: 15px; }
+.filters input[type=search] { flex: 1 1 220px; }
+.filters select { flex: 0 1 260px; }
+.filters .btn { margin-left: auto; }
+label.check.inline { margin: 0; min-height: 44px; font-size: 15px; gap: 8px; }
+label.check.inline input, td.sel input, th.sel input { width: 20px; height: 20px; min-height: 0; margin: 0; padding: 0; accent-color: var(--accent); }
+.tbl-card { padding: 16px; }
+.tbl-wrap { overflow-x: auto; margin: 0 -16px; padding: 0 16px; }
+table.grid { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 15px; }
+table.grid th { position: sticky; top: 0; z-index: 1; background: var(--surface); text-align: left; font-size: 13px; font-weight: 700; color: var(--ink-2);
+  text-transform: uppercase; letter-spacing: .3px; padding: 10px 8px; border-bottom: 2px solid var(--line); white-space: nowrap; user-select: none; }
+table.grid th[data-sort] { cursor: pointer; }
+table.grid th[data-sort]:hover { color: var(--ink); }
+table.grid th[aria-sort=ascending]::after { content: " ▲"; color: var(--accent-ink, var(--ink)); }
+table.grid th[aria-sort=descending]::after { content: " ▼"; color: var(--accent-ink, var(--ink)); }
+table.grid td { padding: 10px 8px; border-bottom: var(--bw) solid var(--line); vertical-align: top; }
+table.grid tbody tr:hover td { background: var(--surface-2); }
+table.grid tr.look td { background: var(--warn-bg); }
+table.grid tr.look td:first-child { box-shadow: inset 4px 0 0 var(--warn); }
+table.grid .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.grid td.per { font-size: 14px; min-width: 130px; }
+table.grid td.why { display: table-cell; min-width: 150px; }
+table.grid td.why .chips-row { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+table.grid td.name { min-width: 160px; }
+table.grid td.name b { white-space: nowrap; }
+table.grid td.acts { text-align: right; }
+table.grid td.acts .btn { min-height: 40px; padding: 0 12px; font-size: 14px; margin: 0 0 4px 4px; }
+table.grid tfoot td { font-weight: 800; border-top: 2px solid var(--line); border-bottom: 0; padding-top: 12px; }
+table.grid .sel { width: 32px; padding-right: 0; }
+.nowrap { white-space: nowrap; }
+.bulk { position: sticky; bottom: 12px; z-index: 3; display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 10px 14px;
+  background: var(--surface); border: 2px solid var(--accent); border-radius: var(--r-md); box-shadow: var(--sh-2); }
+.bulk b { margin-right: auto; }
+.kpi[data-f] { cursor: pointer; }
+.kpi.on { outline: 3px solid var(--accent); outline-offset: 1px; }
+@media (min-width: 1100px) {
+  :root { --side-w: 216px; }
+  .top { position: sticky; top: 0; z-index: 50; }
+  #nav { top: 56px; bottom: 0; right: auto; width: var(--side-w); }
+  .tabs { flex-direction: column; height: 100%; padding: 12px 10px; gap: 2px; border-top: 0; border-right: var(--bw) solid var(--line); box-shadow: none; overflow-y: auto; }
+  .tabs button { flex: 0 0 auto; flex-direction: row; justify-content: flex-start; gap: 12px; min-height: 48px; padding: 0 10px; border-radius: var(--r-md); font-size: 16px; }
+  .tabs button .i { padding: 3px 8px; }
+  .tabs button:hover { background: var(--surface-2); color: var(--ink); }
+  .tabs button[data-more] { display: none; }
+  .tabs button.out { margin-top: auto; color: var(--bad); }
+  main { margin-left: var(--side-w); max-width: none; padding: 24px max(32px, calc((100vw - var(--side-w) - 1000px) / 2)) 48px; }
+  main.wide { padding: 24px 32px 48px; }
+  #toast { bottom: 24px; left: calc(50% + var(--side-w) / 2); }
+}

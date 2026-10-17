@@ -369,10 +369,20 @@ const TABS = { supervisor: ['picar', 'naobra', 'horas', 'trabalhadores'], admin:
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['seguranca', 'naobra', 'trabalhadores', 'picar'],
   project_manager: ['picar', 'naobra', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
 const MORE_ORDER = ['picar', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'obras'];
+// Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
+// Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
+const WIDE = window.matchMedia('(min-width: 1100px)');
+const isWide = () => WIDE.matches;
+WIDE.addEventListener('change', () => {
+  if (!state.ready || !state.me) return;
+  layoutNav(state.me.role);
+  if (state.view === 'secretariado') viewOffice();
+});
 function layoutNav(role) {
   const tabs = document.getElementById('tabs'); const sheet = document.getElementById('more');
   const btn = (v) => nav.querySelector(`button[data-view="${v}"]`);
-  const main = (TABS[role] || TABS.supervisor).filter((v) => !btn(v).hidden);
+  const first = (TABS[role] || TABS.supervisor).filter((v) => !btn(v).hidden);
+  const main = isWide() ? [...first, ...MORE_ORDER.filter((v) => !first.includes(v) && !btn(v).hidden)] : first;
   const moreBtn = nav.querySelector('button[data-more]');
   for (const v of main) tabs.insertBefore(btn(v), moreBtn);
   for (const v of MORE_ORDER) if (!main.includes(v) && !btn(v).hidden) sheet.appendChild(btn(v));
@@ -380,6 +390,7 @@ function layoutNav(role) {
   sheet.appendChild(Object.assign(document.createElement('hr'), {}));
   sheet.appendChild(nav.querySelector('button[data-action=sair]'));
   sheet.querySelectorAll('hr').forEach((h, i, all) => { if (i < all.length - 1) h.remove(); });
+  if (isWide()) tabs.insertBefore(nav.querySelector('button[data-action=sair]'), moreBtn);
 }
 function openMore(open) {
   const sheet = document.getElementById('more'); if (!sheet) return;
@@ -693,6 +704,7 @@ function go(view) {
   else if (state.offline && view !== 'picar') { toast('Sem rede: por agora só podes picar.'); view = 'picar'; }
   stopNfc(); clearInterval(state.timer); clearInterval(state.tick); hideFlash(); openMore(false);
   state.view = view;
+  app.classList.toggle('wide', view === 'secretariado');
   const tab = view === 'ficha' ? 'trabalhadores' : view;
   nav.querySelectorAll('button[data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === tab));
   const cur = nav.querySelector(`button[data-view="${tab}"]`);
@@ -1785,7 +1797,7 @@ function downloadPerDiems(week, data) {
 async function showPerDiemSettings() {
   const box = $('#pdform'); if (!box) return;
   const { data: s, error } = await sb.rpc('mini_per_diem_settings');
-  if (!$('#pdform')) return;
+  if (!box.isConnected) return;
   if (error) { box.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
   const v = (x) => (x == null ? '' : Number(x).toFixed(2));
   box.innerHTML = `<form id="pdset"><div class="row"><div><label for="pdpt">Diária em Portugal (€)</label><input id="pdpt" name="pt" type="number" min="0" max="1000" step="0.01" inputmode="decimal" value="${v(s.amount_pt)}" placeholder="ex.: 12,50"></div>
@@ -1840,7 +1852,7 @@ async function loadPdCases(boxSel, project) {
 async function loadMyPerDiems() {
   const box = $('#pdmine'); if (!box) return;
   const { data: d, error } = await sb.rpc('mini_my_per_diems');
-  if (!$('#pdmine')) return;
+  if (!box.isConnected) return;
   if (error || (!d.weeks.length && !d.cases.length && !d.notices.length)) { box.innerHTML = ''; return; }
   const fresh = d.notices.filter((n) => n.new);
   const NOTE_ICON = { issued: 'ok', to_deduct: 'warn', excused: 'ok', deducted_week: 'warn', deducted_salary: 'warn' };
@@ -1873,13 +1885,13 @@ function viewOffice() {
   if (!state.officeMonth) state.officeMonth = isoDay(new Date()).slice(0, 7);
   const { from, to } = monthRange(state.officeMonth);
   const sites = state.sites;
-  app.innerHTML = `<h1>Secretariado</h1>
+  const main = `<h1>Secretariado</h1>
     <div class="noprint"><label for="month">Mês</label><input type="month" id="month" value="${esc(state.officeMonth)}">
       ${can('horas.aprovar') ? `<p class="small muted">Todas as obras: a obra valida, tu aprovas, no fim do mês fechas.</p>
       ${more('Em que reparar', '<p>Olha com atenção para as picagens marcadas «à mão», «sem rede, chegou tarde» e «próprio cartão»: aparecem a amarelo no dia.</p>')}
       <div id="sum">${skel(1)}</div>` : ''}</div>
-    ${can('horas.aprovar') ? `<div id="list">${skel(3)}</div>` : ''}
-    ${can('salarios.exportar') ? `<div class="card noprint"><h2 style="margin-top:0">Salários</h2>
+    ${can('horas.aprovar') ? `<div id="list">${skel(3)}</div>` : ''}`;
+  const side = `${can('salarios.exportar') ? `<div class="card noprint"><h2 style="margin-top:0">Salários</h2>
       <p class="small muted">Folha Excel do mês e ficheiro para o Primavera.</p>
       ${more('O que leva a folha', '<p>Uma linha por pessoa e obra, com as horas normais, as extra aprovadas, as noturnas e as de descanso ou feriado, mais um resumo por pessoa. Abre no Excel, no Google Sheets ou no telemóvel.</p>')}
       <div class="acts"><button class="btn wide" id="sheet">Descarregar a folha do mês (Excel)</button>
@@ -1900,6 +1912,9 @@ function viewOffice() {
     ${can('contas.gerir') ? `<div class="card noprint"><h2 style="margin-top:0">Departamentos e acessos</h2>
       <p class="small muted">Quem faz o quê na empresa. Cada conta pertence a um ou mais departamentos e só faz o que eles permitem.</p>
       <div id="depts">${skel(2)}</div></div>` : ''}`;
+  // Computer mode: the month's days on the left, closing the month and the exports on the right.
+  app.innerHTML = isWide() ? `<div class="office-grid"><div class="office-main">${main}</div>
+      <aside class="office-side">${can('horas.aprovar') ? '<div id="checklist"></div>' : ''}${side}</aside></div>` : main + side;
   const on = (sel, ev, fn) => { const x = $(sel); if (x) x[ev] = fn; };
   on('#month', 'onchange', (e) => { if (e.target.value) { state.officeMonth = e.target.value; viewOffice(); } });
   on('#sheet', 'onclick', () => downloadPayroll(from, to));
@@ -1919,7 +1934,7 @@ function viewOffice() {
 async function loadDepartments() {
   const box = $('#depts'); if (!box) return;
   const [d, p] = await Promise.all([sb.rpc('mini_departments'), sb.rpc('mini_permissions')]);
-  if (!$('#depts')) return;
+  if (!box.isConnected) return;
   if (d.error || p.error) { box.innerHTML = `<p>${esc(friendly(d.error || p.error))}</p>`; return; }
   const perms = p.data;
   // "Horas (5) · Salários (2)": the areas a department touches, in the catalog's order; the detail is one tap away.
@@ -1936,7 +1951,7 @@ async function loadDepartments() {
     const open = () => editDepartment(d.data.find((x) => x.id === el.dataset.dept), perms);
     el.onclick = open; el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } };
   });
-  $('#newdept').onclick = () => editDepartment(null, perms);
+  box.querySelector('#newdept').onclick = () => editDepartment(null, perms);
 }
 async function editDepartment(x, perms) {
   if (x && x.kind === 'admin') return toast('A Administração tem tudo e não se altera.');
@@ -1973,7 +1988,7 @@ async function loadOffice(from, to) {
   const el = $('#list'); if (!el) return;
   const [{ data, error }, man, per] = await Promise.all([sb.rpc('mini_hours_office', { p_from: from, p_to: to }),
     sb.rpc('mini_manual_taps', { p_from: from, p_to: to }), dayPeriods(from, to)]);
-  if (!$('#list')) return;
+  if (!el.isConnected) return; // the month changed while this one was loading: its newer list wins
   if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; $('#sum').innerHTML = ''; return; }
   const manual = {};
   for (const m of (man && man.data) || []) (manual[m.work_day_id] = manual[m.work_day_id] || []).push(m);
@@ -1986,11 +2001,15 @@ async function loadOffice(from, to) {
   const look = data.filter((r) => (r.status === 'supervisor_validated' && r.flags.length) || noExit(r));
   const clean = data.filter((r) => r.status === 'supervisor_validated' && !r.flags.length && !noExit(r) && r.collaborator_id !== me);
   $('#sum').innerHTML = `<div class="kpis k4">
-      <div class="kpi"><b>${n('registered')}</b> <span>por validar na obra</span></div>
-      <div class="kpi ${look.length ? 'warn' : ''}"><b>${look.length}</b> <span>precisam de ti</span></div>
-      <div class="kpi ok"><b>${n('hr_validated')}</b> <span>aprovados</span></div>
-      <div class="kpi"><b>${n('sent_to_payroll')}</b> <span>fechados</span></div></div>
-    <div id="checklist"></div>`;
+      <div class="kpi" data-f="obra"><b>${n('registered')}</b> <span>por validar na obra</span></div>
+      <div class="kpi ${look.length ? 'warn' : ''}" data-f="ti"><b>${look.length}</b> <span>precisam de ti</span></div>
+      <div class="kpi ok" data-f="aprovados"><b>${n('hr_validated')}</b> <span>aprovados</span></div>
+      <div class="kpi" data-f="fechados"><b>${n('sent_to_payroll')}</b> <span>fechados</span></div></div>
+    ${isWide() ? '' : '<div id="checklist"></div>'}`;
+  if (isWide() && data.length) {
+    officeTable(el, data, manual, per, me, noExit, look);
+    return closeChecklist(data, from, to, noExit);
+  }
   if (!data.length) { el.innerHTML = `<div class="card">${empty('calendar', 'Sem horas neste mês', 'Escolhe outro mês, ou espera que as obras piquem.')}</div>`; }
   else {
     const byWorker = (rows) => { const g = {}; for (const r of rows) (g[r.collaborator_id] = g[r.collaborator_id] || []).push(r); return Object.values(g); };
@@ -2027,6 +2046,143 @@ async function loadOffice(from, to) {
   bindDays();
   if ($('#approveClean')) $('#approveClean').onclick = () => approveDays(clean.map((r) => r.work_day_id));
   closeChecklist(data, from, to, noExit);
+}
+// Computer mode: every day of the month in one table. Filters (person, site, state, only with warnings), sorting by
+// any column, totals of what is shown, approve several at once, and the same list in Excel.
+const OFFICE_FILTERS = [['todos', 'Todos os estados'], ['ti', 'Precisam de ti'], ['obra', 'Por validar na obra'],
+  ['validados', 'Validados na obra'], ['aprovados', 'Aprovados'], ['fechados', 'Fechados']];
+const STATUS_TEXT = { registered: 'Por validar na obra', supervisor_validated: 'Validado na obra', hr_validated: 'Aprovado', sent_to_payroll: 'Fechado' };
+const STATUS_RANK = { registered: 0, supervisor_validated: 1, hr_validated: 2, sent_to_payroll: 3 };
+function officeTable(el, data, manual, per, me, noExit, look) {
+  if (!el.isConnected) return; // a newer render (another month) took this place
+  const q = (sel) => el.querySelector(sel);
+  const f = state.officeFilter = state.officeFilter || { q: '', site: '', st: 'todos', warn: false, sort: 'name', dir: 1 };
+  const lookIds = new Set(look.map((r) => r.work_day_id));
+  const canApprove = (r) => r.status === 'supervisor_validated' && !noExit(r) && r.collaborator_id !== me;
+  const sites = [...new Map(data.map((r) => [r.project_id, r])).values()].sort((a, b) => a.project_code.localeCompare(b.project_code));
+  const cols = [['name', 'Pessoa'], ['day', 'Dia'], ['site', 'Obra'], [null, 'Entradas e saídas'], ['worked', 'Horas', 1], ['ot', 'Extra', 1],
+    ['night', 'Noturnas', 1], ['status', 'Estado'], [null, 'Avisos'], [null, '']];
+  el.innerHTML = `<div class="card tbl-card noprint">
+    <div class="filters">
+      <input id="fq" type="search" placeholder="Procurar nome ou nº" value="${esc(f.q)}" aria-label="Procurar nome ou número">
+      <select id="fsite" aria-label="Obra"><option value="">Todas as obras</option>${sites.map((x) =>
+        `<option value="${esc(x.project_id)}" ${f.site === x.project_id ? 'selected' : ''}>${esc(x.project_code)} · ${esc(x.project_title)}</option>`).join('')}</select>
+      <select id="fst" aria-label="Estado">${OFFICE_FILTERS.map(([k, t]) => `<option value="${k}" ${f.st === k ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>
+      <label class="check inline"><input type="checkbox" id="fwarn" ${f.warn ? 'checked' : ''}>Só com avisos</label>
+      <button class="btn ghost small" id="fxl" type="button">Excel desta lista</button>
+    </div>
+    <div class="tbl-wrap"><table class="grid" id="otab"><thead><tr><th class="sel"><input type="checkbox" id="selall" aria-label="Escolher todos os que se podem aprovar"></th>
+      ${cols.map(([k, t, num]) => `<th${num ? ' class="num"' : ''}${k ? ` data-sort="${k}" tabindex="0" aria-sort="${f.sort === k ? (f.dir > 0 ? 'ascending' : 'descending') : 'none'}"` : ''}>${esc(t)}</th>`).join('')}</tr></thead>
+      <tbody></tbody><tfoot></tfoot></table></div>
+    <div class="bulk" id="bulk" hidden><b id="bulkn"></b><button class="btn acc" id="bulkok" type="button">${ic('ok')}Aprovar os escolhidos</button>
+      <button class="btn ghost small" id="bulkx" type="button">Limpar escolha</button></div></div>`;
+  const key = { name: (r) => r.full_name + r.shift_date, day: (r) => r.shift_date + r.full_name, site: (r) => r.project_code + r.shift_date + r.full_name,
+    worked: (r) => r.worked_minutes, ot: (r) => r.overtime_minutes, night: (r) => r.night_minutes, status: (r) => STATUS_RANK[r.status] };
+  const match = (r) => {
+    const q = f.q.trim().toLowerCase();
+    if (q && !`${r.full_name} ${r.employee_number || ''}`.toLowerCase().includes(q)) return false;
+    if (f.site && r.project_id !== f.site) return false;
+    if (f.warn && !r.flags.length && !noExit(r)) return false;
+    return f.st === 'todos' || (f.st === 'ti' && lookIds.has(r.work_day_id)) || (f.st === 'obra' && r.status === 'registered')
+      || (f.st === 'validados' && r.status === 'supervisor_validated') || (f.st === 'aprovados' && r.status === 'hr_validated')
+      || (f.st === 'fechados' && r.status === 'sent_to_payroll');
+  };
+  const chosen = new Set();
+  let shown = [];
+  const otText = (r) => (r.overtime_minutes ? fmtMin(r.overtime_minutes) + (r.overtime_approved ? ' ✓' : r.overtime_approved === false ? ' ✗' : ' ?') : '');
+  const draw = () => {
+    const k = key[f.sort] || key.name;
+    shown = data.filter(match).sort((a, b) => { const x = k(a); const y = k(b); return (x < y ? -1 : x > y ? 1 : 0) * f.dir; });
+    for (const id of [...chosen]) if (!shown.some((r) => r.work_day_id === id)) chosen.delete(id);
+    q('#otab tbody').innerHTML = shown.map((r) => {
+      const tz = siteTz(r.project_id); const mine = r.collaborator_id === me; const ne = noExit(r);
+      const warn = r.flags.length ? r.flags : r.anomalies.length ? [['anom', r.anomalies.map((a) => anomalyText(a, r.shift_date, tz)).join(', ')]] : [];
+      return `<tr class="${lookIds.has(r.work_day_id) ? 'look' : ''}" data-id="${esc(r.work_day_id)}">
+        <td class="sel">${canApprove(r) ? `<input type="checkbox" data-sel="${esc(r.work_day_id)}" ${chosen.has(r.work_day_id) ? 'checked' : ''} aria-label="Escolher ${esc(r.full_name)} ${esc(dayLabel(r.shift_date))}">` : ''}</td>
+        <td class="name"><b>${esc(r.full_name)}</b>${r.employee_number ? `<div class="small muted">nº ${esc(r.employee_number)}</div>` : ''}</td>
+        <td class="nowrap">${esc(dayLabel(r.shift_date))}</td>
+        <td><span class="chip code" title="${esc(r.project_title)}">${esc(r.project_code)}</span></td>
+        <td class="per">${periodsHtml(periodsOf(r, per[r.work_day_id], tz)) || '<span class="muted">sem picagens</span>'}</td>
+        <td class="num"><b>${esc(fmtMin(r.worked_minutes))}</b></td>
+        <td class="num" title="${r.overtime_minutes ? (r.overtime_approved ? 'aprovadas' : r.overtime_approved === false ? 'recusadas' : 'por decidir') : ''}">${esc(otText(r))}</td>
+        <td class="num">${r.night_minutes ? esc(fmtMin(r.night_minutes)) : ''}</td>
+        <td>${OFFICE_STATUS[r.status] || esc(r.status)}${r.supervisor_name && r.status !== 'registered' ? `<div class="small muted">por ${esc(r.supervisor_name)}</div>` : ''}</td>
+        <td class="why"><div class="chips-row">${warn.map(([c, t]) => chip(c, t)).join('')}</div>${(manual[r.work_day_id] || []).length ? `<div class="small muted" title="${esc(manual[r.work_day_id].map((m) =>
+          `${m.direction === 'in' ? 'Entrada' : 'Saída'} ${fmtHour(m.effective_time, tz)} por ${m.added_by || '?'}: ${m.reason || ''}`).join('\n'))}">À mão: ${esc(manual[r.work_day_id].map((m) =>
+          `${m.direction === 'in' ? 'entrada' : 'saída'} ${fmtHour(m.effective_time, tz)}`).join(', '))}</div>` : ''}
+          ${r.returned_reason ? `<div class="small muted">Devolvido: ${esc(r.returned_reason)}</div>` : ''}</td>
+        <td class="acts nowrap">${mine ? '<span class="small muted">as tuas</span>' : `${ne ? `<button class="btn small" data-out="${esc(r.work_day_id)}">Marcar saída</button>` : ''}
+          ${canApprove(r) ? `<button class="btn small" data-approve="${esc(r.work_day_id)}">Aprovar</button>` : ''}
+          ${['supervisor_validated', 'hr_validated'].includes(r.status) ? `<button class="btn ghost small" data-back="${esc(r.work_day_id)}">Devolver</button>` : ''}`}</td></tr>`;
+    }).join('') || `<tr><td colspan="${cols.length + 1}" class="muted" style="text-align:center;padding:24px">Nenhum dia com estes filtros.</td></tr>`;
+    const sum = (k2) => shown.reduce((a, r) => a + (r[k2] || 0), 0);
+    const people = new Set(shown.map((r) => r.collaborator_id)).size;
+    q('#otab tfoot').innerHTML = `<tr><td></td><td colspan="4">${shown.length} dia(s) · ${people} pessoa(s)${shown.length < data.length ? ` <span class="small muted">(de ${data.length})</span>` : ''}</td>
+      <td class="num">${esc(fmtMin(sum('worked_minutes')))}</td><td class="num">${esc(fmtMin(sum('overtime_minutes')))}</td>
+      <td class="num">${esc(fmtMin(sum('night_minutes')))}</td><td colspan="3"></td></tr>`;
+    q('#otab thead').querySelectorAll('th[data-sort]').forEach((th) => th.setAttribute('aria-sort', th.dataset.sort === f.sort ? (f.dir > 0 ? 'ascending' : 'descending') : 'none'));
+    document.querySelectorAll('#sum .kpi[data-f]').forEach((x) => x.classList.toggle('on', x.dataset.f === f.st));
+    bindRows(); bulk();
+  };
+  const bulk = () => {
+    const can2 = shown.filter(canApprove);
+    q('#selall').checked = can2.length > 0 && can2.every((r) => chosen.has(r.work_day_id));
+    q('#selall').disabled = !can2.length;
+    q('#bulk').hidden = !chosen.size; q('#bulkn').textContent = `${chosen.size} dia(s) escolhido(s)`;
+  };
+  const bindRows = () => {
+    el.querySelectorAll('input[data-sel]').forEach((c) => c.onchange = () => { if (c.checked) chosen.add(c.dataset.sel); else chosen.delete(c.dataset.sel); bulk(); });
+    el.querySelectorAll('button[data-approve]').forEach((b) => b.onclick = () => approveDays([b.dataset.approve]));
+    el.querySelectorAll('button[data-back]').forEach((b) => b.onclick = () => returnDay(b.dataset.back));
+    el.querySelectorAll('button[data-out]').forEach((b) => b.onclick = async () => {
+      const r = data.find((x) => x.work_day_id === b.dataset.out); if (!r) return;
+      if (await markOut({ id: r.collaborator_id, name: r.full_name, day: r.shift_date, since: r.first_in, project: r.project_id })) viewOffice();
+    });
+  };
+  q('#fq').oninput = (e) => { f.q = e.target.value; draw(); };
+  q('#fsite').onchange = (e) => { f.site = e.target.value; draw(); };
+  q('#fst').onchange = (e) => { f.st = e.target.value; draw(); };
+  q('#fwarn').onchange = (e) => { f.warn = e.target.checked; draw(); };
+  q('#selall').onchange = (e) => { for (const r of shown.filter(canApprove)) { if (e.target.checked) chosen.add(r.work_day_id); else chosen.delete(r.work_day_id); } draw(); };
+  q('#bulkx').onclick = () => { chosen.clear(); draw(); };
+  q('#bulkok').onclick = () => { const ids = [...chosen]; if (ids.length && confirm(`Aprovar ${ids.length} dia(s)?`)) approveDays(ids); };
+  q('#otab thead').querySelectorAll('th[data-sort]').forEach((th) => {
+    const sortBy = () => { f.dir = f.sort === th.dataset.sort ? -f.dir : 1; f.sort = th.dataset.sort; draw(); };
+    th.onclick = sortBy; th.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sortBy(); } };
+  });
+  document.querySelectorAll('#sum .kpi[data-f]').forEach((x) => {
+    x.setAttribute('role', 'button'); x.tabIndex = 0;
+    const pick = () => { f.st = f.st === x.dataset.f ? 'todos' : x.dataset.f; q('#fst').value = f.st; draw(); };
+    x.onclick = pick; x.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } };
+  });
+  q('#fxl').onclick = () => downloadOfficeTable(shown, manual, per);
+  draw();
+}
+function downloadOfficeTable(rows, manual, per) {
+  if (!rows.length) return toast('Não há dias nesta lista.');
+  const { from, to } = monthRange(state.officeMonth);
+  excelExport(async () => rows, (X, list) => {
+    const doc = xlDoc([], 'Horas do mês (lista filtrada)', `Período: ${periodLabel(from, to)}`, null);
+    const wb = xlBook(X, doc);
+    const t = xlSheet(wb, 'Horas', doc, [{ h: 'Nº', t: 'text', w: 8, max: 14 }, { h: 'Nome', t: 'text', w: 20, max: 38 }, { h: 'Dia', t: 'date', w: 11 },
+      { h: 'Obra', t: 'text', w: 8, max: 14 }, { h: 'Entradas e saídas', t: 'text', w: 18, max: 48 }, { h: 'Horas', t: 'h', w: 8, font: { bold: true } },
+      { h: 'Extra', t: 'h', w: 8 }, { h: 'Extra aprovada?', t: 'text', w: 10 }, { h: 'Noturnas', t: 'h', w: 8 }, { h: 'Estado', t: 'text', w: 14, max: 24 },
+      { h: 'Avisos', t: 'text', w: 20, max: 70 }]);
+    const first = t.head + 1; let r = first; const s = [0, 0, 0];
+    for (const x of list) {
+      const tz = siteTz(x.project_id);
+      xlRow(t, r, [x.employee_number, x.full_name, xlDate(x.shift_date), x.project_code, periodsOf(x, per[x.work_day_id], tz).join(' · '),
+        xlH(x.worked_minutes), xlH(x.overtime_minutes), x.overtime_minutes ? (x.overtime_approved ? 'sim' : x.overtime_approved === false ? 'não' : 'por decidir') : '',
+        xlH(x.night_minutes), STATUS_TEXT[x.status] || x.status, (x.flags || []).map(([, w]) => w).join('; ')]);
+      s[0] += xlH(x.worked_minutes); s[1] += xlH(x.overtime_minutes); s[2] += xlH(x.night_minutes); r++;
+    }
+    const last = r - 1;
+    xlRow(t, r, [null, `Total (${list.length} dia${list.length === 1 ? '' : 's'})`, null, null, null, xlSum(t, 5, first, last, s[0]),
+      xlSum(t, 6, first, last, s[1]), null, xlSum(t, 8, first, last, s[2]), null, null], { bold: true, fill: XL.soft, top: true, height: 18 });
+    xlFit(t, first, last);
+    xlNote(t.ws, r + 2, 'Horas em decimal (7,50 = 7h30). É a lista como estava filtrada no ecrã; a folha de salários do mês está em «Descarregar a folha do mês».');
+    return { wb, name: `gestnow-horas-${state.officeMonth}.xlsx`, msg: 'Excel descarregado.' };
+  });
 }
 // Why a day needs the office's eye. Empty = approve without looking.
 function dayFlags(r, manual) {
@@ -2093,7 +2249,7 @@ async function closeChecklist(data, from, to, noExit) {
     if (noCode.length) issues.push(`Falta o código para: ${noCode.join('; ')}.`);
     prim = { ok: !issues.length, t: 'Pronto para o Primavera', s: issues.length ? issues.join(' ') : 'Números e códigos completos para as horas aprovadas.' };
   } catch (_) { /* the list still works without it */ }
-  if (!$('#checklist')) return;
+  if (!box.isConnected) return;
   const li = (x, cls) => `<li class="${cls}"><span class="dot">${ic(cls === 'done' ? 'ok' : cls === 'info' ? 'warn' : 'clock')}</span><div><b>${esc(x.t)}</b><div class="sub">${esc(x.s)}</div></div></li>`;
   box.innerHTML = `<div class="card"><h2 style="margin-top:0">${closed ? 'Mês fechado' : 'Fechar o mês'}</h2>
     ${closed ? `<div class="nonfc">${chip('fech', 'Mês fechado')}<span>Estas horas já seguiram para os salários. Ninguém as pode mudar.</span></div>`
