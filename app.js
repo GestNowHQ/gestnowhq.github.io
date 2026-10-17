@@ -381,10 +381,10 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const TABS = { supervisor: ['picar', 'naobra', 'horas', 'trabalhadores'], admin: ['picar', 'naobra', 'horas', 'secretariado'],
+const TABS = { supervisor: ['picar', 'naobra', 'horas', 'trabalhadores'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['seguranca', 'naobra', 'trabalhadores', 'picar'],
-  project_manager: ['picar', 'naobra', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
-const MORE_ORDER = ['picar', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'obras'];
+  project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
+const MORE_ORDER = ['picar', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'obras'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -506,6 +506,7 @@ async function boot() {
   const worker = me.role === 'worker';
   nav.querySelectorAll('button[data-view]').forEach((b) => { if (b.dataset.view !== 'minhas' && b.dataset.view !== 'secretariado') b.hidden = worker; });
   nav.querySelector('[data-view=minhas]').hidden = !me.collaborator_id;
+  nav.querySelector('[data-view=painel]').hidden = worker || !canSiteDetails();
   if (state.view === 'minhas' && !me.collaborator_id) state.view = (TABS[me.role] || TABS.supervisor)[0];
   layoutNav(me.role);
   signedOut(false); nav.hidden = false; document.getElementById('sol').hidden = false; showNet();
@@ -721,7 +722,7 @@ function go(view) {
   stopNfc(); clearInterval(state.timer); clearInterval(state.tick); hideFlash(); openMore(false);
   state.view = view;
   app.classList.toggle('wide', view === 'secretariado' || view === 'painel');
-  const tab = view === 'ficha' ? 'trabalhadores' : view === 'painel' ? 'obras' : view;
+  const tab = view === 'ficha' ? 'trabalhadores' : view;
   nav.querySelectorAll('button[data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === tab));
   const cur = nav.querySelector(`button[data-view="${tab}"]`);
   nav.querySelector('button[data-more]').classList.toggle('on', !!cur && cur.parentElement.id === 'more');
@@ -1065,10 +1066,12 @@ function viewOnSite() {
   if (!state.onsiteFilter) state.onsiteFilter = 'all';
   app.innerHTML = `<h1>Na obra agora</h1>
     <div class="noprint">${siteSelect('site')}</div>
+    ${canSiteDetails() ? `<p class="noprint"><button class="btn wide" id="openPanel">${ic('crane')}Painel da obra</button></p>` : ''}
     <div id="list" style="margin-top:14px">${skel(4)}</div>
     <p class="noprint"><button class="btn ghost wide" id="print">${ic('print')}Imprimir lista (emergência)</button></p>`;
   bindSiteSelect('site', () => { $('#list').innerHTML = skel(4); loadOnSite(); });
   $('#print').onclick = () => { state.onsiteFilter = 'in'; renderOnSite(); window.print(); };
+  if ($('#openPanel')) $('#openPanel').onclick = () => { const st = currentSite(); if (st) { state.panelSite = st.id; go('painel'); } };
   loadOnSite();
   state.timer = setInterval(loadOnSite, 30000);
 }
@@ -2946,7 +2949,7 @@ function viewSites() {
       <div class="wk"><span class="av a${s.country === 'ES' ? 7 : s.country === 'FR' ? 3 : 0}" aria-hidden="true">${ic('crane')}</span><div class="grow"><div class="nm">${esc(s.title)}</div>
         <div class="sub">${esc(addr(s))}${s.municipality && s.municipality.toLowerCase() !== addr(s).toLowerCase() ? (addr(s) ? ' · ' : '') + 'concelho ' + esc(s.municipality) : ''}</div></div></div>
       <div class="tags"><span class="chip code">${esc(s.cost_center_code)}</span>${label[s.status] || chip('', s.status)}${flag(s.country, s.id)}</div>
-      ${canSiteDetails() ? '<p class="small muted" style="margin:8px 0 0">Toca para abrir o painel da obra ›</p>' : ''}</div>`).join('')}</div>`
+      ${canSiteDetails() ? `<p style="margin:12px 0 0"><button class="btn wide" data-panel="${esc(s.id)}">${ic('crane')}Abrir painel da obra</button></p>` : ''}</div>`).join('')}</div>`
       : `<div class="card">${empty('helmet', 'Ainda não há obras', 'Abre a primeira obra aqui em baixo.')}</div>`}
     ${can('obras.gerir') ? `<details class="fold" ${state.sites.length ? '' : 'open'}><summary><span>+ Abrir obra<span class="sub">Cliente, código e nome</span></span></summary><div>
     <form id="f"><div class="row"><div><label>Cliente *</label><input name="client" required placeholder="ex.: Refinaria de Sines"></div>
@@ -2962,7 +2965,7 @@ function viewSites() {
       <div id="cfgbody">${skel(1)}</div></div>` : ''}`;
   if (canSiteDetails()) app.querySelectorAll('.list .card.link').forEach((c) => {
     const open = () => { state.panelSite = c.dataset.id; go('painel'); };
-    c.onclick = (e) => { if (!e.target.closest('a,button,select,input')) open(); };
+    c.onclick = (e) => { if (!e.target.closest('a,select,input')) open(); };
     c.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } };
   });
   if ($('#cfgsite')) { $('#cfgsite').onchange = () => loadSiteDetails($('#cfgsite').value); loadSiteDetails($('#cfgsite').value); }
@@ -3073,9 +3076,11 @@ const PROVIDER = { company: 'Empresa', client: 'Cliente', other: 'Outro', none: 
 const telLink = (t) => t ? `<a href="tel:${esc(String(t).replace(/ /g, ''))}">${esc(t)}</a>` : '';
 const fmtHours = (m) => `${Math.round((m || 0) / 6) / 10}`.replace('.', ',') + ' h';
 async function viewSitePanel() {
-  const id = state.panelSite; if (!id) return go('obras');
-  app.innerHTML = `<p class="noprint"><button class="btn ghost small" id="back">‹ Obras</button></p><div id="pnl">${skel(4)}</div>`;
-  $('#back').onclick = () => go('obras');
+  const id = state.panelSite || (currentSite() && currentSite().id);
+  if (!id) { app.innerHTML = `<h1>Painel da obra</h1><div class="card">${empty('helmet', 'Ainda não há obras', 'Abre a primeira obra em Obras.')}</div>`; return; }
+  if (activeSites().some((x) => x.id === id)) store(SITE_KEY, id);
+  app.innerHTML = `<div class="noprint">${siteSelect('psite')}</div><div id="pnl" style="margin-top:14px">${skel(4)}</div>`;
+  bindSiteSelect('psite', () => { state.panelSite = $('#psite').value; $('#pnl').innerHTML = skel(4); loadSitePanel(state.panelSite); });
   loadSitePanel(id);
 }
 async function loadSitePanel(id, editing) {
