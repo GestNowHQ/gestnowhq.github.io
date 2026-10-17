@@ -2,11 +2,12 @@
 // Only GET requests to this same site are handled. Supabase (data, login, files) is another site: never touched,
 // never cached. Network first, so a new version arrives as soon as there is network; the copy is only a fallback.
 'use strict';
-const CACHE = 'gestnow-mini-v13';
+const CACHE = 'gestnow-mini-v14';
 const SHELL = ['./', 'index.html', 'app.js', 'style.css', 'config.js', 'vendor/supabase-2.117.2.js'];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  // cache: 'reload' skips the browser's own 10-minute copy, so a new version never installs old files.
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
@@ -15,7 +16,7 @@ self.addEventListener('activate', (e) => {
 function network(req) {   // a weak network should not hold the app for long: after 6 s the copy is used
   return new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error('timeout')), 6000);
-    fetch(req).then((r) => { clearTimeout(t); resolve(r); }, (err) => { clearTimeout(t); reject(err); });
+    fetch(req, { cache: 'no-cache' }).then((r) => { clearTimeout(t); resolve(r); }, (err) => { clearTimeout(t); reject(err); });
   });
 }
 self.addEventListener('fetch', (e) => {

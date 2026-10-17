@@ -456,7 +456,14 @@ window.addEventListener('offline', () => { showQueue(); });
 // The app shell (these files, never the Supabase data or the login) is kept on the phone, so Picar opens without network.
 // Service workers only run on https:// (and on localhost for the tests); opened from a file there is none.
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || ['localhost', '127.0.0.1'].includes(location.hostname))) {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  // A new version is looked for every time the app comes back to the screen, and is used at once.
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
+  }).catch(() => {});
+  if (navigator.serviceWorker.controller) {
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (!reloaded) { reloaded = true; location.reload(); } });
+  }
 }
 const isNetErr = (e, status) => status === 0 || /fetch|network|Load failed|timeout|aborted|ERR_/i.test((e && (e.message || e.name)) || String(e || ''));
 function storedSessionExists() { try { return Object.keys(localStorage).some((k) => /^sb-.*-auth-token$/.test(k)); } catch (_) { return false; } }
