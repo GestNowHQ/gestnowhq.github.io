@@ -381,7 +381,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '16';
+const APP_VERSION = '17';
 const TABS = { supervisor: ['picar', 'naobra', 'horas', 'trabalhadores'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['seguranca', 'naobra', 'trabalhadores', 'picar'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -3100,9 +3100,11 @@ function loadUI() {
   return uiLoading;
 }
 async function viewSitePanel() {
-  const id = state.panelSite || (currentSite() && currentSite().id);
+  // The tab opens the control room (all sites); a site's button in Obras opens that site directly.
+  const chosen = state.panelSite; state.panelSite = null;
+  const id = chosen || (currentSite() && currentSite().id);
   if (!id) { app.innerHTML = `<h1>Painel da obra</h1><div class="card">${empty('helmet', 'Ainda não há obras', 'Abre a primeira obra em Obras.')}</div>`; return; }
-  if (activeSites().some((x) => x.id === id)) store(SITE_KEY, id);
+  if (chosen && activeSites().some((x) => x.id === chosen)) store(SITE_KEY, chosen);
   app.innerHTML = `<div id="gnp" class="gnpage">${skel(4)}</div>`;
   // The new look (React + Tailwind, ui/gnui.*), loaded the first time; the old screen stays as the fallback.
   const ui = await loadUI();
@@ -3111,12 +3113,12 @@ async function viewSitePanel() {
     host.innerHTML = ''; state.uiEl = host;
     const api = { rpc: (fn, args) => sb.rpc(fn, args), friendly, toast,
       sites: activeSites().map((x) => ({ id: x.id, title: x.title, code: x.cost_center_code })),
-      onSite: (sid) => { state.panelSite = sid; store(SITE_KEY, sid); ui.mountPainel(host, api, sid); } };
-    ui.mountPainel(host, api, id);
+      onSite: (sid) => { store(SITE_KEY, sid); } };
+    ui.mountPainel(host, api, chosen || undefined);
     return;
   }
   app.innerHTML = `<div class="noprint">${siteSelect('psite')}</div><div id="pnl" style="margin-top:14px">${skel(4)}</div>`;
-  bindSiteSelect('psite', () => { state.panelSite = $('#psite').value; $('#pnl').innerHTML = skel(4); loadSitePanel(state.panelSite); });
+  bindSiteSelect('psite', () => { $('#pnl').innerHTML = skel(4); loadSitePanel($('#psite').value); });
   loadSitePanel(id);
 }
 async function loadSitePanel(id, editing) {
