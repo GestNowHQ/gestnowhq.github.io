@@ -354,3 +354,12 @@ dialog.dlg h2 { margin: 0 0 4px; }
   .card, .kpi { border: 1px solid #999; box-shadow: none; break-inside: avoid; }
 }
 .day .acts > .btn.ghost:only-child { flex: 0 0 auto; min-width: 140px; }
+
+/* Profile switcher: the name in the header is the button. */
+button.who { background: none; border: 0; color: inherit; font: inherit; cursor: default; }
+button.who.sw { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+button.who.strong { background: var(--accent); color: var(--on-accent); }
+.profiles { display: grid; gap: 8px; margin: 10px 0; }
+.check.prof { align-items: flex-start; padding: 10px; border: 1px solid var(--line); border-radius: 12px; }
+.check.prof:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+.chips.reasons .chip:has(input:disabled) { opacity: .8; cursor: default; }

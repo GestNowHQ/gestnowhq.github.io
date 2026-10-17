@@ -45,7 +45,13 @@ const ERRORS = [
   [/cannot send back your own hours/i, 'Não podes devolver as tuas próprias horas.'],
   [/set the municipality of the site first/i, 'Escreve primeiro o concelho da obra e guarda.'],
   [/date and name are required/i, 'Escreve a data e o nome do feriado.'],
-  [/country must be PT or ES/i, 'Escolhe Portugal ou Espanha.'],
+  [/country must be PT, ES or FR/i, 'Escolhe Portugal, Espanha ou França.'],
+  [/this profile is not yours/i, 'Esse perfil não é teu. Pede ao administrador.'],
+  [/admin is given only/i, 'O perfil de administrador só se dá com aprovação de uma segunda pessoa.'],
+  [/an admin keeps the admin profile/i, 'Um administrador mantém sempre o perfil de administrador.'],
+  [/link this login to a person first/i, 'Esta conta não está ligada a uma pessoa: não pode ser encarregado nem colaborador.'],
+  [/choose at least one profile/i, 'Escolhe pelo menos um perfil.'],
+  [/only administrator: another admin/i, 'Esta pessoa é o único administrador. Cria outro administrador primeiro.'],
   [/municipality name is too long/i, 'O nome do concelho é comprido demais.'],
   [/only an entry or an exit/i, 'Só se pode acrescentar uma entrada ou uma saída.'],
   [/project not found/i, 'Obra não encontrada, ou já não estás atribuído a ela.'],
@@ -209,7 +215,7 @@ function reasonText(code) {
 // ---- Time zones: every time on screen and every time typed in is the SITE's time (BTA-01 is in Madrid), never the phone's.
 const DEFAULT_TZ = 'Europe/Lisbon';
 const siteTz = (id) => ((state.sites.find((s) => s.id === id) || {}).timezone) || DEFAULT_TZ;
-const TZ_NAMES = { 'Europe/Lisbon': 'hora de Portugal continental', 'Europe/Madrid': 'hora de Espanha (Madrid)',
+const TZ_NAMES = { 'Europe/Lisbon': 'hora de Portugal continental', 'Europe/Madrid': 'hora de Espanha (Madrid)', 'Europe/Paris': 'hora de França (Paris)',
   'Atlantic/Azores': 'hora dos Açores', 'Atlantic/Madeira': 'hora da Madeira', 'Atlantic/Canary': 'hora das Canárias' };
 const tzName = (tz) => TZ_NAMES[tz] || 'hora de ' + tz;
 const tzFmt = {};
@@ -335,15 +341,16 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(f
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
 const TABS = { supervisor: ['picar', 'naobra', 'horas', 'trabalhadores'], admin: ['picar', 'naobra', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['seguranca', 'naobra', 'trabalhadores', 'picar'],
-  project_manager: ['picar', 'naobra', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'] };
-const MORE_ORDER = ['picar', 'naobra', 'horas', 'secretariado', 'seguranca', 'trabalhadores', 'obras'];
+  project_manager: ['picar', 'naobra', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
+const MORE_ORDER = ['picar', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'obras'];
 function layoutNav(role) {
   const tabs = document.getElementById('tabs'); const sheet = document.getElementById('more');
   const btn = (v) => nav.querySelector(`button[data-view="${v}"]`);
   const main = (TABS[role] || TABS.supervisor).filter((v) => !btn(v).hidden);
   const moreBtn = nav.querySelector('button[data-more]');
   for (const v of main) tabs.insertBefore(btn(v), moreBtn);
-  for (const v of MORE_ORDER) if (!main.includes(v)) sheet.appendChild(btn(v));
+  for (const v of MORE_ORDER) if (!main.includes(v) && !btn(v).hidden) sheet.appendChild(btn(v));
+  for (const v of MORE_ORDER) if (btn(v).hidden && btn(v).parentElement !== sheet) sheet.appendChild(btn(v));
   sheet.appendChild(Object.assign(document.createElement('hr'), {}));
   sheet.appendChild(nav.querySelector('button[data-action=sair]'));
   sheet.querySelectorAll('hr').forEach((h, i, all) => { if (i < all.length - 1) h.remove(); });
@@ -414,7 +421,7 @@ async function boot() {
   let me = null; let error = null;
   try {
     ({ data: me, error } = await core().from('app_users')
-      .select('role, tenant_id, organization_id, collaborator_id, is_active').eq('user_id', session.user.id).maybeSingle().retry(false));   // no network: say so at once
+      .select('role, allowed_roles, tenant_id, organization_id, collaborator_id, is_active').eq('user_id', session.user.id).maybeSingle().retry(false));   // no network: say so at once
   } catch (e) { error = e; }
   // No network is not "no access": open Picar with the last known login of THIS user (taps are queued), or say "no network".
   if (error && (isNetErr(error) || navigator.onLine === false)) {
@@ -426,7 +433,7 @@ async function boot() {
   }
   if (!me.is_active) return showMessage('Conta desligada', 'A tua conta está desligada. Fala com o administrador.', true);
   if (idleTooLong(me.role)) return idleOut();   // nothing is shown before this check
-  state.me = { role: me.role, tenant_id: me.tenant_id, organization_id: me.organization_id, collaborator_id: me.collaborator_id,
+  state.me = { role: me.role, profiles: me.allowed_roles || [me.role], tenant_id: me.tenant_id, organization_id: me.organization_id, collaborator_id: me.collaborator_id,
     is_active: me.is_active, email: session.user.email, user_id: session.user.id };
   const { data: aal } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
   if (PRIVILEGED.includes(me.role) && (!aal || aal.currentLevel !== 'aal2')) {
@@ -438,6 +445,11 @@ async function boot() {
   if (!state.offline) store(ME_KEY, { ...state.me });
   state.ready = true; touch();
   nav.querySelector('[data-view=secretariado]').hidden = !canPeople();
+  // The worker profile sees only their own hours; anyone with a person behind the login has them under Mais.
+  const worker = me.role === 'worker';
+  nav.querySelectorAll('button[data-view]').forEach((b) => { if (b.dataset.view !== 'minhas' && b.dataset.view !== 'secretariado') b.hidden = worker; });
+  nav.querySelector('[data-view=minhas]').hidden = !me.collaborator_id;
+  if (state.view === 'minhas' && !me.collaborator_id) state.view = (TABS[me.role] || TABS.supervisor)[0];
   layoutNav(me.role);
   signedOut(false); nav.hidden = false; document.getElementById('sol').hidden = false; showNet();
   await loadBasics();
@@ -569,11 +581,33 @@ async function verifyCode(factorId, code) {
 // ------------------------------------------------------------------ data
 // Always show who is logged in and with which role, so nobody mistakes one account for another.
 const ROLE_NAMES = { admin: 'Administrador', hr: 'Secretariado / RH', hse: 'Técnico de segurança', finance: 'Finanças',
-  project_manager: 'Diretor de obra', supervisor: 'Encarregado' };
+  project_manager: 'Diretor de obra', supervisor: 'Encarregado', worker: 'Colaborador' };
+const PROFILE_HELP = { admin: 'Tudo: obras, pessoas, contas e escritório. Pede o código do telemóvel.', supervisor: 'Picar, quem está na obra e validar as horas da equipa.',
+  hr: 'Escritório: horas de todas as obras, documentos e fecho do mês.', hse: 'Segurança: documentos e quem está na obra.', worker: 'Só as tuas horas, como qualquer colaborador.' };
+const PROFILE_ORDER = ['admin', 'hr', 'hse', 'supervisor', 'worker'];
+// One login, several hats (Diogo is admin, team leader and worker). Changing hat never mixes data: the database
+// decides what each profile sees, and nobody validates their own hours in any of them.
+async function switchProfile() {
+  const me = state.me; if (!me || me.profiles.length < 2 || state.offline) return;
+  const opts = PROFILE_ORDER.filter((r) => me.profiles.includes(r));
+  const fd = await askSheet('Mudar de perfil', `<p class="small muted">A mesma conta, outro papel. Os dados e as regras de cada papel não se misturam.</p>
+    <div class="profiles" role="radiogroup">${opts.map((r) => `<label class="check prof"><input type="radio" name="p" value="${esc(r)}" ${r === me.role ? 'checked' : ''} required>
+      <span><b>${esc(ROLE_NAMES[r] || r)}</b>${r === me.role ? ' <span class="small muted">(agora)</span>' : ''}<br><span class="small muted">${esc(PROFILE_HELP[r] || '')}</span></span></label>`).join('')}</div>`, 'Mudar');
+  if (!fd || fd.get('p') === me.role) return;
+  const { error } = await sb.rpc('mini_switch_role', { p_role: fd.get('p') });
+  if (error) return toast(friendly(error));
+  state.view = (TABS[fd.get('p')] || TABS.supervisor)[0];
+  toast(`Agora estás como ${ROLE_NAMES[fd.get('p')] || fd.get('p')}.`);
+  boot();   // asks for the phone code when the new profile needs it
+}
+document.getElementById('whoami').addEventListener('click', switchProfile);
 function showWho() {
   const me = state.me; const p = me.collaborator_id && state.people.find((x) => x.id === me.collaborator_id);
   const el = document.getElementById('whoami'); el.textContent = `${p ? p.full_name : me.email} · ${ROLE_NAMES[me.role] || me.role}`;
-  el.title = el.textContent; el.className = 'who' + (PRIVILEGED.includes(me.role) ? ' strong' : ''); el.hidden = false;
+  const many = me.profiles && me.profiles.length > 1;
+  if (many) el.textContent += ' ▾';
+  el.title = many ? 'Mudar de perfil' : el.textContent; el.className = 'who' + (PRIVILEGED.includes(me.role) ? ' strong' : '') + (many ? ' sw' : '');
+  el.disabled = !many; el.hidden = false;
 }
 async function loadBasics() {
   const [s, p] = await Promise.all([
@@ -588,7 +622,7 @@ async function loadBasics() {
   state.sites = s.data || (usable ? cached.sites : []);
   if (s.data) store(SITES_KEY, { tenant_id: state.me.tenant_id, sites: s.data.map(({ id, title, cost_center_code, status, timezone }) => ({ id, title, cost_center_code, status, timezone })) });
   state.people = p.data || [];
-  if (state.offline) { state.docTypes = []; return; }
+  if (state.offline || state.me.role === 'worker') { state.docTypes = []; return; }
   const t = await sb.rpc('mini_document_types');
   state.docTypes = t.error ? [] : (t.data || []);
 }
@@ -611,7 +645,8 @@ function bindSiteSelect(id, after) {
 
 function go(view) {
   if (!state.ready) return boot();   // never show a screen before login (and the phone code, when required)
-  if (state.offline && view !== 'picar') { toast('Sem rede: por agora só podes picar.'); view = 'picar'; }
+  if (state.me.role === 'worker') view = 'minhas';   // the worker profile has one screen (the database checks the same)
+  else if (state.offline && view !== 'picar') { toast('Sem rede: por agora só podes picar.'); view = 'picar'; }
   stopNfc(); clearInterval(state.timer); clearInterval(state.tick); hideFlash(); openMore(false);
   state.view = view;
   const tab = view === 'ficha' ? 'trabalhadores' : view;
@@ -620,7 +655,7 @@ function go(view) {
   nav.querySelector('button[data-more]').classList.toggle('on', !!cur && cur.parentElement.id === 'more');
   window.scrollTo(0, 0);
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
-     ficha: viewWorker, obras: viewSites, secretariado: viewOffice }[view] || viewClock)();
+     ficha: viewWorker, obras: viewSites, secretariado: viewOffice, minhas: viewMine }[view] || viewClock)();
 }
 
 // ------------------------------------------------------------------ Picar
@@ -1135,6 +1170,8 @@ async function viewWorker() {
   const current = (typeId) => files.find((x) => x.type_id === typeId && x.is_current);
   const older = files.filter((x) => !x.is_current);
   const login = ((us && us.data) || []).find((u) => u.collaborator_id === id);
+  let prof = null;
+  if (login) { const r = await core().from('app_users').select('allowed_roles').eq('user_id', login.user_id).maybeSingle(); prof = r.data && r.data.allowed_roles; }
   const el = $('#w'); if (!el) return;
   if (ws.error || ds.error) { el.innerHTML = `<p>${esc(friendly(ws.error || ds.error))}</p>`; return; }
   const w = ws.data.find((x) => x.collaborator_id === id); if (!w) { el.innerHTML = '<p>Não encontrado.</p>'; return; }
@@ -1181,7 +1218,11 @@ async function viewWorker() {
     ${isAdmin() ? `<div class="card"><h2 style="margin-top:0">Conta na app</h2>${login ? `
       <p>${esc(login.email)} · ${esc(ROLE_NAMES[login.role] || login.role)} ·
         ${login.is_active ? chip('ok', 'ligada', 'ok') : chip('', 'desligada')}</p>
-      <p><button class="btn ghost wide" id="toggleLogin">${login.is_active ? 'Desligar a conta' : 'Ligar a conta'}</button></p>` : w.is_active ? `
+      ${login.is_active ? `<form id="profs"><label>Perfis desta conta</label><div class="chips reasons">${PROFILE_ORDER.filter((r) => r !== 'admin' || (prof || []).includes('admin')).map((r) =>
+        `<label class="chip"><input type="checkbox" name="p" value="${esc(r)}" ${(prof || [login.role]).includes(r) ? 'checked' : ''} ${r === 'admin' ? 'disabled' : ''}>${esc(ROLE_NAMES[r])}</label>`).join('')}</div>
+        <p class="small muted">A pessoa muda de perfil no nome lá em cima. Nunca valida as próprias horas, em nenhum perfil.</p>
+        <p><button class="btn ghost wide">Guardar perfis</button></p></form>` : ''}
+      ${login.is_me ? '' : `<p><button class="btn ghost wide" id="toggleLogin">${login.is_active ? 'Desligar a conta' : 'Ligar a conta'}</button></p>`}` : w.is_active ? `
       <p class="small muted">Dá a esta pessoa acesso à app para picar, ver quem está na obra e validar horas.</p>
       <form id="login"><label>Email *</label><input name="email" type="email" required autocomplete="off">
         <label>Papel</label><select name="role"><option value="supervisor">Encarregado</option><option value="hse">Técnico de segurança</option><option value="hr">Secretariado / RH</option></select>
@@ -1225,6 +1266,15 @@ async function viewWorker() {
       <p><b>Dá-a à pessoa em mão ou diz-lha de viva voz.</b> Não a envies por mensagem nem email. Só aparece agora.
       No primeiro login, a pessoa escolhe a sua palavra-passe.</p><p><button class="btn wide" id="pwdone">Já entreguei</button></p>`;
     $('#pwdone').onclick = () => viewWorker();
+  };
+  if ($('#profs')) $('#profs').onsubmit = async (e) => {
+    e.preventDefault();
+    const roles = [...e.target.querySelectorAll('input[name=p]')].filter((c) => c.checked).map((c) => c.value);
+    const { error } = await sb.rpc('mini_set_user_profiles', { p_user: login.user_id, p_roles: roles });
+    if (error) return toast(friendly(error));
+    toast('Perfis guardados.');
+    if (login.is_me) return boot();
+    viewWorker();
   };
   if ($('#toggleLogin')) $('#toggleLogin').onclick = async () => {
     const why = prompt(login.is_active ? 'Porque é que desligas esta conta?' : 'Porque é que ligas outra vez esta conta?');
@@ -1541,6 +1591,38 @@ async function markOut(p) {
   if (error) { toast(friendly(error)); return false; }
   toast(`Saída marcada: ${p.name}, ${fmtTime(at, tz)}.`);
   return true;
+}
+
+// ------------------------------------------------------------------ As minhas horas (any profile with a person behind it)
+// What the worker sees of their own month: each day, where, from when to when, the hours and how far the validation went.
+function viewMine() {
+  if (!state.me.collaborator_id) return go((TABS[state.me.role] || TABS.supervisor)[0]);
+  if (!state.mineMonth) state.mineMonth = isoDay(new Date()).slice(0, 7);
+  const months = [0, 1, 2].map((k) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - k); return isoDay(d).slice(0, 7); });
+  const mName = (ym) => new Date(ym + '-15T12:00:00').toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' });
+  app.innerHTML = `<h1>As minhas horas</h1>
+    <div class="chips">${months.map((m) => `<button class="chip" data-m="${m}" aria-pressed="${m === state.mineMonth}">${esc(mName(m))}</button>`).join('')}</div>
+    <div id="mine">${skel(3)}</div>`;
+  app.querySelectorAll('[data-m]').forEach((b) => b.onclick = () => { state.mineMonth = b.dataset.m; viewMine(); });
+  loadMine();
+}
+async function loadMine() {
+  const ym = state.mineMonth; const { from, to } = monthRange(ym);
+  const { data, error } = await sb.rpc('mini_my_hours', { p_from: from, p_to: to });
+  const el = $('#mine'); if (!el || ym !== state.mineMonth) return;
+  if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  if (!data.length) { el.innerHTML = `<div class="card">${empty('clock', 'Sem horas neste mês', 'Os dias aparecem aqui depois de picares na obra.')}</div>`; return; }
+  const tot = data.reduce((a, r) => ({ w: a.w + r.worked_minutes, o: a.o + r.overtime_minutes, s: a.s + r.special_day_minutes }), { w: 0, o: 0, s: 0 });
+  const done = data.filter((r) => r.status !== 'registered').length;
+  el.innerHTML = `<div class="card"><div class="ptotal"><span>Total do mês</span><span class="hrs">${esc(fmtMin(tot.w))}</span></div>
+      <p class="small muted">${tot.o ? esc(fmtMin(tot.o)) + ' extra · ' : ''}${tot.s ? esc(fmtMin(tot.s)) + ' em descanso ou feriado · ' : ''}${done} de ${data.length} dia(s) já validado(s)</p></div>
+    <div class="card list">${data.map((r) => { const tz = r.timezone || DEFAULT_TZ; return `<div class="pday">
+      <div class="ph"><b>${esc(dayLabel(r.shift_date))}</b> <span class="chip code">${esc(r.project_code)}</span>
+        ${r.anomalies.length ? chip('anom', 'falta uma picagem', 'warn') : DAY_STATUS[r.status] || chip('', r.status)}
+        <span class="hrs">${esc(fmtMin(r.worked_minutes))}</span></div>
+      <div class="per small">${esc(r.project_title)} · ${esc(fmtHour(r.first_in, tz) || '?')}–${esc(fmtHour(r.last_out, tz) || '?')}
+        ${r.overtime_minutes ? ' · ' + esc(fmtMin(r.overtime_minutes)) + ' extra' : ''}${r.is_holiday ? ' · feriado' : r.is_rest_day ? ' · dia de descanso' : ''}</div></div>`; }).join('')}</div>
+    <p class="small muted">Se faltar um dia ou uma hora estiver errada, fala com o teu encarregado: ele corrige com o motivo.</p>`;
 }
 
 // ------------------------------------------------------------------ Secretariado (RH): todas as obras, aprovar, fechar o mês
@@ -2270,14 +2352,13 @@ async function downloadAct(site, from, to) {
 // ------------------------------------------------------------------ Obras
 function viewSites() {
   const label = { execution: chip('ok', 'em curso', 'ok'), lead: chip('', 'rascunho') };
-  const flag = (c) => `<span class="chip" title="${c === 'ES' ? 'Espanha' : 'Portugal'}">${c === 'ES' ? '🇪🇸 ES' : '🇵🇹 PT'}</span>`;
   // the address usually ends with the country already: never write it twice
-  const addr = (s) => String(s.address || '').replace(/[,·\s]*(Portugal|Espanha|España|Spain)\s*$/i, '');
+  const addr = (s) => String(s.address || '').replace(/[,·\s]*(Portugal|Espanha|España|Spain|França|France)\s*$/i, '');
   app.innerHTML = `<h1>Obras</h1>
     ${state.sites.length ? `<div class="list">${state.sites.map((s) => `<div class="card">
-      <div class="wk"><span class="av a${s.country === 'ES' ? 7 : 0}" aria-hidden="true">${ic('crane')}</span><div class="grow"><div class="nm">${esc(s.title)}</div>
+      <div class="wk"><span class="av a${s.country === 'ES' ? 7 : s.country === 'FR' ? 3 : 0}" aria-hidden="true">${ic('crane')}</span><div class="grow"><div class="nm">${esc(s.title)}</div>
         <div class="sub">${esc(addr(s))}${s.municipality && s.municipality.toLowerCase() !== addr(s).toLowerCase() ? (addr(s) ? ' · ' : '') + 'concelho ' + esc(s.municipality) : ''}</div></div></div>
-      <div class="tags"><span class="chip code">${esc(s.cost_center_code)}</span>${label[s.status] || chip('', s.status)}${flag(s.country)}</div></div>`).join('')}</div>`
+      <div class="tags"><span class="chip code">${esc(s.cost_center_code)}</span>${label[s.status] || chip('', s.status)}${flag(s.country, s.id)}</div></div>`).join('')}</div>`
       : `<div class="card">${empty('helmet', 'Ainda não há obras', 'Abre a primeira obra aqui em baixo.')}</div>`}
     ${isAdmin() || (state.me && state.me.role === 'project_manager') ? `<details class="fold" ${state.sites.length ? '' : 'open'}><summary><span>+ Abrir obra<span class="sub">Cliente, código e nome</span></span></summary><div>
     <form id="f"><div class="row"><div><label>Cliente *</label><input name="client" required placeholder="ex.: Refinaria de Sines"></div>
@@ -2288,7 +2369,7 @@ function viewSites() {
       <p><button class="btn wide">Abrir obra</button></p></form></div></details>` : ''}
     ${canSiteDetails() && state.sites.length ? `<h2>País, concelho e feriados da obra</h2><div class="card" id="sitecfg">
       <p class="small muted">O país dá os feriados nacionais e a hora; o concelho, o feriado municipal.</p>
-      ${more('Mais', '<p>Portugal: hora de Lisboa. Espanha: hora de Madrid. Os feriados nacionais contam sozinhos; aqui só se põem os municipais e regionais.</p>')}
+      ${more('Mais', '<p>Portugal: hora de Lisboa. Espanha: hora de Madrid. França: hora de Paris. Os feriados nacionais contam sozinhos; aqui só se põem os municipais e regionais.</p>')}
       <label for="cfgsite">Obra</label><select id="cfgsite">${state.sites.map((s) => `<option value="${esc(s.id)}" ${currentSite() && currentSite().id === s.id ? 'selected' : ''}>${esc(s.title)} (${esc(s.cost_center_code)})</option>`).join('')}</select>
       <div id="cfgbody">${skel(1)}</div></div>` : ''}`;
   if ($('#cfgsite')) { $('#cfgsite').onchange = () => loadSiteDetails($('#cfgsite').value); loadSiteDetails($('#cfgsite').value); }
@@ -2304,6 +2385,8 @@ function viewSites() {
 }
 // Who sees the section (the database checks the same): admin and project manager set country and municipality,
 // admin and HR add or remove the site's own holidays, the supervisor only reads.
+const COUNTRY = { PT: 'Portugal', ES: 'Espanha', FR: 'França' };
+const flag = (c, id) => `<span class="chip" data-flag="${esc(id || '')}" title="${esc(COUNTRY[c] || 'Portugal')}">${{ ES: '🇪🇸 ES', FR: '🇫🇷 FR' }[c] || '🇵🇹 PT'}</span>`;
 const canSiteDetails = () => state.me && ['admin', 'hr', 'project_manager', 'supervisor'].includes(state.me.role);
 const canSetSite = () => state.me && ['admin', 'project_manager'].includes(state.me.role);
 const canHolidays = () => state.me && ['admin', 'hr'].includes(state.me.role);
@@ -2317,10 +2400,10 @@ async function loadSiteDetails(id) {
   if (seq !== siteCfgSeq || !$('#cfgbody')) return;
   if (error) { box.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
   const hol = d.holidays || [];
-  box.innerHTML = `<p style="margin-top:14px">País: <b>${d.country === 'ES' ? 'Espanha' : 'Portugal'}</b> · Concelho: <b>${esc(d.municipality || 'por escrever')}</b>
+  box.innerHTML = `<p style="margin-top:14px">País: <b>${esc(COUNTRY[d.country] || 'Portugal')}</b> · Concelho: <b>${esc(d.municipality || 'por escrever')}</b>
       <span class="small muted">· ${esc(tzName(d.timezone))}</span></p>
     ${canSetSite() ? `<form id="cfgf"><div class="row"><div><label>País</label><select name="country">
-        <option value="PT" ${d.country !== 'ES' ? 'selected' : ''}>Portugal</option><option value="ES" ${d.country === 'ES' ? 'selected' : ''}>Espanha</option></select></div>
+        ${Object.entries(COUNTRY).map(([k, v]) => `<option value="${k}" ${(d.country || 'PT') === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
       <div><label>Concelho (município)</label><input name="mun" maxlength="128" value="${esc(d.municipality || '')}" placeholder="ex.: Sines"></div></div>
       <p><button class="btn wide">Guardar país e concelho</button></p></form>` : ''}
     <h3>Dias de descanso</h3>
@@ -2343,6 +2426,8 @@ async function loadSiteDetails(id) {
     const { error: e2 } = await sb.rpc('mini_set_site_details', { p_project: id, p_country: f.get('country'), p_municipality: String(f.get('mun') || '').trim() });
     if (e2) return toast(friendly(e2));
     toast('País e concelho guardados.'); await loadBasics(); loadSiteDetails(id);
+    const s = state.sites.find((x) => x.id === id); const fl = app.querySelector(`[data-flag="${id}"]`);
+    if (s && fl) fl.outerHTML = flag(s.country, id);
   };
   if ($('#restf')) $('#restf').onsubmit = async (e) => {
     e.preventDefault(); const days = new FormData(e.target).getAll('rd').map(Number);
