@@ -381,6 +381,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
+const APP_VERSION = '16';
 const TABS = { supervisor: ['picar', 'naobra', 'horas', 'trabalhadores'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['seguranca', 'naobra', 'trabalhadores', 'picar'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -406,6 +407,8 @@ function layoutNav(role) {
   sheet.appendChild(Object.assign(document.createElement('hr'), {}));
   sheet.appendChild(nav.querySelector('button[data-action=sair]'));
   sheet.querySelectorAll('hr').forEach((h, i, all) => { if (i < all.length - 1) h.remove(); });
+  // Which version this phone is running, so anyone can check that an update arrived.
+  if (!sheet.querySelector('.ver')) sheet.appendChild(Object.assign(document.createElement('p'), { className: 'ver', textContent: 'Versão ' + APP_VERSION }));
   if (isWide()) tabs.insertBefore(nav.querySelector('button[data-action=sair]'), moreBtn);
 }
 function openMore(open) {
