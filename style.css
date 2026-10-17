@@ -376,3 +376,8 @@ button.who.strong { border-radius: 14px; }
 .note.pd.new { background: var(--info-bg); border-color: var(--info); }
 .note.pd .i { flex: 0 0 auto; margin-top: 2px; }
 .day-h .pdck { width: 24px; height: 24px; flex: 0 0 auto; margin: 0; accent-color: var(--accent); }
+/* Narrow phones (360 px): the role and the name never get cut at the left, long names shorten with "…" */
+button.who b { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.day-h .d { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.day-h > .chip, .day-h .hrs { flex: 0 0 auto; }
+@media (max-width: 400px) { .brand span { display: none; } .top { gap: 6px; } .day-h { gap: 6px; } .day-h .hrs { font-size: 17px; } }
