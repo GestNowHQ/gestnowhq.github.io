@@ -371,3 +371,8 @@ button.who small { font-size: 12px; opacity: .85; white-space: nowrap; overflow:
 button.who.sw { text-decoration: none; }
 button.who.sw b { text-decoration: underline dotted; text-underline-offset: 3px; }
 button.who.strong { border-radius: 14px; }
+/* Diárias: notices to the worker, a checkbox per person in the office list */
+.note.pd { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; margin: 0 0 8px; border-radius: var(--r-md); background: var(--surface-2); border: var(--bw) solid var(--line); font-size: 15px; line-height: 1.35; }
+.note.pd.new { background: var(--info-bg); border-color: var(--info); }
+.note.pd .i { flex: 0 0 auto; margin-top: 2px; }
+.day-h .pdck { width: 24px; height: 24px; flex: 0 0 auto; margin: 0; accent-color: var(--accent); }

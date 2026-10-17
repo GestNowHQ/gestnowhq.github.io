@@ -45,6 +45,19 @@ const ERRORS = [
   [/cannot send back your own hours/i, 'Não podes devolver as tuas próprias horas.'],
   [/set the municipality of the site first/i, 'Escreve primeiro o concelho da obra e guarda.'],
   [/date and name are required/i, 'Escreve a data e o nome do feriado.'],
+  [/week must start on a Monday/i, 'A semana das diárias começa à segunda-feira.'],
+  [/this week has not started yet/i, 'Esta semana ainda não começou: emite as diárias a partir de segunda.'],
+  [/choose who to pay/i, 'Escolhe pelo menos uma pessoa.'],
+  [/for this week was already issued/i, 'A diária desta pessoa nesta semana já foi emitida.'],
+  [/has no diária amount/i, 'Uma obra não tem valor de diária. Põe-no em Obras ou nos valores da empresa.'],
+  [/cannot decide your own diária/i, 'Não podes decidir a tua própria diária.'],
+  [/write why it is justified/i, 'Escreve porque é que está justificada.'],
+  [/this deduction was already made/i, 'Este desconto já foi feito.'],
+  [/hours of this day are complete now/i, 'As horas deste dia já estão completas: não há nada a decidir.'],
+  [/minimum hours must be between/i, 'O mínimo de horas tem de ser entre 0 e 12.'],
+  [/diária must be between/i, 'A diária tem de ser entre 0 e 1000 €.'],
+  [/rule text is too long/i, 'A regra é comprida demais (máximo 2000 letras).'],
+  [/an issued diária cannot change|issued diária is never deleted/i, 'Uma diária emitida já não muda.'],
   [/country must be PT, ES or FR/i, 'Escolhe Portugal, Espanha ou França.'],
   [/this profile is not yours/i, 'Esse perfil não é teu. Pede ao administrador.'],
   [/admin is given only/i, 'O perfil de administrador só se dá com aprovação de uma segunda pessoa.'],
@@ -1227,8 +1240,8 @@ async function viewWorker() {
       ${login.is_me ? '' : `<p><button class="btn ghost wide" id="toggleLogin">${login.is_active ? 'Desligar a conta' : 'Ligar a conta'}</button></p>`}` : w.is_active ? `
       <p class="small muted">Dá a esta pessoa acesso à app para picar, ver quem está na obra e validar horas.</p>
       <form id="login"><label>Email *</label><input name="email" type="email" required autocomplete="off">
-        <label>Papel</label><select name="role"><option value="supervisor">Encarregado</option><option value="hse">Técnico de segurança</option><option value="hr">Secretariado / RH</option></select>
-        ${more('O que cada papel vê', '<p>O secretariado vê os NIFs, os documentos e as horas de todas as obras, e tem de usar a app de códigos.</p>')}
+        <label>Papel</label><select name="role"><option value="supervisor">Encarregado</option><option value="hse">Técnico de segurança</option><option value="hr">Secretariado / RH</option><option value="worker">Colaborador (só as horas e diárias dele)</option></select>
+        ${more('O que cada papel vê', '<p>O colaborador só vê as horas dele, as diárias e os avisos de desconto. O secretariado vê os NIFs, os documentos e as horas de todas as obras, e tem de usar a app de códigos.</p>')}
         <p><button class="btn wide">Criar conta</button></p></form><div id="newpw"></div>` : '<p class="muted">Pessoa inativa: sem conta.</p>'}</div>` : ''}
     ${canPeople() ? `<div class="card"><h2 style="margin-top:0">${w.is_active ? 'Desativar' : 'Reativar'}</h2>
       <form id="act"><label>Porquê? *</label><input name="why" required placeholder="${w.is_active ? 'ex.: terminou o contrato' : 'ex.: voltou a ser contratado'}">
@@ -1384,6 +1397,9 @@ function viewHours() {
     <div class="acts noprint"><button class="btn big" id="all" hidden>${ic('ok')}Validar todos os dias sem problemas</button>
       <button class="btn ghost wide" id="print">${ic('print')}Imprimir</button></div>
     <div class="card noprint" id="fix" hidden></div>
+    ${canPdCases() ? `<div class="card noprint" data-pdcases="auto" hidden style="margin-top:16px"><h2 style="margin-top:0">Diárias: faltas</h2>
+      <p class="small muted">Dias com diária já paga em que a pessoa faltou ou fez menos horas que o mínimo. Desconta, ou aceita a justificação.</p>
+      <div id="pdhours"></div></div>` : ''}
     <div class="card noprint" style="margin-top:16px"><h2 style="margin-top:0">Picagem esquecida</h2>
       <p class="small muted">Acrescenta uma entrada ou saída que faltou, com o motivo.</p>
       ${more('Regras', `<p>Escreve a hora como se vê no relógio da obra (${esc(tzName(tz))}). Fica marcada como acrescentada à mão, com o teu nome e o motivo.
@@ -1408,6 +1424,7 @@ function viewHours() {
     toast('Picagem acrescentada.'); viewHours();
   };
   const pre = state.prefill; state.prefill = null;
+  if (site) loadPdCases('#pdhours', site.id);
   loadHours(isoDay(from), isoDay(to)).then((rows) => fillWorkerSelect(rows || []).then(() => {
     if (!pre) return;
     const f = $('#miss'); if (!f) return;
@@ -1603,8 +1620,10 @@ function viewMine() {
   const months = [0, 1, 2].map((k) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - k); return isoDay(d).slice(0, 7); });
   const mName = (ym) => new Date(ym + '-15T12:00:00').toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' });
   app.innerHTML = `<h1>As minhas horas</h1>
-    <div class="chips">${months.map((m) => `<button class="chip" data-m="${m}" aria-pressed="${m === state.mineMonth}">${esc(mName(m))}</button>`).join('')}</div>
+    <div class="chips" style="margin-bottom:12px">${months.map((m) => `<button class="chip" data-m="${m}" aria-pressed="${m === state.mineMonth}">${esc(mName(m))}</button>`).join('')}</div>
+    <div id="pdmine"></div>
     <div id="mine">${skel(3)}</div>`;
+  loadMyPerDiems();
   app.querySelectorAll('[data-m]').forEach((b) => b.onclick = () => { state.mineMonth = b.dataset.m; viewMine(); });
   loadMine();
 }
@@ -1625,6 +1644,180 @@ async function loadMine() {
       <div class="tags">${r.anomalies.length ? chip('anom', 'falta uma picagem', 'warn') : DAY_STATUS[r.status] || chip('', r.status)}
         ${r.overtime_minutes ? chip('info', fmtMin(r.overtime_minutes) + ' extra') : ''}${r.is_holiday ? chip('info', 'feriado') : r.is_rest_day ? chip('info', 'dia de descanso') : ''}</div></div>`; }).join('')}</div>
     <p class="small muted">Se faltar um dia ou uma hora estiver errada, fala com o teu encarregado: ele corrige com o motivo.</p>`;
+}
+
+// ------------------------------------------------------------------ Diárias (paid in advance on Thursday, for the week)
+// The office issues the week; the team leader decides each missed or short day (deduct, or justified); the deduction
+// comes off the next diária or, if the month closes first, off the salary. The worker sees every step in As minhas horas.
+// The last state is "emitida para pagamento": the app never knows whether the money reached the account.
+const euro = (v) => (v == null ? '–' : `${Number(v).toFixed(2).replace('.', ',')} €`);
+const canPdCases = () => state.me && ['admin', 'hr', 'project_manager', 'supervisor'].includes(state.me.role);
+const PD_PROBLEM = { site_without_amount: 'obra sem valor de diária: põe-no em Obras', site_pays_none: 'esta obra não paga diária',
+  no_days: 'sem dias para pagar nesta semana' };
+const PD_CASE = { to_decide: chip('warn', 'por decidir', 'warn'), deduct: chip('anom', 'a descontar'), excused: chip('ok', 'justificada', 'ok') };
+const pdKind = (c) => (c.kind === 'absent' ? 'faltou' : `só ${fmtMin(c.worked_minutes ?? c.minutes)}`);
+const pdDays = (days) => (days || []).map((d) => dayLabel(d)).join(' · ');
+let pdSeq = 0;
+async function loadPerDiems() {
+  const box = $('#pdbody'); if (!box) return;
+  if (!state.pdWeek) state.pdWeek = monday(new Date());
+  const week = isoDay(state.pdWeek); const end = new Date(state.pdWeek); end.setDate(end.getDate() + 6);
+  const short = (d) => d.toLocaleDateString('pt-PT', { day: 'numeric', month: 'short' });
+  const thu = new Date(state.pdWeek); thu.setDate(thu.getDate() + 3);
+  const future = state.pdWeek > new Date();
+  box.innerHTML = `<div class="row" style="margin:4px 0;flex-wrap:nowrap;align-items:center">
+      <button class="btn ghost small" id="pdprev" style="flex:0 0 auto" aria-label="Semana anterior">‹</button>
+      <div style="text-align:center;flex:1 1 auto"><b>${esc(short(state.pdWeek))} – ${esc(short(end))}</b><div class="small muted">paga na quinta ${esc(short(thu))}</div></div>
+      <button class="btn ghost small" id="pdnext" style="flex:0 0 auto" aria-label="Semana seguinte">›</button></div>
+    <div id="pdlist">${skel(2)}</div>`;
+  $('#pdprev').onclick = () => { state.pdWeek.setDate(state.pdWeek.getDate() - 7); loadPerDiems(); };
+  $('#pdnext').onclick = () => { state.pdWeek.setDate(state.pdWeek.getDate() + 7); loadPerDiems(); };
+  const seq = ++pdSeq;
+  const { data, error } = future ? { data: [] } : await sb.rpc('mini_per_diem_preview', { p_week: week });
+  const el = $('#pdlist'); if (!el || seq !== pdSeq) return;
+  if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  if (!data.length) { el.innerHTML = `<p class="muted">${future ? 'Esta semana ainda não começou.' : 'Ninguém picou nesta semana: não há diárias.'}</p>`; return; }
+  const todo = data.filter((r) => !r.issued && !r.problem);
+  const issued = data.filter((r) => r.issued);
+  const sum = (rows, k) => rows.reduce((a, r) => a + Number(r[k] || 0), 0);
+  el.innerHTML = `<div class="kpis"><div class="kpi ${todo.length ? 'hot' : ''}"><b>${todo.length}</b><span>por emitir · ${esc(euro(sum(todo, 'net_amount')))}</span></div>
+      <div class="kpi ok"><b>${issued.length}</b><span>emitidas · ${esc(euro(sum(issued, 'net_amount')))}</span></div>
+      <div class="kpi ${data.length - todo.length - issued.length ? 'warn' : ''}"><b>${data.length - todo.length - issued.length}</b><span>sem diária</span></div></div>
+    ${data.map((r) => `<div class="day"><div class="day-h">
+        ${!r.issued && !r.problem ? `<input type="checkbox" class="pdck" value="${esc(r.collaborator_id)}" checked aria-label="Pagar a ${esc(r.full_name)}">` : ''}
+        <span class="d">${esc(r.full_name)}</span><span class="chip code">${esc(r.project_code)}</span>${flag(r.country, '')}
+        <span class="hrs">${r.problem ? '–' : esc(euro(r.net_amount))}</span></div>
+      ${r.problem ? `<div class="tags">${chip(r.problem === 'site_without_amount' ? 'warn' : '', PD_PROBLEM[r.problem] || r.problem)}</div>`
+        : `<div class="per small">${(r.days || []).length} dia(s) × ${esc(euro(r.unit_amount))} = ${esc(euro(r.gross_amount))}${Number(r.deduction_amount) ? ` − ${esc(euro(r.deduction_amount))} de faltas` : ''}
+          <br><span class="muted">${esc(pdDays(r.days))}</span></div>
+        <div class="tags">${r.issued ? chip('ok', 'emitida para pagamento ' + new Date(r.issued_at).toLocaleDateString('pt-PT'), 'ok') : ''}
+          ${!r.issued && Number(r.pending_deduction) > Number(r.deduction_amount) ? chip('warn', `${euro(Number(r.pending_deduction) - Number(r.deduction_amount))} a descontar fica para depois`) : ''}</div>`}</div>`).join('')}
+    <div class="acts">${todo.length ? `<button class="btn big acc" id="pdissue">${ic('ok')}Emitir para pagamento</button>` : ''}
+      <button class="btn ghost wide" id="pdxl">Excel das diárias da semana</button></div>
+    ${more('Como se calcula', `<p>Em Portugal paga-se de segunda a sexta; no estrangeiro de segunda a domingo. Conta a partir do primeiro dia em que a pessoa picou na semana.
+      Os dias que já passaram só contam se a pessoa esteve na obra (no estrangeiro, os dias de descanso contam). Hoje e os dias à frente contam adiantados.</p>
+      <p>Se depois faltar, ou fizer menos horas que o mínimo, o encarregado decide: desconta ou fica justificada. O desconto sai da diária seguinte; se o mês fechar antes, sai do ordenado.</p>`)}`;
+  const btn = $('#pdissue');
+  const picked = () => [...el.querySelectorAll('.pdck:checked')].map((c) => c.value);
+  const label = () => { if (!btn) return; const ids = picked(); const t = sum(todo.filter((r) => ids.includes(r.collaborator_id)), 'net_amount');
+    btn.lastChild.textContent = `Emitir ${ids.length} diária(s) para pagamento · ${euro(t)}`; btn.disabled = !ids.length; };
+  el.querySelectorAll('.pdck').forEach((c) => c.onchange = label); label();
+  if (btn) btn.onclick = async () => {
+    const ids = picked(); if (!ids.length) return;
+    const t = sum(todo.filter((r) => ids.includes(r.collaborator_id)), 'net_amount');
+    const fd = await askSheet('Emitir diárias para pagamento', `<p>${ids.length} pessoa(s), ${esc(euro(t))} no total.</p>
+      <p class="small muted">Cada pessoa recebe o aviso «emitida para pagamento» com as contas. Depois de emitida, a diária não muda: uma falta a seguir desconta-se na próxima.</p>`, 'Emitir');
+    if (!fd) return;
+    const { data: n, error: e2 } = await sb.rpc('mini_per_diem_issue', { p_week: week, p_collabs: ids });
+    if (e2) return toast(friendly(e2));
+    toast(`${n} diária(s) emitida(s) para pagamento.`); loadPerDiems();
+  };
+  $('#pdxl').onclick = () => downloadPerDiems(week, data);
+}
+function downloadPerDiems(week, data) {
+  const end = new Date(week + 'T12:00:00'); end.setDate(end.getDate() + 6);
+  excelExport(async () => data, (X, rows) => {
+    const open = rows.some((r) => !r.issued && !r.problem);
+    const doc = xlDoc([], 'Diárias da semana', `Semana de ${fmtDate(week)} a ${fmtDate(isoDay(end))}`, null);
+    const wb = xlBook(X, doc);
+    const t = xlSheet(wb, 'Diárias', doc, [{ h: 'Nº', t: 'text', w: 8, max: 14 }, { h: 'Nome', t: 'text', w: 20, max: 38 },
+      { h: 'Obra', t: 'text', w: 8, max: 14 }, { h: 'País', t: 'text', w: 6 }, { h: 'Dias', t: 'n', w: 6 }, { h: 'Dias pagos', t: 'text', w: 20, max: 60 },
+      { h: 'Valor por dia', t: 'eur', w: 10 }, { h: 'Bruto', t: 'eur', w: 10 }, { h: 'Desconto de faltas', t: 'eur', w: 11 },
+      { h: 'A pagar', t: 'eur', w: 11, font: { bold: true } }, { h: 'Estado', t: 'text', w: 14, max: 40 }]);
+    const first = t.head + 1; let r = first; const s = [0, 0, 0];
+    for (const x of rows) {
+      const p = !!x.problem;
+      xlRow(t, r, [x.employee_number, x.full_name, x.project_code, COUNTRY[x.country] || x.country, p ? 0 : (x.days || []).length,
+        p ? '' : (x.days || []).map((d) => d.slice(8, 10) + '/' + d.slice(5, 7)).join(', '), p ? null : Number(x.unit_amount),
+        p ? 0 : Number(x.gross_amount), p ? 0 : Number(x.deduction_amount), p ? 0 : Number(x.net_amount),
+        x.issued ? 'Emitida para pagamento' : p ? PD_PROBLEM[x.problem] : 'Por emitir'],
+      { cell: x.issued ? { 10: { font: { color: { argb: XL.ok } } } } : p ? {} : { 10: { fill: XL.warnBg, font: { color: { argb: XL.warn } } } } });
+      if (!p) { s[0] += Number(x.gross_amount); s[1] += Number(x.deduction_amount); s[2] += Number(x.net_amount); }
+      r++;
+    }
+    const last = r - 1;
+    xlRow(t, r, [null, `Total (${rows.length})`, null, null, null, null, null, xlSum(t, 7, first, last, s[0]), xlSum(t, 8, first, last, s[1]),
+      xlSum(t, 9, first, last, s[2]), null], { bold: true, fill: XL.soft, top: true, height: 18 });
+    xlFit(t, first, last);
+    xlNote(t.ws, r + 2, 'Em Portugal paga-se de segunda a sexta; no estrangeiro de segunda a domingo. Faltas depois de emitida descontam-se na diária seguinte ou no ordenado.');
+    return { wb, name: `gestnow-diarias-${week}.xlsx`, msg: open ? 'Excel descarregado: ainda há diárias por emitir.' : 'Excel descarregado.' };
+  });
+}
+async function showPerDiemSettings() {
+  const box = $('#pdform'); if (!box) return;
+  const { data: s, error } = await sb.rpc('mini_per_diem_settings');
+  if (!$('#pdform')) return;
+  if (error) { box.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  const v = (x) => (x == null ? '' : Number(x).toFixed(2));
+  box.innerHTML = `<form id="pdset"><div class="row"><div><label for="pdpt">Diária em Portugal (€)</label><input id="pdpt" name="pt" type="number" min="0" max="1000" step="0.01" inputmode="decimal" value="${v(s.amount_pt)}" placeholder="ex.: 12,50"></div>
+      <div><label for="pdab">Diária no estrangeiro (€)</label><input id="pdab" name="ab" type="number" min="0" max="1000" step="0.01" inputmode="decimal" value="${v(s.amount_abroad)}" placeholder="ex.: 25,00"></div></div>
+    <label for="pdmin">Mínimo de horas no dia para ter diária</label><input id="pdmin" name="min" type="number" min="0" max="12" step="0.5" inputmode="decimal" value="${(s.min_minutes ?? 240) / 60}">
+    <p class="small muted">Menos que isto, o encarregado decide: desconta, ou fica justificada. 0 = só conta faltar o dia todo.</p>
+    <label for="pdrule">Regra da empresa (os trabalhadores leem isto)</label>
+    <textarea id="pdrule" name="rule" rows="4" maxlength="2000" placeholder="ex.: Quem trabalhar menos de 4 horas não recebe a diária desse dia, a não ser que o encarregado aceite a justificação.">${esc(s.rule_text || '')}</textarea>
+    <p class="small muted">Cada obra pode ter um valor próprio, ou não pagar: muda-o em Obras.</p>
+    <p><button class="btn wide">Guardar</button></p></form>`;
+  $('#pdset').onsubmit = async (e) => {
+    e.preventDefault(); const f = new FormData(e.target);
+    const num = (k) => (String(f.get(k) || '').trim() === '' ? null : Number(String(f.get(k)).replace(',', '.')));
+    const { error: e2 } = await sb.rpc('mini_set_per_diem_settings', { p_amount_pt: num('pt'), p_amount_abroad: num('ab'),
+      p_min_minutes: Math.round((num('min') ?? 4) * 60), p_rule_text: String(f.get('rule') || '') });
+    if (e2) return toast(friendly(e2));
+    toast('Diárias guardadas.'); loadPerDiems();
+  };
+}
+// The cases: a paid day the person missed, or worked less than the minimum. One tap to deduct; "justificada" asks why.
+async function loadPdCases(boxSel, project) {
+  const box = $(boxSel); if (!box || !canPdCases()) return;
+  const { data, error } = await sb.rpc('mini_per_diem_cases', { p_project: project || null });
+  if (!$(boxSel)) return;
+  if (error) { box.innerHTML = `<p class="small">${esc(friendly(error))}</p>`; return; }
+  const card = box.closest('[data-pdcases]');
+  const open = data.filter((c) => c.status === 'to_decide');
+  if (card && card.dataset.pdcases === 'auto') card.hidden = !data.length;
+  if (!data.length) { box.innerHTML = '<p class="muted small" style="margin:0">Nenhuma falta nas diárias pagas.</p>'; return; }
+  box.innerHTML = `${open.length ? `<p class="small" style="margin-top:0"><b>${open.length} por decidir.</b> A diária destes dias já foi paga.</p>` : ''}
+    ${data.map((c) => `<div class="day"><div class="day-h"><span class="d">${esc(c.full_name)}</span><span class="chip code">${esc(c.project_code)}</span>
+      <span class="hrs">${esc(euro(c.amount))}</span></div>
+      <div class="per">${esc(dayLabel(c.day))}: ${esc(pdKind(c))}${c.reason ? ` · <span class="muted">${esc(c.reason)}</span>` : ''}</div>
+      <div class="tags">${PD_CASE[c.status] || chip('', c.status)}${c.settled ? chip('', 'descontado: ' + c.settled) : ''}${c.decided_by_name ? chip('', c.decided_by_name) : ''}</div>
+      ${c.status === 'to_decide' && !c.is_me ? `<div class="acts"><button class="btn small" data-pdded="${esc(c.case_id)}">Descontar ${esc(euro(c.amount))}</button>
+        <button class="btn ghost small" data-pdok="${esc(c.case_id)}" data-name="${esc(c.full_name)}">Justificada</button></div>` : ''}</div>`).join('')}`;
+  const decide = async (id, deduct, reason) => {
+    const { error: e2 } = await sb.rpc('mini_per_diem_decide', { p_case: id, p_deduct: deduct, p_reason: reason || null });
+    if (e2) return toast(friendly(e2));
+    toast(deduct ? 'Fica a descontar. A pessoa recebe o aviso.' : 'Justificada: não há desconto. A pessoa recebe o aviso.');
+    loadPdCases(boxSel, project);
+  };
+  box.querySelectorAll('[data-pdded]').forEach((b) => b.onclick = () => decide(b.dataset.pdded, true));
+  box.querySelectorAll('[data-pdok]').forEach((b) => b.onclick = async () => {
+    const fd = await askSheet(`Diária de ${b.dataset.name}: justificada`, `<label for="pdwhy">Porquê? *</label>
+      <input id="pdwhy" name="why" required minlength="5" maxlength="300" autofocus placeholder="ex.: foi ao médico, avisou antes">
+      <p class="small muted">A pessoa recebe a diária inteira deste dia. Fica escrito com o teu nome.</p>`, 'Aceitar justificação');
+    if (fd) decide(b.dataset.pdok, false, String(fd.get('why') || '').trim());
+  });
+}
+// The worker's own diárias, on top of As minhas horas: new notices first, then the weeks and the days with a deduction.
+async function loadMyPerDiems() {
+  const box = $('#pdmine'); if (!box) return;
+  const { data: d, error } = await sb.rpc('mini_my_per_diems');
+  if (!$('#pdmine')) return;
+  if (error || (!d.weeks.length && !d.cases.length && !d.notices.length)) { box.innerHTML = ''; return; }
+  const fresh = d.notices.filter((n) => n.new);
+  const NOTE_ICON = { issued: 'ok', to_deduct: 'warn', excused: 'ok', deducted_week: 'warn', deducted_salary: 'warn' };
+  box.innerHTML = `<div class="card"><h2 style="margin-top:0">As minhas diárias</h2>
+    ${d.notices.slice(0, fresh.length || 3).map((n) => `<div class="note pd ${n.new ? 'new' : ''}">${ic(NOTE_ICON[n.kind] || 'clock')}<span>${esc(n.title)}
+      <span class="small muted">· ${esc(new Date(n.at).toLocaleDateString('pt-PT'))}</span>${n.new ? ' ' + chip('info', 'novo') : ''}</span></div>`).join('')}
+    ${d.weeks.slice(0, 4).map((w) => `<div class="day"><div class="day-h"><span class="d">Semana de ${esc(fmtDate(w.week_start).slice(0, 5))}</span>
+        <span class="chip code">${esc(w.site)}</span><span class="hrs">${esc(euro(w.net))}</span></div>
+      <div class="per small">${w.days.length} dia(s) × ${esc(euro(w.unit))}${Number(w.deduction) ? ` − ${esc(euro(w.deduction))} de faltas` : ''} · emitida para pagamento ${esc(new Date(w.issued_at).toLocaleDateString('pt-PT'))}</div></div>`).join('')}
+    ${d.cases.length ? `<h3>Dias com desconto ou por decidir</h3>${d.cases.map((c) => `<div class="day"><div class="day-h"><span class="d">${esc(dayLabel(c.day))}</span>
+        <span class="small">${esc(pdKind(c))}</span><span class="hrs">${esc(euro(c.amount))}</span></div>
+      <div class="tags">${c.status === 'to_decide' ? chip('warn', 'o encarregado vai decidir') : PD_CASE[c.status] || ''}${c.settled ? chip('', 'descontado: ' + c.settled) : ''}</div>
+      ${c.reason ? `<div class="per small muted">${esc(c.reason)}</div>` : ''}</div>`).join('')}` : ''}
+    ${more('Regra das diárias', `<p>${esc(d.rule_text || `Menos de ${fmtMin(d.min_minutes)} de trabalho num dia, ou faltar, só dá diária se o encarregado aceitar a justificação.`)}</p>
+      <p>A diária é paga adiantada. Se faltares depois, desconta-se na próxima; se o mês fechar antes, desconta-se no ordenado. «Emitida para pagamento» quer dizer que o escritório a mandou pagar.</p>`)}</div>`;
+  if (fresh.length) sb.rpc('mini_per_diem_seen').then(() => {}, () => {});
 }
 
 // ------------------------------------------------------------------ Secretariado (RH): todas as obras, aprovar, fechar o mês
@@ -1655,6 +1848,11 @@ function viewOffice() {
       ${more('Sobre o ficheiro do Primavera', '<p>Horas extra aprovadas, uma linha por pessoa, dia e tipo (1.ª hora, seguintes, descanso, feriado, e os mesmos acima das 100 h do ano). As noturnas não vão neste ficheiro. No Primavera: Recursos Humanos › Alterações Mensais › Relógio de Ponto. O "Nº de trabalhador" tem de ser o número do funcionário no Primavera.</p>')}
       <details class="fold" id="primcfg"><summary><span>Configurar o ficheiro do Primavera<span class="sub">Códigos de horas extra, formato e posições</span></span></summary><div id="primform">${skel(1)}</div></details>
 </div>
+    <div class="card noprint" id="pdcard"><h2 style="margin-top:0">Diárias</h2>
+      <p class="small muted">Pagas à quinta, adiantadas, para a semana toda. Escolhe quem e emite para pagamento.</p>
+      <div id="pdbody">${skel(2)}</div>
+      <details class="fold" id="pdcases"><summary><span>Faltas nas diárias pagas<span class="sub">Descontar ou justificar, em todas as obras</span></span></summary><div data-pdcases="all"><div id="pdcasebox">${skel(1)}</div></div></details>
+      <details class="fold" id="pdcfg"><summary><span>Valores e regra da empresa<span class="sub">Portugal, estrangeiro, mínimo de horas</span></span></summary><div id="pdform">${skel(1)}</div></details></div>
     <div class="card noprint"><h2 style="margin-top:0">Registo de tempos (ACT)</h2>
       <p class="small muted">Registo legal das entradas e saídas de uma obra. Guardar 5 anos.</p>
       ${more('Porquê', '<p>Código do Trabalho, art. 202. Mostra-o se a inspeção pedir.</p>')}
@@ -1665,7 +1863,9 @@ function viewOffice() {
   $('#prim').onclick = () => downloadPrimavera(from, to);
   $('#primcfg').ontoggle = () => { if ($('#primcfg').open) showPrimaveraSettings(); };
   $('#act').onclick = () => downloadAct($('#actsite').value, from, to);
-  loadOffice(from, to);
+  $('#pdcfg').ontoggle = () => { if ($('#pdcfg').open) showPerDiemSettings(); };
+  $('#pdcases').ontoggle = () => { if ($('#pdcases').open) loadPdCases('#pdcasebox'); };
+  loadOffice(from, to); loadPerDiems();
 }
 // What the office must look at: taps added by hand, taps that arrived late from a phone without network, and
 // supervisors' own taps (mini_manual_taps gives the reason; these two texts come from the server as written).
@@ -1975,7 +2175,7 @@ async function excelExport(fetchRows, build) {
 
 const XL = { brand: 'FF0F3D3E', soft: 'FFE7F0EF', mid: 'FFCFE1DF', ink: 'FF142322', muted: 'FF5D6B6A', line: 'FFC9D5D3',
   warnBg: 'FFFFF2D6', warn: 'FF8A5A00', ok: 'FF1F7A3A', grey: 'FF8C9796', rest: 'FFE9EFF7', white: 'FFFFFFFF' };
-const XF = { text: '@', h: '0.00;-0.00;"–"', hm: '[h]:mm;-[h]:mm;"–"', n: '0;-0;"–"', date: 'dd/mm/yyyy', time: 'hh:mm' };
+const XF = { text: '@', h: '0.00;-0.00;"–"', hm: '[h]:mm;-[h]:mm;"–"', n: '0;-0;"–"', date: 'dd/mm/yyyy', time: 'hh:mm', eur: '#,##0.00 "€";-#,##0.00 "€";"–"' };
 const XFONT = 'Calibri';
 // XML cannot hold control characters: a pasted name with one would make the whole file unreadable.
 const xs = (v) => String(v ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F￾￿]/g, '');
@@ -2186,10 +2386,13 @@ function payTable(t, list, firstCol, labelTotal) {
   return r + 1;
 }
 async function downloadPayroll(from, to) {
+  let pd = [];
   await excelExport(async () => {
-    const { data, error } = await sb.rpc('mini_payroll_lines', { p_from: from, p_to: to });
+    const [{ data, error }, ded] = await Promise.all([sb.rpc('mini_payroll_lines', { p_from: from, p_to: to }),
+      sb.rpc('mini_per_diem_payroll', { p_from: from, p_to: to })]);
     if (error) return void toast(friendly(error));
     if (!data.length) return void toast('Sem horas neste mês.');
+    pd = (ded && ded.data) || [];   // no diárias module: the sheet simply has no diárias page
     return data;
   }, (X, data) => {
     const closed = data.every((r) => r.all_closed);
@@ -2220,7 +2423,24 @@ async function downloadPayroll(from, to) {
     r = payTable(t2, [...people.values()].map((p) => ({ ...p, lead: [...p.lead, p.sites.join(', ')] })),
       5, `Total (${people.size} pessoa${people.size === 1 ? '' : 's'})`);
     PAY_NOTES.slice(0, 1).forEach((s) => { r++; xlNote(t2.ws, r, s); });
-    // 3. what each column means
+    // 3. diárias to deduct from the salary: paid in advance, then missed, and not taken from a later diária
+    if (pd.length) {
+      const t3 = xlSheet(wb, 'Diárias a descontar', doc, [{ h: 'Nº', t: 'text', w: 8, max: 14 }, { h: 'Nome', t: 'text', w: 20, max: 38 },
+        { h: 'A descontar no ordenado', t: 'eur', w: 12, font: { bold: true } }, { h: 'Diárias dos dias', t: 'text', w: 20, max: 60 },
+        { h: 'Faltas por decidir', t: 'n', w: 9 }]);
+      const f3 = t3.head + 1; let r3 = f3;
+      for (const x of pd) {
+        xlRow(t3, r3, [x.employee_number, x.full_name, Number(x.deduction), x.days || '', Number(x.cases_to_decide)],
+          { cell: Number(x.cases_to_decide) ? { 4: { fill: XL.warnBg, font: { bold: true, color: { argb: XL.warn } } } } : {} });
+        r3++;
+      }
+      xlRow(t3, r3, [null, `Total (${pd.length})`, xlSum(t3, 2, f3, r3 - 1, pd.reduce((s, x) => s + Number(x.deduction), 0)), null,
+        xlSum(t3, 4, f3, r3 - 1, pd.reduce((s, x) => s + Number(x.cases_to_decide), 0))], { bold: true, fill: XL.soft, top: true, height: 18 });
+      xlFit(t3, f3, r3 - 1);
+      xlNote(t3.ws, r3 + 2, 'Diárias pagas adiantadas em dias em que a pessoa faltou, sem justificação aceite, e que não couberam numa diária seguinte.');
+      xlNote(t3.ws, r3 + 3, 'Faltas por decidir: o encarregado ainda não disse se desconta ou se está justificada. Ao fechar o mês, o que estiver «a descontar» passa para o ordenado.');
+    }
+    // 4. what each column means
     const ws = wb.addWorksheet('Como ler', { views: [{ showGridLines: false }] });
     ws.getColumn(1).width = 26; ws.getColumn(2).width = 100;
     const put = (row, a, b, f = {}) => { const c1 = ws.getCell(row, 1); const c2 = ws.getCell(row, 2);
@@ -2244,7 +2464,8 @@ async function downloadPayroll(from, to) {
     ws.headerFooter = { oddFooter: '&L&8GestNow · Como ler&R&8Página &P de &N' };
     return { wb, name: `gestnow-salarios-${from.slice(0, 7)}${closed ? '' : '-provisorio'}.xlsx`,
       msg: (pending ? `Folha provisória: ainda há ${pending} dia(s) por aprovar.` : closed ? 'Folha descarregada.' : 'Folha provisória: o mês ainda não foi fechado.')
-        + (undecided ? ` Há ${fmtMin(undecided)} de horas extra por decidir (coluna a amarelo).` : '') };
+        + (undecided ? ` Há ${fmtMin(undecided)} de horas extra por decidir (coluna a amarelo).` : '')
+        + (pd.length ? ` Inclui ${pd.length} pessoa(s) com diárias a descontar.` : '') };
   });
 }
 
@@ -2392,6 +2613,7 @@ const flag = (c, id) => `<span class="chip" data-flag="${esc(id || '')}" title="
 const canSiteDetails = () => state.me && ['admin', 'hr', 'project_manager', 'supervisor'].includes(state.me.role);
 const canSetSite = () => state.me && ['admin', 'project_manager'].includes(state.me.role);
 const canHolidays = () => state.me && ['admin', 'hr'].includes(state.me.role);
+const canSitePd = () => state.me && ['admin', 'hr', 'project_manager'].includes(state.me.role);
 const canRestDays = () => state.me && ['admin', 'hr', 'project_manager'].includes(state.me.role);
 const WEEKDAYS = [[1, 'Seg'], [2, 'Ter'], [3, 'Qua'], [4, 'Qui'], [5, 'Sex'], [6, 'Sáb'], [7, 'Dom']];
 let siteCfgSeq = 0;
@@ -2408,6 +2630,16 @@ async function loadSiteDetails(id) {
         ${Object.entries(COUNTRY).map(([k, v]) => `<option value="${k}" ${(d.country || 'PT') === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
       <div><label>Concelho (município)</label><input name="mun" maxlength="128" value="${esc(d.municipality || '')}" placeholder="ex.: Sines"></div></div>
       <p><button class="btn wide">Guardar país e concelho</button></p></form>` : ''}
+    <h3>Diária</h3>
+    <p style="margin-top:0"><b>${d.per_diem_effective == null ? 'sem valor' : Number(d.per_diem_effective) === 0 ? 'não paga diária' : esc(euro(d.per_diem_effective)) + ' por dia'}</b>
+      <span class="small muted">· ${d.per_diem_amount == null ? 'valor da empresa para ' + (d.country === 'PT' || !d.country ? 'Portugal' : 'o estrangeiro') : 'valor próprio desta obra'}</span></p>
+    ${canSitePd() ? `<form id="pdsite"><div class="chips reasons" role="radiogroup" aria-label="Diária desta obra">
+        <label class="chip"><input type="radio" name="m" value="co" ${d.per_diem_amount == null ? 'checked' : ''}>Valor da empresa</label>
+        <label class="chip"><input type="radio" name="m" value="own" ${d.per_diem_amount != null && Number(d.per_diem_amount) > 0 ? 'checked' : ''}>Valor próprio</label>
+        <label class="chip"><input type="radio" name="m" value="none" ${d.per_diem_amount != null && Number(d.per_diem_amount) === 0 ? 'checked' : ''}>Não paga</label></div>
+      <div id="pdown" ${d.per_diem_amount != null && Number(d.per_diem_amount) > 0 ? '' : 'hidden'}><label for="pdamt">Valor por dia (€)</label>
+        <input id="pdamt" name="amt" type="number" min="0.01" max="1000" step="0.01" inputmode="decimal" value="${d.per_diem_amount != null && Number(d.per_diem_amount) > 0 ? Number(d.per_diem_amount).toFixed(2) : ''}"></div>
+      <p><button class="btn ghost wide">Guardar diária</button></p></form>` : ''}
     <h3>Dias de descanso</h3>
     <p class="small muted" style="margin-top:0">Depende do cliente. As horas feitas nestes dias só entram na folha se o chefe de equipa as aprovar.</p>
     ${canRestDays() ? `<form id="restf"><div class="chips reasons" role="group" aria-label="Dias de descanso">${WEEKDAYS.map(([n, l]) =>
@@ -2431,6 +2663,18 @@ async function loadSiteDetails(id) {
     const s = state.sites.find((x) => x.id === id); const fl = app.querySelector(`[data-flag="${id}"]`);
     if (s && fl) fl.outerHTML = flag(s.country, id);
   };
+  if ($('#pdsite')) {
+    const f = $('#pdsite');
+    f.querySelectorAll('input[name=m]').forEach((r) => r.onchange = () => { $('#pdown').hidden = f.m.value !== 'own'; f.amt.required = f.m.value === 'own'; });
+    f.onsubmit = async (e) => {
+      e.preventDefault(); const m = f.m.value;
+      const amt = m === 'co' ? null : m === 'none' ? 0 : Number(String(f.amt.value).replace(',', '.'));
+      if (m === 'own' && !(amt > 0)) return toast('Escreve o valor da diária.');
+      const { error: e2 } = await sb.rpc('mini_set_site_per_diem', { p_project: id, p_amount: amt });
+      if (e2) return toast(friendly(e2));
+      toast('Diária da obra guardada.'); loadSiteDetails(id);
+    };
+  }
   if ($('#restf')) $('#restf').onsubmit = async (e) => {
     e.preventDefault(); const days = new FormData(e.target).getAll('rd').map(Number);
     if (days.length > 6) return toast('A obra precisa de pelo menos um dia de trabalho.');
