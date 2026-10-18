@@ -102,6 +102,8 @@ const ERRORS = [
   [/this profile is not yours/i, 'Esse perfil não é teu. Pede ao administrador.'],
   [/admin is given only/i, 'O perfil de administrador só se dá com aprovação de uma segunda pessoa.'],
   [/an admin keeps the admin profile/i, 'Um administrador mantém sempre o perfil de administrador.'],
+  [/in your own company you change profile/i, 'Na tua empresa já mudas de perfil com a tua própria pessoa.'],
+  [/has not let you in/i, 'Esta empresa não te deixa entrar. Pede acesso de suporte.'],
   [/department name needs/i, 'O nome do departamento tem de ter entre 2 e 60 letras.'],
   [/choose the type of access/i, 'Escolhe o tipo de acesso: escritório, segurança, encarregado ou colaborador.'],
   [/takes no permissions/i, 'O tipo colaborador só vê as próprias horas: não leva permissões.'],
@@ -406,11 +408,11 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '31';
+const APP_VERSION = '32';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['seguranca', 'naobra', 'trabalhadores', 'picar'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
-const MORE_ORDER = ['equipa', 'picar', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'obras', 'clientes'];
+const MORE_ORDER = ['equipa', 'picar', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'obras', 'processo', 'clientes'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -503,7 +505,7 @@ boot();
 async function boot() {
   stopNfc(); clearInterval(state.timer); clearInterval(state.tick); hideFlash(); openMore(false);
   state.ready = false; state.offline = false; nav.hidden = true; document.getElementById('whoami').hidden = true;
-  document.getElementById('sol').hidden = true; document.getElementById('search').hidden = true; closePalette(); signedOut(true); showNet();
+  document.getElementById('sol').hidden = true; document.getElementById('search').hidden = true; document.getElementById('help').hidden = true; closePalette(); signedOut(true); showNet();
   let session = null; let sErr = null;
   try { const r = await sb.auth.getSession(); session = r.data.session; sErr = r.error; } catch (e) { sErr = e; }
   if (!session) return (sErr && isNetErr(sErr)) || (navigator.onLine === false && storedSessionExists()) ? showNetworkError() : showLogin();
@@ -553,12 +555,14 @@ async function boot() {
   nav.querySelector('[data-view=painel]').hidden = worker || !canSiteDetails();
   nav.querySelector('[data-view=acolhimento]').hidden = worker || !can('acolhimento.gerir');
   nav.querySelector('[data-view=clientes]').hidden = worker || state.offline || !isOwner();
+  nav.querySelector('[data-view=processo]').hidden = worker || state.offline || !canProcess();
   nav.querySelector('[data-view=equipa]').hidden = me.role !== 'supervisor' || !canSiteDetails();
   if (me.role === 'supervisor' && !state.booted && state.view === 'picar' && canSiteDetails()) state.view = 'equipa';
   state.booted = true;
   if (state.view === 'minhas' && !me.collaborator_id) state.view = (TABS[me.role] || TABS.supervisor)[0];
   layoutNav(me.role);
-  signedOut(false); nav.hidden = false; document.getElementById('sol').hidden = false; document.getElementById('search').hidden = me.role === 'worker'; showNet();
+  signedOut(false); nav.hidden = false; document.getElementById('sol').hidden = false; document.getElementById('search').hidden = me.role === 'worker';
+  document.getElementById('help').hidden = nav.querySelector('[data-view=processo]').hidden; showNet();
   await loadBasics();
   showWho();
   if (state.offline) { go('picar'); return; }
@@ -756,7 +760,20 @@ const roleLabel = (r, me = state.me) => {
 };
 // One login, several hats (Diogo is admin, team leader and worker). Changing hat never mixes data: the database
 // decides what each profile sees, and nobody validates their own hours in any of them.
+// The GestNow owner inside a client company (Clientes) has only the admin profile there: «Simular perfis» gives him
+// the five, with a test person of that company behind them (sql/61), to see the app as encarregado or colaborador.
+const canSimulate = () => isOwner() && !!state.platform.can_simulate && state.me.role === 'admin' && state.me.profiles.length < 2;
+async function startSimulation() {
+  const fd = await askSheet('Simular perfis', `<p>Para veres a app como <b>encarregado</b> ou <b>colaborador</b> em ${esc(state.platform.tenant || 'esta empresa')}.</p>
+    <p class="small muted">A tua conta fica com os 5 perfis aqui. Para os perfis de obra é criada uma pessoa de teste, «Teste Dono (simulação)», sem cartão e sem obra. Apaga-se com os outros dados de teste antes do uso real.</p>`, 'Simular');
+  if (!fd) return false;
+  const { data, error } = await sb.rpc('platform_simulate_profiles');
+  if (error) { toast(friendly(error)); return false; }
+  state.me.profiles = data.profiles; state.me.collaborator_id = data.person;
+  return true;
+}
 async function switchProfile() {
+  if (state.me && !state.offline && canSimulate() && !(await startSimulation())) return;
   const me = state.me; if (!me || me.profiles.length < 2 || state.offline) return;
   const opts = PROFILE_ORDER.filter((r) => me.profiles.includes(r));
   const fd = await askSheet('Mudar de perfil', `<p class="small muted">A mesma conta, outro papel. Os dados e as regras de cada papel não se misturam.</p>
@@ -773,7 +790,7 @@ document.getElementById('whoami').addEventListener('click', switchProfile);
 function showWho() {
   const me = state.me; const p = me.collaborator_id && state.people.find((x) => x.id === me.collaborator_id);
   const el = document.getElementById('whoami');
-  const many = me.profiles && me.profiles.length > 1;
+  const many = (me.profiles && me.profiles.length > 1) || canSimulate();
   // Two lines: the role (never cut off) and, under it, whose account this is.
   // The GestNow owner can be in any client company: the second line says which.
   const nm = isOwner() && state.platform.tenant ? state.platform.tenant : p ? p.full_name.split(' ')[0] + ' ' + p.full_name.split(' ').slice(-1)[0] : me.email;
@@ -804,6 +821,7 @@ function paletteItems(q) {
   }
   const acts = [];
   if (state.me.profiles && state.me.profiles.length > 1 && !state.offline) acts.push({ label: 'Mudar de perfil', icon: 'users', run: switchProfile });
+  else if (canSimulate() && !state.offline) acts.push({ label: 'Simular perfis (encarregado, colaborador)', icon: 'users', run: switchProfile });
   acts.push({ label: document.documentElement.dataset.theme === 'sol' ? 'Desligar modo sol' : 'Modo sol (mais contraste ao sol)', icon: 'sun', run: () => document.getElementById('sol').click() });
   acts.push({ label: 'Sair', icon: 'out', run: signOut });
   for (const a of acts) if (!n || has(a.label)) out.push({ g: 'Ações', ...a });
@@ -829,6 +847,7 @@ function openPalette() {
 }
 function closePalette() { const d = document.getElementById('cmdk'); if (d && d.open) d.close(); }   // also runs from boot(), before the consts above exist
 document.getElementById('search').addEventListener('click', openPalette);
+document.getElementById('help').addEventListener('click', () => { if (state.ready && state.view !== 'processo') openProcessFor(state.view); });
 cmdq.addEventListener('input', renderPalette);
 cmdq.addEventListener('keydown', (e) => {
   if (e.key === 'ArrowDown') { e.preventDefault(); markPalette(cmdl._sel + 1); }
@@ -888,7 +907,8 @@ function go(view) {
   nav.querySelector('button[data-more]').classList.toggle('on', !!cur && cur.parentElement.id === 'more');
   window.scrollTo(0, 0);
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
-     ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients }[view] || viewClock)();
+     ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients,
+     processo: viewProcess }[view] || viewClock)();
 }
 
 // ------------------------------------------------------------------ Clientes (the GestNow owner's console, sql/59)
@@ -2558,6 +2578,7 @@ const TOUR_TEXT = {
   trabalhadores: 'Pessoas: as fichas, os cartões e os documentos de cada colaborador.',
   acolhimento: 'Acolhimento: as conversas, os vídeos e os manuais que cada pessoa nova tem de fazer.',
   obras: 'Obras: as moradas, os horários e as regras de cada obra.',
+  processo: 'Processo: o caminho de cada obra, do primeiro contacto ao fecho de contas. Toca num passo e eu explico o que vem antes e depois. O ponto de interrogação em cima diz-te onde estás.',
   clientes: 'Clientes: as empresas que usam a GestNow. Crias, entras numa e voltas.',
 };
 async function startTour() {
@@ -4553,4 +4574,181 @@ function sitePanelForm(box, d) {
     if (se) return toast(friendly(se));
     toast('Ficha da obra guardada.'); loadSitePanel(d.id);
   };
+}
+
+// ------------------------------------------------------------------ Mapa do processo (sql/60)
+// The chain from the first contact to closing the job, as the database keeps it (a published version never changes).
+// Each step says what comes before and after, who is accountable, the proof that stays and the standard it meets.
+// The bot explains a step from the same rows, so it never says what the map does not. Every profile but the worker.
+const canProcess = () => can('processo.ver');
+const PROC_SITE_KEY = 'gestnow.proc.site';
+const PROJECT_STATUS = { lead: 'Angariação', bidding: 'Em orçamento', awarded: 'Adjudicada', preparation: 'Em preparação', execution: 'Em execução',
+  suspended: 'Suspensa', completed: 'Concluída', invoiced: 'Faturada', closed: 'Fechada' };
+const GRADES = { Q1: 'Q1 · nuclear, importante para a segurança', Q2: 'Q2 · nuclear, outros trabalhos', Q3: 'Q3 · convencional' };
+const RACI_WORD = { A: 'aprova', R: 'faz', C: 'é consultado', I: 'é informado' };
+const RACI_YOU = { A: 'Aprovas', R: 'Fazes', C: 'És consultado', I: 'És informado' };
+function procState() { return state.proc || (state.proc = { step: null, mine: false, nuclear: false, site: load(PROC_SITE_KEY, '') || '', ask: 0 }); }
+// Opens the map on the step a screen belongs to (the «?» in the top bar).
+function openProcessFor(view) {
+  procState().fromView = view;
+  go('processo');
+}
+async function viewProcess() {
+  if (!canProcess()) return viewClock();   // code guard as well as the database's
+  const st = procState();
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">ISO 9001 · ISO 19443</p><h1>Mapa do processo</h1></div></div>
+    <p class="muted lead">Do primeiro contacto ao fecho de contas. Toca num passo para ver o que vem antes, o que se faz, o que vem depois, quem é responsável e a prova que fica guardada. Os losangos são portões: sem a aprovação, a obra não passa.</p>
+    <div id="proc">${skel(4)}</div>`;
+  const box = $('#proc');
+  let r = await sb.rpc('mini_process_map', { p_site: st.site || null });
+  if (r.error && st.site) { st.site = ''; store(PROC_SITE_KEY, ''); r = await sb.rpc('mini_process_map', { p_site: null }); }   // that job is gone or not mine
+  if (!box.isConnected) return;
+  if (r.error) { box.innerHTML = `<div class="card"><p>${esc(friendly(r.error))}</p></div>`; return; }
+  const m = st.map = r.data;
+  if (st.siteSeen !== (m.site && m.site.id)) {   // a job just chosen: nuclear follows its grade, the step follows where it is
+    st.siteSeen = m.site && m.site.id;
+    st.nuclear = !!(m.site && ['Q1', 'Q2'].includes(m.site.grade));
+    if (m.site && !st.fromView) st.step = m.site.current;
+  }
+  if (st.fromView) { const hit = m.steps.find((s) => (s.screens || []).includes(st.fromView)); if (hit) st.step = hit.code; st.fromView = null; }
+  if (!st.step || !m.steps.some((s) => s.code === st.step)) st.step = (m.site && m.site.current) || m.steps[0].code;
+  st.bot = await getBot(); if (!box.isConnected) return;
+  renderProcess();
+}
+function procChain() { return state.proc.map.steps.filter((s) => s.kind !== 'control'); }
+function procRole(s, code) { const r = s.raci || {}; if (r.A === code) return 'A'; for (const k of ['R', 'C', 'I']) if ((r[k] || []).includes(code)) return k; return ''; }
+function procMyRole(s) {   // the strongest letter this login has on a step (A before R before C before I)
+  let best = ''; const rank = { A: 4, R: 3, C: 2, I: 1, '': 0 };
+  for (const role of state.proc.map.roles) if (role.mine) { const x = procRole(s, role.code); if (rank[x] > rank[best]) best = x; }
+  return best;
+}
+const procRoleName = (code) => { const r = state.proc.map.roles.find((x) => x.code === code); return r ? r.name : code; };
+function procStatus(s) {   // done / now / '' from where the chosen job is
+  const m = state.proc.map; if (!m.site) return '';
+  if (m.site.closed) return 'done';
+  const order = procChain().map((x) => x.code); const i = order.indexOf(s.code); const cur = order.indexOf(m.site.current);
+  return i < cur ? 'done' : i === cur ? 'now' : '';
+}
+function renderProcess() {
+  const st = state.proc; const m = st.map; const box = $('#proc'); if (!box) return;
+  const chain = procChain(); const mine = m.roles.filter((r) => r.mine);
+  const sites = state.sites.slice().sort((a, b) => String(a.title).localeCompare(b.title, 'pt'));
+  const done = chain.filter((s) => procStatus(s) === 'done').length;
+  box.innerHTML = `<div class="proc-bar">
+      <div class="proc-site"><label for="psite">Ver onde está uma obra</label><select id="psite"><option value="">Nenhuma: só o mapa</option>
+        ${sites.map((s) => `<option value="${esc(s.id)}" ${s.id === (m.site && m.site.id) ? 'selected' : ''}>${esc(s.title)} (${esc(s.cost_center_code)})</option>`).join('')}</select></div>
+      <div class="chips" role="group" aria-label="Vista">
+        <button class="chip" type="button" id="pall" aria-pressed="${!st.mine}">Toda a cadeia</button>
+        ${mine.length ? `<button class="chip" type="button" id="pmine" aria-pressed="${st.mine}" title="${esc(mine.map((r) => r.name).join(', '))}">O meu papel</button>` : ''}
+        <button class="chip nuc" type="button" id="pnuc" aria-pressed="${st.nuclear}">Nuclear</button>
+      </div></div>
+    ${m.site ? `<div class="card proc-sum"><div class="grow"><b>${esc(m.site.title)}</b><small>${esc(m.site.code)} · ${esc(PROJECT_STATUS[m.site.status] || m.site.status)} · ${done} de ${chain.length} passos feitos</small>
+        <div class="proc-prog" aria-hidden="true"><i style="width:${Math.round(done / chain.length * 100)}%"></i></div></div>
+      <div class="proc-grade">${m.site.grade ? chip(['Q1', 'Q2'].includes(m.site.grade) ? 'nuc' : 'reg', m.site.grade === 'Q3' ? 'Convencional (Q3)' : 'Nuclear ' + m.site.grade) : chip('reg', 'Sem grau')}
+        ${can('obras.grau') ? '<button class="btn ghost small" id="pgrade">Grau da obra</button>' : ''}</div></div>` : ''}
+    ${st.mine ? `<p class="small muted proc-legend">És de ${esc(mine.map((r) => r.name).join(', ').replace(/, ([^,]*)$/, ' e $1'))}. A letra em cada passo é o teu papel: <b>A</b> aprova, <b>R</b> faz, <b>C</b> é consultado, <b>I</b> é informado. Os outros passos ficam esbatidos.</p>` : ''}
+    <div class="proc-phases">${m.phases.map((ph, i) => {
+      const steps = chain.filter((s) => s.phase === i + 1);
+      const open = steps.some((s) => s.code === st.step);
+      return `<section class="proc-phase"><h2><span>${i + 1}</span>${esc(ph)}</h2><div class="proc-track">${steps.map((s, k) => {
+        const role = procMyRole(s); const stt = procStatus(s);
+        return `${k ? `<span class="proc-arrow" aria-hidden="true">${ic('go')}</span>` : ''}<button type="button" class="proc-node ${s.kind} ${stt} ${st.mine && !role ? 'dim' : ''}" data-step="${esc(s.code)}" aria-pressed="${s.code === st.step}">
+          ${st.mine && role ? `<span class="proc-role" title="${esc(RACI_WORD[role])}">${role}</span>` : ''}
+          <span class="proc-k"><i class="proc-dot"></i>${s.kind === 'gate' ? 'Portão' : 'Passo'} ${chain.indexOf(s) + 1}</span>
+          <b>${esc(s.title)}</b><small>${esc(procRoleName(s.raci.A))}${st.nuclear && s.nuclear.length ? ` · <em>+${s.nuclear.length} nuclear</em>` : ''}</small></button>`;
+      }).join('')}</div>${open ? '<div id="pcard"></div>' : ''}</section>`;
+    }).join('')}</div>
+    <p class="small muted proc-loop">${ic('auto')} As lições de cada obra fechada voltam para a Orçamentação da próxima.</p>
+    <h2 class="proc-h">Sempre ligados, em qualquer passo</h2>
+    <div class="proc-ctl">${m.steps.filter((s) => s.kind === 'control' && (st.nuclear || !s.nuclear.length)).map((s) => `<div class="card"><b>${esc(s.title)}${s.nuclear.length ? ' ' + chip('nuc', 'Nuclear') : ''}</b>
+      <p class="small muted">${esc(s.lead)}</p><div class="proc-iso">${s.iso.map((x) => `<span class="chip code">${esc(x)}</span>`).join('')}</div></div>`).join('')}
+      ${st.nuclear ? '' : `<div class="card proc-more"><b>+${m.steps.filter((s) => s.kind === 'control' && s.nuclear.length).length} com o modo nuclear</b><p class="small muted">Liga «Nuclear» em cima para ver o controlo de peças falsificadas e a cultura de segurança.</p></div>`}</div>
+    <h2 class="proc-h">Pergunta ao ${esc(st.bot.name)}</h2>
+    <div class="chips" id="pask">${procQuestions().map((q, i) => `<button class="chip" type="button" data-q="${i}" aria-pressed="${i === st.ask}">${esc(q.q)}</button>`).join('')}</div>
+    <div class="card proc-answer" id="pans"></div>
+    <p class="small muted">Mapa versão ${esc(m.version)}, publicado a ${esc(fmtDate(String(m.published_at).slice(0, 10)))}. Um mapa publicado nunca é alterado: uma mudança é uma versão nova. Fontes: ${esc(m.sources || '')}</p>`;
+  $('#psite').onchange = (e) => { st.site = e.target.value; store(PROC_SITE_KEY, st.site); viewProcess(); };
+  $('#pall').onclick = () => { st.mine = false; renderProcess(); };
+  if ($('#pmine')) $('#pmine').onclick = () => { st.mine = true; const first = chain.find((s) => procMyRole(s) === 'A') || chain.find((s) => procMyRole(s) === 'R'); if (first) st.step = first.code; renderProcess(); };
+  $('#pnuc').onclick = () => { st.nuclear = !st.nuclear; renderProcess(); };
+  if ($('#pgrade')) $('#pgrade').onclick = setSiteGrade;
+  box.querySelectorAll('.proc-node').forEach((b) => b.onclick = () => {
+    Voice.stop(); st.step = b.dataset.step; renderProcess();
+    const c = $('#pcard'); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
+  box.querySelectorAll('#pask button').forEach((b) => b.onclick = () => { st.ask = Number(b.dataset.q); box.querySelectorAll('#pask button').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); procAnswer(); });
+  procCard(); procAnswer();
+}
+// What the bot says about a step: who, before, here, after, the standard. Built from the map's own rows.
+function procExplain(code) {
+  const st = state.proc; const chain = procChain(); const i = chain.findIndex((s) => s.code === code); const s = chain[i];
+  const prev = chain[i - 1]; const next = chain[i + 1];
+  const doers = (s.raci.R || []).filter((x) => x !== s.raci.A);
+  const out = [`${s.title}: quem responde é ${procRoleName(s.raci.A)}${doers.length ? `, e quem faz é ${doers.map(procRoleName).join(', ')}` : ''}.`];
+  out.push(prev ? `Antes, tem de estar ${prev.kind === 'gate' ? 'aprovado o portão' : 'feito o passo'} «${prev.title}».${st.map.site ? (procStatus(prev) === 'done' ? ' Nesta obra já está.' : ' Nesta obra ainda não está.') : ''}`
+    : 'Antes disto não há nada: é aqui que tudo começa.');
+  out.push(`Aqui: ${s.actions.slice(0, 3).map((a) => a.charAt(0).toLowerCase() + a.slice(1)).join('; ')}.`);
+  out.push(next ? `Depois, segue para ${next.kind === 'gate' ? 'o portão' : 'o passo'} «${next.title}», de ${procRoleName(next.raci.A)}.` : 'Depois, o que se aprendeu volta para a Orçamentação da próxima obra.');
+  out.push(`A norma: ${s.iso.map((x) => 'ISO ' + x).join(', ')}${st.nuclear && s.nuclear.length ? ', e a ISO 19443 por ser nuclear' : ''}.`);
+  return out;
+}
+function procCard() {
+  const el = $('#pcard'); if (!el) return;
+  const st = state.proc; const chain = procChain(); const i = chain.findIndex((s) => s.code === st.step); const s = chain[i];
+  const prev = chain[i - 1]; const next = chain[i + 1]; const stt = procStatus(s); const role = procMyRole(s);
+  const screens = (s.screens || []).filter((v) => { const b = nav.querySelector(`button[data-view="${v}"]`); return b && !b.hidden; });
+  const who = (k, list) => list && list.length ? `<dt>${k}</dt><dd>${list.map((c) => `<span class="chip ${k === 'Aprova' ? 'fech' : 'reg'}">${esc(procRoleName(c))}</span>`).join('')}</dd>` : '';
+  el.className = 'card proc-card'; el.setAttribute('aria-live', 'polite');
+  el.innerHTML = `<div class="proc-card-h"><p class="ph-k">${s.kind === 'gate' ? 'Portão' : 'Passo'} ${i + 1} de ${chain.length}${stt === 'done' ? ' · ' + chip('ok', 'Feito') : stt === 'now' ? ' · ' + chip('warn', 'A obra está aqui') : ''}${role ? ' · ' + chip('info', RACI_YOU[role]) : ''}</p>
+      <h3>${esc(s.title)}</h3><p class="muted">${esc(s.lead)}</p></div>
+    <div class="proc-nav"><button type="button" class="btn ghost small" ${prev ? `data-go="${esc(prev.code)}"` : 'disabled'}><span>← Antes</span><b>${esc(prev ? prev.title : 'Início')}</b></button>
+      <button type="button" class="btn ghost small" ${next ? `data-go="${esc(next.code)}"` : 'disabled'}><span>Depois →</span><b>${esc(next ? next.title : 'Volta à Orçamentação')}</b></button></div>
+    ${s.block ? `<p class="proc-block">${ic('lock')}${esc(s.block)}</p>` : ''}
+    <h4>O que se faz aqui</h4><ul class="proc-list">${s.actions.map((a) => `<li>${esc(a)}</li>`).join('')}
+      ${st.nuclear ? s.nuclear.map((a) => `<li class="nuc">${chip('nuc', 'Nuclear')} ${esc(a)}</li>`).join('') : ''}</ul>
+    <h4>Prova que fica guardada</h4><ul class="proc-list ev">${(s.evidence || []).map((e) => `<li>${e.auto ? chip('info', 'Automático') + ' ' : ''}${esc(e.t)}</li>`).join('')}</ul>
+    ${s.auto ? `<p class="proc-auto">${ic('auto')}<span><b>Sem papéis:</b> ${esc(s.auto)}</span></p>` : ''}
+    <h4>Quem</h4><dl class="proc-raci">${who('Aprova', [s.raci.A])}${who('Faz', s.raci.R)}${who('Consulta', s.raci.C)}${who('Informa', s.raci.I)}</dl>
+    <h4>Norma</h4><div class="proc-iso">${s.iso.map((x) => `<span class="chip code">ISO ${esc(x)}</span>`).join('')}${st.nuclear && s.nuclear.length ? '<span class="chip code nuc">ISO 19443</span><span class="chip code nuc">10 CFR 50 Anexo B</span>' : ''}</div>
+    <div class="proc-bot"><div class="bot-3d small">${botFace(st.bot.look)}</div><div class="grow"><b>${esc(st.bot.name)} explica</b>${procExplain(s.code).map((p) => `<p>${esc(p)}</p>`).join('')}</div></div>
+    <div class="acts">${screens.map((v) => `<button type="button" class="btn ghost small" data-open="${esc(v)}">${ic('go')}Abrir ${esc(nav.querySelector(`button[data-view="${v}"]`).textContent.trim())}</button>`).join('')}
+      ${!(s.screens || []).length ? '<span class="chip reg">Ecrã deste passo: em construção</span>' : ''}
+      <button type="button" class="btn ghost small" id="phear">${ic('voice')}Ouvir ${esc(st.bot.name)}</button></div>`;
+  el.querySelectorAll('[data-go]').forEach((b) => b.onclick = () => { Voice.stop(); st.step = b.dataset.go; renderProcess(); const c = $('#pcard'); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); });
+  el.querySelectorAll('[data-open]').forEach((b) => b.onclick = () => go(b.dataset.open));
+  el.querySelector('#phear').onclick = () => { if (!Voice.ok()) return toast('Este navegador não tem voz.'); Voice.say(procExplain(s.code).join(' '), { face: el.querySelector('.botface') }); };
+}
+// The questions people ask most, each answered from the map. The first ones follow the roles this login plays.
+function procQuestions() {
+  const m = state.proc.map; const qs = [];
+  for (const r of m.roles.filter((x) => x.mine)) qs.push({ q: `Sou de ${r.name}: o que é meu?`, role: r.code });
+  qs.push({ q: 'Vou orçamentar. E antes, e depois?', step: 'S3' }, { q: 'Vou faturar. O que tem de estar feito?', step: 'S9' },
+    { q: 'Posso começar a obra?', step: 'P4' }, { q: 'Chegou a encomenda do cliente', step: 'P3' });
+  return qs.filter((q) => !q.step || m.steps.some((s) => s.code === q.step)).slice(0, 7);
+}
+function procAnswer() {
+  const el = $('#pans'); if (!el) return;
+  const st = state.proc; const q = procQuestions()[st.ask] || procQuestions()[0]; let lines;
+  if (q.role) {
+    const chain = procChain(); const by = (k) => chain.filter((s) => procRole(s, q.role) === k).map((s) => `«${s.title}»`);
+    const a = by('A'); const r = by('R'); const ctl = st.map.steps.filter((s) => s.kind === 'control');
+    lines = [`${procRoleName(q.role)} aprova ${a.length ? a.join(', ') : 'nenhum passo'}${r.length ? `, e faz ${r.join(', ')}` : ''}.`,
+      `${by('C').length} passos pedem a vossa opinião e ${by('I').length} só vos informam.`];
+    if (q.role === 'QUA') lines.push(`A Qualidade também é dona de ${ctl.filter((s) => /não conform|calibra|document|arquivo/i.test(s.title)).map((s) => s.title.toLowerCase()).join(', ')}, que correm por baixo de toda a obra. Responde à Direção e não à Produção, para poder parar a obra.`);
+    lines.push('Toca em «O meu papel», em cima, para ver só esses passos.');
+  } else lines = procExplain(q.step);
+  el.innerHTML = `<div class="proc-bot"><div class="bot-3d small">${botFace(st.bot.look)}</div><div class="grow"><b>${esc(st.bot.name)}</b>${lines.map((p) => `<p>${esc(p)}</p>`).join('')}
+    <div class="acts"><button type="button" class="btn ghost small" id="pahear">${ic('voice')}Ouvir</button>${q.step ? `<button type="button" class="btn ghost small" id="pago">Ver no mapa</button>` : ''}</div></div></div>`;
+  el.querySelector('#pahear').onclick = () => { if (!Voice.ok()) return toast('Este navegador não tem voz.'); Voice.say(lines.join(' '), { face: el.querySelector('.botface') }); };
+  if (q.step) el.querySelector('#pago').onclick = () => { st.step = q.step; renderProcess(); const c = $('#pcard'); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+}
+async function setSiteGrade() {
+  const s = state.proc.map.site; if (!s) return;
+  const fd = await askSheet('Grau da obra', `<p class="small muted">O grau liga os controlos da qualidade nuclear (ISO 19443) nesta obra. Muda-se com o código do telemóvel e fica registado.</p>
+    <div class="chips reasons" role="radiogroup">${Object.entries(GRADES).map(([k, t]) => `<label class="chip"><input type="radio" name="g" value="${k}" ${s.grade === k ? 'checked' : ''} required>${esc(t)}</label>`).join('')}
+      <label class="chip"><input type="radio" name="g" value="" ${!s.grade ? 'checked' : ''}>Sem grau</label></div>`, 'Guardar');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_set_site_grade', { p_site: s.id, p_grade: fd.get('g') || null });
+  if (error) return toast(friendly(error));
+  toast('Grau da obra guardado.'); state.proc.siteSeen = null; viewProcess();
 }

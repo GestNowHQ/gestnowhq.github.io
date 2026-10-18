@@ -45,12 +45,15 @@
     <symbol id="i-user" viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0"/></symbol>
     <symbol id="i-bot" viewBox="0 0 24 24"><path d="M4 5h16v11H9.5L5 20v-4H4zM9 10.5h.01M12 10.5h.01M15 10.5h.01" stroke-width="2"/></symbol>
     <symbol id="i-voice" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4zM15.5 9.5a3.5 3.5 0 0 1 0 5M18 7a7 7 0 0 1 0 10"/></symbol>
+    <symbol id="i-map" viewBox="0 0 24 24"><circle cx="5" cy="6" r="2.2"/><circle cx="19" cy="18" r="2.2"/><path d="M7.2 6H15a3 3 0 0 1 0 6H9a3 3 0 0 0 0 6h7.8"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01"/></symbol>
     <symbol id="i-mute" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4zM16 10l4.5 4.5M20.5 10 16 14.5"/></symbol>
   </svg>
   <header class="top">
     <div class="brand"><svg class="logo" viewBox="0 0 44 44" aria-hidden="true"><defs><linearGradient id="lgT" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#818cf8"/><stop offset="1" stop-color="#4338ca"/></linearGradient></defs><rect width="44" height="44" rx="12" fill="url(#lgT)"/><path d="M31.5 15.2A11 11 0 1 0 33 22" fill="none" stroke="#fff" stroke-width="4.6" stroke-linecap="round"/><path d="M22.5 22H27" stroke="#fff" stroke-width="4.6" stroke-linecap="round"/><circle cx="33" cy="22" r="3.3" fill="#fbbf24"/></svg><strong>GestNow <span>Mini</span></strong></div>
     <div id="net" class="net" hidden></div>
     <button id="search" class="search" type="button" hidden aria-label="Procurar pessoas, obras e ecrãs"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg><span>Procurar…</span><kbd>Ctrl K</kbd></button>
+    <button id="help" class="iconbtn" type="button" hidden aria-label="Onde estou no processo" title="Onde estou no processo"><svg class="i"><use href="#i-help"/></svg></button>
     <button id="sol" class="iconbtn" type="button" hidden aria-pressed="false" aria-label="Modo sol (alto contraste)" title="Modo sol (alto contraste)"><svg class="i"><use href="#i-sun"/></svg></button>
     <button id="whoami" class="who" type="button" hidden></button>
   </header>
@@ -70,6 +73,7 @@
       <button data-view="minhas" hidden><svg class="i" aria-hidden="true"><use href="#i-clock"/></svg><span>As minhas horas</span></button>
       <button data-view="acolhimento" hidden><svg class="i" aria-hidden="true"><use href="#i-play"/></svg><span>Acolhimento</span></button>
       <button data-view="obras"><svg class="i" aria-hidden="true"><use href="#i-crane"/></svg><span>Obras</span></button>
+      <button data-view="processo" hidden><svg class="i" aria-hidden="true"><use href="#i-map"/></svg><span>Processo</span></button>
       <button data-view="clientes" hidden><svg class="i" aria-hidden="true"><use href="#i-key"/></svg><span>Clientes</span></button>
       <button data-action="tour" class="tourbtn"><svg class="i" aria-hidden="true"><use href="#i-bot"/></svg><span>Visita guiada</span></button>
       <button data-action="sair" class="out"><svg class="i" aria-hidden="true"><use href="#i-out"/></svg><span>Sair</span></button>
