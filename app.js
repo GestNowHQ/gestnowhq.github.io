@@ -381,7 +381,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '21';
+const APP_VERSION = '22';
 const TABS = { supervisor: ['picar', 'naobra', 'horas', 'trabalhadores'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['seguranca', 'naobra', 'trabalhadores', 'picar'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -567,13 +567,36 @@ function showNetworkError() {
 }
 // Before login: brand background, logo, one white card. No menu, no data.
 function signedOut(on) { document.body.classList.toggle('signed-out', !!on); }
+const LOGO = (id) => `<svg viewBox="0 0 44 44" aria-hidden="true"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#818cf8"/><stop offset="1" stop-color="#4338ca"/></linearGradient></defs><rect width="44" height="44" rx="12" fill="url(#${id})"/><path d="M12 27a10 10 0 0 1 20 0v2H12z" fill="#fff"/><path d="M20.6 17.1h2.8V27h-2.8z" fill="#4f46e5" opacity=".35"/><rect x="10" y="28.6" width="24" height="3.8" rx="1.9" fill="#fff"/><circle cx="34" cy="10" r="3.2" fill="#fbbf24"/></svg>`;
+// Before login: the shop window. Left (computer) or top (phone) sells the app; the card only asks for what is needed.
+// Marketing only: no menu, no data, nothing that needs a session.
 function authScreen(inner) {
   signedOut(true);
   const online = navigator.onLine !== false;
-  app.innerHTML = `<div class="auth"><div class="logo-big"><svg viewBox="0 0 44 44" aria-hidden="true"><rect width="44" height="44" rx="12" fill="#f5b301"/><path d="M11 26a11 11 0 0 1 22 0v3H11z" fill="#0f1d1c"/><rect x="9" y="28" width="26" height="4" rx="2" fill="#0f1d1c"/></svg>
-    <div><b>GestNow Mini</b><span>Picagem e horas da obra</span></div></div>
-    <div class="card">${inner}</div>
-    <p class="foot"><i class="${online ? '' : 'off'}"></i>${online ? 'Ligado à rede' : 'Sem rede'}</p></div>`;
+  const feat = (i, b, t) => `<li><span class="fi">${ic(i)}</span><div><b>${b}</b><small>${t}</small></div></li>`;
+  app.innerHTML = `<div class="auth">
+    <aside class="auth-hero">
+      <div class="logo-big">${LOGO('lgA')}<div><b>GestNow</b><span>Operações de obra industrial</span></div></div>
+      <div class="auth-pitch">
+        <h2>A obra inteira,<br><em>num toque.</em></h2>
+        <p>Picagem por cartão, horas validadas e documentos em dia. Feito para equipas que não podem parar.</p>
+        <ul class="feats">
+          ${feat('tap', 'Picar num segundo', 'O cartão encosta ao telemóvel. Sem rede, guarda e envia depois.')}
+          ${feat('clock', 'Horas sem papel', 'O encarregado valida a semana e o escritório fecha o mês.')}
+          ${feat('shield', 'Ninguém entra sem documentos', 'Validades controladas, entrada bloqueada quando algo falta.')}
+        </ul>
+      </div>
+      <div class="demo" aria-hidden="true">
+        <div class="phone"><div class="scr"><small>PICAR</small><b>07:58</b><div class="ring"><span></span><span></span>${ic('tap')}</div></div></div>
+        <div class="tag-card"><i></i><span>GestNow</span></div>
+        <div class="ok-pill">${ic('ok')}<div><b>Entrada registada</b><small>07:58 · Obra Exemplo</small></div></div>
+      </div>
+    </aside>
+    <section class="auth-main">
+      <div class="card">${inner}</div>
+      <p class="trust">${ic('shield')}<span>Dados alojados na UE</span><span>RGPD</span><span>Verificação em 2 passos</span></p>
+      <p class="foot"><i class="${online ? '' : 'off'}"></i>${online ? 'Ligado à rede' : 'Sem rede'}</p>
+    </section></div>`;
 }
 
 const AUTH_LOST = /permission denied|JWT|not authenticated|401/i;
@@ -602,10 +625,10 @@ function showMessage(title, text, withLogout) {
 function showLogin() {
   nav.hidden = true;
   authScreen(`<h1>Entrar</h1>${state.idleOut ? `<div class="result warn">${ic('clock')}<div>Saíste automaticamente por estares sem mexer na app. Entra outra vez.</div></div>`
-      : '<p class="muted" style="margin-top:-6px">Com o email e a palavra-passe da empresa.</p>'}
+      : '<p class="muted lead">Entra com o email e a palavra-passe da empresa.</p>'}
     <form id="f"><label for="em">Email</label><input id="em" name="email" type="email" autocomplete="username" inputmode="email" required>
     <label for="pw">Palavra-passe</label><input id="pw" name="password" type="password" autocomplete="current-password" required>
-    <p style="margin-top:20px"><button class="btn big acc">Entrar</button></p></form>`);
+    <p style="margin-top:22px"><button class="btn big go">Entrar ${ic('go')}</button></p></form>`);
   $('#f').onsubmit = async (e) => {
     e.preventDefault();
     const f = new FormData(e.target);
