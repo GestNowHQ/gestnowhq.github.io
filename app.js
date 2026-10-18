@@ -381,7 +381,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '22';
+const APP_VERSION = '23';
 const TABS = { supervisor: ['picar', 'naobra', 'horas', 'trabalhadores'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['seguranca', 'naobra', 'trabalhadores', 'picar'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -567,7 +567,7 @@ function showNetworkError() {
 }
 // Before login: brand background, logo, one white card. No menu, no data.
 function signedOut(on) { document.body.classList.toggle('signed-out', !!on); }
-const LOGO = (id) => `<svg viewBox="0 0 44 44" aria-hidden="true"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#818cf8"/><stop offset="1" stop-color="#4338ca"/></linearGradient></defs><rect width="44" height="44" rx="12" fill="url(#${id})"/><path d="M12 27a10 10 0 0 1 20 0v2H12z" fill="#fff"/><path d="M20.6 17.1h2.8V27h-2.8z" fill="#4f46e5" opacity=".35"/><rect x="10" y="28.6" width="24" height="3.8" rx="1.9" fill="#fff"/><circle cx="34" cy="10" r="3.2" fill="#fbbf24"/></svg>`;
+const LOGO = (id) => `<svg viewBox="0 0 44 44" aria-hidden="true"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#818cf8"/><stop offset="1" stop-color="#4338ca"/></linearGradient></defs><rect width="44" height="44" rx="12" fill="url(#${id})"/><path d="M31.5 15.2A11 11 0 1 0 33 22" fill="none" stroke="#fff" stroke-width="4.6" stroke-linecap="round"/><path d="M22.5 22H27" stroke="#fff" stroke-width="4.6" stroke-linecap="round"/><circle cx="33" cy="22" r="3.3" fill="#fbbf24"/></svg>`;
 // Before login: the shop window. Left (computer) or top (phone) sells the app; the card only asks for what is needed.
 // Marketing only: no menu, no data, nothing that needs a session.
 function authScreen(inner) {
