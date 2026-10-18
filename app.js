@@ -381,11 +381,11 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '23';
-const TABS = { supervisor: ['picar', 'naobra', 'horas', 'trabalhadores'], admin: ['picar', 'painel', 'horas', 'secretariado'],
+const APP_VERSION = '24';
+const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['seguranca', 'naobra', 'trabalhadores', 'picar'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
-const MORE_ORDER = ['picar', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'obras'];
+const MORE_ORDER = ['equipa', 'picar', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'obras'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -517,6 +517,9 @@ async function boot() {
   nav.querySelectorAll('button[data-view]').forEach((b) => { if (b.dataset.view !== 'minhas' && b.dataset.view !== 'secretariado') b.hidden = worker; });
   nav.querySelector('[data-view=minhas]').hidden = !me.collaborator_id;
   nav.querySelector('[data-view=painel]').hidden = worker || !canSiteDetails();
+  nav.querySelector('[data-view=equipa]').hidden = me.role !== 'supervisor' || !canSiteDetails();
+  if (me.role === 'supervisor' && !state.booted && state.view === 'picar' && canSiteDetails()) state.view = 'equipa';
+  state.booted = true;
   if (state.view === 'minhas' && !me.collaborator_id) state.view = (TABS[me.role] || TABS.supervisor)[0];
   layoutNav(me.role);
   signedOut(false); nav.hidden = false; document.getElementById('sol').hidden = false; document.getElementById('search').hidden = me.role === 'worker'; showNet();
@@ -536,7 +539,7 @@ const BRIEF_KEY = 'gestnow.brief';
 async function showBrief() {
   if (state.offline || !state.me || state.me.role === 'worker' || !canSiteDetails()) return;
   const key = state.me.user_id + ':' + isoDay(new Date());
-  if (load(BRIEF_KEY, '') === key || state.view === 'painel') return;
+  if (load(BRIEF_KEY, '') === key || state.view === 'painel' || state.view === 'equipa') return;
   const { data, error } = await sb.rpc('mini_control_room');
   if (error || !data || !Array.isArray(data.sites) || !state.ready || state.view === 'painel' || $('#brief')) return;
   store(BRIEF_KEY, key);
@@ -847,7 +850,51 @@ function go(view) {
   nav.querySelector('button[data-more]').classList.toggle('on', !!cur && cur.parentElement.id === 'more');
   window.scrollTo(0, 0);
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
-     ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine }[view] || viewClock)();
+     ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, equipa: viewTeam }[view] || viewClock)();
+}
+
+// ------------------------------------------------------------------ A minha equipa (the team leader's start screen)
+// One site at a time: who is in, who has not arrived, who may not enter, and what is waiting for the team leader.
+function viewTeam() {
+  if (!canSiteDetails()) return viewClock();   // code guard as well as the database's
+  const today = new Date().toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long' });
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">${esc(today)}</p><h1>A minha equipa</h1></div></div>
+    <div class="team-site">${siteSelect('tsite')}</div>
+    <div id="tkpis">${skel(1)}</div>
+    <div class="team-acts"><button class="btn big" id="tpic">${ic('tap')}Picar a equipa</button><button class="btn big ghost" id="tval">${ic('ok')}Validar a semana</button></div>
+    <div id="talert"></div>
+    <div class="sec-h"><h2 class="eyebrow">Hoje na obra</h2></div><div id="tlist">${skel(4)}</div>`;
+  bindSiteSelect('tsite', loadTeam);
+  $('#tpic').onclick = () => go('picar');
+  $('#tval').onclick = () => go('horas');
+  loadTeam();
+  state.timer = setInterval(() => { if (state.view === 'equipa' && document.visibilityState === 'visible') loadTeam(); }, 60000);
+}
+let teamSeq = 0;
+async function loadTeam() {
+  const site = currentSite(); const el = $('#tlist'); if (!el) return;
+  if (!site) { el.innerHTML = `<div class="card">${empty('box', 'Sem obras abertas', 'Quando tiveres uma obra, a tua equipa aparece aqui.')}</div>`; $('#tkpis').innerHTML = ''; return; }
+  const seq = ++teamSeq; const tz = siteTz(site.id);
+  const [{ data: team, error }, room] = await Promise.all([sb.rpc('mini_team_today', { p_project: site.id }), sb.rpc('mini_control_room')]);
+  if (seq !== teamSeq || !el.isConnected) return;
+  if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  const s = ((room.data && room.data.sites) || []).find((x) => x.id === site.id) || {};
+  const n = (k) => team.filter((p) => p.state === k).length;
+  const blocked = team.filter((p) => p.blocked).length;
+  $('#tkpis').innerHTML = `<div class="kpis k4 team-kpis">
+    <div class="kpi ok"><b>${n('in')}<small>/${team.length}</small></b><span>na obra agora</span></div>
+    <div class="kpi ${n('absent') ? 'warn' : ''}"><b>${n('absent')}</b><span>ainda não chegaram</span></div>
+    <div class="kpi ${blocked ? 'bad' : ''}"><b>${blocked}</b><span>não podem entrar</span></div>
+    <button class="kpi ${s.to_validate ? 'info' : ''}" data-go="horas"><b>${s.to_validate || 0}</b><span>dias por validar</span></button></div>`;
+  $('#tkpis').querySelector('[data-go]').onclick = () => go('horas');
+  $('#talert').innerHTML = s.missing_out ? `<div class="result warn">${ic('warn')}<div><b>${s.missing_out} saída(s) em falta nos últimos 7 dias</b>Marca-as em Horas, com o motivo.</div></div>` : '';
+  if (!team.length) { el.innerHTML = `<div class="card">${empty('box', 'Ninguém atribuído a esta obra', 'O escritório atribui as pessoas à obra em Pessoas.')}</div>`; return; }
+  const ST = { in: (p) => chip('val', 'na obra desde ' + fmtHour(p.first_in, tz), 'ok'), left: (p) => chip('', 'saiu às ' + fmtHour(p.last_at, tz)),
+    absent: () => chip('reg', 'ainda não picou') };
+  el.innerHTML = `<div class="card team-list">${team.map((p) => `<button class="tm ${p.state}" data-id="${esc(p.id)}">
+      <span class="tm-av">${avatar(p.name)}<i></i></span><span class="grow"><b>${esc(p.name)}</b><small>${esc(p.number || '')}</small></span>
+      <span class="tags">${p.blocked ? chip('anom', 'não pode entrar: faltam documentos', 'warn') : ST[p.state](p)}</span></button>`).join('')}</div>`;
+  el.querySelectorAll('[data-id]').forEach((b) => b.onclick = () => { state.worker = b.dataset.id; go('ficha'); });
 }
 
 // ------------------------------------------------------------------ Picar
@@ -1948,37 +1995,148 @@ async function markOut(p) {
 }
 
 // ------------------------------------------------------------------ As minhas horas (any profile with a person behind it)
-// What the worker sees of their own month: each day, where, from when to when, the hours and how far the validation went.
+// The worker's start screen: today, the week, the month in big numbers, a calendar of the month, what they will earn
+// (only if the company switches it on), the site card and the diárias. Every number comes from the official taps.
+const MINE_STATE = { registered: 'por validar', supervisor_validated: 'validado na obra', hr_validated: 'aprovado no escritório', sent_to_payroll: 'fechado para salários' };
 function viewMine() {
   if (!state.me.collaborator_id) return go((TABS[state.me.role] || TABS.supervisor)[0]);
   if (!state.mineMonth) state.mineMonth = isoDay(new Date()).slice(0, 7);
-  const months = [0, 1, 2].map((k) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - k); return isoDay(d).slice(0, 7); });
+  const months = [0, 1, 2].map((k) => { const d = new Date(); d.setDate(15); d.setMonth(d.getMonth() - k); return isoDay(d).slice(0, 7); });
   const mName = (ym) => new Date(ym + '-15T12:00:00').toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' });
-  app.innerHTML = `<div class="ph"><div><p class="ph-k">${esc(((state.people.find((x) => x.id === state.me.collaborator_id) || {}).full_name) || '')}</p><h1>As minhas horas</h1></div></div>
+  const me = state.people.find((x) => x.id === state.me.collaborator_id);
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">${esc((me && me.full_name) || '')}</p><h1>As minhas horas</h1></div></div>
     <div class="chips" style="margin-bottom:12px">${months.map((m) => `<button class="chip" data-m="${m}" aria-pressed="${m === state.mineMonth}">${esc(mName(m))}</button>`).join('')}</div>
-    <div id="pdmine"></div>
-    <div id="mine">${skel(3)}</div>`;
+    <div class="mine-grid"><div><div id="minetop">${skel(1)}</div><div id="minepay"></div><div id="mine">${skel(3)}</div></div>
+    <div><div id="minesite"></div><div id="pdmine"></div></div></div>`;
   loadMyPerDiems();
   app.querySelectorAll('[data-m]').forEach((b) => b.onclick = () => { state.mineMonth = b.dataset.m; viewMine(); });
   loadMine();
+  state.timer = setInterval(() => { if (state.view === 'minhas' && document.visibilityState === 'visible') loadMine(true); }, 60000);
 }
-async function loadMine() {
-  const ym = state.mineMonth; const { from, to } = monthRange(ym);
-  const { data, error } = await sb.rpc('mini_my_hours', { p_from: from, p_to: to });
+async function loadMine(quiet) {
+  const ym = state.mineMonth;
+  const { data: d, error } = await sb.rpc('mini_my_home', { p_month: ym + '-01' });
   const el = $('#mine'); if (!el || ym !== state.mineMonth) return;
-  if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
-  if (!data.length) { el.innerHTML = `<div class="card">${empty('clock', 'Sem horas neste mês', 'Os dias aparecem aqui depois de picares na obra.')}</div>`; return; }
-  const tot = data.reduce((a, r) => ({ w: a.w + r.worked_minutes, o: a.o + r.overtime_minutes, s: a.s + r.special_day_minutes }), { w: 0, o: 0, s: 0 });
-  const done = data.filter((r) => r.status !== 'registered').length;
-  el.innerHTML = `<div class="card"><div class="day-h"><span class="d">Total do mês</span><span class="hrs">${esc(fmtMin(tot.w))}</span></div>
-      <p class="small muted">${tot.o ? esc(fmtMin(tot.o)) + ' extra · ' : ''}${tot.s ? esc(fmtMin(tot.s)) + ' em descanso ou feriado · ' : ''}${done} de ${data.length} dia(s) já validado(s)</p></div>
-    <div class="card">${data.map((r) => { const tz = r.timezone || DEFAULT_TZ; return `<div class="day">
-      <div class="day-h"><span class="d">${esc(dayLabel(r.shift_date))}</span><span class="chip code">${esc(r.project_code)}</span>
-        <span class="hrs">${esc(fmtMin(r.worked_minutes))}</span></div>
-      <div class="per">${esc(fmtHour(r.first_in, tz) || '?')}–${esc(fmtHour(r.last_out, tz) || '?')} <span class="small muted">· ${esc(r.project_title)}</span></div>
-      <div class="tags">${r.anomalies.length ? chip('anom', 'falta uma picagem', 'warn') : DAY_STATUS[r.status] || chip('', r.status)}
-        ${r.overtime_minutes ? chip('info', fmtMin(r.overtime_minutes) + ' extra') : ''}${r.is_holiday ? chip('info', 'feriado') : r.is_rest_day ? chip('info', 'dia de descanso') : ''}</div></div>`; }).join('')}</div>
-    <p class="small muted">Se faltar um dia ou uma hora estiver errada, fala com o teu encarregado: ele corrige com o motivo.</p>`;
+  if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; $('#minetop').innerHTML = ''; return; }
+  state.mineData = d;
+  $('#minetop').innerHTML = mineHero(d);
+  $('#minepay').innerHTML = minePay(d);
+  $('#minesite').innerHTML = mineSite(d.site);
+  if (quiet && el.dataset.ym === ym) return;
+  el.dataset.ym = ym;
+  const t = d.totals || {};
+  const openNow = (r) => r.anomalies.length > 0 && r.anomalies.every((a) => a === 'open_shift') && r.date >= (d.today || {}).date;
+  if (!d.days.length) { el.innerHTML = `<div class="card">${empty('clock', 'Sem horas neste mês', 'Os dias aparecem aqui depois de picares na obra.')}</div>`; return; }
+  el.innerHTML = `<div class="kpis k4 mine-kpis">
+      <div class="kpi big"><b>${esc(fmtMin(t.worked))}</b><span>Total do mês</span></div>
+      <div class="kpi info"><b>${esc(fmtMin(t.overtime))}</b><span>horas extra</span></div>
+      <div class="kpi"><b>${t.days}</b><span>dias trabalhados</span></div>
+      <div class="kpi ${t.validated === t.rows ? 'ok' : 'warn'}"><b>${t.validated}<small>/${t.rows}</small></b><span>${t.validated} de ${t.rows} dia(s) já validado(s)</span></div></div>
+    ${(t.special || t.night) ? `<p class="small muted mine-extra">${t.special ? esc(fmtMin(t.special)) + ' em descanso ou feriado' : ''}${t.special && t.night ? ' · ' : ''}${t.night ? esc(fmtMin(t.night)) + ' à noite' : ''}</p>` : ''}
+    <div class="card cal-card"><div class="sec-h" style="margin-top:0"><h2>Calendário</h2><span class="small muted">Toca num dia para ver tudo</span></div>
+      ${mineCalendar(d)}
+      <div class="cal-legend"><span><i class="ok"></i>validado</span><span><i class="todo"></i>por validar</span><span><i class="bad"></i>falta picagem</span><span><i class="off"></i>folga ou feriado</span></div></div>
+    <div class="card">${d.days.map((r) => { const tz = r.tz || DEFAULT_TZ; return `<button class="day mday" data-day="${esc(r.date)}">
+      <div class="day-h"><span class="d">${esc(dayLabel(r.date))}</span><span class="chip code">${esc(r.code)}</span>
+        <span class="hrs">${esc(fmtMin(r.worked))}</span></div>
+      <div class="per">${esc(fmtHour(r.first_in, tz) || '?')}–${esc(fmtHour(r.last_out, tz) || '?')} <span class="small muted">· ${esc(r.title)}</span></div>
+      <div class="tags">${openNow(r) ? chip('val', 'a decorrer', 'clock') : r.anomalies.length ? chip('anom', 'falta uma picagem', 'warn') : DAY_STATUS[r.status] || chip('', r.status)}
+        ${r.overtime ? chip('info', fmtMin(r.overtime) + ' extra' + (r.ot_ok === null ? ' (por aprovar)' : '')) : ''}${r.holiday ? chip('info', 'feriado') : r.rest ? chip('info', 'dia de descanso') : ''}
+        ${r.changed ? chip('', 'corrigido', 'key') : ''}</div></button>`; }).join('')}</div>
+    <p class="small muted">Se faltar um dia ou uma hora estiver errada, fala com o teu encarregado: ele corrige com o motivo, e tu vês aqui quem mudou e porquê.</p>`;
+  el.querySelectorAll('[data-day]').forEach((b) => b.onclick = () => mineDay(b.dataset.day));
+}
+// Today: in since when, hours so far against a normal day, and the week as bars.
+function mineHero(d) {
+  const t = d.today || {}; const tz = (d.site && state.sites.find((s) => s.id === d.site.id) || {}).timezone || DEFAULT_TZ;
+  const h = tzParts(Date.now(), tz).hour % 24;
+  const hello = (h >= 6 && h < 13 ? 'Bom dia' : h >= 13 && h < 20 ? 'Boa tarde' : 'Boa noite') + ', ' + String(d.name || '').split(' ')[0];
+  const inNow = t.last === 'in';
+  let so = 0;
+  for (let i = 0, open = null; i < (t.events || []).length; i++) {
+    const e = t.events[i];
+    if (e.dir === 'in') open = new Date(e.at).getTime();
+    else if (open !== null) { so += (new Date(e.at).getTime() - open) / 60000; open = null; }
+    if (i === t.events.length - 1 && open !== null) so += (Date.now() - open) / 60000;
+  }
+  so = Math.max(0, Math.round(so));
+  const pct = Math.min(100, Math.round((so / (t.normal_day || 480)) * 100));
+  const status = inNow ? `Na obra desde as <b>${esc(fmtHour(t.first_in, tz))}</b>`
+    : t.last === 'out' ? `Saíste às <b>${esc(fmtHour(t.last_at, tz))}</b>` : 'Ainda não picaste hoje';
+  const wk = d.week || []; const wmax = Math.max(600, ...wk.map((x) => x.worked)); const wsum = wk.reduce((a, x) => a + (x.date === t.date ? Math.max(x.worked, so) : x.worked), 0);
+  const today = t.date;
+  return `<section class="pic-hero mine-hero">
+    <div class="pic-top"><h1>${esc(hello)}</h1>${inNow ? '<span class="live"><i></i>na obra</span>' : ''}</div>
+    <div class="mh-now"><div class="mh-big">${esc(fmtMin(so))}</div><div class="mh-sub">${status}${d.site ? ` · ${esc(d.site.title)}` : ''}</div></div>
+    <div class="mh-bar" role="img" aria-label="${pct}% de um dia normal"><i style="width:${pct}%"></i></div>
+    <div class="mh-bl"><span>hoje</span><span>dia normal ${esc(fmtMin(t.normal_day || 480))}</span></div>
+    <div class="mh-week"><div class="mh-wh"><span>Esta semana</span><b>${esc(fmtMin(wsum))}</b></div>
+      <div class="mh-bars">${wk.map((x, i) => `<div class="${x.date === today ? 'today' : ''}"><i style="height:${(x.date === today ? Math.max(x.worked, so) : x.worked) ? Math.max(8, Math.round(((x.date === today ? Math.max(x.worked, so) : x.worked) / wmax) * 100)) : 0}%"></i><span>${['S', 'T', 'Q', 'Q', 'S', 'S', 'D'][i]}</span></div>`).join('')}</div></div>
+  </section>`;
+}
+// What I will earn: only when the company switches it on. Gross, indicative, with the sums shown.
+function minePay(d) {
+  const p = d.pay; if (!p) return '';
+  const mName = new Date(d.from + 'T12:00:00').toLocaleDateString('pt-PT', { month: 'long' });
+  if (p.state === 'no_rate') return `<div class="card pay"><h2 style="margin-top:0">Quanto vou ganhar</h2><p class="small muted">A empresa ainda não registou o teu valor à hora. Pede ao escritório.</p></div>`;
+  const row = (label, v, sub) => Number(v) ? `<div class="pay-r"><span>${esc(label)}${sub ? `<small>${esc(sub)}</small>` : ''}</span><b>${esc(euro(v))}</b></div>` : '';
+  const conf = Number(p.total) ? Math.round((Number(p.confirmed) / Number(p.total)) * 100) : 0;
+  return `<div class="card pay"><div class="pay-h"><span>Quanto vou ganhar em ${esc(mName)}</span>${chip('', 'estimativa')}</div>
+    <div class="pay-big">${esc(euro(p.total))}</div>
+    <div class="pay-conf"><i style="width:${conf}%"></i></div>
+    <p class="small muted" style="margin:6px 0 12px">${esc(euro(p.confirmed))} já confirmados pelo encarregado ou pelo escritório</p>
+    ${row('Horas normais', p.normal, euro(p.rate) + ' à hora')}
+    ${row('Horas extra aprovadas', p.overtime, p.own_ot_rate ? 'valor da empresa' : '1.ª hora +25 %, seguintes +37,5 %')}
+    ${row('Descanso e feriados', p.special, '+50 %')}
+    ${row('Noite', p.night, 'acréscimo')}
+    ${row('Diárias', p.per_diems, 'emitidas para pagamento')}
+    ${Number(p.overtime_pending) ? `<div class="pay-r pend"><span>Horas extra por aprovar<small>entram quando forem aprovadas</small></span><b>+${esc(euro(p.overtime_pending))}</b></div>` : ''}
+    ${more('Como faço estas contas', '<p>As tuas horas oficiais (as do cartão) vezes o teu valor à hora. Horas extra com as regras de Portugal (Código do Trabalho, art. 268.º): +25 % na 1.ª hora do dia, +37,5 % nas seguintes, +50 % em descanso ou feriado, e mais acima das 100 horas do ano.</p><p>É um valor <b>bruto e indicativo</b>: não tira IRS nem Segurança Social, e o contrato coletivo pode ter outras regras. O recibo de vencimento é o que conta.</p>')}</div>`;
+}
+// The site: where it is, a button to the map, and who to call.
+function mineSite(s) {
+  if (!s) return '';
+  const q = s.lat && s.lng ? `${s.lat},${s.lng}` : [s.address, s.municipality].filter(Boolean).join(', ');
+  const map = q ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(q)}` : '';
+  const tel = (n) => `tel:${String(n).replace(/[^\d+]/g, '')}`;
+  const who = (name, role, phone) => name ? `<div class="contact">${avatar(name)}<div class="grow"><b>${esc(name)}</b><small>${esc(role)}</small></div>
+      ${phone ? `<a class="btn ghost small" href="${esc(tel(phone))}">${ic('phone')}Ligar</a>` : ''}</div>` : '';
+  return `<div class="card site-card"><p class="eyebrow" style="margin-top:0">A minha obra</p>
+    <h2 style="margin:0">${esc(s.title)}</h2><p class="small muted" style="margin:2px 0 10px">${esc([s.code, s.client].filter(Boolean).join(' · '))}</p>
+    ${q ? `<p class="addr">${ic('pin')}<span>${esc([s.address, s.municipality].filter(Boolean).join(', ') || 'Localização no mapa')}</span></p>
+      <a class="btn wide" href="${esc(map)}" target="_blank" rel="noopener">${ic('go')}Levar-me lá</a>` : '<p class="small muted">A morada da obra ainda não foi preenchida.</p>'}
+    ${who(s.supervisor, 'Encarregado', s.supervisor_phone)}${who(s.contact_name, s.contact_role || 'Contacto do cliente', s.contact_phone)}</div>`;
+}
+// One day in full: every tap (and who added it by hand, and why) and every step of the validation.
+async function mineDay(day) {
+  const { data: d, error } = await sb.rpc('mini_my_day', { p_day: day });
+  if (error) return toast(friendly(error));
+  const r = ((state.mineData && state.mineData.days) || []).find((x) => x.date === day);
+  const body = `<div class="mday-sum">${r ? `<b>${esc(fmtMin(r.worked))}</b> trabalhadas${r.overtime ? ` · ${esc(fmtMin(r.overtime))} extra` : ''}` : ''}</div>
+    <h3>Picagens</h3>${d.events.length ? `<ol class="taps">${d.events.map((e) => `<li><span class="t">${esc(fmtHour(e.at, e.tz))}</span>
+      <span>${e.dir === 'in' ? 'Entrada' : 'Saída'} · ${esc(e.code)}${e.manual ? `<small class="warn-t">${ic('key')}Adicionada à mão: ${esc(e.reason || '')}</small>` : ''}</span></li>`).join('')}</ol>` : '<p class="small muted">Sem picagens neste dia.</p>'}
+    <h3>Validação</h3><ol class="steps">${(r ? [`<li class="on"><b>Registado</b><small>pelas picagens do cartão</small></li>`] : []).join('')}
+      ${d.log.map((l) => `<li class="on ${l.to === 'registered' ? 'back' : ''}"><b>${esc(l.to === 'registered' ? 'Devolvido para corrigir' : MINE_STATE[l.to] || l.to)}</b>
+        <small>${esc(l.by || '')} · ${esc(new Date(l.at).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }))}</small>
+        ${l.note ? `<small class="note-t">«${esc(l.note)}»</small>` : ''}</li>`).join('')}
+      ${r && r.status === 'registered' ? '<li><b>À espera do encarregado</b></li>' : ''}</ol>`;
+  await askSheet(dayLabel(day), body, 'Fechar');
+}
+// The month as a calendar: each day coloured by its state. Monday first.
+function mineCalendar(d) {
+  const from = new Date(d.from + 'T12:00:00'); const lead = (from.getDay() + 6) % 7;
+  const last = Number(d.to.slice(8, 10)); const today = (d.today || {}).date;
+  const by = {}; for (const r of d.days) { const x = by[r.date] || (by[r.date] = { w: 0, k: [] }); x.w += r.worked; x.k.push(r); }
+  const cells = [];
+  for (let i = 0; i < lead; i++) cells.push('<span class="cd pad"></span>');
+  for (let n = 1; n <= last; n++) {
+    const iso = d.from.slice(0, 8) + String(n).padStart(2, '0'); const x = by[iso];
+    const wd = (lead + n - 1) % 7;
+    const k = !x ? (wd >= 5 ? 'off' : '') : x.k.some((r) => r.anomalies.length && !(r.anomalies.every((a) => a === 'open_shift') && iso >= today)) ? 'bad' : x.k.some((r) => r.holiday || r.rest) && x.w ? 'off' : x.k.every((r) => r.status !== 'registered') ? 'ok' : 'todo';
+    cells.push(x ? `<button class="cd ${k}${iso === today ? ' today' : ''}" data-day="${iso}"><b>${n}</b><small>${esc(fmtMin(x.w).replace('h00', 'h'))}</small></button>`
+      : `<span class="cd ${k}${iso === today ? ' today' : ''}"><b>${n}</b></span>`);
+  }
+  return `<div class="cal-h">${['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((x) => `<span>${x}</span>`).join('')}</div><div class="cal">${cells.join('')}</div>`;
 }
 
 // ------------------------------------------------------------------ Diárias (paid in advance on Thursday, for the week)
@@ -2191,6 +2349,7 @@ function viewOffice() {
         <button class="btn ghost wide" id="prim">Ficheiro para o Primavera (Relógio de Ponto)</button></div>
       ${more('Sobre o ficheiro do Primavera', '<p>Horas extra aprovadas, uma linha por pessoa, dia e tipo (1.ª hora, seguintes, descanso, feriado, e os mesmos acima das 100 h do ano). As noturnas não vão neste ficheiro. No Primavera: Recursos Humanos › Alterações Mensais › Relógio de Ponto. O "Nº de trabalhador" tem de ser o número do funcionário no Primavera.</p>')}
       ${can('salarios.configurar') ? `<details class="fold" id="primcfg"><summary><span>Configurar o ficheiro do Primavera<span class="sub">Códigos de horas extra, formato e posições</span></span></summary><div id="primform">${skel(1)}</div></details>` : ''}
+      ${can('salarios.configurar') ? `<label class="check prof payest"><input type="checkbox" id="payest" disabled><span><b>Mostrar ao colaborador quanto vai ganhar</b><small>Estimativa do bruto do mês, em «As minhas horas», com o valor à hora de cada um. Só para quem é da empresa (nunca para subempreiteiros).</small></span></label>` : ''}
 </div>` : ''}
     ${can('diarias.emitir') ? `<div class="card noprint" id="pdcard"><h2 style="margin-top:0">Diárias</h2>
       <p class="small muted">Pagas à quinta, adiantadas, para a semana toda. Escolhe quem e emite para pagamento.</p>
@@ -2215,6 +2374,13 @@ function viewOffice() {
   on('#sheet', 'onclick', () => downloadPayroll(from, to));
   on('#prim', 'onclick', () => downloadPrimavera(from, to));
   on('#primcfg', 'ontoggle', () => { if ($('#primcfg').open) showPrimaveraSettings(); });
+  if ($('#payest')) sb.rpc('mini_pay_estimate_setting').then(({ data, error }) => {
+    const x = $('#payest'); if (!x || error) return;
+    x.checked = !!data; x.disabled = false;
+    x.onchange = async () => { const { error: e } = await sb.rpc('mini_set_pay_estimate', { p_on: x.checked });
+      if (e) { x.checked = !x.checked; return toast(friendly(e)); }
+      toast(x.checked ? 'Os colaboradores passam a ver a estimativa do que vão ganhar.' : 'A estimativa deixou de aparecer aos colaboradores.'); };
+  });
   on('#act', 'onclick', () => downloadAct($('#actsite').value, from, to));
   on('#pdcfg', 'ontoggle', () => { if ($('#pdcfg').open) showPerDiemSettings(); });
   on('#pdcases', 'ontoggle', () => { if ($('#pdcases').open) loadPdCases('#pdcasebox'); });
