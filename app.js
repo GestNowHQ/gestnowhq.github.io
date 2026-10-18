@@ -38,6 +38,12 @@ const REASON_PREFIX = {
 };
 const ERRORS = [
   [/disagreement\(s\) of workers still to answer/i, 'Há reclamações de trabalhadores por responder neste mês. Responde primeiro (Secretaria › Pedidos e reclamações).'],
+  [/finish the previous ones first/i, 'Acaba primeiro as partes anteriores.'],
+  [/see it to the end first \((\d+) s left\)/i, 'Ainda não chegaste ao fim. Faltam $1 s.'],
+  [/see it to the end first/i, 'Vê até ao fim primeiro.'],
+  [/answer every question/i, 'Responde a todas as perguntas.'],
+  [/each question needs/i, 'Cada pergunta precisa de texto, 2 a 4 respostas e a certa marcada.'],
+  [/paste a YouTube link/i, 'Cola um link de um vídeo do YouTube.'],
   [/this card is not known/i, 'Este cartão não está registado na empresa.'],
   [/this person is not in your team/i, 'Este colaborador não está na tua equipa.'],
   [/tap the card/i, 'Encosta o cartão ou escreve o número.'],
@@ -257,7 +263,7 @@ function friendly(err) {
   // A missed entry for a person who was blocked at that time (inactive, documents): say why, in plain words.
   const blocked = /could not enter at that time:\s*(.*)$/i.exec(msg);
   if (blocked) return `Esta pessoa não podia entrar a essa hora: ${blocked[1].split(/,\s*/).map(reasonText).join(' · ')}. Resolve isso primeiro ou fala com o escritório.`;
-  for (const [re, pt] of ERRORS) if (re.test(msg)) return pt;
+  for (const [re, pt] of ERRORS) if (re.test(msg)) return pt.replace(/\$(\d)/g, (_, n) => (re.exec(msg) || [])[+n] || '');
   return 'Erro: ' + msg;
 }
 function reasonText(code) {
@@ -403,7 +409,7 @@ const APP_VERSION = '26';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['seguranca', 'naobra', 'trabalhadores', 'picar'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
-const MORE_ORDER = ['equipa', 'picar', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'obras'];
+const MORE_ORDER = ['equipa', 'picar', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'obras'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -523,6 +529,12 @@ async function boot() {
   }
   // A login made by the admin comes with a temporary password: the person chooses their own first.
   if (session.user.user_metadata && session.user.user_metadata.must_change_password) return state.offline ? showNetworkError() : showNewPassword();
+  // A person still in onboarding sees only the steps (the database shows nothing else to them anyway).
+  document.body.classList.remove('onboarding');
+  if (!state.offline && me.collaborator_id) {
+    const { data: ob } = await sb.rpc('mini_onboarding');
+    if (ob && ob.status && ob.status !== 'active' && ob.status !== 'none') return showOnboarding(ob);
+  }
   if (!state.offline) {
     const { data: acc } = await sb.rpc('mini_my_access');
     if (acc) { state.me.perms = acc.permissions || []; state.me.depts = acc.departments || []; state.me.profiles = acc.profiles || state.me.profiles; }
@@ -535,6 +547,7 @@ async function boot() {
   nav.querySelectorAll('button[data-view]').forEach((b) => { if (b.dataset.view !== 'minhas' && b.dataset.view !== 'secretariado') b.hidden = worker; });
   nav.querySelector('[data-view=minhas]').hidden = !me.collaborator_id;
   nav.querySelector('[data-view=painel]').hidden = worker || !canSiteDetails();
+  nav.querySelector('[data-view=acolhimento]').hidden = worker || !can('acolhimento.gerir');
   nav.querySelector('[data-view=equipa]').hidden = me.role !== 'supervisor' || !canSiteDetails();
   if (me.role === 'supervisor' && !state.booted && state.view === 'picar' && canSiteDetails()) state.view = 'equipa';
   state.booted = true;
@@ -868,7 +881,7 @@ function go(view) {
   nav.querySelector('button[data-more]').classList.toggle('on', !!cur && cur.parentElement.id === 'more');
   window.scrollTo(0, 0);
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
-     ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, equipa: viewTeam }[view] || viewClock)();
+     ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, equipa: viewTeam, acolhimento: viewInduction }[view] || viewClock)();
 }
 
 // ------------------------------------------------------------------ A minha equipa (the team leader's start screen)
@@ -1406,7 +1419,7 @@ function renderOnSite() {
 async function viewPeople() {
   app.innerHTML = `<div class="ph"><div><p class="ph-k">Equipa</p><h1>Trabalhadores</h1></div>
     ${canPeople() ? `<button class="btn" id="new">+ Novo trabalhador</button>` : ''}</div>
-    <div id="list">${skel(4)}</div>
+    <div id="pboard"></div><div id="list">${skel(4)}</div>
     ${canPeople() ? `
     <div class="card" id="newcard" hidden><h2 style="margin-top:0">Novo trabalhador</h2>
     <p class="small muted">Só para quem ainda não está na lista.</p>
@@ -1414,7 +1427,10 @@ async function viewPeople() {
       <div><label>NIF *</label><input name="nif" inputmode="numeric" required></div></div>
       <div class="row"><div><label>Nº de trabalhador</label><input name="num"></div>
       <div><label>Função</label><input name="job" placeholder="ex.: Serralheiro"></div></div>
-      <div class="row"><div><label>Cartão</label><input name="card" autocomplete="off" placeholder="Encosta o cartão ou escreve o número"></div>
+      <fieldset class="onbmode"><legend>Acolhimento</legend>
+        <label class="opt"><input type="radio" name="mode" value="paper" checked><span><b>Já verifiquei em papel</b><small>Fica ativo já e pode picar com o cartão.</small></span></label>
+        <label class="opt"><input type="radio" name="mode" value="app"><span><b>Faz o acolhimento na app</b><small>Vê os vídeos e manuais no telemóvel dele. O cartão associa-se quando acabar.</small></span></label></fieldset>
+      <div class="row paper-only"><div><label>Cartão</label><input name="card" autocomplete="off" placeholder="Encosta o cartão ou escreve o número"></div>
       ${'NDEFReader' in window ? '<div style="flex:0 0 auto"><button type="button" class="btn ghost" id="read">Ler cartão</button></div>' : ''}</div>
       ${siteSelect('site')}
       <h2>Documentos que travam a entrada</h2>
@@ -1424,7 +1440,7 @@ async function viewPeople() {
         <div class="row"><div><label>Data de emissão</label><input name="i_${esc(t.id)}" type="date" max="${isoDay(new Date())}"></div>
         <div><label>Válido até (vazio = não caduca)</label><input name="e_${esc(t.id)}" type="date"></div></div>
         <label>Foto ou PDF do documento</label><input name="f_${esc(t.id)}" type="file" accept="${FILE_ACCEPT}"></fieldset>`).join('')}
-      <label class="check"><input type="checkbox" name="seen" required> Vi em papel a identificação e o contrato desta pessoa *</label>
+      <label class="check paper-only"><input type="checkbox" name="seen" required> Vi em papel a identificação e o contrato desta pessoa *</label>
       <label>Notas (opcional)</label><input name="notes" placeholder="ex.: contrato a termo até 12/2026">
       <p class="small muted">Fica guardado, com o teu nome, como prova do que verificaste.</p>
       <p><button class="btn big">Guardar</button></p></form></div>` : ''}`;
@@ -1433,6 +1449,9 @@ async function viewPeople() {
     app.insertBefore($('#newcard'), $('#list'));
     bindSiteSelect('site');
     if ($('#read')) $('#read').onclick = () => readOneCard('input[name=card]');
+    const syncMode = () => { const app1 = $('#f').querySelector('input[name=mode]:checked').value === 'app';
+      $('#f').querySelectorAll('.paper-only').forEach((x) => { x.hidden = app1; x.querySelectorAll('input').forEach((i) => { i.disabled = app1; }); }); };
+    $('#f').querySelectorAll('input[name=mode]').forEach((r) => r.onchange = syncMode); syncMode();
     $('#f').onsubmit = async (e) => {
       e.preventDefault();
       const f = new FormData(e.target);
@@ -1447,7 +1466,11 @@ async function viewPeople() {
       if (dup) return offerExisting(dup);
       const btn = e.target.querySelector('.btn:not(.ghost)'); btn.disabled = true;
       const notes = String(f.get('notes') || '').trim();
-      const { data, error } = await sb.rpc('mini_add_worker', {
+      const viaApp = f.get('mode') === 'app';
+      const { data, error } = viaApp
+        ? await sb.rpc('mini_add_worker_onboarding', { p_full_name: f.get('name'), p_tax_number: nif, p_employee_number: f.get('num'),
+          p_project: $('#site') ? $('#site').value : null, p_job_title: f.get('job') })
+        : await sb.rpc('mini_add_worker', {
         p_full_name: f.get('name'), p_tax_number: nif, p_employee_number: f.get('num'),
         p_card_uid: normUid(f.get('card')), p_project: $('#site') ? $('#site').value : null,
         p_statement: 'Identificação e contrato vistos em papel.' + (notes ? ' ' + notes : ''), p_job_title: f.get('job') });
@@ -1463,10 +1486,12 @@ async function viewPeople() {
       }
       btn.disabled = false;
       const missing = docs.filter((x) => !x.issue).length + failed;
-      toast(missing ? 'Trabalhador guardado. Faltam documentos: regista-os na ficha.' : 'Trabalhador guardado, pronto para picar.');
+      toast(viaApp ? 'Guardado. Agora cria-lhe a conta na app (na ficha, «Conta na app») para ele começar o acolhimento.'
+        : missing ? 'Trabalhador guardado. Faltam documentos: regista-os na ficha.' : 'Trabalhador guardado, pronto para picar.');
       await loadBasics(); state.worker = data; go('ficha');
     };
   }
+  if (canPeople()) loadOnbBoard('#pboard', true);
   const { data, error } = await sb.rpc('mini_workers');
   const el = $('#list'); if (!el) return;
   if (error) { el.innerHTML = `<p class="muted">${esc(friendly(error))}</p>`; return; }
@@ -1820,6 +1845,221 @@ async function readOneCard(sel) {
     reader.onreading = (ev) => { app.querySelector(sel).value = normUid(ev.serialNumber); ctrl.abort(); toast('Cartão lido.'); };
     setTimeout(() => ctrl.abort(), 20000);
   } catch (err) { toast('O NFC não arrancou: ' + err.message); }
+}
+
+// ------------------------------------------------------------------ Acolhimento (the new worker's mandatory steps)
+// A person whose account is not active yet sees only this: the steps in order, nothing of the app behind them.
+// The database is the lock (is_fully_active); this screen only shows the way through it.
+const ONB_STEPS = ['Acolhimento', 'Os meus dados', 'Contrato', 'Assinar', 'Pronto'];
+const ONB_AT = { pending_video: 0, pending_data: 1, pending_hr_validation: 1, pending_contract: 2, pending_rate_approval: 3, active: 4 };
+const ytId = (s) => { const m = /(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/))([A-Za-z0-9_-]{11})/.exec(String(s || '')) || /^([A-Za-z0-9_-]{11})$/.exec(String(s || '').trim());
+  return m ? m[1] : null; };
+const paras = (t) => String(t || '').split(/\n\s*\n/).map((x) => `<p>${esc(x.trim()).replace(/\n/g, '<br>')}</p>`).join('');
+const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.max(0, s) % 60).padStart(2, '0')}`;
+function onbShell(ob, inner) {
+  state.onb = ob; nav.hidden = true; signedOut(false); document.body.classList.add('onboarding');
+  const at = ONB_AT[ob.status] ?? 0;
+  app.innerHTML = `<div class="onb">
+    <div class="onb-top"><span class="onb-logo">${LOGO('lgO')}<b>GestNow</b></span><span class="grow"></span><button class="btn ghost small" id="onbout">${ic('out')}Sair</button></div>
+    <div class="onb-hello"><p class="ph-k">${esc(ob.company || '')}</p><h1>Bem-vindo, ${esc(String(ob.name || '').split(' ')[0])}</h1>
+      <p class="muted">Antes de começares a trabalhar connosco, há ${ONB_STEPS.length - 1} passos. Cada um abre quando o anterior estiver feito.</p></div>
+    <ol class="onb-steps">${ONB_STEPS.map((s, i) => `<li class="${i < at ? 'done' : i === at ? 'now' : ''}"><span>${i < at ? ic('ok') : i + 1}</span><b>${esc(s)}</b></li>`).join('')}</ol>
+    <div id="onbbody">${inner}</div></div>`;
+  $('#onbout').onclick = () => { document.body.classList.remove('onboarding'); signOut(); };
+}
+async function showOnboarding(ob) {
+  if (!ob) { const r = await sb.rpc('mini_onboarding'); if (r.error) return showMessage('Sem ligação', friendly(r.error), true); ob = r.data; }
+  if (!ob || ob.status === 'active' || ob.status === 'none') { document.body.classList.remove('onboarding'); return boot(); }
+  ob.skew = new Date(ob.server_now).getTime() - Date.now();
+  if (ob.status !== 'pending_video') {
+    const waiting = { pending_data: ['Os teus dados', 'O próximo passo é preencheres a tua ficha: morada, NISS, IBAN e documentos. Este ecrã ainda está a ser preparado; até lá, o RH trata disto contigo.'],
+      pending_hr_validation: ['À espera do RH', 'O RH está a confirmar os teus dados. Avisamos-te aqui quando estiver.'],
+      pending_contract: ['À espera do contrato', 'O RH está a preparar o teu contrato. Quando chegar, aparece aqui para leres e assinares.'],
+      pending_rate_approval: ['Quase pronto', 'Falta confirmares as condições do contrato.'] }[ob.status] || ['Em curso', ''];
+    return onbShell(ob, `<div class="card onb-wait">${ic('clock')}<h2>${esc(waiting[0])}</h2><p>${esc(waiting[1])}</p>
+      <p class="small muted">${ic('ok')} Acolhimento concluído${ob.steps && ob.steps.safety_videos ? ' em ' + esc(new Date(ob.steps.safety_videos).toLocaleDateString('pt-PT')) : ''}.</p>
+      <button class="btn ghost" id="onbre">Atualizar</button></div>`), ($('#onbre').onclick = () => showOnboarding());
+  }
+  const items = ob.items || [];
+  const done = items.filter((x) => x.passed_at).length;
+  const cur = items.find((x) => !x.passed_at);
+  onbShell(ob, items.length ? `<div class="card onb-list"><div class="sec-h" style="margin-top:0"><h2>Passo 1 · Acolhimento</h2><span class="count">${done}/${items.length}</span></div>
+      <div class="onb-bar"><i style="width:${Math.round(100 * done / items.length)}%"></i></div>
+      <p class="small muted">Vê ou lê cada parte até ao fim. No fim respondes a umas perguntas rápidas. Se errares, vês outra vez.</p>
+      ${items.map((x, i) => { const st = x.passed_at ? 'done' : x === cur ? 'now' : 'lock'; return `<button class="onb-item ${st}" ${st === 'now' ? `data-open="${esc(x.id)}"` : 'disabled'}>
+        <span class="oi">${st === 'done' ? ic('ok') : st === 'lock' ? ic('lock') : ic(x.kind === 'video' ? 'play' : 'doc')}</span>
+        <span class="grow"><b>${i + 1}. ${esc(x.title)}</b><small>${x.kind === 'video' ? 'Vídeo' : 'Para ler'} · ${Math.max(1, Math.round(x.min_seconds / 60))} min${x.questions.length ? ` · ${x.questions.length} pergunta(s)` : ''}${x.attempts && !x.passed_at ? ` · ${x.attempts}ª tentativa falhada` : ''}</small></span>
+        ${st === 'now' ? `<span class="btn small">${x.opened_at ? 'Continuar' : 'Começar'}</span>` : st === 'done' ? chip('val', 'feito', 'ok') : ''}</button>`; }).join('')}</div>`
+    : `<div class="card onb-wait">${ic('clock')}<h2>O acolhimento ainda está a ser preparado</h2><p>A empresa ainda não pôs os vídeos e manuais. Volta daqui a pouco.</p><button class="btn ghost" id="onbre">Atualizar</button></div>`);
+  if ($('#onbre')) $('#onbre').onclick = () => showOnboarding();
+  app.querySelectorAll('[data-open]').forEach((b) => b.onclick = () => onbItem(items.find((x) => x.id === b.dataset.open), items));
+}
+// One video or manual: the clock is the server's; «Já vi» opens when the time is up (and, for a manual, at its end).
+async function onbItem(x, items) {
+  const { data: openedAt, error } = await sb.rpc('mini_induction_open', { p_item: x.id });
+  if (error) return toast(friendly(error));
+  const ob = state.onb; const n = items.indexOf(x) + 1;
+  const end = new Date(openedAt).getTime() + x.min_seconds * 900 - (ob.skew || 0);
+  onbShell(ob, `<div class="card onb-view"><p class="eyebrow" style="margin-top:0">Parte ${n} de ${items.length}</p><h2>${esc(x.title)}</h2>
+    ${x.kind === 'video' ? `<div class="onb-video"><iframe src="https://www.youtube-nocookie.com/embed/${esc(x.video_id)}?rel=0&modestbranding=1&playsinline=1" title="${esc(x.title)}"
+        allow="encrypted-media; picture-in-picture; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div>`
+      : `<div class="onb-manual" id="onbman">${paras(x.body)}</div>`}
+    <div class="onb-go"><button class="btn big" id="seen" disabled>${ic('clock')}<span id="seentx">…</span></button>
+      <button class="btn ghost wide" id="back">Voltar à lista</button></div></div>`);
+  // A manual counts as read when its last line has been on the screen: the box scrolled to its end, and its bottom in view.
+  let read = x.kind === 'video';
+  const atEnd = () => { const m = $('#onbman'); if (!m) return false; const r = m.getBoundingClientRect();
+    return m.scrollTop + m.clientHeight >= m.scrollHeight - 8 && r.bottom <= window.innerHeight + 4; };
+  const tick = () => {
+    const b = $('#seen'); if (!b) return clearInterval(t);
+    if (!read && atEnd()) read = true;
+    const left = Math.ceil((end - Date.now()) / 1000);
+    b.disabled = left > 0 || !read;
+    $('#seentx').textContent = left > 0 ? `Podes continuar daqui a ${mmss(left)}` : !read ? 'Lê até ao fim para continuar' : x.questions.length ? 'Já vi: responder às perguntas' : 'Já vi: continuar';
+  };
+  const t = setInterval(tick, 1000); tick();
+  if ($('#onbman')) { $('#onbman').addEventListener('scroll', tick, { passive: true }); window.addEventListener('scroll', tick, { passive: true }); }
+  $('#back').onclick = () => { clearInterval(t); window.removeEventListener('scroll', tick); showOnboarding(); };
+  $('#seen').onclick = async () => {
+    const { data: r, error: e } = await sb.rpc('mini_induction_seen', { p_item: x.id });
+    if (e) return toast(friendly(e));
+    clearInterval(t); window.removeEventListener('scroll', tick);
+    if (r.step_done) { toast('Acolhimento concluído. Obrigado!'); return showOnboarding(); }
+    if (!x.questions.length) return showOnboarding();
+    onbQuiz(x, n, items.length);
+  };
+}
+function onbQuiz(x, n, total, wrong) {
+  onbShell(state.onb, `<form class="card onb-quiz" id="qz"><p class="eyebrow" style="margin-top:0">Parte ${n} de ${total} · perguntas</p><h2>${esc(x.title)}</h2>
+    ${x.questions.map((q, i) => `<fieldset><legend>${i + 1}. ${esc(q.q)}</legend>${q.options.map((o, j) =>
+      `<label class="opt"><input type="radio" name="q${i}" value="${j}" required><span>${esc(o)}</span></label>`).join('')}</fieldset>`).join('')}
+    <button class="btn big">Enviar respostas</button></form>`);
+  $('#qz').onsubmit = async (e) => {
+    e.preventDefault(); const f = new FormData(e.target);
+    const answers = x.questions.map((_, i) => Number(f.get('q' + i)));
+    const { data: r, error } = await sb.rpc('mini_induction_answer', { p_item: x.id, p_answers: answers });
+    if (error) return toast(friendly(error));
+    if (r.passed) { toast(r.step_done ? 'Acolhimento concluído. Obrigado!' : 'Muito bem! Passa à parte seguinte.'); return showOnboarding(); }
+    const bad = (r.wrong || []).map((i) => i + 1);
+    onbShell(state.onb, `<div class="card onb-wait bad">${ic('warn')}<h2>Ainda não</h2>
+      <p>Erraste ${bad.length === 1 ? 'a pergunta ' + bad[0] : 'as perguntas ' + bad.join(' e ')}. Vê outra vez com atenção e responde de novo.</p>
+      <button class="btn big" id="again">Ver outra vez</button></div>`);
+    $('#again').onclick = async () => { const r2 = await sb.rpc('mini_onboarding'); if (r2.error) return toast(friendly(r2.error)); r2.data.skew = new Date(r2.data.server_now).getTime() - Date.now(); state.onb = r2.data;
+      const items = r2.data.items; onbItem(items.find((y) => y.id === x.id), items); };
+  };
+}
+
+// HR / safety: the videos and manuals of the onboarding, in order, each with its questions; and who is in onboarding now.
+async function viewInduction() {
+  if (!can('acolhimento.gerir')) return go('trabalhadores');
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Pessoas</p><h1>Acolhimento</h1></div><button class="btn" id="addi">+ Vídeo ou manual</button></div>
+    <p class="muted lead">O que cada pessoa nova vê e lê no telemóvel antes de começar. Mudar um vídeo, um texto ou as perguntas cria uma versão nova; a prova diz sempre que versão cada pessoa viu.</p>
+    <div class="ind-grid"><div id="ilist">${skel(3)}</div><div id="iboard"></div></div>`;
+  $('#addi').onclick = () => editInduction(null);
+  loadInduction(); loadOnbBoard('#iboard');
+}
+async function loadInduction() {
+  const el = $('#ilist'); if (!el) return;
+  const { data, error } = await sb.rpc('mini_induction_items');
+  if (!el.isConnected) return;
+  if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  state.indItems = data;
+  if (!data.length) {
+    el.innerHTML = `<div class="card">${empty('play', 'Ainda não há acolhimento', 'Junta os teus vídeos (links do YouTube, podem ser «não listados») e manuais. Ou começa pelo modelo da GestNow e adapta-o.')}
+      <p><button class="btn wide" id="tpl">Começar com o modelo (3 manuais com perguntas)</button></p></div>`;
+    $('#tpl').onclick = useInductionTemplate; return;
+  }
+  el.innerHTML = `<div class="card ind-list">${data.map((x, i) => `<button class="ind ${x.is_active ? '' : 'off'}" data-id="${esc(x.id)}">
+      <span class="oi">${ic(x.kind === 'video' ? 'play' : 'doc')}</span><span class="grow"><b>${i + 1}. ${esc(x.title)}</b>
+      <small>${x.kind === 'video' ? 'Vídeo' : 'Manual'} · mín. ${mmss(x.min_seconds)} · ${x.questions.length} pergunta(s) · versão ${x.version}${x.for_external ? '' : ' · só da empresa'} · ${x.passed} pessoa(s) concluíram</small></span>
+      ${x.is_active ? chip('val', 'ativo', 'ok') : chip('', 'desligado')}</button>`).join('')}</div>
+    <p class="small muted">Toca para mudar. Quem já é ativo não precisa de rever; uma versão nova vale para quem entrar a partir de agora.</p>`;
+  el.querySelectorAll('[data-id]').forEach((b) => b.onclick = () => editInduction(data.find((x) => x.id === b.dataset.id)));
+}
+const ONB_LABEL = { pending_video: 'Passo 1 · acolhimento', pending_data: 'Passo 2 · dados', pending_hr_validation: 'Passo 2 · à espera do RH',
+  pending_contract: 'Passo 3 · contrato', pending_rate_approval: 'Passo 4 · assinar' };
+async function loadOnbBoard(sel, onlyIfAny) {
+  const el = $(sel); if (!el) return;
+  const { data, error } = await sb.rpc('mini_onboarding_board');
+  if (!el.isConnected || error || (onlyIfAny && !data.length)) return;
+  el.innerHTML = `<div class="card"><div class="sec-h" style="margin-top:0"><h2>Novas entradas</h2>${data.length ? `<span class="count">${data.length}</span>` : ''}</div>
+    ${data.length ? data.map((p) => `<button class="onb-row" data-id="${esc(p.id)}">${avatar(p.name)}
+      <span class="grow"><b>${esc(p.name)}</b><small>${esc(ONB_LABEL[p.status] || p.status)}${p.status === 'pending_video' && p.items ? ` · ${p.passed}/${p.items} partes` : ''}${p.has_login ? '' : ' · ainda sem conta na app'}</small></span>
+      ${p.status === 'pending_video' && p.items ? `<span class="mini-bar"><i style="width:${Math.round(100 * p.passed / p.items)}%"></i></span>` : ''}</button>`).join('')
+      : `<p class="small muted">${ic('ok')} Ninguém a meio do acolhimento. Ao registar uma pessoa nova em Pessoas, escolhe «Faz o acolhimento na app».</p>`}</div>`;
+  el.querySelectorAll('[data-id]').forEach((b) => b.onclick = () => { state.worker = b.dataset.id; go('ficha'); });
+}
+async function editInduction(x) {
+  const q = (x && x.questions) || [];
+  const qrow = (i, v) => `<fieldset class="qedit" data-q="${i}"><legend>Pergunta ${i + 1}</legend><input name="q${i}" value="${esc(v ? v.q : '')}" placeholder="ex.: Sem capacete podes entrar na obra?" maxlength="200">
+    ${[0, 1, 2].map((j) => `<label class="opt"><input type="radio" name="c${i}" value="${j}" ${v && v.correct === j ? 'checked' : !v && j === 0 ? 'checked' : ''} title="Resposta certa">
+      <input name="o${i}_${j}" value="${esc(v && v.options[j] ? v.options[j] : '')}" placeholder="${j === 0 ? 'Resposta' : 'Outra resposta'}${j === 2 ? ' (opcional)' : ''}" maxlength="120"></label>`).join('')}</fieldset>`;
+  const fd = await askSheet(x ? 'Mudar: ' + x.title : 'Novo vídeo ou manual', `
+    <label for="it">Título</label><input id="it" name="title" required minlength="3" maxlength="120" value="${esc(x ? x.title : '')}" placeholder="ex.: Regras de segurança da refinaria">
+    <div class="chips reasons" role="radiogroup"><label class="chip"><input type="radio" name="kind" value="video" ${!x || x.kind === 'video' ? 'checked' : ''}>Vídeo do YouTube</label>
+      <label class="chip"><input type="radio" name="kind" value="document" ${x && x.kind === 'document' ? 'checked' : ''}>Texto para ler</label></div>
+    <div id="kv"><label for="iv">Link do YouTube</label><input id="iv" name="video" value="${esc(x && x.video_id ? 'https://youtu.be/' + x.video_id : '')}" placeholder="https://youtu.be/…">
+      <p class="small muted">Põe o vídeo no YouTube como «Não listado»: só quem tem o link o vê.</p></div>
+    <div id="kd" hidden><label for="ib">Texto (uma linha em branco separa parágrafos)</label><textarea id="ib" name="body" rows="8" maxlength="20000">${esc(x && x.body ? x.body : '')}</textarea></div>
+    <label for="im">Tempo mínimo antes de poder continuar (minutos)</label><input id="im" name="min" type="number" min="0.5" max="60" step="0.5" value="${x ? x.min_seconds / 60 : 2}">
+    <p class="small muted">Para um vídeo, põe a duração dele. A pessoa só avança depois deste tempo.</p>
+    <h3>Perguntas (marca a resposta certa)</h3>${[0, 1, 2].map((i) => qrow(i, q[i])).join('')}
+    <label class="check inline"><input type="checkbox" name="ext" ${!x || x.for_external ? 'checked' : ''}> Também para trabalhadores de subempreiteiros</label>
+    ${x ? `<label class="check inline"><input type="checkbox" name="active" ${x.is_active ? 'checked' : ''}> Ativo (desliga para deixar de mostrar a quem entra)</label>` : ''}`, 'Guardar', (dlg) => {
+    const sync = () => { const v = dlg.querySelector('input[name=kind]:checked').value; dlg.querySelector('#kv').hidden = v !== 'video'; dlg.querySelector('#kd').hidden = v !== 'document'; };
+    dlg.querySelectorAll('input[name=kind]').forEach((r) => r.onchange = sync); sync();
+  });
+  if (!fd) return;
+  const kind = fd.get('kind');
+  const questions = [0, 1, 2].map((i) => {
+    const text = String(fd.get('q' + i) || '').trim(); const opts = [0, 1, 2].map((j) => String(fd.get(`o${i}_${j}`) || '').trim());
+    const c = Number(fd.get('c' + i) || 0);
+    if (!text) return null;
+    const kept = opts.map((o, j) => ({ o, j })).filter((y) => y.o);
+    return { q: text, options: kept.map((y) => y.o), correct: Math.max(0, kept.findIndex((y) => y.j === c)) };
+  }).filter(Boolean);
+  if (questions.some((y) => y.options.length < 2)) return toast('Cada pergunta precisa de pelo menos 2 respostas.');
+  const vid = kind === 'video' ? ytId(fd.get('video')) : null;
+  if (kind === 'video' && !vid) return toast('Esse link não é de um vídeo do YouTube.');
+  const { data: id, error } = await sb.rpc('mini_induction_save', { p_id: x ? x.id : null, p_title: String(fd.get('title')).trim(), p_kind: kind,
+    p_video_id: vid, p_body: kind === 'document' ? String(fd.get('body') || '') : null, p_min_seconds: Math.round(Number(fd.get('min') || 1) * 60),
+    p_questions: questions, p_position: x ? x.position : null, p_for_external: !!fd.get('ext') });
+  if (error) return toast(friendly(error));
+  if (x && !!fd.get('active') !== x.is_active) { const r = await sb.rpc('mini_induction_set_active', { p_id: id, p_active: !!fd.get('active') }); if (r.error) return toast(friendly(r.error)); }
+  toast('Guardado.'); loadInduction();
+}
+// A starting point, to adapt: three short manuals with questions. Plain words, no company-specific rules.
+const INDUCTION_TEMPLATE = [
+  { title: 'Bem-vindo: como trabalhamos', min: 120, body: `Bem-vindo à equipa. Este acolhimento explica as regras que valem em todas as obras. Lê com atenção: no fim há perguntas.
+
+Picar o ponto: à chegada e à saída encostas o teu cartão no leitor da obra. Se te esqueceres, avisa logo o encarregado, que regista a picagem com o motivo. Nunca piques por um colega nem emprestes o teu cartão.
+
+Horário e faltas: o encarregado diz-te o horário da obra. Se precisares de faltar ou sair mais cedo, faz o pedido na app com antecedência.
+
+As tuas horas: vês todas as tuas horas na app. Se um dia estiver errado, carrega em «Não concordo com este dia» antes do fim do mês.`,
+    q: [{ q: 'Esqueceste-te de picar a saída. O que fazes?', options: ['Aviso o encarregado', 'Peço a um colega para picar por mim', 'Não faço nada'], correct: 0 },
+      { q: 'Podes emprestar o teu cartão a um colega?', options: ['Sim, se for amigo', 'Nunca'], correct: 1 }] },
+  { title: 'Equipamento de proteção individual (EPI)', min: 120, body: `Na obra usas sempre: capacete, botas de biqueira de aço, óculos de proteção, colete refletor e luvas adequadas à tarefa. Algumas zonas pedem mais (proteção auditiva, máscara, arnês): segue a sinalização e o que o encarregado disser.
+
+Sem o EPI completo não entras na obra. Se o teu EPI estiver estragado ou perdido, pede um novo antes de começar a trabalhar.
+
+O EPI é pessoal. Cuida dele e guarda-o limpo.`,
+    q: [{ q: 'Sem capacete podes entrar na obra?', options: ['Sim, se for rápido', 'Não'], correct: 1 },
+      { q: 'O teu par de luvas rasgou-se. O que fazes?', options: ['Trabalho sem luvas', 'Peço luvas novas antes de continuar'], correct: 1 }] },
+  { title: 'Emergências e acidentes', min: 120, body: `Em caso de alarme: para o trabalho, deixa a zona em segurança se puderes, e vai pelo caminho de evacuação até ao ponto de encontro da obra. Não voltes atrás para buscar nada.
+
+Se houver um acidente: protege-te primeiro, chama ajuda (112 e o encarregado) e não mexas na pessoa ferida se não souberes como.
+
+Qualquer quase-acidente ou situação perigosa conta: diz ao encarregado no mesmo dia. Falar evita o próximo acidente.`,
+    q: [{ q: 'Toca o alarme. Para onde vais?', options: ['Para o ponto de encontro', 'Volto à carrinha buscar as minhas coisas', 'Continuo a trabalhar'], correct: 0 },
+      { q: 'Viste uma situação perigosa mas ninguém se magoou. O que fazes?', options: ['Nada, não aconteceu nada', 'Digo ao encarregado no mesmo dia'], correct: 1 }] }];
+async function useInductionTemplate() {
+  for (const [i, t] of INDUCTION_TEMPLATE.entries()) {
+    const { error } = await sb.rpc('mini_induction_save', { p_id: null, p_title: t.title, p_kind: 'document', p_video_id: null, p_body: t.body,
+      p_min_seconds: t.min, p_questions: t.q, p_position: (i + 1) * 10, p_for_external: true });
+    if (error) return toast(friendly(error));
+  }
+  toast('Modelo criado. Revê os textos e junta os teus vídeos.'); loadInduction();
 }
 
 // ------------------------------------------------------------------ Segurança
