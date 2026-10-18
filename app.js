@@ -1858,8 +1858,8 @@ const ONB_AT = { pending_video: 0, pending_data: 1, pending_hr_validation: 1, pe
 const ytId = (s) => { const m = /(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/))([A-Za-z0-9_-]{11})/.exec(String(s || '')) || /^([A-Za-z0-9_-]{11})$/.exec(String(s || '').trim());
   return m ? m[1] : null; };
 const paras = (t) => String(t || '').split(/\n\s*\n/).map((x) => `<p>${esc(x.trim()).replace(/\n/g, '<br>')}</p>`).join('');
-const KIND_IC = { video: 'play', document: 'doc', bot: 'bot' };
-const KIND_TX = { video: 'Vídeo', document: 'Para ler', bot: 'Conversa com o bot' };
+const KIND_IC = { video: 'play', document: 'doc', bot: 'bot', hunt: 'search' };
+const KIND_TX = { video: 'Vídeo', document: 'Para ler', bot: 'Conversa com o bot', hunt: 'Encontra o perigo' };
 const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.max(0, s) % 60).padStart(2, '0')}`;
 function onbShell(ob, inner) {
   dropRobots();
@@ -1904,6 +1904,7 @@ async function showOnboarding(ob) {
 // One video or manual: the clock is the server's; «Já vi» opens when the time is up (and, for a manual, at its end).
 async function onbItem(x, items) {
   if (x.kind === 'bot') return onbBot(x, items);
+  if (x.kind === 'hunt') return onbHunt(x, items);
   const { data: openedAt, error } = await sb.rpc('mini_induction_open', { p_item: x.id });
   if (error) return toast(friendly(error));
   const ob = state.onb; const n = items.indexOf(x) + 1;
@@ -1973,8 +1974,8 @@ async function loadInduction() {
   if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
   state.indItems = data;
   if (!data.length) {
-    el.innerHTML = `<div class="card">${empty('play', 'Ainda não há acolhimento', 'Começa pelo pacote geral da GestNow (9 conversas de segurança com o bot) e junta por cima o que é só da tua empresa: regras da obra, manuais do cliente, vídeos.')}
-      <p><button class="btn wide" id="tpl">Usar o pacote geral da GestNow (9 conversas)</button></p></div>`;
+    el.innerHTML = `<div class="card">${empty('play', 'Ainda não há acolhimento', 'Começa pelo pacote geral da GestNow (9 conversas de segurança com o bot e o jogo «Encontra o perigo») e junta por cima o que é só da tua empresa: regras da obra, manuais do cliente, vídeos.')}
+      <p><button class="btn wide" id="tpl">Usar o pacote geral da GestNow (10 partes)</button></p></div>`;
     $('#tpl').onclick = useInductionTemplate; return;
   }
   el.innerHTML = `<div class="card ind-list">${data.map((x, i) => `<button class="ind ${x.is_active ? '' : 'off'}" data-id="${esc(x.id)}">
@@ -2001,6 +2002,7 @@ async function loadOnbBoard(sel, onlyIfAny) {
 }
 async function editInduction(x) {
   const q = (x && x.questions) || [];
+  const scenes = ((await sb.rpc('mini_hunt_scenes')).data) || [];
   const qrow = (i, v) => `<fieldset class="qedit" data-q="${i}"><legend>Pergunta ${i + 1}</legend><input name="q${i}" value="${esc(v ? v.q : '')}" placeholder="ex.: Sem capacete podes entrar na obra?" maxlength="200">
     ${[0, 1, 2].map((j) => `<label class="opt"><input type="radio" name="c${i}" value="${j}" ${v && v.correct === j ? 'checked' : !v && j === 0 ? 'checked' : ''} title="Resposta certa">
       <input name="o${i}_${j}" value="${esc(v && v.options[j] ? v.options[j] : '')}" placeholder="${j === 0 ? 'Resposta' : 'Outra resposta'}${j === 2 ? ' (opcional)' : ''}" maxlength="120"></label>`).join('')}</fieldset>`;
@@ -2008,7 +2010,11 @@ async function editInduction(x) {
     <label for="it">Título</label><input id="it" name="title" required minlength="3" maxlength="120" value="${esc(x ? x.title : '')}" placeholder="ex.: Regras de segurança da refinaria">
     <div class="chips reasons" role="radiogroup"><label class="chip"><input type="radio" name="kind" value="bot" ${!x || x.kind === 'bot' ? 'checked' : ''}>Conversa com o bot</label>
       <label class="chip"><input type="radio" name="kind" value="video" ${x && x.kind === 'video' ? 'checked' : ''}>Vídeo do YouTube</label>
-      <label class="chip"><input type="radio" name="kind" value="document" ${x && x.kind === 'document' ? 'checked' : ''}>Texto para ler</label></div>
+      <label class="chip"><input type="radio" name="kind" value="document" ${x && x.kind === 'document' ? 'checked' : ''}>Texto para ler</label>
+      ${scenes.length ? `<label class="chip"><input type="radio" name="kind" value="hunt" ${x && x.kind === 'hunt' ? 'checked' : ''}>Encontra o perigo</label>` : ''}</div>
+    <div id="kh" hidden><label for="isc">Imagem</label><select id="isc" name="scene">${scenes.map((c) => `<option value="${esc(c.key)}" ${x && x.scene === c.key ? 'selected' : ''}>${esc(c.title)} · ${c.hazards} perigos</option>`).join('')}</select>
+      <img class="hunt-prev" id="iscp" alt="" src="scenes/${esc(x && x.scene ? x.scene : (scenes[0] || {}).key)}.svg">
+      <p class="small muted">A pessoa toca em cada perigo. Onde estão fica só no servidor; tocar ao calhas não passa (10 enganos e começa de novo).</p></div>
     <div id="kv"><label for="iv">Link do YouTube</label><input id="iv" name="video" value="${esc(x && x.video_id ? 'https://youtu.be/' + x.video_id : '')}" placeholder="https://youtu.be/…">
       <p class="small muted">Põe o vídeo no YouTube como «Não listado»: só quem tem o link o vê.</p></div>
     <div id="kd" hidden><label for="ib" id="ibl">Texto (uma linha em branco separa parágrafos)</label>
@@ -2021,8 +2027,10 @@ async function editInduction(x) {
     <label class="check inline"><input type="checkbox" name="ext" ${!x || x.for_external ? 'checked' : ''}> Também para trabalhadores de subempreiteiros</label>
     ${x ? `<label class="check inline"><input type="checkbox" name="active" ${x.is_active ? 'checked' : ''}> Ativo (desliga para deixar de mostrar a quem entra)</label>` : ''}`, 'Guardar', (dlg) => {
     const sync = () => { const v = dlg.querySelector('input[name=kind]:checked').value; dlg.querySelector('#kv').hidden = v !== 'video'; dlg.querySelector('#kd').hidden = v === 'video';
-      dlg.querySelector('#km').hidden = v === 'bot'; dlg.querySelector('#ibp').hidden = dlg.querySelector('#ibh').hidden = v !== 'bot';
-      dlg.querySelector('#ibl').textContent = v === 'bot' ? 'O que o bot diz' : 'Texto (uma linha em branco separa parágrafos)'; };
+      dlg.querySelector('#km').hidden = v === 'bot' || v === 'hunt'; dlg.querySelector('#ibp').hidden = dlg.querySelector('#ibh').hidden = v !== 'bot';
+      dlg.querySelector('#kh').hidden = v !== 'hunt';
+      dlg.querySelector('#ibl').textContent = v === 'bot' ? 'O que o bot diz' : v === 'hunt' ? 'O que o bot diz antes de começar' : 'Texto (uma linha em branco separa parágrafos)'; };
+    const sc = dlg.querySelector('#isc'); if (sc) sc.onchange = () => { dlg.querySelector('#iscp').src = `scenes/${sc.value}.svg`; };
     dlg.querySelectorAll('input[name=kind]').forEach((r) => r.onchange = sync); sync();
     const ta = dlg.querySelector('#ib');
     dlg.querySelectorAll('[data-tag]').forEach((b) => b.onclick = () => { const at = ta.selectionStart ?? ta.value.length; const t = `[${b.dataset.tag}] `;
@@ -2038,11 +2046,11 @@ async function editInduction(x) {
     return { q: text, options: kept.map((y) => y.o), correct: Math.max(0, kept.findIndex((y) => y.j === c)) };
   }).filter(Boolean);
   if (questions.some((y) => y.options.length < 2)) return toast('Cada pergunta precisa de pelo menos 2 respostas.');
-  const vid = kind === 'video' ? ytId(fd.get('video')) : null;
+  const vid = kind === 'video' ? ytId(fd.get('video')) : kind === 'hunt' ? String(fd.get('scene') || '') : null;
   if (kind === 'video' && !vid) return toast('Esse link não é de um vídeo do YouTube.');
-  if (kind !== 'video' && String(fd.get('body') || '').trim().length < 20) return toast(kind === 'bot' ? 'Escreve o que o bot diz.' : 'Escreve o texto.');
+  if (kind !== 'video' && String(fd.get('body') || '').trim().length < 20) return toast(kind === 'bot' || kind === 'hunt' ? 'Escreve o que o bot diz.' : 'Escreve o texto.');
   const { data: id, error } = await sb.rpc('mini_induction_save', { p_id: x ? x.id : null, p_title: String(fd.get('title')).trim(), p_kind: kind,
-    p_video_id: vid, p_body: kind !== 'video' ? String(fd.get('body') || '') : null, p_min_seconds: kind === 'bot' ? null : Math.round(Number(fd.get('min') || 1) * 60),
+    p_video_id: vid, p_body: kind !== 'video' ? String(fd.get('body') || '') : null, p_min_seconds: kind === 'bot' || kind === 'hunt' ? null : Math.round(Number(fd.get('min') || 1) * 60),
     p_questions: questions, p_position: x ? x.position : null, p_for_external: !!fd.get('ext') });
   if (error) return toast(friendly(error));
   if (x && !!fd.get('active') !== x.is_active) { const r = await sb.rpc('mini_induction_set_active', { p_id: id, p_active: !!fd.get('active') }); if (r.error) return toast(friendly(r.error)); }
@@ -2159,7 +2167,10 @@ Um quase-acidente é quando quase acontece. Conta sempre ao encarregado, no mesm
 
 Obrigado por me ouvires. Bom trabalho, e em segurança!`,
     q: [{ q: 'Toca o alarme. Para onde vais?', options: ['Para o ponto de encontro', 'Volto à carrinha buscar as minhas coisas', 'Continuo a trabalhar'], correct: 0 },
-      { q: 'Quase caiu uma peça em cima de um colega, mas ninguém se magoou. O que fazes?', options: ['Nada, não aconteceu nada', 'Conto ao encarregado no mesmo dia'], correct: 1 }] }];
+      { q: 'Quase caiu uma peça em cima de um colega, mas ninguém se magoou. O que fazes?', options: ['Nada, não aconteceu nada', 'Conto ao encarregado no mesmo dia'], correct: 1 }] },
+  // The last part is a game: tap the hazards in a picture (sql/58). Where they are is only on the server.
+  { title: 'Encontra o perigo: a refinaria', kind: 'hunt', scene: 'obra-1',
+    body: 'Agora és tu. Nesta zona de trabalho há sete perigos. Toca em cada um. Olha bem antes de tocar: muitos toques ao calhas e começas de novo.', q: [] }];
 // Adds the parts of the general pack this company does not have yet (by title), at the end, in the pack's order.
 async function useInductionTemplate() {
   const have = new Set((state.indItems || []).map((x) => x.title));
@@ -2167,7 +2178,7 @@ async function useInductionTemplate() {
   if (!add.length) return toast('Já tens o pacote geral completo.');
   const base = Math.max(0, ...(state.indItems || []).map((x) => x.position));
   for (const [i, t] of add.entries()) {
-    const { error } = await sb.rpc('mini_induction_save', { p_id: null, p_title: t.title, p_kind: t.kind, p_video_id: null, p_body: t.body,
+    const { error } = await sb.rpc('mini_induction_save', { p_id: null, p_title: t.title, p_kind: t.kind, p_video_id: t.scene || null, p_body: t.body,
       p_min_seconds: t.min || null, p_questions: t.q, p_position: base + (i + 1) * 10, p_for_external: true });
     if (error) return toast(friendly(error));
   }
@@ -2386,6 +2397,83 @@ async function onbBot(x, items) {
     $('#back').onclick = () => { live = false; Voice.stop(); showOnboarding(); };
     $('#bagain').onclick = async () => { live = false; Voice.stop(); const r2 = await sb.rpc('mini_onboarding'); if (r2.error) return toast(friendly(r2.error));
       r2.data.skew = new Date(r2.data.server_now).getTime() - Date.now(); state.onb = r2.data; onbBot(r2.data.items.find((y) => y.id === x.id), r2.data.items); };
+  };
+}
+
+// «Encontra o perigo»: a picture of a work area; the worker taps each hazard (sql/58).
+// Where the hazards are is never sent to the phone: each tap goes to the server, and only a hazard found comes back.
+async function onbHunt(x, items) {
+  const ob = state.onb; const n = items.indexOf(x) + 1; const bot = ob.bot || { name: 'Hardy', look: 'robo' };
+  const total = x.hazards || 0; let found = (x.found || []).slice();
+  onbShell(ob, `<div class="card hunt-card"><div class="hunt-head"><span class="hunt-face">${botFace(bot.look)}</span>
+      <div class="grow"><b>${esc(bot.name)}</b><small>Parte ${n} de ${items.length} · ${esc(x.title)}</small></div>
+      <span class="hunt-count" id="hcount" aria-live="polite"></span>
+      <button class="iconbtn" id="voz" type="button" aria-pressed="${Voice.on}" aria-label="Voz" title="Ligar ou desligar a voz">${ic(Voice.on ? 'voice' : 'mute')}</button></div>
+    <p class="hunt-say" id="hsay">${esc(x.body || '')}</p>
+    <div class="hunt-scene" id="hscene"><img id="himg" src="scenes/${esc(x.scene)}.svg" alt="Zona de trabalho com perigos escondidos" draggable="false"><div class="hunt-marks" id="hmarks"></div>
+      <div class="hunt-start" id="hstart"><button class="btn big" id="hgo">${ic('search')}${x.opened_at ? 'Continuar' : 'Começar a procurar'}</button></div></div>
+    <ol class="hunt-list" id="hlist"></ol>
+    <div class="bot-act" id="hact"><button class="btn ghost wide" id="back">Voltar à lista</button></div></div>`);
+  const img = $('#himg'); const marks = $('#hmarks'); const list = $('#hlist'); const say = $('#hsay'); const act = $('#hact');
+  let live = true; let busy = false;
+  const alive = () => live && img.isConnected;
+  const talk = (text) => { say.textContent = text; return Voice.say(text, { face: app.querySelector('.hunt-face .botface') }); };
+  const count = () => { $('#hcount').innerHTML = `<b>${found.length}</b>/${total}`; $('#hcount').classList.toggle('all', found.length >= total); };
+  const W = () => img.naturalWidth || 800; const H = () => img.naturalHeight || 1000;
+  const mark = (h, fresh) => {
+    const m = document.createElement('span'); m.className = 'hunt-ring' + (fresh ? ' fresh' : '');
+    m.style.cssText = `left:${100 * h.x / W()}%;top:${100 * h.y / H()}%;width:${200 * h.r / W()}%`;
+    m.textContent = String(found.indexOf(h) + 1); marks.appendChild(m);
+    const li = document.createElement('li'); li.innerHTML = `<b>${esc(h.label)}</b><span>${esc(h.why)}</span>`; list.appendChild(li);
+    if (fresh) li.scrollIntoView && li.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  };
+  const miss = (px, py) => { const m = document.createElement('span'); m.className = 'hunt-miss'; m.style.cssText = `left:${px}%;top:${py}%`; m.innerHTML = ic('x'); marks.appendChild(m); setTimeout(() => m.remove(), 900); };
+  const redraw = () => { marks.innerHTML = ''; list.innerHTML = ''; found.forEach((h) => mark(h, false)); count(); };
+  if (img.complete) redraw(); else img.onload = redraw;
+  $('#voz').onclick = () => { Voice.on = !Voice.on; $('#voz').setAttribute('aria-pressed', String(Voice.on)); $('#voz').innerHTML = ic(Voice.on ? 'voice' : 'mute'); };
+  $('#back').onclick = () => { live = false; Voice.stop(); showOnboarding(); };
+  const finish = async () => {
+    $('#hscene').classList.add('done');
+    let seen;
+    for (let k = 0; k < 4; k++) {
+      const r = await sb.rpc('mini_induction_seen', { p_item: x.id });
+      if (!r.error) { seen = r.data; break; }
+      const m = /(\d+) s left/.exec(r.error.message || '');
+      if (!m) return toast(friendly(r.error));
+      act.innerHTML = `<p class="small muted bot-hint">${ic('clock')} Só mais ${esc(m[1])} segundos…</p>`;
+      await sleep((Number(m[1]) + 1) * 1000); if (!alive()) return;
+    }
+    if (!seen) return toast('Tenta outra vez daqui a pouco.');
+    if (x.questions.length) { live = false; return onbQuiz(x, n, items.length); }
+    act.innerHTML = `<button class="btn big" id="hnext">${ic('ok')}${seen.step_done ? 'Acolhimento concluído' : 'Passar à parte seguinte'}</button>`;
+    $('#hnext').onclick = () => { live = false; Voice.stop(); if (seen.step_done) toast('Acolhimento concluído. Obrigado!'); showOnboarding(); };
+    await talk(`Muito bem! Encontraste os ${total} perigos. Na obra, quando vires um destes, para e avisa.`);
+  };
+  img.addEventListener('click', async (e) => {
+    if (busy || !$('#hstart').hidden || found.length >= total) return;
+    const r = img.getBoundingClientRect(); const fx = (e.clientX - r.left) / r.width; const fy = (e.clientY - r.top) / r.height;
+    busy = true;
+    const { data: t, error } = await sb.rpc('mini_hunt_tap', { p_item: x.id, p_x: Math.round(fx * W()), p_y: Math.round(fy * H()) });
+    busy = false;
+    if (error) return toast(friendly(error));
+    if (!alive()) return;
+    if (t.hit) {
+      const h = { i: t.i, x: t.x, y: t.y, r: t.r, label: t.label, why: t.why }; found.push(h); mark(h, true); count();
+      if (navigator.vibrate) navigator.vibrate(30);
+      if (found.length >= total) { await talk(t.why); if (alive()) finish(); } else talk(t.why);
+      return;
+    }
+    if (t.again) return toast('Esse já encontraste. Procura outro.');
+    miss(100 * fx, 100 * fy);
+    if (t.reset) { found = []; redraw(); return talk('Muitos toques ao calhas. Vamos começar de novo: olha com atenção antes de tocar.'); }
+    if (t.misses_left <= 3) say.textContent = `Não é aí. ${t.misses_left === 1 ? 'Mais um engano' : `Mais ${t.misses_left} enganos`} e começas de novo.`;
+  });
+  $('#hgo').onclick = async () => {
+    const { error } = await sb.rpc('mini_induction_open', { p_item: x.id });
+    if (error) return toast(friendly(error));
+    $('#hstart').hidden = true;
+    if (found.length >= total) return finish();
+    talk(found.length ? `Já encontraste ${found.length}. Faltam ${total - found.length}.` : x.body);
   };
 }
 
