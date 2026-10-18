@@ -410,7 +410,7 @@ const APP_VERSION = '30';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['seguranca', 'naobra', 'trabalhadores', 'picar'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
-const MORE_ORDER = ['equipa', 'picar', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'obras'];
+const MORE_ORDER = ['equipa', 'picar', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'obras', 'clientes'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -540,6 +540,8 @@ async function boot() {
   if (!state.offline) {
     const { data: acc } = await sb.rpc('mini_my_access');
     if (acc) { state.me.perms = acc.permissions || []; state.me.depts = acc.departments || []; state.me.profiles = acc.profiles || state.me.profiles; }
+    const { data: pw } = await sb.rpc('platform_whoami');
+    state.platform = pw || null;
     store(ME_KEY, { ...state.me });
   }
   state.ready = true; touch();
@@ -550,6 +552,7 @@ async function boot() {
   nav.querySelector('[data-view=minhas]').hidden = !me.collaborator_id;
   nav.querySelector('[data-view=painel]').hidden = worker || !canSiteDetails();
   nav.querySelector('[data-view=acolhimento]').hidden = worker || !can('acolhimento.gerir');
+  nav.querySelector('[data-view=clientes]').hidden = worker || state.offline || !isOwner();
   nav.querySelector('[data-view=equipa]').hidden = me.role !== 'supervisor' || !canSiteDetails();
   if (me.role === 'supervisor' && !state.booted && state.view === 'picar' && canSiteDetails()) state.view = 'equipa';
   state.booted = true;
@@ -772,7 +775,8 @@ function showWho() {
   const el = document.getElementById('whoami');
   const many = me.profiles && me.profiles.length > 1;
   // Two lines: the role (never cut off) and, under it, whose account this is.
-  const nm = p ? p.full_name.split(' ')[0] + ' ' + p.full_name.split(' ').slice(-1)[0] : me.email;
+  // The GestNow owner can be in any client company: the second line says which.
+  const nm = isOwner() && state.platform.tenant ? state.platform.tenant : p ? p.full_name.split(' ')[0] + ' ' + p.full_name.split(' ').slice(-1)[0] : me.email;
   el.innerHTML = `${avatar(p ? p.full_name : me.email).replace('class="av ', 'class="av wav ')}<span class="wtx"><b>${esc(roleLabel(me.role))}${many ? ' ▾' : ''}</b><small>${esc(nm)}</small></span>`;
   el.setAttribute('aria-label', `${roleLabel(me.role)}, ${p ? p.full_name : me.email}${many ? '. Mudar de perfil' : ''}`);
   el.title = (p ? p.full_name : me.email) + (many ? ' · toca para mudar de perfil' : ''); el.className = 'who' + (PRIVILEGED.includes(me.role) ? ' strong' : '') + (many ? ' sw' : '');
@@ -884,7 +888,70 @@ function go(view) {
   nav.querySelector('button[data-more]').classList.toggle('on', !!cur && cur.parentElement.id === 'more');
   window.scrollTo(0, 0);
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
-     ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, equipa: viewTeam, acolhimento: viewInduction }[view] || viewClock)();
+     ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients }[view] || viewClock)();
+}
+
+// ------------------------------------------------------------------ Clientes (the GestNow owner's console, sql/59)
+// The client companies, with numbers only. «Entrar» moves this login into one (and back): what it had in each company
+// is kept. Only the platform owner, with the phone code, sees this screen; the database checks the same.
+const isOwner = () => !!(state.platform && state.platform.platform);
+async function viewClients() {
+  if (!isOwner()) return viewClock();   // code guard as well as the database's
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">GestNow · só o dono vê</p><h1>Clientes</h1></div><button class="btn" id="newc">+ Novo cliente</button></div>
+    <p class="muted lead">As empresas que usam a GestNow. Aqui só vês números, nunca nomes de pessoas. Para trabalhar numa, carrega em «Entrar»; voltas por esta lista, e o que tinhas em cada uma fica guardado.</p>
+    <div id="clist">${skel(3)}</div>`;
+  $('#newc').onclick = newClient;
+  loadClients();
+}
+async function loadClients() {
+  const el = $('#clist'); if (!el) return;
+  const { data, error } = await sb.rpc('platform_clients');
+  if (!el.isConnected) return;
+  if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  const n = (v) => Number(v || 0).toLocaleString('pt-PT');
+  el.innerHTML = `<div class="clients">${data.map((c) => `<article class="card client${c.here ? ' here' : ''}">
+      <div class="cl-top">${avatar(c.name).replace('class="av ', 'class="av cl-av ')}<div class="grow"><b>${esc(c.name)}</b>
+        <small>${c.demo ? 'Empresa fictícia, para testes' : 'NIF ' + esc(c.tax_id)}</small></div>
+        ${c.here ? chip('ok', 'Estás aqui', 'ok') : c.demo ? chip('warn', 'fictícia') : chip('info', 'real')}</div>
+      <div class="cl-stats"><span><b>${n(c.sites)}</b>obras</span><span><b>${n(c.people)}</b>pessoas</span><span><b>${n(c.taps_7d)}</b>picagens 7 dias</span><span><b>${n(c.induction)}</b>partes de acolhimento</span></div>
+      <div class="cl-act">${c.here ? (c.demo && !Number(c.sites) ? `<button class="btn wide" data-fill>${ic('auto')}Preencher com dados de exemplo</button>`
+          : `<p class="small muted">${ic('ok')} Os ecrãs da app mostram agora os dados desta empresa.</p>`)
+        : c.open ? `<button class="btn wide ghost" data-enter="${esc(c.id)}">${ic('go')}Entrar</button>`
+        : `<p class="small muted">${ic('lock')} Esta empresa não te deu acesso. Pede acesso de suporte ao administrador dela.</p>`}</div></article>`).join('')}</div>`;
+  el.querySelectorAll('[data-enter]').forEach((b) => b.onclick = () => enterClient(b.dataset.enter, b));
+  if (el.querySelector('[data-fill]')) el.querySelector('[data-fill]').onclick = (e) => fillDemo(e.currentTarget);
+}
+async function enterClient(id, btn) {
+  // Taps still waiting on this phone belong to the company they were made in: send them first.
+  if (queue().some((x) => !x._u || x._u === state.me.user_id)) return toast('Há picagens por enviar neste telemóvel. Espera que sejam enviadas e tenta outra vez.');
+  btn.disabled = true;
+  const { data, error } = await sb.rpc('platform_enter_client', { p_tenant: id });
+  if (error) { btn.disabled = false; return toast(friendly(error)); }
+  Object.assign(state, { sites: [], people: [], indItems: null, bot: null, worker: null, panelSite: null });
+  toast(`Agora estás em ${data.tenant}.`);
+  state.view = 'clientes'; boot();
+}
+async function fillDemo(btn) {
+  btn.disabled = true; btn.lastChild.textContent = 'A preencher…';
+  const { data, error } = await sb.rpc('platform_fill_demo');
+  if (error) { btn.disabled = false; btn.lastChild.textContent = 'Preencher com dados de exemplo'; return toast(friendly(error)); }
+  toast(`Pronto: ${data.sites} obras, ${data.people} pessoas e ${data.taps} picagens das últimas duas semanas.`);
+  state.view = 'clientes'; boot();
+}
+async function newClient() {
+  const fd = await askSheet('Novo cliente', `
+    <label for="cn">Nome da empresa</label><input id="cn" name="name" required minlength="2" maxlength="120" placeholder="ex.: Montagens Industriais, Lda">
+    <label class="check inline"><input type="checkbox" name="demo" id="cd" checked> Empresa fictícia, só para testes</label>
+    <div id="ctx"><label for="ct">NIF</label><input id="ct" name="tax" inputmode="text" maxlength="32" placeholder="ex.: 509999999">
+      <p class="small muted">Numa empresa fictícia podes deixar em branco.</p></div>
+    <p class="small muted">A empresa fica pronta a usar: departamentos, tipos de documentos e modo simples. Entras nela como administrador.</p>`, 'Criar', (dlg) => {
+    const sync = () => { dlg.querySelector('#ct').required = !dlg.querySelector('#cd').checked; };
+    dlg.querySelector('#cd').onchange = sync; sync();
+  });
+  if (!fd) return;
+  const { error } = await sb.rpc('platform_create_client', { p_name: String(fd.get('name') || '').trim(), p_tax_id: String(fd.get('tax') || '').trim() || null, p_demo: !!fd.get('demo') });
+  if (error) return toast(friendly(error));
+  toast('Cliente criado. Carrega em «Entrar» para trabalhar nele.'); loadClients();
 }
 
 // ------------------------------------------------------------------ A minha equipa (the team leader's start screen)
@@ -2491,6 +2558,7 @@ const TOUR_TEXT = {
   trabalhadores: 'Pessoas: as fichas, os cartões e os documentos de cada colaborador.',
   acolhimento: 'Acolhimento: as conversas, os vídeos e os manuais que cada pessoa nova tem de fazer.',
   obras: 'Obras: as moradas, os horários e as regras de cada obra.',
+  clientes: 'Clientes: as empresas que usam a GestNow. Crias, entras numa e voltas.',
 };
 async function startTour() {
   if (!state.ready || document.getElementById('tour')) return;
