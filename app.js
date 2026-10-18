@@ -408,7 +408,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '32';
+const APP_VERSION = '33';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['seguranca', 'naobra', 'trabalhadores', 'picar'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -3934,7 +3934,7 @@ function periodLabel(from, to) {
 function xlBook(X, doc) {
   const wb = new X.Workbook();
   wb.creator = 'GestNow'; wb.lastModifiedBy = 'GestNow'; wb.created = wb.modified = new Date();
-  wb.title = doc.title; wb.subject = doc.scope; wb.company = doc.company; wb.category = 'GestNow Mini';
+  wb.title = doc.title; wb.subject = doc.scope; wb.company = doc.company; wb.category = 'GestNow';
   wb.calcProperties.fullCalcOnLoad = true;
   return wb;
 }
