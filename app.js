@@ -38,6 +38,9 @@ const REASON_PREFIX = {
 };
 const ERRORS = [
   [/disagreement\(s\) of workers still to answer/i, 'Há reclamações de trabalhadores por responder neste mês. Responde primeiro (Secretaria › Pedidos e reclamações).'],
+  [/this card is not known/i, 'Este cartão não está registado na empresa.'],
+  [/this person is not in your team/i, 'Este colaborador não está na tua equipa.'],
+  [/tap the card/i, 'Encosta o cartão ou escreve o número.'],
   [/you already disagreed with this day/i, 'Já reclamaste deste dia. Espera pela resposta.'],
   [/there is no day to disagree/i, 'Não há horas nesse dia para reclamar.'],
   [/write what is wrong/i, 'Em «Outro motivo», escreve o que está errado (pelo menos 10 letras).'],
@@ -396,7 +399,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '25';
+const APP_VERSION = '26';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['seguranca', 'naobra', 'trabalhadores', 'picar'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -876,13 +879,15 @@ function viewTeam() {
   app.innerHTML = `<div class="ph"><div><p class="ph-k">${esc(today)}</p><h1>A minha equipa</h1></div></div>
     <div class="team-site">${siteSelect('tsite')}</div>
     <div id="tkpis">${skel(1)}</div>
-    <div class="team-acts"><button class="btn big" id="tpic">${ic('tap')}Picar a equipa</button><button class="btn big ghost" id="tval">${ic('ok')}Validar a semana</button></div>
+    <div class="team-acts"><button class="btn big" id="tpic">${ic('tap')}Picar a equipa</button><button class="btn big ghost" id="tval">${ic('ok')}Validar a semana</button>
+      <button class="btn ghost wide look" id="tlook">${ic('card')}<span><b>O colaborador quer ver as horas</b><small>Ele encosta o cartão dele ao teu telemóvel</small></span></button></div>
     <div id="talert"></div>
     <div id="treq"></div>
     <div class="sec-h"><h2 class="eyebrow">Hoje na obra</h2></div><div id="tlist">${skel(4)}</div>`;
   bindSiteSelect('tsite', loadTeam);
   $('#tpic').onclick = () => go('picar');
   $('#tval').onclick = () => go('horas');
+  $('#tlook').onclick = () => cardGlance(currentSite() && currentSite().id);
   loadTeam();
   state.timer = setInterval(() => { if (state.view === 'equipa' && document.visibilityState === 'visible') loadTeam(); }, 60000);
 }
@@ -1752,6 +1757,62 @@ function offerExisting(p) {
   box.scrollIntoView({ behavior: 'smooth' });
 }
 
+// A worker without a login of his own sees his hours on the team leader's phone: he taps HIS card, the phone shows HIS
+// month, read-only, no money. Each look is written down and the worker sees who looked. Closes itself after 90 s.
+async function cardGlance(project) {
+  const d = document.createElement('dialog'); d.className = 'dlg glance';
+  let ctrl = null; let timer = null;
+  const stop = () => { if (ctrl) { ctrl.abort(); ctrl = null; } clearInterval(timer); };
+  d.addEventListener('close', () => { stop(); d.remove(); });
+  d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
+  const ask = (msg) => {
+    stop();
+    d.innerHTML = `<div class="gl-ask"><h2>Ver as horas com o cartão</h2>
+      ${'NDEFReader' in window ? `<div class="tapzone on"><span class="ring">${ic('tap')}</span><b>Encosta o cartão do colaborador</b><span class="small">às costas deste telemóvel</span></div>` : ''}
+      ${msg ? `<div class="result bad">${ic('warn')}<div><b>${esc(msg)}</b></div></div>` : ''}
+      <form class="gl-num"><label for="gluid">${'NDEFReader' in window ? 'Ou escreve o número do cartão' : 'Número do cartão (ou leitor USB)'}</label>
+        <div class="row"><input id="gluid" autocomplete="off" autocapitalize="characters" placeholder="ex.: 04:A1:B2:C3"><button class="btn">Ver</button></div></form>
+      <p class="small muted">${ic('shield')} Mostra só as horas e os pedidos dele, nunca valores. A consulta fica registada e ele vê quem consultou.</p>
+      <button class="btn ghost wide" data-close>Fechar</button></div>`;
+    d.querySelector('[data-close]').onclick = () => d.close();
+    d.querySelector('form').onsubmit = (e) => { e.preventDefault(); const v = d.querySelector('#gluid').value.trim(); if (v) show(normUid(v)); };
+    if ('NDEFReader' in window) {
+      try {
+        const c = new AbortController(); ctrl = c; const reader = new NDEFReader();
+        reader.scan({ signal: c.signal }).catch((err) => toast('O NFC não arrancou: ' + err.message));
+        reader.onreading = (ev) => { if (ctrl === c) show(normUid(ev.serialNumber)); };
+      } catch (err) { toast('O NFC não arrancou: ' + err.message); }
+    }
+  };
+  const show = async (uid) => {
+    stop();
+    const { data: g, error } = await sb.rpc('mini_card_glance', project ? { p_uid: uid, p_project: project } : { p_uid: uid });
+    if (!d.isConnected) return;
+    if (error) return ask(friendly(error));
+    const t = g.totals || {}; const b = g.balance;
+    const days = (g.days || []).slice(0, 14);
+    let left = 90;
+    d.innerHTML = `<div class="gl-show"><div class="gl-top">${avatar(g.name)}<div class="grow"><b>${esc(g.name)}</b><small>${esc(g.number || '')}</small></div>
+        <span class="gl-left" id="glleft">90 s</span></div>
+      <div class="kpis k3"><div class="kpi"><b>${esc(fmtMin(t.worked || 0))}</b><span>este mês</span></div>
+        <div class="kpi info"><b>${esc(fmtMin(t.overtime || 0))}</b><span>extra</span></div>
+        <div class="kpi ok"><b>${t.validated || 0}<small>/${t.rows || 0}</small></b><span>dias validados</span></div></div>
+      ${b ? `<p class="small gl-vac">${ic('calendar')}<b>${b.remaining}</b> dias de férias por marcar em ${b.year}</p>` : ''}
+      <h3>Últimos dias</h3>${days.length ? `<div class="gl-days">${days.map((r) => { const tz = r.tz || DEFAULT_TZ; return `<div class="gl-day">
+          <span class="d">${esc(dayLabel(r.date))}</span><span class="h">${esc(fmtHour(r.first_in, tz) || '?')}–${esc(fmtHour(r.last_out, tz) || '?')}</span>
+          <b>${esc(fmtMin(r.worked))}</b>${r.date === g.today && r.anomalies.every((x) => x === 'open_shift') && r.anomalies.length ? chip('info', 'a decorrer', 'clock') : r.anomalies.length ? chip('anom', 'falta picagem', 'warn') : chip(r.status === 'registered' ? 'reg' : 'val', MINE_STATE[r.status] || r.status)}</div>`; }).join('')}</div>`
+        : '<p class="small muted">Sem dias registados nas últimas semanas.</p>'}
+      ${(g.absences || []).length ? `<h3>Pedidos</h3>${g.absences.map((a) => `<p class="small">${esc(ABS_KIND[a.kind] || a.kind)} · ${esc(absWhen(a))} ${ABS_CHIP[a.status] || ''}</p>`).join('')}` : ''}
+      ${(g.disputes || []).length ? `<h3>Reclamações</h3>${g.disputes.map((x) => `<p class="small">${esc(DISPUTE_REASON[x.reason] || x.reason)} · ${esc(dayLabel(x.day))} ${x.status === 'open' ? chip('reg', 'à espera', 'clock') : x.status === 'fixed' ? chip('val', 'corrigido', 'ok') : chip('', 'mantido')}</p>`).join('')}` : ''}
+      <p class="small muted">Se um dia estiver errado, diz-me agora e eu corrijo em Horas, com o motivo.</p>
+      <div class="acts"><button class="btn big" data-close>Fechar</button><button class="btn ghost wide" data-next>Outro colaborador</button></div></div>`;
+    d.querySelector('[data-close]').onclick = () => d.close();
+    d.querySelector('[data-next]').onclick = () => ask();
+    timer = setInterval(() => { left -= 1; const el = d.querySelector('#glleft'); if (el) el.textContent = left + ' s'; if (left <= 0) d.close(); }, 1000);
+  };
+  document.body.appendChild(d); d.showModal(); ask();
+}
+
 async function readOneCard(sel) {
   try {
     const ctrl = new AbortController(); const reader = new NDEFReader();
@@ -2227,7 +2288,10 @@ async function loadMyRequests() {
         <span class="small muted">${esc(absWhen(a))}</span>${ABS_CHIP[a.status] || ''}</span></summary>
         ${a.note ? `<p class="small">«${esc(a.note)}»</p>` : ''}${absSteps(a)}
         ${a.status === 'requested' ? `<button class="btn ghost small" data-cancel="${esc(a.id)}">Cancelar o pedido</button>` : ''}</details>`).join('')}` : ''}
-    ${d.disputes.length ? `<h3>As minhas reclamações</h3>${d.disputes.map(dispLine).join('')}` : ''}</div>`;
+    ${d.disputes.length ? `<h3>As minhas reclamações</h3>${d.disputes.map(dispLine).join('')}` : ''}<div id="glances"></div></div>`;
+  sb.rpc('mini_my_glances').then(({ data: gl }) => { const el = $('#glances'); if (!el || !gl || !gl.length) return;
+    el.innerHTML = `<details class="req"><summary><span class="req-h"><b>Quem viu as minhas horas pelo cartão</b><span class="small muted">${gl.length}</span></span></summary>
+      ${gl.map((x) => `<p class="small">${esc(x.by || '')} · ${esc(new Date(x.at).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }))}</p>`).join('')}</details>`; });
   $('#askvac').onclick = () => askAbsence('vacation');
   $('#askabs').onclick = () => askAbsence(null);
   box.querySelectorAll('[data-cancel]').forEach((x) => x.onclick = async () => {

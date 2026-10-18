@@ -892,4 +892,20 @@ details.req > summary { list-style: none; cursor: pointer; } details.req > summa
 .vac { flex-wrap: wrap; align-items: center; } .vac-n { display: flex; align-items: center; gap: 2px; min-width: 0; } .vac small { text-align: left; }
 .req-h { flex-wrap: nowrap; } .req-h .grow { flex: 1 1 auto; } .req-h .avatar, .req-h .av { flex: 0 0 auto; }
 details.req .req-h { flex-wrap: wrap; }
+
+/* v26: worker sees his hours with his card on the team leader's phone */
+.team-acts .look { grid-column: 1 / -1; justify-content: flex-start; text-align: left; gap: 12px; padding: 12px 16px; }
+.team-acts .look span { display: flex; flex-direction: column; } .team-acts .look small { font-weight: 500; color: var(--ink-2); font-size: 12.5px; }
+.dlg.glance { width: min(560px, 100vw); }
+.gl-ask .tapzone { margin: 8px 0 14px; pointer-events: none; }
+.gl-num .row { display: flex; gap: 8px; align-items: stretch; } .gl-num input { flex: 1 1 auto; min-width: 0; }
+.gl-ask p.small .i { width: 15px; height: 15px; vertical-align: -3px; color: var(--brand); }
+.gl-top { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; } .gl-top .grow b { display: block; font-size: 19px; } .gl-top small { color: var(--ink-2); }
+.gl-left { font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 700; color: var(--ink-2); background: var(--surface-2); padding: 4px 9px; border-radius: 999px; }
+.gl-vac { display: flex; align-items: center; gap: 6px; } .gl-vac .i { width: 16px; height: 16px; color: var(--brand); } .gl-vac b { color: var(--brand); font-size: 16px; }
+.gl-days { display: flex; flex-direction: column; }
+.gl-day { display: grid; grid-template-columns: 128px 1fr auto; grid-template-areas: "d h w" "c c c"; gap: 2px 10px; align-items: center; padding: 8px 0; border-top: var(--bw) solid var(--line); }
+.gl-day .d { grid-area: d; font-weight: 650; font-size: 14px; } .gl-day .h { grid-area: h; color: var(--ink-2); font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.gl-day b { grid-area: w; font-variant-numeric: tabular-nums; } .gl-day .chip { grid-area: c; justify-self: start; }
+.gl-show h3 { margin: 16px 0 4px; } .gl-show .acts { margin-top: 14px; }
 }
