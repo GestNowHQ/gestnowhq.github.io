@@ -1038,4 +1038,7 @@ body.onboarding .top { display: none; }
 .picto.warn svg { background: #facc15; clip-path: polygon(50% 3%, 98% 94%, 2% 94%); stroke: #111827; padding: 17px 14px 8px; border-radius: 0; }
 .picto.ghs svg { background: #fff; border: 4px solid #dc2626; transform: rotate(45deg) scale(.8); stroke: #111827; padding: 9px; border-radius: 3px; }
 .picto.stopk svg { background: #dc2626; clip-path: polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%); }
+
+.bot-3d.set:not(.has3d) { height: 104px; width: 104px; }
+.bot-3d.set > svg.botface { width: 88px; height: 88px; }
 }

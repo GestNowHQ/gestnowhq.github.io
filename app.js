@@ -1895,7 +1895,7 @@ async function showOnboarding(ob) {
       <p class="small muted">Vê ou lê cada parte até ao fim. No fim respondes a umas perguntas rápidas. Se errares, vês outra vez.</p>
       ${items.map((x, i) => { const st = x.passed_at ? 'done' : x === cur ? 'now' : 'lock'; return `<button class="onb-item ${st}" ${st === 'now' ? `data-open="${esc(x.id)}"` : 'disabled'}>
         <span class="oi">${st === 'done' ? ic('ok') : st === 'lock' ? ic('lock') : ic(KIND_IC[x.kind] || 'doc')}</span>
-        <span class="grow"><b>${i + 1}. ${esc(x.title)}</b><small>${KIND_TX[x.kind] || 'Para ler'} · ${Math.max(1, Math.round(x.min_seconds / 60))} min${x.questions.length ? ` · ${x.questions.length} pergunta(s)` : ''}${x.attempts && !x.passed_at ? ` · ${x.attempts}ª tentativa falhada` : ''}</small></span>
+        <span class="grow"><b>${i + 1}. ${esc(x.title)}</b><small>${KIND_TX[x.kind] || 'Para ler'} · ${Math.max(1, Math.round(x.min_seconds / 60))} min${x.questions.length ? ` · ${pl(x.questions.length, 'pergunta', 'perguntas')}` : ''}${x.attempts && !x.passed_at ? ` · ${x.attempts}ª tentativa falhada` : ''}</small></span>
         ${st === 'now' ? `<span class="btn small">${x.opened_at ? 'Continuar' : 'Começar'}</span>` : st === 'done' ? chip('val', 'feito', 'ok') : ''}</button>`; }).join('')}</div>`
     : `<div class="card onb-wait">${ic('clock')}<h2>O acolhimento ainda está a ser preparado</h2><p>A empresa ainda não pôs os vídeos e manuais. Volta daqui a pouco.</p><button class="btn ghost" id="onbre">Atualizar</button></div>`);
   if ($('#onbre')) $('#onbre').onclick = () => showOnboarding();
@@ -1979,7 +1979,7 @@ async function loadInduction() {
   }
   el.innerHTML = `<div class="card ind-list">${data.map((x, i) => `<button class="ind ${x.is_active ? '' : 'off'}" data-id="${esc(x.id)}">
       <span class="oi">${ic(KIND_IC[x.kind] || 'doc')}</span><span class="grow"><b>${i + 1}. ${esc(x.title)}</b>
-      <small>${x.kind === 'document' ? 'Manual' : KIND_TX[x.kind]} · mín. ${mmss(x.min_seconds)} · ${x.questions.length} pergunta(s) · versão ${x.version}${x.for_external ? '' : ' · só da empresa'} · ${x.passed} pessoa(s) concluíram</small></span>
+      <small>${x.kind === 'document' ? 'Manual' : KIND_TX[x.kind]} · mín. ${mmss(x.min_seconds)} · ${pl(x.questions.length, 'pergunta', 'perguntas')} · versão ${x.version}${x.for_external ? '' : ' · só da empresa'} · ${x.passed === 1 ? '1 pessoa concluiu' : `${x.passed} pessoas concluíram`}</small></span>
       ${x.is_active ? chip('val', 'ativo', 'ok') : chip('', 'desligado')}</button>`).join('')}</div>
     <p class="small muted">Toca para mudar. Quem já é ativo não precisa de rever; uma versão nova vale para quem entrar a partir de agora.</p>
     ${INDUCTION_TEMPLATE.some((t) => !data.some((x) => x.title === t.title)) ? `<p><button class="btn ghost wide" id="tpl">${ic('bot')}Juntar o que falta do pacote geral da GestNow</button></p>` : ''}`;
@@ -2171,7 +2171,7 @@ async function useInductionTemplate() {
       p_min_seconds: t.min || null, p_questions: t.q, p_position: base + (i + 1) * 10, p_for_external: true });
     if (error) return toast(friendly(error));
   }
-  toast(`${add.length} parte(s) do pacote geral juntas. Revê o que o bot diz e junta o que é só da tua empresa.`); loadInduction();
+  toast(`${add.length === 1 ? '1 parte do pacote geral junta' : `${add.length} partes do pacote geral juntas`}. Revê o que o bot diz e junta o que é só da tua empresa.`); loadInduction();
 }
 
 // ------------------------------------------------------------------ O bot de segurança (acolhimento em conversa, visita guiada)
@@ -2232,6 +2232,7 @@ function botLine(raw) {
   return { signs, text };
 }
 const botLines = (body) => String(body || '').split(/\n\s*\n/).map((x) => botLine(x)).filter((x) => x.text || x.signs.length);
+const pl = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const words = (s) => (String(s).trim().match(/\S+/g) || []).length;
 // The voice: the phone's own (pt-PT if it has one). Muted, or no Portuguese voice: the same pace, in silence.
 const VOICE_KEY = 'gestnow.voz';
@@ -2315,7 +2316,7 @@ async function onbBot(x, items) {
   onbShell(ob, `<div class="card bot-card"><div class="bot-head bot-stage" id="bhead"><div class="bot-3d" id="b3d">${botFace(bot.look)}</div>
       <div class="grow"><b>${esc(bot.name)}</b><small id="bst">Parte ${n} de ${items.length} · ${esc(x.title)}</small></div>
       <button class="iconbtn" id="voz" type="button" aria-pressed="${Voice.on}" aria-label="Voz" title="Ligar ou desligar a voz">${ic(Voice.on ? 'voice' : 'mute')}</button></div>
-    <div class="bot-log" id="blog" aria-live="polite"><div class="bub bot"><p>Olá, ${esc(String(ob.name || '').split(' ')[0])}! Sou ${esc(bot.name)}. Esta conversa leva ${Math.max(1, Math.round(lines.reduce((a, l) => a + Voice.pace(l.text), 0) / 60000))} minuto(s). Liga o som do telemóvel.</p></div></div>
+    <div class="bot-log" id="blog" aria-live="polite"><div class="bub bot"><p>Olá, ${esc(String(ob.name || '').split(' ')[0])}! Sou ${esc(bot.name)}. Esta conversa leva ${(() => { const m = Math.max(1, Math.round(lines.reduce((a, l) => a + Voice.pace(l.text), 0) / 60000)); return m === 1 ? 'um minuto' : `${m} minutos`; })()}. Liga o som do telemóvel.</p></div></div>
     <div class="bot-act" id="bact"><button class="btn big" id="bgo">${ic('play')}${x.opened_at ? 'Continuar a conversa' : 'Começar a conversa'}</button>
       <button class="btn ghost wide" id="back">Voltar à lista</button></div></div>`);
   const face = () => $('#bhead .botface'); const log = $('#blog'); const act = $('#bact');
