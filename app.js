@@ -37,6 +37,21 @@ const REASON_PREFIX = {
   'skill_missing:': 'Falta a competência: ',
 };
 const ERRORS = [
+  [/disagreement\(s\) of workers still to answer/i, 'Há reclamações de trabalhadores por responder neste mês. Responde primeiro (Secretaria › Pedidos e reclamações).'],
+  [/you already disagreed with this day/i, 'Já reclamaste deste dia. Espera pela resposta.'],
+  [/there is no day to disagree/i, 'Não há horas nesse dia para reclamar.'],
+  [/write what is wrong/i, 'Em «Outro motivo», escreve o que está errado (pelo menos 10 letras).'],
+  [/write the answer/i, 'Escreve a resposta (pelo menos 10 letras).'],
+  [/write why you refuse/i, 'Escreve porque recusas (pelo menos 10 letras).'],
+  [/write why \(at least 5/i, 'Escreve o motivo (pelo menos 5 letras).'],
+  [/not enough holiday days left/i, 'Não tens dias de férias suficientes para esse pedido.'],
+  [/overlap|conflicting key value violates exclusion constraint/i, 'Já tens um pedido nesses dias.'],
+  [/too far in the past: talk to the office/i, 'Esse dia já passou há mais de uma semana: fala com o escritório.'],
+  [/some hours only on one day/i, 'Horas só se pedem para um dia.'],
+  [/this request was already answered/i, 'Este pedido já foi respondido.'],
+  [/only a request still waiting can be cancelled/i, 'Só se cancela um pedido que ainda está à espera.'],
+  [/you cannot (decide|answer) your own/i, 'Não podes decidir um pedido teu: é outra pessoa que decide.'],
+  [/this month is already closed/i, 'Este mês já está fechado.'],
   [/end date is before the start/i, 'A data de fim é antes do início.'],
   [/team leader must be on the site team/i, 'O responsável de equipa tem de estar atribuído a esta obra.'],
   [/site manager not found/i, 'Escolhe o gestor de obra da lista.'],
@@ -381,7 +396,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '24';
+const APP_VERSION = '25';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['seguranca', 'naobra', 'trabalhadores', 'picar'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -863,6 +878,7 @@ function viewTeam() {
     <div id="tkpis">${skel(1)}</div>
     <div class="team-acts"><button class="btn big" id="tpic">${ic('tap')}Picar a equipa</button><button class="btn big ghost" id="tval">${ic('ok')}Validar a semana</button></div>
     <div id="talert"></div>
+    <div id="treq"></div>
     <div class="sec-h"><h2 class="eyebrow">Hoje na obra</h2></div><div id="tlist">${skel(4)}</div>`;
   bindSiteSelect('tsite', loadTeam);
   $('#tpic').onclick = () => go('picar');
@@ -895,6 +911,50 @@ async function loadTeam() {
       <span class="tm-av">${avatar(p.name)}<i></i></span><span class="grow"><b>${esc(p.name)}</b><small>${esc(p.number || '')}</small></span>
       <span class="tags">${p.blocked ? chip('anom', 'não pode entrar: faltam documentos', 'warn') : ST[p.state](p)}</span></button>`).join('')}</div>`;
   el.querySelectorAll('[data-id]').forEach((b) => b.onclick = () => { state.worker = b.dataset.id; go('ficha'); });
+  loadPending('#treq', site.id);
+}
+// What waits for an answer: workers' disagreements with a day and their requests for holidays or absences.
+// Team leader: one site, gives the first word on requests. Office: every site, decides.
+async function loadPending(sel, project) {
+  const box = $(sel); if (!box) return;
+  const { data: d, error } = await sb.rpc('mini_pending_requests', project ? { p_project: project } : {});
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = ''; return; }
+  const office = !project;
+  const n = d.disputes.length + d.absences.length;
+  if (!n) { box.innerHTML = office ? `<div class="card"><h2 style="margin-top:0">Pedidos e reclamações</h2><p class="small muted">${ic('ok')} Nada à espera de resposta.</p></div>` : ''; return; }
+  box.innerHTML = `<div class="card pend-card"><div class="sec-h" style="margin-top:0"><h2>${office ? 'Pedidos e reclamações' : 'Pedidos da equipa'}</h2><span class="count">${n}</span></div>
+    ${d.disputes.map((x) => { const tz = x.tz || DEFAULT_TZ; return `<div class="req open"><div class="req-h">${avatar(x.name)}<span class="grow"><b>${esc(x.name)}</b>
+        <small>não concorda com ${esc(dayLabel(x.day))} · ${esc(x.code)} · ${esc(fmtHour(x.first_in, tz) || '?')}–${esc(fmtHour(x.last_out, tz) || '?')} · ${esc(fmtMin(x.worked))}</small></span></div>
+      <p class="small"><b>${esc(DISPUTE_REASON[x.reason] || x.reason)}</b>${x.note ? ` · «${esc(x.note)}»` : ''}</p>
+      <div class="acts"><button class="btn small" data-dfix="${esc(x.id)}">Corrigi</button><button class="btn ghost small" data-dkeep="${esc(x.id)}">Mantenho</button>
+        <button class="btn ghost small" data-dgo="${esc(x.day)}">Ver o dia em Horas</button></div></div>`; }).join('')}
+    ${d.absences.map((a) => `<div class="req open"><div class="req-h">${avatar(a.name)}<span class="grow"><b>${esc(a.name)}</b>
+        <small>${esc(ABS_KIND[a.kind] || a.kind)} · ${esc(absWhen(a))}${a.from !== a.to ? ` · ${a.days} dia(s) úteis` : ''}</small></span>
+        ${office && a.sup_ok ? chip('val', 'encarregado de acordo', 'ok') : ''}</div>
+      ${a.note ? `<p class="small">«${esc(a.note)}»</p>` : ''}${office && a.sup_note ? `<p class="small muted">Encarregado: «${esc(a.sup_note)}»</p>` : ''}
+      <div class="acts"><button class="btn small" data-aok="${esc(a.id)}">${office ? 'Aprovar' : 'De acordo'}</button><button class="btn ghost small" data-ano="${esc(a.id)}">Recusar</button></div></div>`).join('')}</div>`;
+  const reload = () => loadPending(sel, project);
+  const answer = async (id, fixed) => {
+    const fd = await askSheet(fixed ? 'Corrigido' : 'Mantenho as horas', `<label for="ans">Resposta para o trabalhador</label>
+      <textarea id="ans" name="ans" rows="3" required minlength="10" maxlength="500" placeholder="${fixed ? 'ex.: acrescentei a entrada das 06:45' : 'ex.: a câmara da portaria mostra entrada às 07:10'}"></textarea>`, 'Enviar resposta');
+    if (!fd) return;
+    const { error: e } = await sb.rpc('mini_answer_dispute', { p_id: id, p_fixed: fixed, p_answer: String(fd.get('ans') || '').trim() });
+    if (e) return toast(friendly(e)); toast('Resposta enviada. O trabalhador vê-a nas suas horas.'); reload();
+  };
+  const decide = async (id, ok) => {
+    let note = null;
+    if (!ok) { const fd = await askSheet('Recusar o pedido', '<label for="why">Porquê</label><textarea id="why" name="why" rows="3" required minlength="10" maxlength="500"></textarea>', 'Recusar');
+      if (!fd) return; note = String(fd.get('why') || '').trim(); }
+    const { error: e } = await sb.rpc(office ? 'mini_absence_decide' : 'mini_absence_opinion', { p_id: id, p_ok: ok, p_note: note });
+    if (e) return toast(friendly(e));
+    toast(ok ? (office ? 'Pedido aprovado.' : 'De acordo. O pedido seguiu para o escritório.') : 'Pedido recusado. O trabalhador vê o motivo.'); reload();
+  };
+  box.querySelectorAll('[data-dfix]').forEach((b) => b.onclick = () => answer(b.dataset.dfix, true));
+  box.querySelectorAll('[data-dkeep]').forEach((b) => b.onclick = () => answer(b.dataset.dkeep, false));
+  box.querySelectorAll('[data-dgo]').forEach((b) => b.onclick = () => go('horas'));
+  box.querySelectorAll('[data-aok]').forEach((b) => b.onclick = () => decide(b.dataset.aok, true));
+  box.querySelectorAll('[data-ano]').forEach((b) => b.onclick = () => decide(b.dataset.ano, false));
 }
 
 // ------------------------------------------------------------------ Picar
@@ -1957,7 +2017,7 @@ function askSheet(title, body, okLabel, onOpen) {
       <div class="acts"><button class="btn big" value="ok">${esc(okLabel)}</button>
       <button class="btn ghost wide" value="cancel" formnovalidate>Cancelar</button></div></form>`;
     const form = d.querySelector('form'); let fd = null;
-    form.addEventListener('submit', (e) => { if (e.submitter && e.submitter.value === 'ok') fd = new FormData(form); });
+    form.addEventListener('submit', (e) => { if (e.submitter && e.submitter.value && e.submitter.value !== 'cancel') { fd = new FormData(form); fd.set('_v', e.submitter.value); } });
     d.addEventListener('close', () => { d.remove(); resolve(fd); });
     d.addEventListener('click', (e) => { if (e.target === d) d.close(); });   // tap outside = cancel
     document.body.appendChild(d); d.showModal(); if (onOpen) onOpen(d);
@@ -2007,8 +2067,8 @@ function viewMine() {
   app.innerHTML = `<div class="ph"><div><p class="ph-k">${esc((me && me.full_name) || '')}</p><h1>As minhas horas</h1></div></div>
     <div class="chips" style="margin-bottom:12px">${months.map((m) => `<button class="chip" data-m="${m}" aria-pressed="${m === state.mineMonth}">${esc(mName(m))}</button>`).join('')}</div>
     <div class="mine-grid"><div><div id="minetop">${skel(1)}</div><div id="minepay"></div><div id="mine">${skel(3)}</div></div>
-    <div><div id="minesite"></div><div id="pdmine"></div></div></div>`;
-  loadMyPerDiems();
+    <div><div id="minereq"></div><div id="minesite"></div><div id="pdmine"></div></div></div>`;
+  loadMyPerDiems(); loadMyRequests();
   app.querySelectorAll('[data-m]').forEach((b) => b.onclick = () => { state.mineMonth = b.dataset.m; viewMine(); });
   loadMine();
   state.timer = setInterval(() => { if (state.view === 'minhas' && document.visibilityState === 'visible') loadMine(true); }, 60000);
@@ -2120,7 +2180,83 @@ async function mineDay(day) {
         <small>${esc(l.by || '')} · ${esc(new Date(l.at).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }))}</small>
         ${l.note ? `<small class="note-t">«${esc(l.note)}»</small>` : ''}</li>`).join('')}
       ${r && r.status === 'registered' ? '<li><b>À espera do encarregado</b></li>' : ''}</ol>`;
-  await askSheet(dayLabel(day), body, 'Fechar');
+  const { data: disp } = await sb.rpc('mini_my_day_disputes', { p_day: day });
+  const open = (disp || []).some((x) => x.status === 'open');
+  const canDispute = r && r.status !== 'sent_to_payroll' && !open;
+  const dispHtml = (disp || []).length ? `<h3>As minhas reclamações</h3>${disp.map(dispLine).join('')}` : '';
+  const fd = await askSheet(dayLabel(day), body + dispHtml + (canDispute ? '<button class="btn ghost wide disagree" value="dispute" formnovalidate>Não concordo com este dia</button>' : ''), 'Fechar');
+  if (!fd || fd.get('_v') !== 'dispute') return;
+  const f2 = await askSheet('Não concordo: ' + dayLabel(day), `<p class="small muted">O encarregado ou o escritório respondem antes de fechar o mês. Vês a resposta aqui.</p>
+      <div class="chips reasons" role="radiogroup">${Object.entries(DISPUTE_REASON).map(([k, v], i) => `<label class="chip"><input type="radio" name="reason" value="${k}" ${i === 0 ? 'checked' : ''}>${esc(v)}</label>`).join('')}</div>
+      <label for="dnote">Explica (obrigatório em «Outro motivo»)</label><textarea id="dnote" name="note" rows="3" maxlength="500" placeholder="ex.: entrei às 06:45, o cartão não leu"></textarea>`, 'Enviar');
+  if (!f2) return;
+  const { error: e } = await sb.rpc('mini_dispute_day', { p_day: day, p_reason: f2.get('reason'), p_note: String(f2.get('note') || '').trim() || null });
+  if (e) return toast(friendly(e));
+  toast('Enviado. O encarregado e o escritório vão responder antes de fechar o mês.');
+  loadMyRequests(); loadMine();
+}
+const DISPUTE_REASON = { earlier_in: 'Entrei mais cedo', later_out: 'Saí mais tarde', missing_overtime: 'Faltam horas extra', was_present: 'Estive lá e diz que faltei', other: 'Outro motivo' };
+const ABS_KIND = { vacation: 'Férias', medical_appointment: 'Consulta médica', justified_paid: 'Falta justificada', justified_unpaid: 'Falta sem vencimento',
+  bereavement: 'Falecimento de familiar', marriage: 'Casamento' };
+const dispLine = (x) => `<div class="req ${x.status}"><div class="req-h"><b>${esc(DISPUTE_REASON[x.reason] || x.reason)}</b>${x.day ? `<span class="small muted">${esc(dayLabel(x.day))}</span>` : ''}
+    ${x.status === 'open' ? chip('reg', 'à espera de resposta', 'clock') : x.status === 'fixed' ? chip('val', 'corrigido', 'ok') : chip('', 'mantido')}</div>
+  ${x.note ? `<p class="small">«${esc(x.note)}»</p>` : ''}${x.answer ? `<p class="small ans">${ic('user')}<span><b>${esc(x.by || 'Resposta')}:</b> ${esc(x.answer)}</span></p>` : ''}</div>`;
+const absWhen = (a) => a.from === a.to ? `${fmtDate(a.from)}${a.minutes ? ` · ${fmtMin(a.minutes)}` : ''}` : `${fmtDate(a.from)} a ${fmtDate(a.to)}`;
+function absSteps(a) {
+  const st = a.status;
+  const sup = a.sup_ok === true ? `<li class="on"><b>Encarregado: de acordo</b>${a.sup_note ? `<small>«${esc(a.sup_note)}»</small>` : ''}</li>`
+    : a.sup_ok === false ? `<li class="on back"><b>Encarregado: recusou</b>${a.sup_note ? `<small>«${esc(a.sup_note)}»</small>` : ''}</li>`
+    : st === 'requested' ? '<li><b>À espera do encarregado</b></li>' : '';
+  const off = st === 'approved' ? `<li class="on"><b>Escritório: aprovado</b>${a.decision_note ? `<small>«${esc(a.decision_note)}»</small>` : ''}</li>`
+    : st === 'rejected' && a.sup_ok !== false ? `<li class="on back"><b>Escritório: recusado</b>${a.decision_note ? `<small>«${esc(a.decision_note)}»</small>` : ''}</li>`
+    : st === 'requested' && a.sup_ok ? '<li><b>À espera do escritório</b></li>' : st === 'cancelled' ? '<li class="on"><b>Cancelado por ti</b></li>' : '';
+  return `<ol class="steps"><li class="on"><b>Pedido enviado</b><small>${esc(new Date(a.at).toLocaleDateString('pt-PT'))}</small></li>${sup}${off}</ol>`;
+}
+const ABS_CHIP = { requested: chip('reg', 'pendente', 'clock'), approved: chip('val', 'aprovado', 'ok'), rejected: chip('anom', 'recusado'), cancelled: chip('', 'cancelado') };
+// The worker's requests: holiday balance, ask for holidays / an absence / leaving early, and the answers.
+async function loadMyRequests() {
+  const box = $('#minereq'); if (!box) return;
+  const { data: d, error } = await sb.rpc('mini_my_requests');
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = ''; return; }
+  const b = d.balance;
+  box.innerHTML = `<div class="card reqs"><div class="sec-h" style="margin-top:0"><h2>Pedidos</h2></div>
+    ${b ? `<div class="vac"><div class="vac-n"><b>${b.remaining}</b><span>dias de férias por marcar em ${b.year}</span></div><small>${b.entitled} por ano · ${b.used} gozados${b.pending ? ` · ${b.pending} em pedido` : ''}</small></div>` : ''}
+    <div class="acts"><button class="btn" id="askvac">${ic('calendar')}Pedir férias</button><button class="btn ghost" id="askabs">${ic('clock')}Pedir falta</button></div>
+    ${d.absences.length ? `<h3>Os meus pedidos</h3>${d.absences.map((a) => `<details class="req"><summary><span class="req-h"><b>${esc(ABS_KIND[a.kind] || a.kind)}</b>
+        <span class="small muted">${esc(absWhen(a))}</span>${ABS_CHIP[a.status] || ''}</span></summary>
+        ${a.note ? `<p class="small">«${esc(a.note)}»</p>` : ''}${absSteps(a)}
+        ${a.status === 'requested' ? `<button class="btn ghost small" data-cancel="${esc(a.id)}">Cancelar o pedido</button>` : ''}</details>`).join('')}` : ''}
+    ${d.disputes.length ? `<h3>As minhas reclamações</h3>${d.disputes.map(dispLine).join('')}` : ''}</div>`;
+  $('#askvac').onclick = () => askAbsence('vacation');
+  $('#askabs').onclick = () => askAbsence(null);
+  box.querySelectorAll('[data-cancel]').forEach((x) => x.onclick = async () => {
+    const { error: e } = await sb.rpc('mini_cancel_my_absence', { p_id: x.dataset.cancel });
+    if (e) return toast(friendly(e)); toast('Pedido cancelado.'); loadMyRequests();
+  });
+}
+async function askAbsence(kind) {
+  const today = isoDay(new Date());
+  const kinds = kind ? '' : `<label>O quê</label><div class="chips reasons" role="radiogroup">${Object.entries(ABS_KIND).filter(([k]) => k !== 'vacation').map(([k, v], i) =>
+    `<label class="chip"><input type="radio" name="kind" value="${k}" ${i === 0 ? 'checked' : ''}>${esc(v)}</label>`).join('')}</div>`;
+  const fd = await askSheet(kind ? 'Pedir férias' : 'Pedir falta ou sair mais cedo', `${kinds}
+    <div class="two"><div><label for="af">${kind ? 'Do dia' : 'Dia'}</label><input type="date" id="af" name="from" value="${today}" min="${today}" required></div>
+    <div><label for="at">Até ao dia</label><input type="date" id="at" name="to" value="${today}" min="${today}" required></div></div>
+    ${kind ? '' : `<label class="check inline"><input type="checkbox" name="part" id="apart"> Só umas horas desse dia (ex.: saio à tarde)</label>
+      <div id="ahrs" hidden><label for="ah">Quantas horas fora</label><select id="ah" name="hours">${[1, 2, 3, 4, 5, 6].map((h) => `<option value="${h * 60}" ${h === 4 ? 'selected' : ''}>${h} h</option>`).join('')}</select></div>`}
+    <label for="an">${kind ? 'Nota (opcional)' : 'Porquê'}</label><textarea id="an" name="note" rows="2" maxlength="500" ${kind ? '' : 'required minlength="5"'}></textarea>
+    <p class="small muted">Vai primeiro ao teu encarregado e depois ao escritório. Vês aqui cada resposta.</p>`, 'Enviar pedido', (dlg) => {
+    const f = dlg.querySelector('#af'); const t = dlg.querySelector('#at');
+    f.onchange = () => { if (t.value < f.value) t.value = f.value; t.min = f.value; };
+    const pt = dlg.querySelector('#apart'); if (pt) pt.onchange = () => { dlg.querySelector('#ahrs').hidden = !pt.checked; if (pt.checked) t.value = f.value; t.disabled = pt.checked; };
+  });
+  if (!fd) return;
+  const from = fd.get('from'); const part = !!fd.get('part');
+  const { error } = await sb.rpc('mini_request_absence', { p_kind: kind || fd.get('kind'), p_starts: from, p_ends: part ? from : (fd.get('to') || from),
+    p_minutes: part ? Number(fd.get('hours')) : null, p_note: String(fd.get('note') || '').trim() || null });
+  if (error) return toast(friendly(error));
+  toast('Pedido enviado ao teu encarregado.');
+  loadMyRequests();
 }
 // The month as a calendar: each day coloured by its state. Monday first.
 function mineCalendar(d) {
@@ -2342,7 +2478,7 @@ function viewOffice() {
       ${more('Em que reparar', '<p>Olha com atenção para as picagens marcadas «à mão», «sem rede, chegou tarde» e «próprio cartão»: aparecem a amarelo no dia.</p>')}
       <div id="sum">${skel(1)}</div>` : ''}</div>
     ${can('horas.aprovar') ? `<div id="list">${skel(3)}</div>` : ''}`;
-  const side = `${can('salarios.exportar') ? `<div class="card noprint"><h2 style="margin-top:0">Salários</h2>
+  const side = `${can('horas.aprovar') ? '<div id="offreq" class="noprint"></div>' : ''}${can('salarios.exportar') ? `<div class="card noprint"><h2 style="margin-top:0">Salários</h2>
       <p class="small muted">Folha Excel do mês e ficheiro para o Primavera.</p>
       ${more('O que leva a folha', '<p>Uma linha por pessoa e obra, com as horas normais, as extra aprovadas, as noturnas e as de descanso ou feriado, mais um resumo por pessoa. Abre no Excel, no Google Sheets ou no telemóvel.</p>')}
       <div class="acts"><button class="btn wide" id="sheet">Descarregar a folha do mês (Excel)</button>
@@ -2384,7 +2520,7 @@ function viewOffice() {
   on('#act', 'onclick', () => downloadAct($('#actsite').value, from, to));
   on('#pdcfg', 'ontoggle', () => { if ($('#pdcfg').open) showPerDiemSettings(); });
   on('#pdcases', 'ontoggle', () => { if ($('#pdcases').open) loadPdCases('#pdcasebox'); });
-  if (can('horas.aprovar')) loadOffice(from, to);
+  if (can('horas.aprovar')) { loadOffice(from, to); loadPending('#offreq', null); }
   if (can('diarias.emitir')) loadPerDiems();
   if (can('contas.gerir')) loadDepartments();
 }

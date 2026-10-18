@@ -869,4 +869,27 @@ button.kpi { font: inherit; color: inherit; text-align: left; cursor: pointer; }
 @media (max-width: 520px) { .tm .tags { flex-basis: 100%; padding-left: 52px; } }
 
 .payest { display: flex; gap: 10px; margin-top: 12px; } .payest small { display: block; color: var(--ink-2); font-size: 12.5px; margin-top: 2px; }
+
+/* ---------------------------------------------------------------- v25: pedidos e «não concordo» */
+.reqs .acts { margin: 12px 0 4px; }
+.vac { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; padding: 12px 14px; border-radius: 14px; background: var(--brand-soft); }
+.vac b { font-size: 32px; font-weight: 800; letter-spacing: -.03em; color: var(--brand); margin-right: 8px; } .vac span { font-size: 14px; font-weight: 600; }
+.vac small { color: var(--ink-2); font-size: 12px; text-align: right; }
+.req { border-top: var(--bw) solid var(--line); padding: 10px 0; }
+details.req > summary { list-style: none; cursor: pointer; } details.req > summary::-webkit-details-marker { display: none; }
+.req-h { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; }
+.req-h .grow { min-width: 0; } .req-h .grow b { display: block; } .req-h small { color: var(--ink-2); font-size: 12.5px; }
+.req p { margin: 6px 0 0; }
+.req .acts { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; } .req .acts .btn { flex: 0 0 auto; min-width: 0; }
+.req .steps { margin-top: 10px; }
+.req .ans { display: flex; gap: 6px; align-items: flex-start; padding: 8px 10px; border-radius: 10px; background: var(--surface-2); }
+.req .ans .i { width: 16px; height: 16px; flex: 0 0 auto; margin-top: 2px; color: var(--brand); }
+.pend-card .count { margin-left: auto; min-width: 26px; height: 26px; padding: 0 8px; border-radius: 999px; display: inline-grid; place-items: center; background: var(--warn-fill); color: var(--on-warn-fill); font-weight: 750; font-size: 13px; }
+.btn.disagree { margin-top: 14px; color: var(--bad); border-color: color-mix(in srgb, var(--bad) 35%, transparent); }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+/* v25 polish: requests card */
+.vac { flex-wrap: wrap; align-items: center; } .vac-n { display: flex; align-items: center; gap: 2px; min-width: 0; } .vac small { text-align: left; }
+.req-h { flex-wrap: nowrap; } .req-h .grow { flex: 1 1 auto; } .req-h .avatar, .req-h .av { flex: 0 0 auto; }
+details.req .req-h { flex-wrap: wrap; }
 }
