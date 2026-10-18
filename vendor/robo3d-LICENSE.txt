@@ -1,0 +1,5 @@
+robo3d-1.js: GestNow safety robot (source: mini/robo3d-src/robo3d.js in the project files), bundled with three.js r170
+  three.js: Copyright 2010-2024 Three.js Authors, MIT License (https://github.com/mrdoob/three.js/blob/dev/LICENSE)
+robo3d.glb: «RobotExpressive» by Tomás Laulhé (Quaternius), CC0 1.0 (public domain); facial morph targets by Don McCurdy.
+  Source: https://github.com/mrdoob/three.js/tree/dev/examples/models/gltf/RobotExpressive
+  Colours and the hard hat are applied at run time by robo3d-1.js.

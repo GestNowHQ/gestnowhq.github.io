@@ -874,7 +874,7 @@ function go(view) {
   if (!state.ready) return boot();   // never show a screen before login (and the phone code, when required)
   if (state.me.role === 'worker') view = 'minhas';   // the worker profile has one screen (the database checks the same)
   else if (state.offline && view !== 'picar') { toast('Sem rede: por agora só podes picar.'); view = 'picar'; }
-  stopNfc(); clearInterval(state.timer); clearInterval(state.tick); hideFlash(); openMore(false); Voice.stop();
+  stopNfc(); clearInterval(state.timer); clearInterval(state.tick); hideFlash(); openMore(false); Voice.stop(); dropRobots();
   if (state.uiEl && window.GNUI) { window.GNUI.unmount(state.uiEl); state.uiEl = null; }
   state.view = view;
   app.classList.toggle('wide', view === 'secretariado' || view === 'painel');
@@ -1862,6 +1862,7 @@ const KIND_IC = { video: 'play', document: 'doc', bot: 'bot' };
 const KIND_TX = { video: 'Vídeo', document: 'Para ler', bot: 'Conversa com o bot' };
 const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.max(0, s) % 60).padStart(2, '0')}`;
 function onbShell(ob, inner) {
+  dropRobots();
   state.onb = ob; nav.hidden = true; signedOut(false); document.body.classList.add('onboarding');
   const at = ONB_AT[ob.status] ?? 0;
   app.innerHTML = `<div class="onb">
@@ -1972,15 +1973,17 @@ async function loadInduction() {
   if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
   state.indItems = data;
   if (!data.length) {
-    el.innerHTML = `<div class="card">${empty('play', 'Ainda não há acolhimento', 'Junta conversas com o bot, vídeos (links do YouTube, podem ser «não listados») e manuais. Ou começa pelo modelo da GestNow e adapta-o.')}
-      <p><button class="btn wide" id="tpl">Começar com o modelo (2 conversas com o bot e 1 manual)</button></p></div>`;
+    el.innerHTML = `<div class="card">${empty('play', 'Ainda não há acolhimento', 'Começa pelo pacote geral da GestNow (9 conversas de segurança com o bot) e junta por cima o que é só da tua empresa: regras da obra, manuais do cliente, vídeos.')}
+      <p><button class="btn wide" id="tpl">Usar o pacote geral da GestNow (9 conversas)</button></p></div>`;
     $('#tpl').onclick = useInductionTemplate; return;
   }
   el.innerHTML = `<div class="card ind-list">${data.map((x, i) => `<button class="ind ${x.is_active ? '' : 'off'}" data-id="${esc(x.id)}">
       <span class="oi">${ic(KIND_IC[x.kind] || 'doc')}</span><span class="grow"><b>${i + 1}. ${esc(x.title)}</b>
       <small>${x.kind === 'document' ? 'Manual' : KIND_TX[x.kind]} · mín. ${mmss(x.min_seconds)} · ${x.questions.length} pergunta(s) · versão ${x.version}${x.for_external ? '' : ' · só da empresa'} · ${x.passed} pessoa(s) concluíram</small></span>
       ${x.is_active ? chip('val', 'ativo', 'ok') : chip('', 'desligado')}</button>`).join('')}</div>
-    <p class="small muted">Toca para mudar. Quem já é ativo não precisa de rever; uma versão nova vale para quem entrar a partir de agora.</p>`;
+    <p class="small muted">Toca para mudar. Quem já é ativo não precisa de rever; uma versão nova vale para quem entrar a partir de agora.</p>
+    ${INDUCTION_TEMPLATE.some((t) => !data.some((x) => x.title === t.title)) ? `<p><button class="btn ghost wide" id="tpl">${ic('bot')}Juntar o que falta do pacote geral da GestNow</button></p>` : ''}`;
+  if ($('#tpl')) $('#tpl').onclick = useInductionTemplate;
   el.querySelectorAll('[data-id]').forEach((b) => b.onclick = () => editInduction(data.find((x) => x.id === b.dataset.id)));
 }
 const ONB_LABEL = { pending_video: 'Passo 1 · acolhimento', pending_data: 'Passo 2 · dados', pending_hr_validation: 'Passo 2 · à espera do RH',
@@ -2045,7 +2048,9 @@ async function editInduction(x) {
   if (x && !!fd.get('active') !== x.is_active) { const r = await sb.rpc('mini_induction_set_active', { p_id: id, p_active: !!fd.get('active') }); if (r.error) return toast(friendly(r.error)); }
   toast('Guardado.'); loadInduction();
 }
-// A starting point, to adapt: three short manuals with questions. Plain words, no company-specific rules.
+// The GestNow general pack: the same for every client company, which then adds its own (rules of the site, the client's manuals).
+// Written by GestNow from the general rules of prevention (ACT, EU-OSHA, OSHA): no one's manual is copied. Plain words, short lines.
+// Every part is a conversation with the bot; [sinais] show the safety sign. Questions: the right answer is «correct».
 const INDUCTION_TEMPLATE = [
   { title: 'Bem-vindo: como trabalhamos', kind: 'bot', body: `Bem-vindo à equipa! Vou explicar-te as regras que valem em todas as obras. Presta atenção, porque no fim faço-te umas perguntas.
 
@@ -2071,20 +2076,102 @@ Na app vês todas as tuas horas. Se um dia estiver errado, carrega em «Não con
 Sem o equipamento completo, não entras na obra. Se alguma coisa estiver estragada ou perdida, pede outra antes de começar a trabalhar.`,
     q: [{ q: 'Sem capacete podes entrar na obra?', options: ['Sim, se for rápido', 'Não'], correct: 1 },
       { q: 'As tuas luvas rasgaram-se. O que fazes?', options: ['Trabalho sem luvas', 'Peço luvas novas antes de continuar'], correct: 1 }] },
-  { title: 'Emergências e acidentes', kind: 'document', min: 120, body: `Em caso de alarme: para o trabalho, deixa a zona em segurança se puderes, e vai pelo caminho de evacuação até ao ponto de encontro da obra. Não voltes atrás para buscar nada.
+  { title: 'Autorização de trabalho e direito de parar', kind: 'bot', body: `Nas fábricas e refinarias, quase todos os trabalhos precisam de uma autorização de trabalho, assinada antes de começar.
 
-Se houver um acidente: protege-te primeiro, chama ajuda (112 e o encarregado) e não mexas na pessoa ferida se não souberes como.
+[autorizacao] A autorização diz o que vais fazer, onde, os perigos e as proteções. Lê-a, ou pede que ta expliquem, antes de assinares.
 
-Qualquer quase-acidente ou situação perigosa conta: diz ao encarregado no mesmo dia. Falar evita o próximo acidente.`,
+Só fazes o que está escrito na autorização. Se o trabalho mudar, para e pede uma autorização nova.
+
+[stop] Tens sempre o direito, e o dever, de parar um trabalho que não é seguro. Ninguém te pode castigar por isso.
+
+Se vires um perigo, para, afasta as pessoas, e avisa o encarregado. Primeiro a segurança, depois o trabalho.`,
+    q: [{ q: 'O trabalho mudou e já não é o que está na autorização. O que fazes?', options: ['Continuo, é quase igual', 'Paro e peço uma autorização nova'], correct: 1 },
+      { q: 'Achas que um trabalho não é seguro. Podes pará-lo?', options: ['Sim, e devo avisar o encarregado', 'Não, só o chefe pode parar'], correct: 0 }] },
+  { title: 'Trabalhos em altura', kind: 'bot', body: `As quedas em altura são das maiores causas de mortes nas obras. Vamos falar disso.
+
+[queda] Onde há risco de cair, tem de haver proteção: guarda-corpos, redes, ou arnês preso a um ponto seguro.
+
+[arnes] Se usas arnês, está sempre preso. Um arnês solto não te protege de nada.
+
+[andaime] Só sobes a um andaime com a etiqueta verde, verificado. Etiqueta vermelha, ou sem etiqueta: não sobes.
+
+Nunca tires um guarda-corpos, uma tampa ou uma rede. Se for preciso, quem monta o andaime faz a alteração.
+
+Ferramentas em altura vão presas, para não caírem em cima de ninguém. E por baixo, a zona fica vedada.`,
+    q: [{ q: 'O andaime tem a etiqueta vermelha. Podes subir?', options: ['Não', 'Sim, se for só um minuto'], correct: 0 },
+      { q: 'Estás em altura com arnês. Quando o prendes?', options: ['Só nas zonas mais altas', 'Sempre'], correct: 1 },
+      { q: 'Um guarda-corpos atrapalha o teu trabalho. O que fazes?', options: ['Tiro-o e volto a pôr no fim', 'Peço a quem montou para o alterar'], correct: 1 }] },
+  { title: 'Espaços confinados', kind: 'bot', body: `Um espaço confinado é um sítio fechado com entrada apertada: um tanque, uma cisterna, uma caixa de visita, o interior de um equipamento.
+
+[gas] O ar lá dentro pode não ter oxigénio suficiente, ou ter gases tóxicos ou que explodem. Muitas vezes não se vê nem se cheira.
+
+[autorizacao] Só entras com autorização de trabalho, e depois de o ar ser medido. As medições continuam enquanto lá estás.
+
+Fica sempre um vigilante cá fora, a falar contigo, com o plano de salvamento pronto.
+
+Se um colega desmaiar lá dentro, não entres para o tirar. Dá o alarme. A maior parte das vítimas destes acidentes são pessoas que entraram para salvar.`,
+    q: [{ q: 'Um colega desmaiou dentro de um tanque. O que fazes?', options: ['Entro logo para o tirar', 'Dou o alarme e não entro sem equipamento'], correct: 1 },
+      { q: 'Quando podes entrar num espaço confinado?', options: ['Com autorização e o ar medido', 'Quando não cheira a nada'], correct: 0 }] },
+  { title: 'Produtos químicos', kind: 'bot', body: `Na indústria trabalhas perto de produtos químicos. Alguns queimam, outros são tóxicos, outros pegam fogo.
+
+[quimico] Lê sempre o rótulo. Os símbolos de perigo, em losango vermelho, dizem-te o risco.
+
+A ficha de dados de segurança explica como usar, que proteção usar, e o que fazer num acidente. Pergunta ao encarregado onde está.
+
+[luvas] [oculos] Usa as luvas e os óculos certos para aquele produto. Nunca uses um produto numa embalagem sem rótulo.
+
+[fumar] Nunca comas, bebas ou fumes onde há produtos químicos. Lava as mãos antes das pausas.
+
+Se um produto te salpicar os olhos ou a pele, lava logo com muita água, e avisa.`,
+    q: [{ q: 'Encontraste uma garrafa sem rótulo. O que fazes?', options: ['Uso, deve ser água', 'Não uso e aviso o encarregado'], correct: 1 },
+      { q: 'Um produto salpicou-te os olhos. O que fazes primeiro?', options: ['Lavo logo com muita água', 'Espero para ver se passa'], correct: 0 }] },
+  { title: 'Trabalho a quente e incêndio', kind: 'bot', body: `Soldar, cortar ou rebarbar faz faíscas. Numa zona com gases ou combustíveis, uma faísca chega para um incêndio ou uma explosão.
+
+[inflamavel] [autorizacao] Trabalho a quente só com autorização, e depois de medir os gases à volta.
+
+[extintor] Tem sempre um extintor ao teu lado, e tira ou tapa tudo o que possa arder.
+
+Quando acabas, a zona fica vigiada durante algum tempo. Muitos incêndios começam depois de o trabalho acabar.
+
+[alarme] Se houver um início de incêndio, dá o alarme primeiro. Só usas o extintor se for pequeno e tiveres uma saída atrás de ti.`,
+    q: [{ q: 'Antes de soldar perto de tubagens com produto, o que é preciso?', options: ['Nada, sou soldador experiente', 'Autorização e medição de gases'], correct: 1 },
+      { q: 'Acabaste de soldar. A zona pode ficar sozinha logo?', options: ['Não, fica vigiada durante algum tempo', 'Sim'], correct: 0 }] },
+  { title: 'Bloqueio de energias (consignação)', kind: 'bot', body: `Antes de mexer numa máquina, numa bomba ou num quadro elétrico, a energia tem de estar desligada e bloqueada. Chama-se consignação.
+
+[cadeado] Cada pessoa que trabalha no equipamento põe o seu próprio cadeado e a sua etiqueta. A chave fica contigo.
+
+Depois de bloquear, confirma que não há energia: tenta arrancar, mede a tensão, verifica a pressão.
+
+Nunca tires o cadeado de outra pessoa. E nunca trabalhes num equipamento só porque «disseram que está desligado».
+
+[stop] Se encontrares um cadeado ou uma etiqueta, não mexas. Pergunta de quem é.`,
+    q: [{ q: 'Vais trabalhar numa bomba. Basta alguém dizer que está desligada?', options: ['Sim', 'Não: ponho o meu cadeado e confirmo'], correct: 1 },
+      { q: 'Podes tirar o cadeado de um colega que já foi embora?', options: ['Nunca', 'Sim, se ele demorar'], correct: 0 }] },
+  { title: 'Emergências e quase-acidentes', kind: 'bot', body: `Para terminar: o que fazer quando alguma coisa corre mal.
+
+[alarme] [saida] Se tocar o alarme, para o trabalho, deixa a zona em segurança se puderes, e sai pelo caminho de evacuação.
+
+[encontro] Vai para o ponto de encontro e espera pelo encarregado, para seres contado. Não voltes atrás para buscar nada.
+
+[112] [socorro] Se houver um acidente: protege-te primeiro, chama ajuda, 112 e o encarregado, e não mexas no ferido se não souberes como.
+
+Um quase-acidente é quando quase acontece. Conta sempre ao encarregado, no mesmo dia. Falar disso evita o próximo acidente.
+
+Obrigado por me ouvires. Bom trabalho, e em segurança!`,
     q: [{ q: 'Toca o alarme. Para onde vais?', options: ['Para o ponto de encontro', 'Volto à carrinha buscar as minhas coisas', 'Continuo a trabalhar'], correct: 0 },
-      { q: 'Viste uma situação perigosa mas ninguém se magoou. O que fazes?', options: ['Nada, não aconteceu nada', 'Digo ao encarregado no mesmo dia'], correct: 1 }] }];
+      { q: 'Quase caiu uma peça em cima de um colega, mas ninguém se magoou. O que fazes?', options: ['Nada, não aconteceu nada', 'Conto ao encarregado no mesmo dia'], correct: 1 }] }];
+// Adds the parts of the general pack this company does not have yet (by title), at the end, in the pack's order.
 async function useInductionTemplate() {
-  for (const [i, t] of INDUCTION_TEMPLATE.entries()) {
+  const have = new Set((state.indItems || []).map((x) => x.title));
+  const add = INDUCTION_TEMPLATE.filter((t) => !have.has(t.title));
+  if (!add.length) return toast('Já tens o pacote geral completo.');
+  const base = Math.max(0, ...(state.indItems || []).map((x) => x.position));
+  for (const [i, t] of add.entries()) {
     const { error } = await sb.rpc('mini_induction_save', { p_id: null, p_title: t.title, p_kind: t.kind, p_video_id: null, p_body: t.body,
-      p_min_seconds: t.min || null, p_questions: t.q, p_position: (i + 1) * 10, p_for_external: true });
+      p_min_seconds: t.min || null, p_questions: t.q, p_position: base + (i + 1) * 10, p_for_external: true });
     if (error) return toast(friendly(error));
   }
-  toast('Modelo criado. Revê o que o bot diz e junta os teus vídeos.'); loadInduction();
+  toast(`${add.length} parte(s) do pacote geral juntas. Revê o que o bot diz e junta o que é só da tua empresa.`); loadInduction();
 }
 
 // ------------------------------------------------------------------ O bot de segurança (acolhimento em conversa, visita guiada)
@@ -2126,9 +2213,19 @@ const PICTO = {
   alarme: ['Alarme', 'fire', '<path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4zM10 20.5a2 2 0 0 0 4 0"/>'],
   fumar: ['Proibido fumar', 'no', '<path d="M4 13h11v3H4zM17 13v3M19 13v3M17 10c0-2 2-1.5 2-4"/>'],
   cartao: ['O teu cartão', 'card', '<path d="M3 7h12v10H3zM6 14h4M18 9a4 4 0 0 1 0 6M20.5 6.5a7.5 7.5 0 0 1 0 11"/>'],
+  autorizacao: ['Autorização de trabalho', 'card', '<path d="M7 3h7l4 4v14H7zM14 3v4h4M9.5 12h6M9.5 15.5h6M9.5 19l1.5-1.5 1.5 1.5 3-3"/>'],
+  stop: ['Parar o trabalho', 'stopk', '<path d="M8 20v-8.5l-1.6-2a1.1 1.1 0 0 1 1.7-1.4L9.5 10V4.8a1.1 1.1 0 0 1 2.2 0V10V3.8a1.1 1.1 0 0 1 2.2 0V10V4.8a1.1 1.1 0 0 1 2.2 0V10V6.5a1.1 1.1 0 0 1 2.2 0V14c0 3.3-2 6-5 6z"/>'],
+  queda: ['Risco de queda', 'warn', '<circle cx="13" cy="7" r="1.6"/><path d="M7 11.5l4-1.5 3 3 3-.5M11 10l-1 5-3 2.5M10 15l3.5 1.5L14 20M4 20h6"/>'],
+  andaime: ['Andaime verificado', 'safe', '<path d="M5 21V4M19 21V4M5 9h14M5 15h14M5 9l14 6M5 4h14"/>'],
+  gas: ['Gases perigosos', 'warn', '<path d="M7 18c-2 0-3-1.5-3-3 0-2 1.6-3 3-3 .3-2.5 2.2-4 4.5-4 2.6 0 4.2 1.8 4.5 4 1.8 0 3 1.3 3 3s-1.2 3-3 3z"/>'],
+  quimico: ['Produto perigoso', 'ghs', '<path d="M9 4h6M10 4v5l-5 9h14l-5-9V4M8 14h8"/>'],
+  inflamavel: ['Inflamável', 'ghs', '<path d="M12 4c1 3 4.5 5 4.5 9.5A4.5 4.5 0 0 1 7.5 13.5c0-2 1-3.2 2-4 0 1.5.8 2.5 1.8 2.8C11 9.5 11 6.5 12 4z"/><path d="M6 20h12"/>'],
+  cadeado: ['Bloqueio com cadeado', 'must', '<rect x="6" y="11" width="12" height="9" rx="2"/><path d="M8.5 11V8a3.5 3.5 0 0 1 7 0v3M12 14.5v2.5"/>'],
   '112': ['Ligar 112', 'fire', '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>'],
 };
-const picto = (k) => { const p = PICTO[k]; return `<figure class="picto ${p[1]}"><svg viewBox="0 0 24 24" aria-hidden="true">${p[2]}${p[1] === 'no' ? '<path class="slash" d="M4.5 4.5l15 15"/>' : ''}</svg><figcaption>${esc(p[0])}</figcaption></figure>`; };
+const picto = (k) => { const p = PICTO[k];
+  const inner = p[1] === 'ghs' ? `<g transform="rotate(-45 12 12)">${p[2]}</g>` : p[2];
+  return `<figure class="picto ${p[1]}"><svg viewBox="0 0 24 24" aria-hidden="true">${inner}${p[1] === 'no' ? '<path class="slash" d="M4.5 4.5l15 15"/>' : ''}</svg><figcaption>${esc(p[0])}</figcaption></figure>`; };
 // A line of the script: its signs, and the words without the [tags].
 function botLine(raw) {
   const signs = []; const text = String(raw).replace(/\[([a-z0-9]+)\]/gi, (m, k) => { k = k.toLowerCase(); if (PICTO[k]) { signs.push(k); return ''; } return m; }).replace(/[ \t]+/g, ' ').trim();
@@ -2146,61 +2243,106 @@ const Voice = {
     if (!this.ok()) return null;
     let vs = speechSynthesis.getVoices();
     if (!vs.length && !this.waited) { this.waited = true; await new Promise((r) => { speechSynthesis.addEventListener('voiceschanged', r, { once: true }); setTimeout(r, 1200); }); vs = speechSynthesis.getVoices(); }
-    return vs.find((v) => /^pt[-_]PT/i.test(v.lang)) || vs.find((v) => /^pt/i.test(v.lang)) || null;
+    // The best Portuguese voice this phone has: Portugal first, then the neural / online ones (Google, Natural, Premium…).
+    const score = (v) => (/^pt[-_]PT/i.test(v.lang) ? 100 : /^pt/i.test(v.lang) ? 10 : -1000) + (/natural|neural|premium|enhanced|melhorad|online/i.test(v.name) ? 8 : 0)
+      + (/google/i.test(v.name) ? 6 : 0) + (v.localService === false ? 3 : 0);
+    const best = vs.filter((v) => score(v) > 0).sort((a, b) => score(b) - score(a))[0];
+    return best || null;
   },
   pace: (text) => (window.GESTNOW_TEST ? 60 : Math.max(1600, words(text) * 390)),   // ~2.6 words a second: slower than the server's 4 (sql/56 K2)
   stop() { this.gen = (this.gen || 0) + 1; if (this.ok()) speechSynthesis.cancel(); },
-  async say(text, face) {
+  // o: { face (an element that gets .talking), robot (the 3D one), onWord(i) (index of the word being said, for the subtitles) }.
+  async say(text, o = {}) {
+    if (o instanceof Element) o = { face: o };
     const gen = this.gen = (this.gen || 0) + 1; const t0 = Date.now(); const min = this.pace(text);
-    if (face) face.classList.add('talking');
+    const starts = []; String(text).replace(/\S+/g, (w, i) => { starts.push(i); return w; });
+    let wi = -1; const word = (i) => { if (i === wi || gen !== this.gen) return; wi = i; if (o.onWord) o.onWord(i); if (o.robot) o.robot.word(); };
+    // Words in time: from the voice when it reports them, else at an even pace over the expected length.
+    let byVoice = false; const step = Math.max(120, min / Math.max(1, starts.length));
+    const tick = setInterval(() => { if (!byVoice && gen === this.gen && wi < starts.length - 1) word(wi + 1); }, step); word(0);
+    if (o.face) o.face.classList.add('talking'); if (o.robot) o.robot.talk(true);
     try {
       const v = this.on && text ? await this.voice() : null;
       if (v && gen === this.gen) {
         speechSynthesis.cancel();
         await new Promise((res) => {
           const u = new SpeechSynthesisUtterance(text); u.voice = v; u.lang = v.lang; u.rate = 1;
+          u.onboundary = (e) => { if (e.name && e.name !== 'word') return; byVoice = true; let k = 0; while (k + 1 < starts.length && starts[k + 1] <= e.charIndex) k++; word(k); };
           u.onend = u.onerror = res; setTimeout(res, words(text) * 900 + 5000);   // a voice that never ends must not stop the bot
           speechSynthesis.speak(u);
         });
       }
       const rest = min - (Date.now() - t0); if (rest > 0 && gen === this.gen) await new Promise((r) => setTimeout(r, rest));
-    } finally { if (face) face.classList.remove('talking'); }
+    } finally {
+      clearInterval(tick); if (gen === this.gen && o.onWord) o.onWord(starts.length);
+      if (o.face) o.face.classList.remove('talking'); if (o.robot) o.robot.talk(false);
+    }
     return gen === this.gen;
   },
 };
+// The 3D robot (vendor/robo3d-1.js + robo3d.glb, ~0.7 MB, fetched only when a robot is on screen, then kept by the phone).
+// Not on «save data», not without WebGL, not in the automatic tests unless asked: the drawn face stays instead.
+let robotLibP = null;
+function robotLib() {
+  if (!robotLibP) robotLibP = new Promise((res) => {
+    if (window.GNRobot) return res(window.GNRobot);
+    const sc = document.createElement('script'); sc.src = 'vendor/robo3d-1.js'; sc.onload = () => res(window.GNRobot || null); sc.onerror = () => res(null); document.head.appendChild(sc);
+  });
+  return robotLibP;
+}
+const robots = new Set();
+function dropRobots() { for (const r of robots) { try { r.dispose(); } catch (_) {} } robots.clear(); }
+async function robotIn(el, look, from) {
+  if (look !== 'robo' || !el || (window.GESTNOW_TEST && !window.GESTNOW_3D) || (navigator.connection && navigator.connection.saveData)) return null;
+  const lib = await robotLib(); if (!lib || !lib.supported() || !el.isConnected) return null;
+  try {
+    const r = await lib.mount(el, { model: 'vendor/robo3d.glb', from });
+    if (!r) return null;
+    if (!el.isConnected) { r.dispose(); return null; }
+    robots.add(r); el.classList.add('has3d'); return r;
+  } catch (_) { return null; }
+}
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function getBot() {
   if (state.bot) return state.bot;
   const { data } = await sb.rpc('mini_bot');
-  return (state.bot = data || { name: 'Gil', look: 'robo' });
+  return (state.bot = data || { name: 'Hardy', look: 'robo' });
 }
 // One bot part of the onboarding: the bot talks, then asks; the server grades (55 I5) and keeps the clock (56 K2).
 async function onbBot(x, items) {
-  const ob = state.onb; const n = items.indexOf(x) + 1; const bot = ob.bot || { name: 'Gil', look: 'robo' };
+  const ob = state.onb; const n = items.indexOf(x) + 1; const bot = ob.bot || { name: 'Hardy', look: 'robo' };
   const lines = botLines(x.body);
-  onbShell(ob, `<div class="card bot-card"><div class="bot-head" id="bhead">${botFace(bot.look)}<div class="grow"><b>${esc(bot.name)}</b><small id="bst">Parte ${n} de ${items.length} · ${esc(x.title)}</small></div>
+  onbShell(ob, `<div class="card bot-card"><div class="bot-head bot-stage" id="bhead"><div class="bot-3d" id="b3d">${botFace(bot.look)}</div>
+      <div class="grow"><b>${esc(bot.name)}</b><small id="bst">Parte ${n} de ${items.length} · ${esc(x.title)}</small></div>
       <button class="iconbtn" id="voz" type="button" aria-pressed="${Voice.on}" aria-label="Voz" title="Ligar ou desligar a voz">${ic(Voice.on ? 'voice' : 'mute')}</button></div>
     <div class="bot-log" id="blog" aria-live="polite"><div class="bub bot"><p>Olá, ${esc(String(ob.name || '').split(' ')[0])}! Sou ${esc(bot.name)}. Esta conversa leva ${Math.max(1, Math.round(lines.reduce((a, l) => a + Voice.pace(l.text), 0) / 60000))} minuto(s). Liga o som do telemóvel.</p></div></div>
     <div class="bot-act" id="bact"><button class="btn big" id="bgo">${ic('play')}${x.opened_at ? 'Continuar a conversa' : 'Começar a conversa'}</button>
       <button class="btn ghost wide" id="back">Voltar à lista</button></div></div>`);
   const face = () => $('#bhead .botface'); const log = $('#blog'); const act = $('#bact');
-  let live = true;
+  let live = true; let robot = null;
+  robotIn($('#b3d'), bot.look, 0.18).then((r) => { robot = r; });
+  const act3d = (name) => { if (robot) robot.play(name); };
   const alive = () => live && log.isConnected;
   const scroll = () => { const last = log.lastElementChild; if (last && last.scrollIntoView) last.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
   const add = (who, html) => { const d = document.createElement('div'); d.className = 'bub ' + who; d.innerHTML = html; log.appendChild(d); scroll(); return d; };
   const speak = async (l) => {
     const typing = add('bot typing', '<i></i><i></i><i></i>'); await sleep(550); typing.remove(); if (!alive()) return false;
-    const b = add('bot', `${l.signs.length ? `<div class="signs">${l.signs.map(picto).join('')}</div>` : ''}${l.text ? `<p>${esc(l.text)}</p>` : ''}`);
+    // The words light up as they are said (karaoke): who reads without sound follows at the same pace.
     const spoken = [l.text, ...l.signs.filter(() => !l.text).map((k) => PICTO[k][0])].join('. ');
-    b.title = 'Toca para ouvir outra vez'; b.onclick = () => Voice.say(spoken, face());
-    return (await Voice.say(spoken, face())) && alive();
+    const ws = l.text ? l.text.split(/\s+/) : [];
+    const b = add('bot', `${l.signs.length ? `<div class="signs">${l.signs.map(picto).join('')}</div>` : ''}${ws.length ? `<p class="kara">${ws.map((w) => `<span>${esc(w)}</span>`).join(' ')}</p>` : ''}`);
+    const spans = [...b.querySelectorAll('.kara span')];
+    const onWord = (i) => spans.forEach((sp, k) => { sp.classList.toggle('said', k < i); sp.classList.toggle('now', k === i); });
+    const opts = () => ({ face: face(), robot, onWord });
+    b.title = 'Toca para ouvir outra vez'; b.onclick = () => Voice.say(spoken, opts());
+    return (await Voice.say(spoken, opts())) && alive();
   };
   $('#voz').onclick = () => { Voice.on = !Voice.on; $('#voz').setAttribute('aria-pressed', String(Voice.on)); $('#voz').innerHTML = ic(Voice.on ? 'voice' : 'mute'); };
   $('#back').onclick = () => { live = false; Voice.stop(); showOnboarding(); };
   $('#bgo').onclick = async () => {
     const { error } = await sb.rpc('mini_induction_open', { p_item: x.id });
     if (error) return toast(friendly(error));
-    act.innerHTML = '<p class="small muted bot-hint">Toca numa mensagem para a ouvir outra vez.</p>';
+    act.innerHTML = '<p class="small muted bot-hint">Toca numa mensagem para a ouvir outra vez.</p>'; act3d('Wave');
     for (const l of lines) if (!(await speak(l))) return;
     const answers = [];
     if (x.questions.length && !(await speak({ signs: [], text: `Agora ${x.questions.length === 1 ? 'uma pergunta' : x.questions.length + ' perguntas'} rápidas.` }))) return;
@@ -2230,12 +2372,14 @@ async function onbBot(x, items) {
       res = r.data;
     }
     if (res.passed) {
+      act3d(res.step_done ? 'Dance' : 'ThumbsUp');
       await speak({ signs: [], text: x.questions.length ? 'Muito bem! Acertaste tudo.' : 'Muito bem! Já está.' });
       act.innerHTML = `<button class="btn big" id="bnext">${ic('ok')}${res.step_done ? 'Acolhimento concluído' : 'Passar à parte seguinte'}</button>`;
       $('#bnext').onclick = () => { live = false; Voice.stop(); if (res.step_done) toast('Acolhimento concluído. Obrigado!'); showOnboarding(); };
       return;
     }
     const bad = (res.wrong || []).map((i) => i + 1);
+    act3d('No');
     await speak({ signs: [], text: `Ainda não. ${bad.length === 1 ? 'A pergunta ' + bad[0] + ' não está certa' : 'As perguntas ' + bad.join(' e ') + ' não estão certas'}. Vamos ouvir outra vez, com atenção.` });
     act.innerHTML = `<button class="btn big" id="bagain">${ic('play')}Ouvir outra vez</button><button class="btn ghost wide" id="back">Voltar à lista</button>`;
     $('#back').onclick = () => { live = false; Voice.stop(); showOnboarding(); };
@@ -2272,11 +2416,12 @@ async function startTour() {
   const search = document.getElementById('search'); if (search && !search.hidden) steps.push({ el: search, text: 'Procurar: escreve o nome de uma pessoa, de uma obra ou de um ecrã, e vais direto lá.' });
   steps.push({ text: 'É isto. Se quiseres ver outra vez, está em «Mais», «Visita guiada». Bom trabalho e em segurança!' });
   const ov = document.createElement('div'); ov.id = 'tour'; ov.className = 'tour'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-label', 'Visita guiada');
-  ov.innerHTML = `<div class="tour-hole" id="thole"></div><div class="tour-card" id="tcard">${botFace(bot.look)}<div class="grow"><b>${esc(bot.name)}</b><p id="ttx"></p>
+  ov.innerHTML = `<div class="tour-hole" id="thole"></div><div class="tour-card" id="tcard"><div class="tour-3d">${botFace(bot.look)}</div><div class="grow"><b>${esc(bot.name)}</b><p id="ttx"></p>
     <div class="tour-acts"><span class="tour-dots" id="tdots"></span><button class="btn ghost small" id="tskip">Sair</button><button class="btn small" id="tnext">Seguinte</button></div></div></div>`;
   document.body.appendChild(ov);
-  let i = 0;
-  const end = () => { Voice.stop(); ov.remove(); window.removeEventListener('resize', place); };
+  let i = 0; let robot = null;
+  robotIn(ov.querySelector('.tour-3d'), bot.look, 0.12).then((r) => { robot = r; if (r) r.play('Wave'); });
+  const end = () => { Voice.stop(); if (robot) { robots.delete(robot); robot.dispose(); } ov.remove(); window.removeEventListener('resize', place); };
   function place() {
     const s = steps[i]; const hole = ov.querySelector('#thole'); const card = ov.querySelector('#tcard');
     const r = s.el && s.el.getBoundingClientRect();
@@ -2291,7 +2436,7 @@ async function startTour() {
     ov.querySelector('#ttx').textContent = s.text;
     ov.querySelector('#tdots').innerHTML = steps.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('');
     ov.querySelector('#tnext').textContent = i === steps.length - 1 ? 'Terminar' : 'Seguinte';
-    place(); Voice.say(s.text, ov.querySelector('#tcard .botface'));
+    place(); Voice.say(s.text, { face: ov.querySelector('#tcard .botface'), robot });
   }
   window.addEventListener('resize', place);
   ov.querySelector('#tskip').onclick = end;
@@ -2302,13 +2447,15 @@ async function startTour() {
 // Acolhimento screen: the company's bot (name and look), and a way to hear it and to see the tour.
 async function loadBotCard() {
   const el = $('#ibot'); if (!el) return;
+  dropRobots();
   const bot = await getBot(); if (!el.isConnected) return;
-  el.innerHTML = `<div class="card bot-set">${botFace(bot.look)}<div class="grow"><b>O vosso bot: ${esc(bot.name)}</b>
+  el.innerHTML = `<div class="card bot-set"><div class="bot-3d set">${botFace(bot.look)}</div><div class="grow"><b>O vosso bot: ${esc(bot.name)}</b>
       <small>Apresenta as conversas do acolhimento e faz a visita guiada à app. Fala com a voz do telemóvel, sem custos.</small></div>
     <div class="bot-set-acts"><button class="btn ghost small" id="bhear">${ic('voice')}Ouvir</button><button class="btn ghost small" id="btour">${ic('bot')}Visita guiada</button><button class="btn small" id="bedit">Mudar</button></div></div>`;
   $('#bhear').onclick = async () => { if (!Voice.ok()) return toast('Este navegador não tem voz.'); if (!(await Voice.voice())) toast('Este telemóvel não tem voz em português: instala-a nas definições (Texto para voz).');
-    Voice.say(`Olá! Sou ${bot.name}, e vou receber as pessoas novas da empresa.`, el.querySelector('.botface')); };
+    if (robot) robot.play('Wave'); Voice.say(`Olá! Sou ${bot.name}, e vou receber as pessoas novas da empresa.`, { face: el.querySelector('.botface'), robot }); };
   $('#btour').onclick = startTour;
+  let robot = null; robotIn(el.querySelector('.bot-3d'), bot.look, 0).then((r) => { robot = r; });
   $('#bedit').onclick = async () => {
     const fd = await askSheet('O vosso bot', `<label for="bn">Nome</label><input id="bn" name="name" required minlength="2" maxlength="30" value="${esc(bot.name)}">
       <label>Aspeto</label><div class="bot-looks" role="radiogroup">${Object.entries(BOT_LOOKS).map(([k, t]) => `<label class="bot-look"><input type="radio" name="look" value="${k}" ${bot.look === k ? 'checked' : ''}>${botFace(k)}<span>${esc(t)}</span></label>`).join('')}</div>`, 'Guardar');
