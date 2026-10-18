@@ -400,6 +400,7 @@ nav.addEventListener('click', (e) => {
   if (b.dataset.more !== undefined) return openMore(document.getElementById('more').hidden);
   openMore(false);
   if (b.dataset.action === 'sair') return signOut();
+  if (b.dataset.action === 'tour') return startTour();
   go(b.dataset.view);
 });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
@@ -428,12 +429,13 @@ function layoutNav(role) {
   for (const v of main) tabs.insertBefore(btn(v), moreBtn);
   for (const v of MORE_ORDER) if (!main.includes(v) && !btn(v).hidden) sheet.appendChild(btn(v));
   for (const v of MORE_ORDER) if (btn(v).hidden && btn(v).parentElement !== sheet) sheet.appendChild(btn(v));
+  sheet.appendChild(nav.querySelector('button[data-action=tour]'));
   sheet.appendChild(Object.assign(document.createElement('hr'), {}));
   sheet.appendChild(nav.querySelector('button[data-action=sair]'));
   sheet.querySelectorAll('hr').forEach((h, i, all) => { if (i < all.length - 1) h.remove(); });
   // Which version this phone is running, so anyone can check that an update arrived.
   if (!sheet.querySelector('.ver')) sheet.appendChild(Object.assign(document.createElement('p'), { className: 'ver', textContent: 'Versão ' + APP_VERSION }));
-  if (isWide()) tabs.insertBefore(nav.querySelector('button[data-action=sair]'), moreBtn);
+  if (isWide()) { tabs.insertBefore(nav.querySelector('button[data-action=tour]'), moreBtn); tabs.insertBefore(nav.querySelector('button[data-action=sair]'), moreBtn); }
 }
 function openMore(open) {
   const sheet = document.getElementById('more'); if (!sheet) return;
@@ -562,6 +564,7 @@ async function boot() {
   const other = queue().filter((x) => x._u && x._u !== state.me.user_id);
   if (other.length) toast(`Há ${other.length} picagem(ns) de outra conta neste telemóvel, ainda por enviar.`);
   go(state.view);
+  if (state.tourNext) { state.tourNext = false; setTimeout(startTour, 700); return; }   // just finished the onboarding: the bot shows the app
   showBrief();
 }
 // Once a day, on the first screen: what needs this person today, in one line, from the control room's numbers.
@@ -871,7 +874,7 @@ function go(view) {
   if (!state.ready) return boot();   // never show a screen before login (and the phone code, when required)
   if (state.me.role === 'worker') view = 'minhas';   // the worker profile has one screen (the database checks the same)
   else if (state.offline && view !== 'picar') { toast('Sem rede: por agora só podes picar.'); view = 'picar'; }
-  stopNfc(); clearInterval(state.timer); clearInterval(state.tick); hideFlash(); openMore(false);
+  stopNfc(); clearInterval(state.timer); clearInterval(state.tick); hideFlash(); openMore(false); Voice.stop();
   if (state.uiEl && window.GNUI) { window.GNUI.unmount(state.uiEl); state.uiEl = null; }
   state.view = view;
   app.classList.toggle('wide', view === 'secretariado' || view === 'painel');
@@ -1855,6 +1858,8 @@ const ONB_AT = { pending_video: 0, pending_data: 1, pending_hr_validation: 1, pe
 const ytId = (s) => { const m = /(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/))([A-Za-z0-9_-]{11})/.exec(String(s || '')) || /^([A-Za-z0-9_-]{11})$/.exec(String(s || '').trim());
   return m ? m[1] : null; };
 const paras = (t) => String(t || '').split(/\n\s*\n/).map((x) => `<p>${esc(x.trim()).replace(/\n/g, '<br>')}</p>`).join('');
+const KIND_IC = { video: 'play', document: 'doc', bot: 'bot' };
+const KIND_TX = { video: 'Vídeo', document: 'Para ler', bot: 'Conversa com o bot' };
 const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.max(0, s) % 60).padStart(2, '0')}`;
 function onbShell(ob, inner) {
   state.onb = ob; nav.hidden = true; signedOut(false); document.body.classList.add('onboarding');
@@ -1869,7 +1874,8 @@ function onbShell(ob, inner) {
 }
 async function showOnboarding(ob) {
   if (!ob) { const r = await sb.rpc('mini_onboarding'); if (r.error) return showMessage('Sem ligação', friendly(r.error), true); ob = r.data; }
-  if (!ob || ob.status === 'active' || ob.status === 'none') { document.body.classList.remove('onboarding'); return boot(); }
+  Voice.stop();
+  if (!ob || ob.status === 'active' || ob.status === 'none') { if (state.onb && ob && ob.status === 'active') state.tourNext = true; state.onb = null; document.body.classList.remove('onboarding'); return boot(); }
   ob.skew = new Date(ob.server_now).getTime() - Date.now();
   if (ob.status !== 'pending_video') {
     const waiting = { pending_data: ['Os teus dados', 'O próximo passo é preencheres a tua ficha: morada, NISS, IBAN e documentos. Este ecrã ainda está a ser preparado; até lá, o RH trata disto contigo.'],
@@ -1887,8 +1893,8 @@ async function showOnboarding(ob) {
       <div class="onb-bar"><i style="width:${Math.round(100 * done / items.length)}%"></i></div>
       <p class="small muted">Vê ou lê cada parte até ao fim. No fim respondes a umas perguntas rápidas. Se errares, vês outra vez.</p>
       ${items.map((x, i) => { const st = x.passed_at ? 'done' : x === cur ? 'now' : 'lock'; return `<button class="onb-item ${st}" ${st === 'now' ? `data-open="${esc(x.id)}"` : 'disabled'}>
-        <span class="oi">${st === 'done' ? ic('ok') : st === 'lock' ? ic('lock') : ic(x.kind === 'video' ? 'play' : 'doc')}</span>
-        <span class="grow"><b>${i + 1}. ${esc(x.title)}</b><small>${x.kind === 'video' ? 'Vídeo' : 'Para ler'} · ${Math.max(1, Math.round(x.min_seconds / 60))} min${x.questions.length ? ` · ${x.questions.length} pergunta(s)` : ''}${x.attempts && !x.passed_at ? ` · ${x.attempts}ª tentativa falhada` : ''}</small></span>
+        <span class="oi">${st === 'done' ? ic('ok') : st === 'lock' ? ic('lock') : ic(KIND_IC[x.kind] || 'doc')}</span>
+        <span class="grow"><b>${i + 1}. ${esc(x.title)}</b><small>${KIND_TX[x.kind] || 'Para ler'} · ${Math.max(1, Math.round(x.min_seconds / 60))} min${x.questions.length ? ` · ${x.questions.length} pergunta(s)` : ''}${x.attempts && !x.passed_at ? ` · ${x.attempts}ª tentativa falhada` : ''}</small></span>
         ${st === 'now' ? `<span class="btn small">${x.opened_at ? 'Continuar' : 'Começar'}</span>` : st === 'done' ? chip('val', 'feito', 'ok') : ''}</button>`; }).join('')}</div>`
     : `<div class="card onb-wait">${ic('clock')}<h2>O acolhimento ainda está a ser preparado</h2><p>A empresa ainda não pôs os vídeos e manuais. Volta daqui a pouco.</p><button class="btn ghost" id="onbre">Atualizar</button></div>`);
   if ($('#onbre')) $('#onbre').onclick = () => showOnboarding();
@@ -1896,6 +1902,7 @@ async function showOnboarding(ob) {
 }
 // One video or manual: the clock is the server's; «Já vi» opens when the time is up (and, for a manual, at its end).
 async function onbItem(x, items) {
+  if (x.kind === 'bot') return onbBot(x, items);
   const { data: openedAt, error } = await sb.rpc('mini_induction_open', { p_item: x.id });
   if (error) return toast(friendly(error));
   const ob = state.onb; const n = items.indexOf(x) + 1;
@@ -1952,11 +1959,11 @@ function onbQuiz(x, n, total, wrong) {
 // HR / safety: the videos and manuals of the onboarding, in order, each with its questions; and who is in onboarding now.
 async function viewInduction() {
   if (!can('acolhimento.gerir')) return go('trabalhadores');
-  app.innerHTML = `<div class="ph"><div><p class="ph-k">Pessoas</p><h1>Acolhimento</h1></div><button class="btn" id="addi">+ Vídeo ou manual</button></div>
-    <p class="muted lead">O que cada pessoa nova vê e lê no telemóvel antes de começar. Mudar um vídeo, um texto ou as perguntas cria uma versão nova; a prova diz sempre que versão cada pessoa viu.</p>
-    <div class="ind-grid"><div id="ilist">${skel(3)}</div><div id="iboard"></div></div>`;
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Pessoas</p><h1>Acolhimento</h1></div><button class="btn" id="addi">+ Nova parte</button></div>
+    <p class="muted lead">O que cada pessoa nova ouve, vê e lê no telemóvel antes de começar. Mudar uma conversa, um vídeo, um texto ou as perguntas cria uma versão nova; a prova diz sempre que versão cada pessoa fez.</p>
+    <div id="ibot"></div><div class="ind-grid"><div id="ilist">${skel(3)}</div><div id="iboard"></div></div>`;
   $('#addi').onclick = () => editInduction(null);
-  loadInduction(); loadOnbBoard('#iboard');
+  loadBotCard(); loadInduction(); loadOnbBoard('#iboard');
 }
 async function loadInduction() {
   const el = $('#ilist'); if (!el) return;
@@ -1965,13 +1972,13 @@ async function loadInduction() {
   if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
   state.indItems = data;
   if (!data.length) {
-    el.innerHTML = `<div class="card">${empty('play', 'Ainda não há acolhimento', 'Junta os teus vídeos (links do YouTube, podem ser «não listados») e manuais. Ou começa pelo modelo da GestNow e adapta-o.')}
-      <p><button class="btn wide" id="tpl">Começar com o modelo (3 manuais com perguntas)</button></p></div>`;
+    el.innerHTML = `<div class="card">${empty('play', 'Ainda não há acolhimento', 'Junta conversas com o bot, vídeos (links do YouTube, podem ser «não listados») e manuais. Ou começa pelo modelo da GestNow e adapta-o.')}
+      <p><button class="btn wide" id="tpl">Começar com o modelo (2 conversas com o bot e 1 manual)</button></p></div>`;
     $('#tpl').onclick = useInductionTemplate; return;
   }
   el.innerHTML = `<div class="card ind-list">${data.map((x, i) => `<button class="ind ${x.is_active ? '' : 'off'}" data-id="${esc(x.id)}">
-      <span class="oi">${ic(x.kind === 'video' ? 'play' : 'doc')}</span><span class="grow"><b>${i + 1}. ${esc(x.title)}</b>
-      <small>${x.kind === 'video' ? 'Vídeo' : 'Manual'} · mín. ${mmss(x.min_seconds)} · ${x.questions.length} pergunta(s) · versão ${x.version}${x.for_external ? '' : ' · só da empresa'} · ${x.passed} pessoa(s) concluíram</small></span>
+      <span class="oi">${ic(KIND_IC[x.kind] || 'doc')}</span><span class="grow"><b>${i + 1}. ${esc(x.title)}</b>
+      <small>${x.kind === 'document' ? 'Manual' : KIND_TX[x.kind]} · mín. ${mmss(x.min_seconds)} · ${x.questions.length} pergunta(s) · versão ${x.version}${x.for_external ? '' : ' · só da empresa'} · ${x.passed} pessoa(s) concluíram</small></span>
       ${x.is_active ? chip('val', 'ativo', 'ok') : chip('', 'desligado')}</button>`).join('')}</div>
     <p class="small muted">Toca para mudar. Quem já é ativo não precisa de rever; uma versão nova vale para quem entrar a partir de agora.</p>`;
   el.querySelectorAll('[data-id]').forEach((b) => b.onclick = () => editInduction(data.find((x) => x.id === b.dataset.id)));
@@ -1994,20 +2001,29 @@ async function editInduction(x) {
   const qrow = (i, v) => `<fieldset class="qedit" data-q="${i}"><legend>Pergunta ${i + 1}</legend><input name="q${i}" value="${esc(v ? v.q : '')}" placeholder="ex.: Sem capacete podes entrar na obra?" maxlength="200">
     ${[0, 1, 2].map((j) => `<label class="opt"><input type="radio" name="c${i}" value="${j}" ${v && v.correct === j ? 'checked' : !v && j === 0 ? 'checked' : ''} title="Resposta certa">
       <input name="o${i}_${j}" value="${esc(v && v.options[j] ? v.options[j] : '')}" placeholder="${j === 0 ? 'Resposta' : 'Outra resposta'}${j === 2 ? ' (opcional)' : ''}" maxlength="120"></label>`).join('')}</fieldset>`;
-  const fd = await askSheet(x ? 'Mudar: ' + x.title : 'Novo vídeo ou manual', `
+  const fd = await askSheet(x ? 'Mudar: ' + x.title : 'Nova parte do acolhimento', `
     <label for="it">Título</label><input id="it" name="title" required minlength="3" maxlength="120" value="${esc(x ? x.title : '')}" placeholder="ex.: Regras de segurança da refinaria">
-    <div class="chips reasons" role="radiogroup"><label class="chip"><input type="radio" name="kind" value="video" ${!x || x.kind === 'video' ? 'checked' : ''}>Vídeo do YouTube</label>
+    <div class="chips reasons" role="radiogroup"><label class="chip"><input type="radio" name="kind" value="bot" ${!x || x.kind === 'bot' ? 'checked' : ''}>Conversa com o bot</label>
+      <label class="chip"><input type="radio" name="kind" value="video" ${x && x.kind === 'video' ? 'checked' : ''}>Vídeo do YouTube</label>
       <label class="chip"><input type="radio" name="kind" value="document" ${x && x.kind === 'document' ? 'checked' : ''}>Texto para ler</label></div>
     <div id="kv"><label for="iv">Link do YouTube</label><input id="iv" name="video" value="${esc(x && x.video_id ? 'https://youtu.be/' + x.video_id : '')}" placeholder="https://youtu.be/…">
       <p class="small muted">Põe o vídeo no YouTube como «Não listado»: só quem tem o link o vê.</p></div>
-    <div id="kd" hidden><label for="ib">Texto (uma linha em branco separa parágrafos)</label><textarea id="ib" name="body" rows="8" maxlength="20000">${esc(x && x.body ? x.body : '')}</textarea></div>
-    <label for="im">Tempo mínimo antes de poder continuar (minutos)</label><input id="im" name="min" type="number" min="0.5" max="60" step="0.5" value="${x ? x.min_seconds / 60 : 2}">
-    <p class="small muted">Para um vídeo, põe a duração dele. A pessoa só avança depois deste tempo.</p>
+    <div id="kd" hidden><label for="ib" id="ibl">Texto (uma linha em branco separa parágrafos)</label>
+      <p class="small muted" id="ibh" hidden>Uma linha em branco separa cada fala do bot. Frases curtas, como se falasses com a pessoa. Toca num sinal para o pôr na fala:</p>
+      <div class="picto-pick" id="ibp" hidden>${Object.entries(PICTO).map(([k, v]) => `<button type="button" class="chip" data-tag="${k}" title="Põe [${k}] no texto">${esc(v[0])}</button>`).join('')}</div>
+      <textarea id="ib" name="body" rows="9" maxlength="20000">${esc(x && x.body ? x.body : '')}</textarea></div>
+    <div id="km"><label for="im">Tempo mínimo antes de poder continuar (minutos)</label><input id="im" name="min" type="number" min="0.5" max="60" step="0.5" value="${x ? x.min_seconds / 60 : 2}">
+    <p class="small muted">Para um vídeo, põe a duração dele. A pessoa só avança depois deste tempo.</p></div>
     <h3>Perguntas (marca a resposta certa)</h3>${[0, 1, 2].map((i) => qrow(i, q[i])).join('')}
     <label class="check inline"><input type="checkbox" name="ext" ${!x || x.for_external ? 'checked' : ''}> Também para trabalhadores de subempreiteiros</label>
     ${x ? `<label class="check inline"><input type="checkbox" name="active" ${x.is_active ? 'checked' : ''}> Ativo (desliga para deixar de mostrar a quem entra)</label>` : ''}`, 'Guardar', (dlg) => {
-    const sync = () => { const v = dlg.querySelector('input[name=kind]:checked').value; dlg.querySelector('#kv').hidden = v !== 'video'; dlg.querySelector('#kd').hidden = v !== 'document'; };
+    const sync = () => { const v = dlg.querySelector('input[name=kind]:checked').value; dlg.querySelector('#kv').hidden = v !== 'video'; dlg.querySelector('#kd').hidden = v === 'video';
+      dlg.querySelector('#km').hidden = v === 'bot'; dlg.querySelector('#ibp').hidden = dlg.querySelector('#ibh').hidden = v !== 'bot';
+      dlg.querySelector('#ibl').textContent = v === 'bot' ? 'O que o bot diz' : 'Texto (uma linha em branco separa parágrafos)'; };
     dlg.querySelectorAll('input[name=kind]').forEach((r) => r.onchange = sync); sync();
+    const ta = dlg.querySelector('#ib');
+    dlg.querySelectorAll('[data-tag]').forEach((b) => b.onclick = () => { const at = ta.selectionStart ?? ta.value.length; const t = `[${b.dataset.tag}] `;
+      ta.value = ta.value.slice(0, at) + t + ta.value.slice(ta.selectionEnd ?? at); ta.focus(); ta.selectionStart = ta.selectionEnd = at + t.length; });
   });
   if (!fd) return;
   const kind = fd.get('kind');
@@ -2021,8 +2037,9 @@ async function editInduction(x) {
   if (questions.some((y) => y.options.length < 2)) return toast('Cada pergunta precisa de pelo menos 2 respostas.');
   const vid = kind === 'video' ? ytId(fd.get('video')) : null;
   if (kind === 'video' && !vid) return toast('Esse link não é de um vídeo do YouTube.');
+  if (kind !== 'video' && String(fd.get('body') || '').trim().length < 20) return toast(kind === 'bot' ? 'Escreve o que o bot diz.' : 'Escreve o texto.');
   const { data: id, error } = await sb.rpc('mini_induction_save', { p_id: x ? x.id : null, p_title: String(fd.get('title')).trim(), p_kind: kind,
-    p_video_id: vid, p_body: kind === 'document' ? String(fd.get('body') || '') : null, p_min_seconds: Math.round(Number(fd.get('min') || 1) * 60),
+    p_video_id: vid, p_body: kind !== 'video' ? String(fd.get('body') || '') : null, p_min_seconds: kind === 'bot' ? null : Math.round(Number(fd.get('min') || 1) * 60),
     p_questions: questions, p_position: x ? x.position : null, p_for_external: !!fd.get('ext') });
   if (error) return toast(friendly(error));
   if (x && !!fd.get('active') !== x.is_active) { const r = await sb.rpc('mini_induction_set_active', { p_id: id, p_active: !!fd.get('active') }); if (r.error) return toast(friendly(r.error)); }
@@ -2030,23 +2047,31 @@ async function editInduction(x) {
 }
 // A starting point, to adapt: three short manuals with questions. Plain words, no company-specific rules.
 const INDUCTION_TEMPLATE = [
-  { title: 'Bem-vindo: como trabalhamos', min: 120, body: `Bem-vindo à equipa. Este acolhimento explica as regras que valem em todas as obras. Lê com atenção: no fim há perguntas.
+  { title: 'Bem-vindo: como trabalhamos', kind: 'bot', body: `Bem-vindo à equipa! Vou explicar-te as regras que valem em todas as obras. Presta atenção, porque no fim faço-te umas perguntas.
 
-Picar o ponto: à chegada e à saída encostas o teu cartão no leitor da obra. Se te esqueceres, avisa logo o encarregado, que regista a picagem com o motivo. Nunca piques por um colega nem emprestes o teu cartão.
+[cartao] Picar o ponto: à chegada e à saída, encostas o teu cartão no leitor da obra.
 
-Horário e faltas: o encarregado diz-te o horário da obra. Se precisares de faltar ou sair mais cedo, faz o pedido na app com antecedência.
+Se te esqueceres de picar, avisa logo o encarregado. Ele regista a picagem com o motivo.
 
-As tuas horas: vês todas as tuas horas na app. Se um dia estiver errado, carrega em «Não concordo com este dia» antes do fim do mês.`,
+Nunca piques por um colega, e nunca emprestes o teu cartão.
+
+O encarregado diz-te o horário da obra. Se precisares de faltar ou de sair mais cedo, faz o pedido na app, com antecedência.
+
+Na app vês todas as tuas horas. Se um dia estiver errado, carrega em «Não concordo com este dia», antes do fim do mês.`,
     q: [{ q: 'Esqueceste-te de picar a saída. O que fazes?', options: ['Aviso o encarregado', 'Peço a um colega para picar por mim', 'Não faço nada'], correct: 0 },
       { q: 'Podes emprestar o teu cartão a um colega?', options: ['Sim, se for amigo', 'Nunca'], correct: 1 }] },
-  { title: 'Equipamento de proteção individual (EPI)', min: 120, body: `Na obra usas sempre: capacete, botas de biqueira de aço, óculos de proteção, colete refletor e luvas adequadas à tarefa. Algumas zonas pedem mais (proteção auditiva, máscara, arnês): segue a sinalização e o que o encarregado disser.
+  { title: 'Equipamento de proteção individual (EPI)', kind: 'bot', body: `Agora, o mais importante: o teu equipamento de proteção.
 
-Sem o EPI completo não entras na obra. Se o teu EPI estiver estragado ou perdido, pede um novo antes de começar a trabalhar.
+[capacete] [botas] [colete] Na obra usas sempre capacete, botas de biqueira de aço e colete refletor.
 
-O EPI é pessoal. Cuida dele e guarda-o limpo.`,
+[oculos] [luvas] Também óculos de proteção, e as luvas certas para a tarefa que estás a fazer.
+
+[auditiva] [arnes] Algumas zonas pedem mais: proteção auditiva, máscara ou arnês. Segue a sinalização e o que o encarregado disser.
+
+Sem o equipamento completo, não entras na obra. Se alguma coisa estiver estragada ou perdida, pede outra antes de começar a trabalhar.`,
     q: [{ q: 'Sem capacete podes entrar na obra?', options: ['Sim, se for rápido', 'Não'], correct: 1 },
-      { q: 'O teu par de luvas rasgou-se. O que fazes?', options: ['Trabalho sem luvas', 'Peço luvas novas antes de continuar'], correct: 1 }] },
-  { title: 'Emergências e acidentes', min: 120, body: `Em caso de alarme: para o trabalho, deixa a zona em segurança se puderes, e vai pelo caminho de evacuação até ao ponto de encontro da obra. Não voltes atrás para buscar nada.
+      { q: 'As tuas luvas rasgaram-se. O que fazes?', options: ['Trabalho sem luvas', 'Peço luvas novas antes de continuar'], correct: 1 }] },
+  { title: 'Emergências e acidentes', kind: 'document', min: 120, body: `Em caso de alarme: para o trabalho, deixa a zona em segurança se puderes, e vai pelo caminho de evacuação até ao ponto de encontro da obra. Não voltes atrás para buscar nada.
 
 Se houver um acidente: protege-te primeiro, chama ajuda (112 e o encarregado) e não mexas na pessoa ferida se não souberes como.
 
@@ -2055,11 +2080,243 @@ Qualquer quase-acidente ou situação perigosa conta: diz ao encarregado no mesm
       { q: 'Viste uma situação perigosa mas ninguém se magoou. O que fazes?', options: ['Nada, não aconteceu nada', 'Digo ao encarregado no mesmo dia'], correct: 1 }] }];
 async function useInductionTemplate() {
   for (const [i, t] of INDUCTION_TEMPLATE.entries()) {
-    const { error } = await sb.rpc('mini_induction_save', { p_id: null, p_title: t.title, p_kind: 'document', p_video_id: null, p_body: t.body,
-      p_min_seconds: t.min, p_questions: t.q, p_position: (i + 1) * 10, p_for_external: true });
+    const { error } = await sb.rpc('mini_induction_save', { p_id: null, p_title: t.title, p_kind: t.kind, p_video_id: null, p_body: t.body,
+      p_min_seconds: t.min || null, p_questions: t.q, p_position: (i + 1) * 10, p_for_external: true });
     if (error) return toast(friendly(error));
   }
-  toast('Modelo criado. Revê os textos e junta os teus vídeos.'); loadInduction();
+  toast('Modelo criado. Revê o que o bot diz e junta os teus vídeos.'); loadInduction();
+}
+
+// ------------------------------------------------------------------ O bot de segurança (acolhimento em conversa, visita guiada)
+// A scripted bot, never a free AI: everyone hears the same words, and the proof says which (sql/56).
+// One paragraph = one thing the bot says. [capacete], [saida]… show a safety sign. The phone's own voice speaks it.
+const BOT_LOOKS = { robo: 'Robô de segurança', capacete: 'Capacete amarelo', ela: 'Técnica de segurança', ele: 'Técnico de segurança' };
+function botFace(look, cls) {
+  if (look === 'robo' || !BOT_LOOKS[look]) return `<svg class="botface ${cls || ''}" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="32" fill="#e0e7ff"/>
+    <path d="M24 55h16v9H24z" fill="#1e293b"/><path d="M14 64c1-8 7-11 18-11s17 3 18 11z" fill="#1d4ed8"/><path d="M22 54l10 7 10-7" fill="none" stroke="#facc15" stroke-width="3"/>
+    <rect x="17.5" y="29" width="29" height="25" rx="12.5" fill="#f1f5f9" stroke="#cbd5e1"/><rect x="15" y="37" width="4" height="9" rx="2" fill="#1d4ed8"/><rect x="45" y="37" width="4" height="9" rx="2" fill="#1d4ed8"/>
+    <rect x="21.5" y="34.5" width="21" height="10" rx="5" fill="#0f172a"/>
+    <circle cx="27" cy="39.5" r="2.4" fill="#67e8f9"/><circle cx="37" cy="39.5" r="2.4" fill="#67e8f9"/><circle cx="27" cy="39.5" r="4" fill="#22d3ee" opacity=".25"/><circle cx="37" cy="39.5" r="4" fill="#22d3ee" opacity=".25"/>
+    <ellipse class="mouth" cx="32" cy="49" rx="3.4" ry="1.1" fill="#475569"/>
+    <path d="M14.5 32a17.5 17.5 0 0 1 35 0z" fill="#facc15" stroke="#eab308" stroke-width="1.2"/><path d="M29.5 15h5v16h-5z" fill="#eab308" opacity=".6"/>
+    <rect x="10.5" y="30" width="43" height="5" rx="2.5" fill="#eab308"/></svg>`;
+  const helmet = look === 'capacete' ? '#f59e0b' : '#f8fafc'; const brim = look === 'capacete' ? '#d97706' : '#cbd5e1';
+  return `<svg class="botface ${cls || ''}" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="32" fill="#e0e7ff"/>
+    ${look === 'ela' ? '<path d="M16.5 40c0 12 4 17 9 18h13c5-1 9-6 9-18z" fill="#7c2d12"/>' : ''}
+    <circle cx="32" cy="42" r="14.5" fill="#fcd9b6"/>
+    ${look === 'ele' ? '<path d="M18.5 44c1 9 6 13.5 13.5 13.5S44.5 53 45.5 44c-3 4-7.5 5.5-13.5 5.5S21.5 48 18.5 44z" fill="#57534e"/>' : ''}
+    <circle cx="26.5" cy="41" r="2" fill="#1f2937"/><circle cx="37.5" cy="41" r="2" fill="#1f2937"/>
+    <ellipse class="mouth" cx="32" cy="48.3" rx="3.6" ry="1.5" fill="#9f1239"/>
+    <path d="M15 37.5a17 17 0 0 1 34 0z" fill="${helmet}" stroke="${brim}" stroke-width="1.2"/><path d="M29.5 21.5h5v15h-5z" fill="${brim}" opacity=".55"/>
+    <rect x="10.5" y="35.5" width="43" height="5" rx="2.5" fill="${brim}"/></svg>`;
+}
+// Safety signs, drawn here (no files, no network): blue = mandatory, green = safe way, red = fire / prohibited.
+const PICTO = {
+  capacete: ['Capacete', 'must', '<path d="M5 15a7 7 0 0 1 14 0M3.5 15h17v2.5h-17zM12 8V6"/>'],
+  botas: ['Botas de segurança', 'must', '<path d="M8 4h5v9l6 3v3H5v-4l3-2z"/>'],
+  oculos: ['Óculos', 'must', '<circle cx="7" cy="13" r="3.2"/><circle cx="17" cy="13" r="3.2"/><path d="M10.2 13h3.6M3.8 13 3 9M20.2 13l.8-4"/>'],
+  luvas: ['Luvas', 'must', '<path d="M8 21v-7l-3-3.5 1.2-1.2L9 11V5.5a1.2 1.2 0 0 1 2.4 0V10V4.5a1.2 1.2 0 0 1 2.4 0V10V5.5a1.2 1.2 0 0 1 2.4 0v7l1.6-1.6 1.1 1.1-3 5V21z"/>'],
+  colete: ['Colete refletor', 'must', '<path d="M8.5 3 4 7v14h6v-9h4v9h6V7l-4.5-4L13 7h-2zM4 15h6M14 15h6"/>'],
+  auditiva: ['Proteção auditiva', 'must', '<path d="M6 14v-2a6 6 0 0 1 12 0v2M4 14h4v6H4zM16 14h4v6h-4z"/>'],
+  arnes: ['Arnês', 'must', '<circle cx="12" cy="4.5" r="1.8"/><path d="M8 21l1-8h6l1 8M8 9h8M9 9l3 4 3-4M12 2.7V1"/>'],
+  saida: ['Saída de emergência', 'safe', '<circle cx="11" cy="4.5" r="1.7"/><path d="M6 21l3.5-6 2.5 2v4M5 11l3-3h3.5l2.5 3.5 2.5.5M9 8.5l-1.2 5.5M17.5 3h3v18h-3"/>'],
+  encontro: ['Ponto de encontro', 'safe', '<path d="M3 3l5 5M21 3l-5 5M3 21l5-5M21 21l-5-5M3 3h4M3 3v4M21 3h-4M21 3v4M3 21h4M3 21v-4M21 21h-4M21 21v-4"/><circle cx="12" cy="12" r="2.4"/>'],
+  socorro: ['Primeiros socorros', 'safe', '<path d="M12 5v14M5 12h14" stroke-width="4"/>'],
+  extintor: ['Extintor', 'fire', '<path d="M9 9h6v12H9zM12 9V6M10 6h4.5l3 2.5M12 3.5V6"/>'],
+  alarme: ['Alarme', 'fire', '<path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4zM10 20.5a2 2 0 0 0 4 0"/>'],
+  fumar: ['Proibido fumar', 'no', '<path d="M4 13h11v3H4zM17 13v3M19 13v3M17 10c0-2 2-1.5 2-4"/>'],
+  cartao: ['O teu cartão', 'card', '<path d="M3 7h12v10H3zM6 14h4M18 9a4 4 0 0 1 0 6M20.5 6.5a7.5 7.5 0 0 1 0 11"/>'],
+  '112': ['Ligar 112', 'fire', '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>'],
+};
+const picto = (k) => { const p = PICTO[k]; return `<figure class="picto ${p[1]}"><svg viewBox="0 0 24 24" aria-hidden="true">${p[2]}${p[1] === 'no' ? '<path class="slash" d="M4.5 4.5l15 15"/>' : ''}</svg><figcaption>${esc(p[0])}</figcaption></figure>`; };
+// A line of the script: its signs, and the words without the [tags].
+function botLine(raw) {
+  const signs = []; const text = String(raw).replace(/\[([a-z0-9]+)\]/gi, (m, k) => { k = k.toLowerCase(); if (PICTO[k]) { signs.push(k); return ''; } return m; }).replace(/[ \t]+/g, ' ').trim();
+  return { signs, text };
+}
+const botLines = (body) => String(body || '').split(/\n\s*\n/).map((x) => botLine(x)).filter((x) => x.text || x.signs.length);
+const words = (s) => (String(s).trim().match(/\S+/g) || []).length;
+// The voice: the phone's own (pt-PT if it has one). Muted, or no Portuguese voice: the same pace, in silence.
+const VOICE_KEY = 'gestnow.voz';
+const Voice = {
+  get on() { try { return localStorage.getItem(VOICE_KEY) !== '0'; } catch (_) { return true; } },
+  set on(v) { try { localStorage.setItem(VOICE_KEY, v ? '1' : '0'); } catch (_) {} if (!v) this.stop(); },
+  ok: () => 'speechSynthesis' in window && typeof SpeechSynthesisUtterance === 'function',
+  async voice() {
+    if (!this.ok()) return null;
+    let vs = speechSynthesis.getVoices();
+    if (!vs.length && !this.waited) { this.waited = true; await new Promise((r) => { speechSynthesis.addEventListener('voiceschanged', r, { once: true }); setTimeout(r, 1200); }); vs = speechSynthesis.getVoices(); }
+    return vs.find((v) => /^pt[-_]PT/i.test(v.lang)) || vs.find((v) => /^pt/i.test(v.lang)) || null;
+  },
+  pace: (text) => (window.GESTNOW_TEST ? 60 : Math.max(1600, words(text) * 390)),   // ~2.6 words a second: slower than the server's 4 (sql/56 K2)
+  stop() { this.gen = (this.gen || 0) + 1; if (this.ok()) speechSynthesis.cancel(); },
+  async say(text, face) {
+    const gen = this.gen = (this.gen || 0) + 1; const t0 = Date.now(); const min = this.pace(text);
+    if (face) face.classList.add('talking');
+    try {
+      const v = this.on && text ? await this.voice() : null;
+      if (v && gen === this.gen) {
+        speechSynthesis.cancel();
+        await new Promise((res) => {
+          const u = new SpeechSynthesisUtterance(text); u.voice = v; u.lang = v.lang; u.rate = 1;
+          u.onend = u.onerror = res; setTimeout(res, words(text) * 900 + 5000);   // a voice that never ends must not stop the bot
+          speechSynthesis.speak(u);
+        });
+      }
+      const rest = min - (Date.now() - t0); if (rest > 0 && gen === this.gen) await new Promise((r) => setTimeout(r, rest));
+    } finally { if (face) face.classList.remove('talking'); }
+    return gen === this.gen;
+  },
+};
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function getBot() {
+  if (state.bot) return state.bot;
+  const { data } = await sb.rpc('mini_bot');
+  return (state.bot = data || { name: 'Gil', look: 'robo' });
+}
+// One bot part of the onboarding: the bot talks, then asks; the server grades (55 I5) and keeps the clock (56 K2).
+async function onbBot(x, items) {
+  const ob = state.onb; const n = items.indexOf(x) + 1; const bot = ob.bot || { name: 'Gil', look: 'robo' };
+  const lines = botLines(x.body);
+  onbShell(ob, `<div class="card bot-card"><div class="bot-head" id="bhead">${botFace(bot.look)}<div class="grow"><b>${esc(bot.name)}</b><small id="bst">Parte ${n} de ${items.length} · ${esc(x.title)}</small></div>
+      <button class="iconbtn" id="voz" type="button" aria-pressed="${Voice.on}" aria-label="Voz" title="Ligar ou desligar a voz">${ic(Voice.on ? 'voice' : 'mute')}</button></div>
+    <div class="bot-log" id="blog" aria-live="polite"><div class="bub bot"><p>Olá, ${esc(String(ob.name || '').split(' ')[0])}! Sou ${esc(bot.name)}. Esta conversa leva ${Math.max(1, Math.round(lines.reduce((a, l) => a + Voice.pace(l.text), 0) / 60000))} minuto(s). Liga o som do telemóvel.</p></div></div>
+    <div class="bot-act" id="bact"><button class="btn big" id="bgo">${ic('play')}${x.opened_at ? 'Continuar a conversa' : 'Começar a conversa'}</button>
+      <button class="btn ghost wide" id="back">Voltar à lista</button></div></div>`);
+  const face = () => $('#bhead .botface'); const log = $('#blog'); const act = $('#bact');
+  let live = true;
+  const alive = () => live && log.isConnected;
+  const scroll = () => { const last = log.lastElementChild; if (last && last.scrollIntoView) last.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
+  const add = (who, html) => { const d = document.createElement('div'); d.className = 'bub ' + who; d.innerHTML = html; log.appendChild(d); scroll(); return d; };
+  const speak = async (l) => {
+    const typing = add('bot typing', '<i></i><i></i><i></i>'); await sleep(550); typing.remove(); if (!alive()) return false;
+    const b = add('bot', `${l.signs.length ? `<div class="signs">${l.signs.map(picto).join('')}</div>` : ''}${l.text ? `<p>${esc(l.text)}</p>` : ''}`);
+    const spoken = [l.text, ...l.signs.filter(() => !l.text).map((k) => PICTO[k][0])].join('. ');
+    b.title = 'Toca para ouvir outra vez'; b.onclick = () => Voice.say(spoken, face());
+    return (await Voice.say(spoken, face())) && alive();
+  };
+  $('#voz').onclick = () => { Voice.on = !Voice.on; $('#voz').setAttribute('aria-pressed', String(Voice.on)); $('#voz').innerHTML = ic(Voice.on ? 'voice' : 'mute'); };
+  $('#back').onclick = () => { live = false; Voice.stop(); showOnboarding(); };
+  $('#bgo').onclick = async () => {
+    const { error } = await sb.rpc('mini_induction_open', { p_item: x.id });
+    if (error) return toast(friendly(error));
+    act.innerHTML = '<p class="small muted bot-hint">Toca numa mensagem para a ouvir outra vez.</p>';
+    for (const l of lines) if (!(await speak(l))) return;
+    const answers = [];
+    if (x.questions.length && !(await speak({ signs: [], text: `Agora ${x.questions.length === 1 ? 'uma pergunta' : x.questions.length + ' perguntas'} rápidas.` }))) return;
+    for (const [i, q] of x.questions.entries()) {
+      if (!(await speak({ signs: [], text: q.q }))) return;
+      answers[i] = await new Promise((res) => {
+        act.innerHTML = `<div class="bot-opts">${q.options.map((o, j) => `<button class="btn ghost" data-a="${j}">${esc(o)}</button>`).join('')}</div>`;
+        act.querySelectorAll('[data-a]').forEach((b) => b.onclick = () => res(Number(b.dataset.a)));
+      });
+      act.innerHTML = ''; add('me', `<p>${esc(q.options[answers[i]])}</p>`);
+    }
+    // «Já vi» on the server's clock: if the talk was faster than the minimum, wait the rest here.
+    let seen;
+    for (let k = 0; k < 4; k++) {
+      const r = await sb.rpc('mini_induction_seen', { p_item: x.id });
+      if (!r.error) { seen = r.data; break; }
+      const m = /(\d+) s left/.exec(r.error.message || '');
+      if (!m) return toast(friendly(r.error));
+      act.innerHTML = `<p class="small muted bot-hint">${ic('clock')} Só mais ${esc(m[1])} segundos…</p>`;
+      await sleep((Number(m[1]) + 1) * 1000); if (!alive()) return;
+    }
+    if (!seen) return toast('Tenta outra vez daqui a pouco.');
+    let res = { passed: true, step_done: seen.step_done };
+    if (x.questions.length) {
+      const r = await sb.rpc('mini_induction_answer', { p_item: x.id, p_answers: answers });
+      if (r.error) return toast(friendly(r.error));
+      res = r.data;
+    }
+    if (res.passed) {
+      await speak({ signs: [], text: x.questions.length ? 'Muito bem! Acertaste tudo.' : 'Muito bem! Já está.' });
+      act.innerHTML = `<button class="btn big" id="bnext">${ic('ok')}${res.step_done ? 'Acolhimento concluído' : 'Passar à parte seguinte'}</button>`;
+      $('#bnext').onclick = () => { live = false; Voice.stop(); if (res.step_done) toast('Acolhimento concluído. Obrigado!'); showOnboarding(); };
+      return;
+    }
+    const bad = (res.wrong || []).map((i) => i + 1);
+    await speak({ signs: [], text: `Ainda não. ${bad.length === 1 ? 'A pergunta ' + bad[0] + ' não está certa' : 'As perguntas ' + bad.join(' e ') + ' não estão certas'}. Vamos ouvir outra vez, com atenção.` });
+    act.innerHTML = `<button class="btn big" id="bagain">${ic('play')}Ouvir outra vez</button><button class="btn ghost wide" id="back">Voltar à lista</button>`;
+    $('#back').onclick = () => { live = false; Voice.stop(); showOnboarding(); };
+    $('#bagain').onclick = async () => { live = false; Voice.stop(); const r2 = await sb.rpc('mini_onboarding'); if (r2.error) return toast(friendly(r2.error));
+      r2.data.skew = new Date(r2.data.server_now).getTime() - Date.now(); state.onb = r2.data; onbBot(r2.data.items.find((y) => y.id === x.id), r2.data.items); };
+  };
+}
+
+// The guided tour: the bot shows each screen this person has, on the real menu. From «Mais» › «Visita guiada»,
+// from the Acolhimento screen, and once by itself when someone finishes the onboarding.
+const TOUR_TEXT = {
+  equipa: 'A minha equipa: quem está na obra agora, quem ainda não chegou e o que tens de validar.',
+  picar: 'Picar: o leitor de cartões. Cada pessoa encosta o cartão à entrada e à saída.',
+  painel: 'Painel: todas as obras num só ecrã, com o que precisa de atenção.',
+  naobra: 'Na obra: quem está lá dentro neste momento. Numa emergência, é aqui que contas as pessoas.',
+  horas: 'Horas: as horas da equipa, dia a dia, para corrigir e validar.',
+  minhas: 'As minhas horas: as tuas horas, o teu mês, e os pedidos de férias e faltas. Se um dia estiver mal, dizes aqui.',
+  secretariado: 'Secretaria: o mês de toda a gente, fechar o mês e tirar o ficheiro para os salários.',
+  seguranca: 'Segurança: os documentos de cada pessoa, e o que impede alguém de entrar na obra.',
+  trabalhadores: 'Pessoas: as fichas, os cartões e os documentos de cada colaborador.',
+  acolhimento: 'Acolhimento: as conversas, os vídeos e os manuais que cada pessoa nova tem de fazer.',
+  obras: 'Obras: as moradas, os horários e as regras de cada obra.',
+};
+async function startTour() {
+  if (!state.ready || document.getElementById('tour')) return;
+  openMore(false); closePalette();
+  const bot = await getBot();
+  const btn = (v) => nav.querySelector(`button[data-view="${v}"]`);
+  const shown = MORE_ORDER.filter((v) => btn(v) && !btn(v).hidden && TOUR_TEXT[v]);
+  const inMore = shown.filter((v) => btn(v).parentElement.id === 'more');
+  const steps = [{ text: `Olá! Sou ${bot.name}. Vou mostrar-te a app num minuto. Toca em «Seguinte» quando quiseres.` }];
+  for (const v of shown.filter((x) => !inMore.includes(x))) steps.push({ el: btn(v), text: TOUR_TEXT[v] });
+  if (inMore.length) steps.push({ el: nav.querySelector('button[data-more]'), text: 'Em «Mais» tens o resto: ' + inMore.map((v) => btn(v).textContent.trim()).join(', ') + '. E é lá que sais da app.' });
+  const search = document.getElementById('search'); if (search && !search.hidden) steps.push({ el: search, text: 'Procurar: escreve o nome de uma pessoa, de uma obra ou de um ecrã, e vais direto lá.' });
+  steps.push({ text: 'É isto. Se quiseres ver outra vez, está em «Mais», «Visita guiada». Bom trabalho e em segurança!' });
+  const ov = document.createElement('div'); ov.id = 'tour'; ov.className = 'tour'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-label', 'Visita guiada');
+  ov.innerHTML = `<div class="tour-hole" id="thole"></div><div class="tour-card" id="tcard">${botFace(bot.look)}<div class="grow"><b>${esc(bot.name)}</b><p id="ttx"></p>
+    <div class="tour-acts"><span class="tour-dots" id="tdots"></span><button class="btn ghost small" id="tskip">Sair</button><button class="btn small" id="tnext">Seguinte</button></div></div></div>`;
+  document.body.appendChild(ov);
+  let i = 0;
+  const end = () => { Voice.stop(); ov.remove(); window.removeEventListener('resize', place); };
+  function place() {
+    const s = steps[i]; const hole = ov.querySelector('#thole'); const card = ov.querySelector('#tcard');
+    const r = s.el && s.el.getBoundingClientRect();
+    if (!r || !r.width) { hole.hidden = true; ov.classList.add('dim'); card.style.top = ''; card.style.bottom = ''; card.classList.add('mid'); return; }
+    ov.classList.remove('dim'); card.classList.remove('mid'); hole.hidden = false;
+    Object.assign(hole.style, { left: r.left - 6 + 'px', top: r.top - 6 + 'px', width: r.width + 12 + 'px', height: r.height + 12 + 'px' });
+    if (r.top > window.innerHeight / 2) { card.style.top = ''; card.style.bottom = window.innerHeight - r.top + 18 + 'px'; }
+    else { card.style.bottom = ''; card.style.top = r.bottom + 18 + 'px'; }
+  }
+  function show() {
+    const s = steps[i];
+    ov.querySelector('#ttx').textContent = s.text;
+    ov.querySelector('#tdots').innerHTML = steps.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('');
+    ov.querySelector('#tnext').textContent = i === steps.length - 1 ? 'Terminar' : 'Seguinte';
+    place(); Voice.say(s.text, ov.querySelector('#tcard .botface'));
+  }
+  window.addEventListener('resize', place);
+  ov.querySelector('#tskip').onclick = end;
+  ov.querySelector('#tnext').onclick = () => { if (++i >= steps.length) return end(); show(); };
+  ov.addEventListener('keydown', (e) => { if (e.key === 'Escape') end(); });
+  show(); ov.querySelector('#tnext').focus();
+}
+// Acolhimento screen: the company's bot (name and look), and a way to hear it and to see the tour.
+async function loadBotCard() {
+  const el = $('#ibot'); if (!el) return;
+  const bot = await getBot(); if (!el.isConnected) return;
+  el.innerHTML = `<div class="card bot-set">${botFace(bot.look)}<div class="grow"><b>O vosso bot: ${esc(bot.name)}</b>
+      <small>Apresenta as conversas do acolhimento e faz a visita guiada à app. Fala com a voz do telemóvel, sem custos.</small></div>
+    <div class="bot-set-acts"><button class="btn ghost small" id="bhear">${ic('voice')}Ouvir</button><button class="btn ghost small" id="btour">${ic('bot')}Visita guiada</button><button class="btn small" id="bedit">Mudar</button></div></div>`;
+  $('#bhear').onclick = async () => { if (!Voice.ok()) return toast('Este navegador não tem voz.'); if (!(await Voice.voice())) toast('Este telemóvel não tem voz em português: instala-a nas definições (Texto para voz).');
+    Voice.say(`Olá! Sou ${bot.name}, e vou receber as pessoas novas da empresa.`, el.querySelector('.botface')); };
+  $('#btour').onclick = startTour;
+  $('#bedit').onclick = async () => {
+    const fd = await askSheet('O vosso bot', `<label for="bn">Nome</label><input id="bn" name="name" required minlength="2" maxlength="30" value="${esc(bot.name)}">
+      <label>Aspeto</label><div class="bot-looks" role="radiogroup">${Object.entries(BOT_LOOKS).map(([k, t]) => `<label class="bot-look"><input type="radio" name="look" value="${k}" ${bot.look === k ? 'checked' : ''}>${botFace(k)}<span>${esc(t)}</span></label>`).join('')}</div>`, 'Guardar');
+    if (!fd) return;
+    const { data, error } = await sb.rpc('mini_bot_save', { p_name: String(fd.get('name')).trim(), p_look: fd.get('look') || 'robo' });
+    if (error) return toast(friendly(error));
+    state.bot = data; toast('Guardado.'); loadBotCard();
+  };
 }
 
 // ------------------------------------------------------------------ Segurança
