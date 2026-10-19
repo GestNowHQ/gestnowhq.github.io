@@ -1459,3 +1459,9 @@ table.tbl th { white-space: nowrap; vertical-align: bottom; }
 .tv-mine .tv-trip .nm { font-weight: 600; }
 .tv-mine h2 .i { vertical-align: -3px; }
 .tv-card.cancelled, .tv-card.rejected, .tv-card.done { opacity: .78; }
+/* Produção (v43) */
+.pr-acts { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+.pr-acts .btn { display: inline-flex; align-items: center; gap: 6px; }
+.pr-acts .btn small { opacity: .75; font-weight: 500; }
+.fl-sum:has(> :nth-child(4)) { grid-template-columns: repeat(2, 1fr); }
+@media (min-width: 700px) { .fl-sum:has(> :nth-child(4)) { grid-template-columns: repeat(4, 1fr); } }

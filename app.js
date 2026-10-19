@@ -556,11 +556,11 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '42';
+const APP_VERSION = '43';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
-const MORE_ORDER = ['equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'obras', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'processo', 'clientes'];
+const MORE_ORDER = ['equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'obras', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'processo', 'clientes'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -713,6 +713,7 @@ async function boot() {
   nav.querySelector('[data-view=frota]').hidden = worker || state.offline || !canFleet();
   nav.querySelector('[data-view=alojamento]').hidden = worker || state.offline || !canHousing();
   nav.querySelector('[data-view=viagens]').hidden = worker || state.offline || !canTravel();
+  nav.querySelector('[data-view=producao]').hidden = worker || state.offline || !canProd();
   if (me.role === 'supervisor' && !state.booted && state.view === 'picar' && canSiteDetails()) state.view = 'equipa';
   state.booted = true;
   if (state.view === 'minhas' && !me.collaborator_id) state.view = (TABS[me.role] || TABS.supervisor)[0];
@@ -1065,7 +1066,7 @@ function go(view) {
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
      ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients,
      processo: viewProcess, orcamentos: viewEstimates, lmra: viewLmra, emergencia: viewEmergency,
-     armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel }[view] || viewClock)();
+     armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, producao: viewProd }[view] || viewClock)();
   checkEmergencyBar();
 }
 
@@ -2762,6 +2763,7 @@ const TOUR_TEXT = {
   emergencia: 'Emergência: carregas no botão vermelho e cada pessoa pica o cartão no ponto de encontro. Vês logo quem está em falta, com o telefone.',
   lmra: 'LMRA: a análise de risco antes de começar. Um «Não» para o trabalho; com tudo «Sim», a equipa assina com o cartão.',
   alojamento: 'Alojamento: casas e hotéis, quem dorme onde e as camas livres. Ninguém entra numa casa sem a vistoria de entrada com fotos.',
+  producao: 'Produção: o painel da direção de obra. As obras que diriges, quem está lá agora, as horas por validar e os alertas, com os atalhos para agir.',
   viagens: 'Viagens: pedes a viagem de avião, comboio ou autocarro, o RH aprova e marca, e a pessoa vê o bilhete no telemóvel. O custo vai para a obra.',
   frota: 'Frota: cada viatura com semáforo: seguro, inspeção, IUC, revisão e contrato de aluguer. Entregas e devoluções com km.',
   compras: 'Compras: pedes o que falta; acima do limite o Secretariado aprova; depois encomenda-se e regista-se o que chega.',
@@ -6827,6 +6829,66 @@ async function hoInspection(id) {
 // Someone with viagens.pedir asks for a trip by plane, train or bus for a person, always to a site. The RH approves
 // (never the one who asked, nor their own trip), books it with the company, number and cost (the cost goes to the
 // site at once) and adds the tickets. The traveller sees the trip and opens the ticket in As minhas horas (sql/69).
+// Produção (direção de obra): the sites this login runs, what is waiting on them today, and the shortcuts to act.
+// Only reads what the other screens already serve (control room, purchases, trips); each block shows only with its permission.
+const canProd = () => can('obras.gerir') || can('horas.validar_obra');
+function viewProd() {
+  if (!canProd()) return viewClock();   // code guard as well as the database's
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Direção de obra e encarregados</p><h1>Produção</h1></div></div>
+    <div id="prtop">${skel(1)}</div><div id="prbody"></div>`;
+  loadProd();
+}
+async function loadProd() {
+  const top = $('#prtop'); if (!top) return;
+  const [room, buy, trips] = await Promise.all([
+    canSiteDetails() ? sb.rpc('mini_control_room') : { data: { sites: [] } },
+    canBuy() ? sb.rpc('mini_buy_home') : { data: null },
+    canTravel() ? sb.rpc('mini_travel_home') : { data: null }]);
+  if (!top.isConnected) return;
+  if (room.error) { top.innerHTML = `<p>${esc(friendly(room.error))}</p>`; return; }
+  const sites = (room.data && room.data.sites) || [];
+  const sum = (k) => sites.reduce((a, x) => a + (x[k] || 0), 0);
+  const myBuys = buy.data ? buy.data.requests.filter((r) => r.mine && ['pending', 'approved'].includes(r.status)).length : 0;
+  const myTrips = trips.data ? trips.data.trips.filter((t) => t.mine && ['requested', 'approved'].includes(t.status)).length : 0;
+  top.innerHTML = `<div class="fl-sum">
+      <div class="fl-n"><b>${sites.length}</b><span>obra(s) em execução</span></div>
+      <div class="fl-n ok"><b>${sum('on_site')}</b><span>pessoa(s) na obra agora</span></div>
+      <div class="fl-n ${sum('to_validate') ? 'warn' : ''}"><b>${sum('to_validate')}</b><span>dia(s) por validar</span></div>
+      <div class="fl-n ${sum('blocked') + sum('missing_out') ? 'warn' : ''}"><b>${sum('blocked') + sum('missing_out')}</b><span>alerta(s): bloqueados e saídas em falta</span></div></div>
+    <div class="pr-acts">
+      ${can('horas.validar_obra') ? `<button class="btn" data-pgo="horas">${ic('clock')}Validar horas</button>` : ''}
+      ${can('compras.pedir') ? `<button class="btn ghost" data-pgo="compras">${ic('cart')}Pedir compra${myBuys ? ` <small>(${myBuys} à espera)</small>` : ''}</button>` : ''}
+      ${can('viagens.pedir') ? `<button class="btn ghost" data-pgo="viagens">${ic('plane')}Pedir viagem${myTrips ? ` <small>(${myTrips} à espera)</small>` : ''}</button>` : ''}
+      ${can('obras.gerir') ? `<button class="btn ghost" data-pgo="obras">${ic('crane')}Obras</button>` : ''}
+      ${canProcess() ? `<button class="btn ghost" data-pgo="processo">${ic('map')}O meu papel no processo</button>` : ''}
+    </div>`;
+  top.querySelectorAll('[data-pgo]').forEach((b) => b.onclick = () => go(b.dataset.pgo));
+  const body = $('#prbody');
+  if (!sites.length) {
+    body.innerHTML = `<div class="card">${empty('helmet', 'Ainda não diriges nenhuma obra em execução',
+      'Uma obra aparece aqui quando estás atribuído a ela: Pessoas › a tua ficha › Obras.')}</div>`;
+    return;
+  }
+  body.innerHTML = `<h2 class="sec">As tuas obras</h2><div class="list">${sites.map((x) => {
+    const alerts = [[x.blocked, 'não pode(m) entrar'], [x.missing_out, 'saída(s) em falta'], [x.to_validate, 'dia(s) por validar'],
+      [x.expiring, 'documento(s) a caducar'], [x.disputes_open, 'reclamação(ões) de horas']].filter(([n]) => n > 0);
+    const pct = x.budget_hours ? Math.round((x.used || 0) / 60 / x.budget_hours * 100) : null;
+    return `<article class="card pr-site">
+      <div class="wk"><span class="ho-ic">${ic('crane')}</span><div class="grow"><div class="nm">${esc(x.code)} · ${esc(x.title)}</div>
+        <div class="sub">${esc(x.client || 'sem cliente')}${x.grade ? ' · grau ' + esc(x.grade) : ''} · encarregado: ${esc(x.supervisor || '—')} · gestor: ${esc(x.manager || '—')}</div></div>
+        ${chip(alerts.length ? 'warn' : 'ok', alerts.length ? 'Atenção' : 'Em ordem')}</div>
+      <ul class="fl-papers">
+        <li class="fl-p ok"><span>Na obra agora</span><b>${x.on_site || 0} de ${x.team || 0}</b></li>
+        ${x.worked != null ? `<li class="fl-p ok"><span>Horas este mês</span><b>${esc(fmtMin(x.worked))}</b></li>` : ''}
+        ${pct != null ? `<li class="fl-p ${pct > 100 ? 'bad' : pct > 85 ? 'warn' : 'ok'}"><span>Horas gastas do orçamento</span><b>${pct}%</b></li>` : ''}
+        ${alerts.map(([n, t]) => `<li class="fl-p bad"><span>${esc(t)}</span><b>${n}</b></li>`).join('')}
+      </ul>
+      <div class="acts"><button class="btn small" data-panel="${esc(x.id)}">Abrir o dashboard</button>
+        ${can('horas.validar_obra') && x.to_validate ? `<button class="btn ghost small" data-hours="${esc(x.id)}">Validar ${x.to_validate} dia(s)</button>` : ''}</div>
+    </article>`; }).join('')}</div>`;
+  body.querySelectorAll('[data-panel]').forEach((b) => b.onclick = () => { state.panelSite = b.dataset.panel; go('painel'); });
+  body.querySelectorAll('[data-hours]').forEach((b) => b.onclick = () => { store(SITE_KEY, b.dataset.hours); go('horas'); });
+}
 const canTravel = () => ['viagens.pedir', 'viagens.aprovar', 'viagens.gerir'].some(can);
 const TV_MODE = { plane: 'Avião', train: 'Comboio', bus: 'Autocarro', other: 'Outro' };
 const TV_STATE = { requested: ['warn', 'Por aprovar'], approved: ['info', 'Aprovada, por marcar'], booked: ['ok', 'Marcada'], done: ['', 'Feita'],
