@@ -352,6 +352,47 @@ const ERRORS = [
   [/up to 2 months/i, 'Escolhe um período até 2 meses.'],
   [/e-mail already has a login/i, 'Esse email já tem conta.'],
   [/person already has a login/i, 'Esta pessoa já tem conta.'],
+  [/several scaffolds carry this number/i, 'Há mais de um andaime com este número: lê a etiqueta com o telemóvel.'],
+  [/scaffold not found/i, 'Andaime não encontrado nas tuas obras.'],
+  [/your login is not a person/i, 'A tua conta não está ligada a uma pessoa.'],
+  [/say what the scaffold is for/i, 'Diz para que é o andaime.'],
+  [/say where the scaffold goes/i, 'Diz onde fica o andaime.'],
+  [/say who pays the scaffold/i, 'Diz quem paga o andaime.'],
+  [/this site has no client/i, 'Esta obra não tem cliente: o andaime só pode ser pago por nós.'],
+  [/say who builds the scaffold/i, 'Diz que empresa monta o andaime.'],
+  [/scaffolding company not found/i, 'Empresa de andaimes não encontrada.'],
+  [/scaffolding company does not match who pays/i, 'Essa empresa trabalha para o outro lado: confirma quem paga.'],
+  [/for how many days it is needed/i, 'Diz quantos dias o andaime vai estar montado.'],
+  [/write the daily rate/i, 'Escreve o aluguer por dia.'],
+  [/scaffold size for the price list/i, 'Escreve o tamanho do andaime para a tabela de preços.'],
+  [/load class goes from 1 to 6/i, 'A classe de carga vai de 1 a 6.'],
+  [/needed-by date is in the past/i, 'A data em que precisas já passou.'],
+  [/zone not found/i, 'Zona não encontrada.'],
+  [/number is already used on this site/i, 'Esse número já existe nesta obra.'],
+  [/only an inspection puts a scaffold in use/i, 'Só uma inspeção põe o andaime em uso.'],
+  [/this change is not allowed now/i, 'Esta mudança não é possível agora. Atualiza a página.'],
+  [/a photo is required/i, 'Falta a fotografia.'],
+  [/file not allowed for this scaffold/i, 'Fotografia não aceite para este andaime.'],
+  [/this photo was already used/i, 'Esta fotografia já foi usada.'],
+  [/scaffold photo never changes/i, 'As fotografias dos andaimes nunca mudam.'],
+  [/this scaffold cannot be inspected now/i, 'Este andaime não pode ser inspecionado agora.'],
+  [/write the restrictions or what is wrong/i, 'Escreve as restrições ou o que está mal.'],
+  [/say the load class/i, 'Diz a classe de carga.'],
+  [/next inspection date is not valid/i, 'A data da próxima inspeção não é válida (até 92 dias).'],
+  [/a quarterly inspection is due/i, 'Está na altura do exame trimestral.'],
+  [/this scaffold is not standing/i, 'Este andaime não está montado.'],
+  [/waiting is recorded only on scaffolds the client pays/i, 'A espera só se regista em andaimes do cliente.'],
+  [/this scaffold was cancelled/i, 'Este andaime foi cancelado.'],
+  [/the request has no needed-by date/i, 'O pedido não tem data de quando era preciso.'],
+  [/write the crew size and the hours/i, 'Escreve quantas pessoas e quantas horas.'],
+  [/waiting cannot be recorded in advance/i, 'A espera não se regista antes de acontecer.'],
+  [/scaffold was not late that day/i, 'Nesse dia o andaime ainda não estava atrasado.'],
+  [/scaffold was ready that day/i, 'Nesse dia o andaime já estava pronto.'],
+  [/a number is not valid/i, 'Um dos números não é válido.'],
+  [/site not found/i, 'Obra não encontrada.'],
+  [/only an approved estimate becomes a proposal/i, 'Só um orçamento aprovado vira proposta.'],
+  [/login is already in use/i, 'Esta conta já foi usada: a pessoa já escolheu a palavra-passe.'],
+  [/invite e-mail could not be sent/i, 'O email de convite não saiu. Usa o QR code em mão.'],
   [/invalid e-mail/i, 'O email não parece válido.'],
   [/this person is inactive/i, 'Esta pessoa está inativa.'],
   [/your own login/i, 'Não podes desligar a tua própria conta.'],
@@ -595,11 +636,11 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '45';
+const APP_VERSION = '46';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
-const MORE_ORDER = ['equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'processo', 'clientes'];
+const MORE_ORDER = ['equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'andaimes', 'processo', 'clientes'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -693,6 +734,8 @@ async function boot() {
   stopNfc(); clearInterval(state.timer); clearInterval(state.tick); hideFlash(); openMore(false);
   state.ready = false; state.offline = false; nav.hidden = true; document.getElementById('whoami').hidden = true;
   document.getElementById('sol').hidden = true; document.getElementById('search').hidden = true; document.getElementById('help').hidden = true; closePalette(); signedOut(true); showNet();
+  takeClimbLink();
+  if (await openInvite()) return;
   let session = null; let sErr = null;
   try { const r = await sb.auth.getSession(); session = r.data.session; sErr = r.error; } catch (e) { sErr = e; }
   if (!session) return (sErr && isNetErr(sErr)) || (navigator.onLine === false && storedSessionExists()) ? showNetworkError() : showLogin();
@@ -755,6 +798,7 @@ async function boot() {
   nav.querySelector('[data-view=producao]').hidden = worker || state.offline || !canProd();
   nav.querySelector('[data-view=qualidade]').hidden = worker || state.offline || !canQuality();
   nav.querySelector('[data-view=despesas]').hidden = worker || state.offline || !canExpenses();
+  nav.querySelector('[data-view=andaimes]').hidden = worker || state.offline || !canScaffolds();
   if (me.role === 'supervisor' && !state.booted && state.view === 'picar' && canSiteDetails()) state.view = 'equipa';
   state.booted = true;
   if (state.view === 'minhas' && !me.collaborator_id) state.view = (TABS[me.role] || TABS.supervisor)[0];
@@ -769,6 +813,7 @@ async function boot() {
   const other = queue().filter((x) => x._u && x._u !== state.me.user_id);
   if (other.length) toast(`Há ${other.length} picagem(ns) de outra conta neste telemóvel, ainda por enviar.`);
   go(state.view);
+  climbAfterLogin();
   if (state.tourNext) { state.tourNext = false; setTimeout(startTour, 700); return; }   // just finished the onboarding: the bot shows the app
   showBrief();
 }
@@ -913,10 +958,35 @@ async function showMfaVerify() {
   $('#f').onsubmit = (e) => { e.preventDefault(); verifyCode(factor.id, new FormData(e.target).get('code')); };
 }
 
+// An invite opens the app with a one-time code in the address (QR code) or with Supabase's own link (e-mail).
+// The code is used once, then removed from the address so it never stays in the history.
+async function openInvite() {
+  const h = new URLSearchParams(location.hash.slice(1));
+  const bad = h.get('error_code') || h.get('error');
+  const code = h.get('convite');
+  if (!code && !bad) return false;
+  await null;   // boot() starts before the rest of this file has run: let it finish first
+  history.replaceState(null, '', location.pathname + location.search);
+  if (bad) { showInviteFailed(); return true; }
+  const { error } = await sb.auth.verifyOtp({ token_hash: code, type: 'invite' });   // replaces any session open on this phone
+  if (error) { if (isNetErr(error)) showNetworkError(); else showInviteFailed(); return true; }
+  touch();   // just signed in: not an idle phone
+  return false;   // signed in: boot goes on to "choose your password"
+}
+
+function showInviteFailed() {
+  nav.hidden = true;
+  authScreen(`<h1>Este convite já não serve</h1>
+    <p>O link de convite só funciona uma vez e expira. Se não foste tu a abri-lo antes, avisa já o administrador: alguém pode ter usado o teu convite.</p>
+    <p>Pede ao administrador um convite novo.</p>
+    <div class="acts"><button class="btn big" id="tologin">Ir para Entrar</button></div>`);
+  $('#tologin').onclick = () => showLogin();
+}
+
 function showNewPassword() {
   nav.hidden = true;
   authScreen(`<h1>Escolhe a tua palavra-passe</h1>
-    <p>Entraste com uma palavra-passe temporária. Escolhe agora a tua. Não a digas a ninguém.</p>
+    <p>Bem-vindo à GestNow. Escolhe agora a tua palavra-passe: só tu a sabes, nem o administrador a vê. Não a digas a ninguém.</p>
     <form id="f"><label>Palavra-passe nova (pelo menos 10 caracteres)</label>
     <input name="p1" type="password" autocomplete="new-password" minlength="10" required>
     <label>Repete a palavra-passe</label><input name="p2" type="password" autocomplete="new-password" minlength="10" required>
@@ -926,7 +996,7 @@ function showNewPassword() {
     e.preventDefault(); const f = new FormData(e.target);
     if (f.get('p1') !== f.get('p2')) return toast('As duas palavras-passe não são iguais.');
     const { error } = await sb.auth.updateUser({ password: f.get('p1'), data: { must_change_password: false } });
-    if (error) return toast(/same|different/i.test(error.message) ? 'Escolhe uma palavra-passe diferente da temporária.' : friendly(error));
+    if (error) return toast(/same|different/i.test(error.message) ? 'Escolhe uma palavra-passe diferente da anterior.' : friendly(error));
     toast('Palavra-passe guardada.'); boot();
   };
 }
@@ -1107,7 +1177,7 @@ function go(view) {
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
      ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients,
      processo: viewProcess, orcamentos: viewEstimates, lmra: viewLmra, emergencia: viewEmergency,
-     armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, producao: viewProd, qualidade: viewQuality, despesas: viewExpenses }[view] || viewClock)();
+     armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, producao: viewProd, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
   checkEmergencyBar();
 }
 
@@ -1825,6 +1895,53 @@ async function viewPeople() {
     c.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); c.onclick(); } }; });
 }
 
+// Logins by invite: nobody sees a password. E-mail to the person's own address, or a QR code scanned in person.
+async function inviteCall(body) {
+  const { data, error } = await sb.functions.invoke('mini-criar-conta', { body });
+  if (!error) return { data };
+  let msg = error.message;
+  if (error.context && error.context.json) { try { msg = (await error.context.json()).error || msg; } catch (_) {} }
+  return { error: friendly({ message: msg }) };
+}
+
+const QR_LIB = 'vendor/qrcode-generator-1.4.4.js';
+let qrLib = null;
+function loadQr() {
+  if (window.qrcode) return Promise.resolve(window.qrcode);
+  if (!qrLib) {
+    qrLib = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = QR_LIB; s.onload = () => (window.qrcode ? resolve(window.qrcode) : reject(new Error('qr')));
+      s.onerror = () => { s.remove(); qrLib = null; reject(new Error('load')); };
+      document.head.appendChild(s);
+    });
+  }
+  return qrLib;
+}
+
+async function showInvite(data) {
+  const box = $('#newpw'); if (!box) return;
+  if (data.sent) {
+    box.innerHTML = `<div class="result ok">${ic('key')}<div><b>Convite enviado</b>para ${esc(data.email)}</div></div>
+      <p>A pessoa abre o email no telemóvel, toca no link e escolhe a sua palavra-passe. O link só funciona uma vez.
+      Se o email não chegar (ver também o spam), usa «Entregar em mão».</p><p><button class="btn wide" id="pwdone">Feito</button></p>`;
+    $('#pwdone').onclick = () => viewWorker();
+    return;
+  }
+  let img = '';
+  try {
+    const qr = await loadQr(); const q = qr(0, 'M'); q.addData(data.link); q.make();
+    img = q.createDataURL(6, 12);
+  } catch (_) { return toast('Não foi possível desenhar o QR code. Tenta outra vez.'); }
+  box.innerHTML = `<div class="qr invite"><img alt="QR code do convite" src="${img}"></div>
+    <p><b>Mostra este código à pessoa.</b> Ela lê-o com a câmara do telemóvel dela e escolhe a sua palavra-passe.</p>
+    <p class="small muted">Funciona uma vez e expira. Não tires fotografia ao código nem o envies: quem o usar primeiro fica com a conta.
+    Se a pessoa disser que o convite «já não serve», alguém o usou: desliga a conta e dá um convite novo.</p>
+    <p><button class="btn wide" id="pwdone">A pessoa já entrou</button></p>`;
+  $('#pwdone').onclick = () => viewWorker();
+  box.scrollIntoView({ block: 'center' });
+}
+
 // One worker: documents, card, sites, active.
 async function viewWorker() {
   const id = state.worker; if (!id) return go('trabalhadores');
@@ -1837,6 +1954,11 @@ async function viewWorker() {
   const current = (typeId) => files.find((x) => x.type_id === typeId && x.is_current);
   const older = files.filter((x) => !x.is_current);
   const login = ((us && us.data) || []).find((u) => u.collaborator_id === id);
+  let pending = false;
+  if (login && login.is_active && !login.is_me && can('contas.gerir')) {
+    const { data: pend } = await sb.rpc('mini_invites_pending');
+    pending = (pend || []).some((x) => x.collaborator_id === id);
+  }
   // Departments the admin can give (Administração only goes with the admin role) and the ones this login is in.
   let depts = []; let mine = []; let adminDept = null;
   if (can('contas.gerir')) {
@@ -1903,12 +2025,17 @@ async function viewWorker() {
         `<label class="chip"><input type="checkbox" name="d" value="${esc(d.id)}" ${mine.includes(d.id) ? 'checked' : ''}>${esc(d.name)}</label>`).join('')}</div>
         <p class="small muted">Cada departamento dá as suas permissões. Com departamentos de tipos diferentes, a pessoa muda de perfil no nome lá em cima. Nunca valida as próprias horas.</p>
         <p><button class="btn ghost wide">Guardar departamentos</button></p></form>` : ''}
+      ${pending ? `<div class="result warn">${ic('key')}<div><b>Convite por abrir</b>A pessoa ainda não escolheu a palavra-passe.</div></div>
+        <p><button class="btn ghost wide" id="againMail">Enviar o convite outra vez por email</button></p>
+        <p><button class="btn ghost wide" id="againQr">Entregar em mão (QR code)</button></p><div id="newpw"></div>` : ''}
       ${login.is_me ? '' : `<p><button class="btn ghost wide" id="toggleLogin">${login.is_active ? 'Desligar a conta' : 'Ligar a conta'}</button></p>`}` : w.is_active ? `
       <p class="small muted">Dá a esta pessoa acesso à app para picar, ver quem está na obra e validar horas.</p>
       <form id="login"><label>Email *</label><input name="email" type="email" required autocomplete="off">
         <label>Departamento *</label><select name="dept" required><option value="">Escolhe…</option>${depts.map((d) => `<option value="${esc(d.id)}">${esc(d.name)} (${esc(KIND_NAMES[d.kind] || d.kind)})</option>`).join('')}</select>
         ${more('O que cada departamento vê', '<p>Cada departamento só faz o que as suas permissões dizem (vê-as no Secretariado, em «Departamentos e acessos»). O colaborador só vê as horas dele, as diárias e os avisos de desconto. Escritório e segurança usam sempre a app de códigos.</p>')}
-        <p><button class="btn wide">Criar conta</button></p></form><div id="newpw"></div>` : '<p class="muted">Pessoa inativa: sem conta.</p>'}</div>` : ''}
+        <p class="small muted">A pessoa recebe um convite e escolhe a sua palavra-passe. Ninguém a vê, nem tu.</p>
+        <p><button class="btn wide" name="how" value="email">Enviar convite por email</button></p>
+        <p><button class="btn ghost wide" name="how" value="link">Entregar em mão (QR code)</button></p></form><div id="newpw"></div>` : '<p class="muted">Pessoa inativa: sem conta.</p>'}</div>` : ''}
     ${canPeople() ? `<div class="card"><h2 style="margin-top:0">${w.is_active ? 'Desativar' : 'Reativar'}</h2>
       <form id="act"><label>Porquê? *</label><input name="why" required placeholder="${w.is_active ? 'ex.: terminou o contrato' : 'ex.: voltou a ser contratado'}">
       <p class="small muted">${w.is_active ? 'Deixa de poder entrar em qualquer obra e o cartão é anulado. O histórico fica guardado.' : 'Depois de reativar, dá-lhe um cartão.'}</p>
@@ -1936,21 +2063,24 @@ async function viewWorker() {
       ? 'Foi posto nesta obra hoje: só deixa de poder picar a partir de amanhã.' : 'Já não pode picar nesta obra.');
   });
   if ($('#login')) $('#login').onsubmit = async (e) => {
-    e.preventDefault(); const f = new FormData(e.target); const btn = e.target.querySelector('.btn'); btn.disabled = true;
-    const dept = depts.find((d) => d.id === f.get('dept')); if (!dept) { btn.disabled = false; return toast('Escolhe o departamento.'); }
-    const { data, error } = await sb.functions.invoke('mini-criar-conta', { body: { email: f.get('email'), collaborator_id: id, role: dept.kind } });
-    btn.disabled = false;
-    let msg = error && error.message;
-    if (error && error.context && error.context.json) { try { msg = (await error.context.json()).error || msg; } catch (_) {} }
-    if (error) return toast(friendly({ message: msg }));
+    e.preventDefault(); const f = new FormData(e.target); const how = (e.submitter && e.submitter.value) || 'email';
+    const btns = e.target.querySelectorAll('.btn'); btns.forEach((b) => { b.disabled = true; });
+    const dept = depts.find((d) => d.id === f.get('dept')); if (!dept) { btns.forEach((b) => { b.disabled = false; }); return toast('Escolhe o departamento.'); }
+    const { data, error } = await inviteCall({ email: f.get('email'), collaborator_id: id, role: dept.kind, mode: how });
+    btns.forEach((b) => { b.disabled = false; });
+    if (error) return toast(error);
     const { error: de } = await sb.rpc('mini_set_user_departments', { p_user: data.user_id, p_depts: [dept.id] });
     if (de) toast('Conta criada, mas o departamento não ficou guardado: ' + friendly(de));
     e.target.hidden = true;
-    $('#newpw').innerHTML = `<div class="result warn">${ic('key')}<div><b>${esc(data.password)}</b>Palavra-passe temporária de ${esc(data.email)}</div></div>
-      <p><b>Dá-a à pessoa em mão ou diz-lha de viva voz.</b> Não a envies por mensagem nem email. Só aparece agora.
-      No primeiro login, a pessoa escolhe a sua palavra-passe.</p><p><button class="btn wide" id="pwdone">Já entreguei</button></p>`;
-    $('#pwdone').onclick = () => viewWorker();
+    showInvite(data);
   };
+  const again = async (how) => {
+    const { data, error } = await inviteCall({ collaborator_id: id, again: true, mode: how });
+    if (error) return toast(error);
+    showInvite(data);
+  };
+  if ($('#againMail')) $('#againMail').onclick = () => again('email');
+  if ($('#againQr')) $('#againQr').onclick = () => again('link');
   if ($('#profs')) $('#profs').onsubmit = async (e) => {
     e.preventDefault();
     const ids = [...e.target.querySelectorAll('input[name=d]')].filter((c) => c.checked).map((c) => c.value);
@@ -2805,6 +2935,7 @@ const TOUR_TEXT = {
   lmra: 'LMRA: a análise de risco antes de começar. Um «Não» para o trabalho; com tudo «Sim», a equipa assina com o cartão.',
   alojamento: 'Alojamento: casas e hotéis, quem dorme onde e as camas livres. Ninguém entra numa casa sem a vistoria de entrada com fotos.',
   producao: 'Produção: o painel da direção de obra. As obras que diriges, quem está lá agora, as horas por validar e os alertas, com os atalhos para agir.',
+  andaimes: 'Andaimes: pedir, montar, inspecionar (verde, amarelo, vermelho) e desmontar. Quem está na obra vê se pode subir e avisa de um estrago com fotografia.',
   qualidade: 'Qualidade: não conformidades com fotografia, o plano de inspeção de cada obra com os pontos de paragem, parar um trabalho e o Data Book.',
   despesas: 'Despesas: tira uma foto ao talão, escolhe a obra e entrega. A Produção aprova, o custo vai para a obra e o Secretariado reembolsa.',
   viagens: 'Viagens: pedes a viagem de avião, comboio ou autocarro, o RH aprova e marca, e a pessoa vê o bilhete no telemóvel. O custo vai para a obra.',
@@ -3190,9 +3321,9 @@ function viewMine() {
   const me = state.people.find((x) => x.id === state.me.collaborator_id);
   app.innerHTML = `<div class="ph"><div><p class="ph-k">${esc((me && me.full_name) || '')}</p><h1>As minhas horas</h1></div></div>
     <div class="chips" style="margin-bottom:12px">${months.map((m) => `<button class="chip" data-m="${m}" aria-pressed="${m === state.mineMonth}">${esc(mName(m))}</button>`).join('')}</div>
-    <div id="mytrips"></div><div id="myexp"></div><div class="mine-grid"><div><div id="minetop">${skel(1)}</div><div id="minepay"></div><div id="mine">${skel(3)}</div></div>
+    <div id="mytrips"></div><div id="myexp"></div><div id="myclimb"></div><div class="mine-grid"><div><div id="minetop">${skel(1)}</div><div id="minepay"></div><div id="mine">${skel(3)}</div></div>
     <div><div id="minereq"></div><div id="minesite"></div><div id="pdmine"></div></div></div>`;
-  loadMyPerDiems(); loadMyRequests(); loadMyTravels(); loadMyExpenses();
+  loadMyPerDiems(); loadMyRequests(); loadMyTravels(); loadMyExpenses(); loadMyClimb();
   app.querySelectorAll('[data-m]').forEach((b) => b.onclick = () => { state.mineMonth = b.dataset.m; viewMine(); });
   loadMine();
   state.timer = setInterval(() => { if (state.view === 'minhas' && document.visibilityState === 'visible') loadMine(true); }, 60000);
@@ -5178,6 +5309,7 @@ function renderEstimate() {
         <p class="small muted">${e.status === 'draft' ? 'Quando enviares, o orçamento fica congelado: o preço que se assina é este, ao cêntimo.' : e.status === 'review' ? (e.mine ? 'Fizeste este orçamento: não podes ser tu a assiná-lo.' : reqOk ? '' : 'Cada regra que se aplica tem de ficar completa.') : ''}</p>
         <div class="acts">${edit && can('orcamentos.gerir') ? `<button class="btn big" id="esub" ${e.lines.length ? '' : 'disabled'}>Enviar para assinatura</button>` : ''}
           ${e.can_sign ? `<button class="btn big" id="eok">${ic('ok')}Aprovar ${eur0(t.price)}</button><button class="btn ghost wide" id="eno">Recusar</button>` : ''}
+          ${e.status === 'approved' ? `<button class="btn big" id="eprop">${ic('print')}Proposta ao cliente (PDF)</button>` : ''}
           ${e.can_version ? `<button class="btn ghost wide" id="ever">Fazer nova versão (para mudar)</button>` : ''}</div>
       </div>
     </section></div>`;
@@ -5204,6 +5336,61 @@ function renderEstimate() {
   if ($('#eok')) $('#eok').onclick = () => signEstimate(true);
   if ($('#eno')) $('#eno').onclick = () => signEstimate(false);
   if ($('#ever')) $('#ever').onclick = newEstimateVersion;
+  if ($('#eprop')) $('#eprop').onclick = () => proposal(e);
+}
+
+// The client proposal: only from an approved estimate, so the price on paper is the one that was signed, to the cent.
+// The texts (scope, exclusions, validity, payment) are typed here and remembered on this phone for this estimate.
+const PROP_PAY = { hh: 'Faturação mensal por auto de medição das horas realizadas, a 30 dias.', up: 'Faturação mensal por auto de medição das quantidades realizadas, a 30 dias.',
+  ls: 'Faturação por marcos, conforme a tabela acima, a 30 dias.', mx: 'Parte fechada por marcos; trabalhos a mais por auto de medição mensal. Pagamento a 30 dias.',
+  cp: 'Faturação mensal do custo real comprovado mais a margem acordada, a 30 dias.' };
+const PROP_EXCL = 'Andaimes, gruas e meios de elevação não indicados.\nMateriais fornecidos pelo cliente.\nLicenças e autorizações do cliente.\nTrabalho fora do horário normal sem acordo prévio.';
+async function proposal(e) {
+  const key = 'gestnow.prop.' + e.id; let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(key) || '{}'); } catch (_) {}
+  const fd = await askSheet('Proposta ao cliente', `
+    <p class="small muted">${esc(estNo(e))} · ${esc(e.title)} · <b>${eur2(e.totals.price)}</b> · ${esc(EST_FORMS[e.form].n)}</p>
+    <label for="ps">Âmbito do trabalho *</label><textarea id="ps" name="scope" rows="4" required maxlength="2000">${esc(saved.scope || e.notes || e.title)}</textarea>
+    <label for="px">Não incluído</label><textarea id="px" name="excl" rows="4" maxlength="2000">${esc(saved.excl != null ? saved.excl : PROP_EXCL)}</textarea>
+    <label for="pp">Pagamento</label><textarea id="pp" name="pay" rows="2" maxlength="500">${esc(saved.pay || PROP_PAY[e.form])}</textarea>
+    <div class="row"><div><label for="pv">Válida por (dias)</label><input id="pv" name="days" inputmode="numeric" value="${esc(saved.days || 30)}"></div>
+      <div><label for="pc">Contacto</label><input id="pc" name="contact" maxlength="120" value="${esc(saved.contact || '')}" placeholder="nome · telefone · email"></div></div>
+    <p class="small muted">O preço e a tabela vêm do orçamento aprovado e não se mudam aqui.</p>`, 'Ver a proposta');
+  if (!fd) return;
+  const t = { scope: String(fd.get('scope') || '').trim(), excl: String(fd.get('excl') || '').trim(), pay: String(fd.get('pay') || '').trim(),
+    days: Math.max(1, Math.min(365, parseInt(fd.get('days'), 10) || 30)), contact: String(fd.get('contact') || '').trim() };
+  try { localStorage.setItem(key, JSON.stringify(t)); } catch (_) {}
+  const { data: p, error } = await sb.rpc('mini_estimate_proposal', { p_estimate: e.id });
+  if (error) return toast(friendly(error));
+  const face = estFace(e, e.form); const total = face.rows.reduce((a, r) => a + r[3], 0);
+  const today = new Date(); const until = new Date(today.getTime() + t.days * 86400000);
+  const d10 = (x) => x.toISOString().slice(0, 10);
+  const lines = (txt) => txt.split('\n').map((x) => x.trim()).filter(Boolean);
+  const d = document.createElement('dialog'); d.className = 'dlg q-book prop';
+  d.innerHTML = `<div class="printable prop-doc">
+    <header class="prop-h"><div><b class="prop-co">${esc(p.company.name || '')}</b>${p.company.tax_id ? `<small>NIF ${esc(p.company.tax_id)}</small>` : ''}</div>
+      <div class="prop-no"><b>Proposta ${esc(estNo(e))}</b><small>${esc(fmtDate(d10(today)))}</small></div></header>
+    <section class="prop-to"><small>Para</small><b>${esc(p.client ? p.client.name : e.client)}</b>
+      ${p.client && p.client.tax_id ? `<span>NIF ${esc(p.client.tax_id)}</span>` : ''}${p.client && p.client.address ? `<span>${esc(p.client.address)}</span>` : ''}</section>
+    <h2 class="prop-t">${esc(e.title)}</h2>
+    <h3>1. Âmbito</h3>${lines(t.scope).map((x) => `<p>${esc(x)}</p>`).join('')}
+    <h3>2. Preço · ${esc(EST_FORMS[e.form].n)}</h3>
+    <p class="small">${esc(EST_FORMS[e.form].what.split('.')[0])}.</p>
+    <table class="grid prop-tbl"><thead><tr>${face.head.map((h, i) => `<th class="${i >= 2 ? 'num' : ''}">${esc(h)}</th>`).join('')}</tr></thead>
+      <tbody>${face.rows.map((r) => `<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td><td class="num">${esc(r[2])}</td><td class="num">${eur2(r[3])}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td colspan="3">${esc(face.foot)}</td><td class="num">${eur2(total)}</td></tr></tfoot></table>
+    <p class="small">Valores em euros, sem IVA. Acresce IVA à taxa legal em vigor.</p>
+    ${t.excl ? `<h3>3. Não incluído</h3><ul>${lines(t.excl).map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+    <h3>${t.excl ? 4 : 3}. Condições</h3>
+    <ul><li>${esc(t.pay)}</li><li>Proposta válida até ${esc(fmtDate(d10(until)))} (${t.days} dias).</li>
+      <li>O início dos trabalhos depende da aceitação escrita desta proposta ou da nota de encomenda do cliente.</li></ul>
+    <footer class="prop-f"><div><small>Preparada por</small><b>${esc(p.prepared_by || '')}</b>${t.contact ? `<span>${esc(t.contact)}</span>` : ''}</div>
+      <div><small>Aceitação do cliente</small><i></i><span>Nome, data e assinatura</span></div></footer></div>
+    <div class="acts noprint"><button class="btn" data-print>${ic('print')}Imprimir ou guardar PDF</button><button class="btn ghost wide" data-x>Fechar</button></div>`;
+  document.body.appendChild(d); d.showModal();
+  d.querySelector('[data-x]').onclick = () => d.close();
+  d.querySelector('[data-print]').onclick = () => window.print();
+  d.addEventListener('close', () => d.remove());
 }
 async function saveEstimate(patch) {
   const st = orcState();
@@ -7490,4 +7677,276 @@ async function loadMyTravels() {
       ${x.status === 'approved' ? `<p class="small muted">Aprovada. O RH está a marcar.</p>` : `<p class="small">${esc(x.carrier || '')}${x.ref ? ' · reserva ' + esc(x.ref) : ''}</p>`}
       ${(x.tickets || []).length ? `<div class="chips">${x.tickets.map((t) => `<button class="chip" data-file="${esc(t.path)}">${ic('doc')}Abrir bilhete: ${esc(t.label)}</button>`).join('')}</div>` : ''}</div>`).join('')}</div>`;
   box.querySelectorAll('[data-file]').forEach((b) => b.onclick = () => openDocFile(b.dataset.file, 'viagens'));
+}
+
+// Andaimes (v46): request, build, inspect (green / amber / red), damage reports, "posso subir?", waiting evidence and hire cost.
+// A scaffold whose inspection is overdue turns red by itself. Every move is checked again by the database.
+const canScaffolds = () => ['andaimes.ver', 'andaimes.gerir', 'andaimes.inspecionar'].some(can);
+const SC_STATE = { requested: 'Pedido', approved: 'Pedido aprovado', erecting: 'Em montagem', awaiting_inspection: 'À espera de inspeção',
+  in_use: 'Em uso', in_use_restricted: 'Uso com restrições', blocked: 'Bloqueado', modifying: 'Em alteração',
+  dismantle_requested: 'Desmontagem pedida', dismantling: 'Em desmontagem', dismantled: 'Desmontado', cancelled: 'Cancelado' };
+const SC_COLOUR = { green: ['ok', 'Verde: pode subir'], amber: ['warn', 'Amarelo: com restrições'], red: ['bad', 'Vermelho: não subir'], grey: ['', 'Sem uso'] };
+const SC_MOVE = { erecting: 'Começar a montar', awaiting_inspection: 'Montado: pedir inspeção', blocked: 'Bloquear', modifying: 'Alterar (fica bloqueado)',
+  dismantle_requested: 'Pedir desmontagem', dismantling: 'Começar a desmontar', dismantled: 'Já está desmontado', cancelled: 'Cancelar o pedido' };
+const SC_WHY = { inspection_overdue: 'A inspeção passou do prazo.', quarterly_exam_overdue: 'O exame trimestral está em atraso.',
+  atex_zone: 'Zona ATEX: confirma a autorização da zona antes de subir.', phone_check_off: 'Esta obra não usa a verificação pelo telemóvel: pergunta ao encarregado.',
+  height_training_missing: 'Não tens a formação de trabalhos em altura registada.', height_training_expired: 'A tua formação de trabalhos em altura caducou.',
+  suspended: 'Estás suspenso pela Segurança.', site_stopped: 'A obra tem uma paragem ativa.', no_height_permit: 'Falta a autorização de trabalho em altura.',
+  scaffold_full: 'O andaime já tem o número máximo de pessoas.' };
+const scWhy = (r) => SC_WHY[r] || (r.startsWith('scaffold_') ? 'O andaime está: ' + (SC_STATE[r.slice(9)] || r.slice(9)).toLowerCase() + '.' : r);
+const SC_RESULT = { ok: 'Aprovado', restricted: 'Com restrições', not_ok: 'Reprovado' };
+const SC_PHOTO = { erected: 'Montado', inspection: 'Inspeção', report: 'Estrago', waiting: 'Espera', dismantled: 'Desmontado' };
+const appUrl = () => (/^https?:/.test(location.protocol) ? location.origin + location.pathname : 'https://gestnowhq.github.io/');
+
+function viewScaffolds() {
+  if (!canScaffolds()) return viewClock();   // code guard as well as the database's
+  if (!state.scaf) state.scaf = { site: null, id: null };
+  if (state.scaf.id) return viewScaffold();
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Pedir, montar, inspecionar, desmontar</p><h1>Andaimes</h1></div></div>
+    <div id="sctop">${skel(1)}</div><div id="scbody"></div>`;
+  loadScaffolds();
+}
+async function loadScaffolds() {
+  const top = $('#sctop'); if (!top) return;
+  const S = state.scaf;
+  const { data: h, error } = await sb.rpc('mini_scaffold_home', { p_site: S.site });
+  if (!top.isConnected) return;
+  if (error) { top.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
+  S.home = h;
+  const live = h.scaffolds.filter((x) => !['dismantled', 'cancelled'].includes(x.status));
+  const n = (c) => live.filter((x) => x.colour === c).length;
+  const cost = live.reduce((a, x) => a + (Number(x.cost_so_far) || 0), 0);
+  top.innerHTML = `<div class="fl-sum">
+      <div class="fl-n ok"><b>${n('green')}</b><span>verdes</span></div>
+      <div class="fl-n ${n('amber') ? 'warn' : ''}"><b>${n('amber')}</b><span>com restrições</span></div>
+      <div class="fl-n ${n('red') ? 'bad' : ''}"><b>${n('red')}</b><span>vermelhos</span></div>
+      <div class="fl-n"><b>${eur0(cost)}</b><span>aluguer até hoje</span></div></div>
+    <form class="card sc-climb" id="scclimb"><label for="scref">Posso subir?</label>
+      <div class="wk"><input id="scref" name="r" required maxlength="60" placeholder="Número do andaime, ex.: A-012"><button class="btn">Ver</button></div>
+      <p class="small muted">Ou aponta a câmara do telemóvel à etiqueta do andaime.</p></form>
+    <div class="pr-acts">${h.can_manage ? `<button class="btn big" id="scnew">+ Pedir andaime</button>` : ''}</div>
+    <div class="chips" role="group" aria-label="Obra"><button class="chip" data-scsite="" aria-pressed="${!S.site}">Todas as obras</button>
+      ${h.sites.map((x) => `<button class="chip" data-scsite="${esc(x.id)}" aria-pressed="${S.site === x.id}">${esc(x.code)}</button>`).join('')}</div>`;
+  top.querySelectorAll('[data-scsite]').forEach((b) => b.onclick = () => { S.site = b.dataset.scsite || null; loadScaffolds(); });
+  $('#scclimb').onsubmit = (e) => { e.preventDefault(); climbCheck(String(new FormData(e.target).get('r')).trim()); };
+  if ($('#scnew')) $('#scnew').onclick = () => scRequest(h);
+  const body = $('#scbody');
+  const waits = h.waiting.slice(0, 20);
+  body.innerHTML = (h.scaffolds.length ? `<div class="list">${h.scaffolds.map(scCard).join('')}</div>`
+      : `<div class="card">${empty('box', 'Sem andaimes', h.can_manage ? 'Precisas de um andaime? Carrega em «+ Pedir andaime».' : 'Os andaimes das tuas obras aparecem aqui.')}</div>`)
+    + (waits.length ? `<div class="sec-h"><h2>Espera por andaimes do cliente</h2><span class="small muted">prova para pedir as horas paradas</span></div>
+      <div class="card"><ul class="q-list">${waits.map((w) => `<li><b>${esc(w.number)}</b> · ${esc(fmtDate(w.day))} · ${w.crew_size} pessoa(s) × ${nPt(w.hours, 1)} h = <b>${nPt(w.person_hours, 1)} h</b>${w.note ? ' · ' + esc(w.note) : ''}</li>`).join('')}</ul>
+      <p class="small"><b>Total: ${nPt(waits.reduce((a, w) => a + Number(w.person_hours), 0), 1)} horas paradas</b></p></div>` : '');
+  body.querySelectorAll('[data-sc]').forEach((b) => b.onclick = () => { S.id = b.dataset.sc; viewScaffold(); });
+}
+function scCard(x) {
+  const [ck, cl] = SC_COLOUR[x.colour] || ['', x.colour];
+  return `<button type="button" class="card sc-card ${esc(x.colour)}" data-sc="${esc(x.id)}"><span class="sc-dot" aria-hidden="true"></span>
+    <span class="grow"><span class="nm">${esc(x.number)} · ${esc(x.location || x.purpose || '')}</span>
+      <span class="sub">${esc(x.site)} · ${esc(SC_STATE[x.status] || x.status)}${x.height_m ? ' · ' + nPt(x.height_m, 1) + ' m' : ''} · ${x.paid_by === 'client' ? 'pago pelo cliente' : 'pago por nós'}${x.next_inspection_due && ['in_use', 'in_use_restricted'].includes(x.status) ? ' · inspeção até ' + esc(fmtTime(x.next_inspection_due)) : ''}</span></span>
+    <span class="sc-right">${chip(ck, x.overdue ? 'Inspeção fora do prazo' : cl)}${x.open_reports ? chip('bad', x.open_reports + ' estrago(s)') : ''}</span></button>`;
+}
+async function scRequest(h) {
+  const sites = h.sites;
+  const fd = await askSheet('Pedir andaime', `
+    <label for="ss">Obra *</label><select id="ss" name="s" required><option value="">Escolhe</option>${sites.map((x) => `<option value="${esc(x.id)}" ${x.id === state.scaf.site ? 'selected' : ''}>${esc(x.code)} · ${esc(x.title)}</option>`).join('')}</select>
+    <label for="sp">Para quê *</label><input id="sp" name="p" required minlength="3" maxlength="200" placeholder="ex.: acesso às válvulas da linha 300">
+    <label for="sl">Onde *</label><input id="sl" name="l" required minlength="3" maxlength="200" placeholder="ex.: rack 2, cota +6">
+    <div class="row"><div><label for="sh">Altura (m)</label><input id="sh" name="h" inputmode="decimal"></div>
+      <div><label for="sn">Precisa até</label><input id="sn" name="n" type="date" min="${esc(isoDay(new Date()))}"></div></div>
+    <label>Quem paga *</label><div class="chips"><label class="chip"><input type="radio" name="pb" value="us" required>Nós (subempreiteiro nosso)</label>
+      <label class="chip"><input type="radio" name="pb" value="client" required>O cliente (equipa do cliente)</label></div>
+    <label for="se">Empresa de andaimes *</label><input id="se" name="e" required maxlength="200" list="sel" placeholder="Nome da empresa">
+    <datalist id="sel">${h.erectors.map((x) => `<option value="${esc(x.name)}">`).join('')}</datalist>
+    <label for="sf">Telefone da empresa</label><input id="sf" name="f" inputmode="tel" maxlength="40">
+    <div id="sus" hidden><div class="row"><div><label for="sd">Dias previstos *</label><input id="sd" name="d" inputmode="numeric"></div>
+      <div><label for="sr">Aluguer por dia (€) *</label><input id="sr" name="r" inputmode="decimal"></div></div>
+      <p class="small muted">O custo conta por dia a partir da montagem e entra no custo da obra quando o andaime é desmontado.</p></div>
+    <p class="small muted" id="scl" hidden>Andaime do cliente: se a tua equipa ficar parada à espera, regista a espera. É a prova para pedir essas horas.</p>`, 'Pedir', (d) => {
+    d.querySelectorAll('input[name=pb]').forEach((r) => r.onchange = () => { const us = r.value === 'us';
+      d.querySelector('#sus').hidden = !us; d.querySelector('#scl').hidden = us; d.querySelector('#sd').required = us; d.querySelector('#sr').required = us; });
+  });
+  if (!fd) return;
+  const num = (k) => { const v = String(fd.get(k) || '').replace(/\s/g, '').replace(',', '.'); return v === '' ? null : Number(v); };
+  const name = String(fd.get('e')).trim(); const known = h.erectors.find((x) => x.name.toLowerCase() === name.toLowerCase());
+  const p = { site_id: fd.get('s'), purpose: String(fd.get('p')).trim(), location: String(fd.get('l')).trim(), paid_by: fd.get('pb'),
+    height_m: num('h'), needed_by: fd.get('n') || null, planned_days: num('d'), daily_rate: num('r') };
+  if (known) p.erector_id = known.id; else { p.erector_name = name; p.erector_phone = String(fd.get('f') || '').trim(); }
+  const { data: id, error } = await sb.rpc('mini_scaffold_request', { p });
+  if (error) return toast(friendly(error));
+  toast('Pedido feito. Fica vermelho até ser montado e inspecionado.');
+  state.scaf.id = id; viewScaffold();
+}
+// Photo to the private bucket: tenant/scaffold/uuid.ext, with its fingerprint. Images only.
+async function scUpload(scId, f) {
+  if (!f || !f.size) { toast('Tira uma fotografia.'); return null; }
+  if (!f.type.startsWith('image/')) { toast('Só fotografias (JPG, PNG ou WebP).'); return null; }
+  f = await shrinkPhoto(f);
+  const bad = fileProblem(f); if (bad) { toast(bad); return null; }
+  const path = `${state.me.tenant_id}/${scId}/${uuid()}.${FILE_TYPES[f.type]}`;
+  const sha = await sha256Hex(f);
+  const up = await sb.storage.from('andaimes').upload(path, f, { contentType: f.type, upsert: false });
+  if (up.error) { toast(friendly(up.error)); return null; }
+  return { file: path, sha256: sha };
+}
+function viewScaffold() {
+  if (!canScaffolds()) return viewClock();
+  app.innerHTML = `<p class="noprint"><button class="btn ghost small" id="scback">‹ Andaimes</button></p><div id="scone">${skel(3)}</div>`;
+  $('#scback').onclick = () => { state.scaf.id = null; viewScaffolds(); };
+  loadScaffold();
+}
+async function loadScaffold() {
+  const box = $('#scone'); if (!box) return;
+  const { data: x, error } = await sb.rpc('mini_scaffold_get', { p_scaffold: state.scaf.id });
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
+  const [ck, cl] = SC_COLOUR[x.colour] || ['', x.colour];
+  const fromErect = x.status === 'erecting';
+  box.innerHTML = `<div class="card sc-head ${esc(x.colour)}"><div class="wk"><span class="sc-dot big" aria-hidden="true"></span><div class="grow">
+      <p class="ph-k">${esc(x.site)} · ${esc(x.site_title)}</p><h1 style="margin:0">Andaime ${esc(x.number)}</h1>
+      <p class="sub">${esc(x.location || '')}${x.purpose ? ' · ' + esc(x.purpose) : ''}</p></div></div>
+      <p>${chip(ck, x.overdue ? 'Vermelho: inspeção fora do prazo' : cl)} ${chip('', SC_STATE[x.status] || x.status)}</p>
+      ${x.conditions ? `<p class="small"><b>Restrições:</b> ${esc(x.conditions)}</p>` : ''}${x.reason && ['red', 'amber'].includes(x.colour) ? `<p class="small muted">${esc(x.reason)}</p>` : ''}
+      <ul class="fl-papers">
+        <li class="fl-p ${x.overdue ? 'bad' : 'ok'}"><span>Próxima inspeção</span><b>${x.next_inspection_due ? esc(fmtTime(x.next_inspection_due)) : '—'}</b></li>
+        <li class="fl-p"><span>Última inspeção</span><b>${x.last_inspection_at ? esc(fmtTime(x.last_inspection_at)) + (x.last_inspector ? ' · ' + esc(x.last_inspector) : '') : '—'}</b></li>
+        <li class="fl-p"><span>Classe de carga · pessoas</span><b>${x.load_class || '—'} · ${x.max_persons || '—'}</b></li>
+        <li class="fl-p"><span>Empresa</span><b>${esc(x.erector || '')}${x.erector_phone ? ' · ' + esc(x.erector_phone) : ''}</b></li>
+        <li class="fl-p"><span>Quem paga</span><b>${x.paid_by === 'client' ? 'O cliente' : 'Nós'}</b></li>
+        ${x.paid_by === 'us' ? `<li class="fl-p"><span>Aluguer</span><b>${x.days_standing} dia(s) × ${x.daily_rate != null ? eur2(x.daily_rate) : '—'} = ${eur2(x.cost_so_far)}</b></li>` : ''}
+      </ul>
+      <div class="acts">${x.can_inspect ? `<button class="btn big" id="scins">${ic('ok')}Inspecionar</button>` : ''}
+        ${x.moves.map((m) => `<button class="btn ${m === 'blocked' || m === 'cancelled' ? 'ghost danger-t' : 'ghost'} wide" data-move="${m}">${esc(m === 'awaiting_inspection' && !fromErect ? 'Alteração feita: pedir inspeção' : SC_MOVE[m] || m)}</button>`).join('')}
+        ${x.erected_at && !['dismantled', 'cancelled'].includes(x.status) ? `<button class="btn ghost wide danger-t" id="screp">${ic('warn')}Avisar de um estrago</button>` : ''}
+        ${x.can_wait ? `<button class="btn ghost wide" id="scwait">${ic('clock')}A equipa ficou à espera</button>` : ''}
+        ${x.erected_at && !['dismantled', 'cancelled'].includes(x.status) ? `<button class="btn ghost wide" id="sctag">${ic('print')}Etiqueta com QR code</button>` : ''}</div></div>
+    ${x.reports.length ? `<div class="sec-h"><h2>Estragos avisados</h2></div><div class="card"><ul class="q-list">${x.reports.map((r) => `<li>${r.status === 'open' ? chip('bad', 'Aberto') : chip('ok', 'Resolvido')} ${esc(r.note)} · ${esc(r.by || '')} · ${esc(fmtTime(r.at))}</li>`).join('')}</ul></div>` : ''}
+    ${x.inspections.length ? `<div class="sec-h"><h2>Inspeções</h2></div><div class="card"><ul class="q-list">${x.inspections.map((i) => `<li><b>${esc(SC_RESULT[i.result] || i.result)}</b> · ${esc(fmtTime(i.at))} · ${esc(i.inspector || '')}${i.note ? ' · «' + esc(i.note) + '»' : ''}${i.valid_until ? ' · válida até ' + esc(fmtTime(i.valid_until)) : ''}</li>`).join('')}</ul></div>` : ''}
+    ${x.photos.length ? `<div class="sec-h"><h2>Fotografias</h2></div><div class="chips">${x.photos.map((p, i) => `<button class="chip" data-scfile="${esc(p.file)}">${ic('camera')}${esc(SC_PHOTO[p.kind] || 'Foto')} ${i + 1}</button>`).join('')}</div>` : ''}
+    ${x.waiting.length ? `<div class="sec-h"><h2>Espera registada</h2></div><div class="card"><ul class="q-list">${x.waiting.map((w) => `<li>${esc(fmtDate(w.day))} · ${w.crew_size} × ${nPt(w.hours, 1)} h = <b>${nPt(w.person_hours, 1)} h</b>${w.note ? ' · ' + esc(w.note) : ''}</li>`).join('')}</ul></div>` : ''}
+    <div class="sec-h"><h2>Histórico</h2></div><div class="card"><ul class="q-list">${x.history.map((l) => `<li>${esc(SC_STATE[l.to] || l.to)} · ${esc(fmtTime(l.at))}${l.by ? ' · ' + esc(l.by) : l.source === 'overdue' ? ' · automático (inspeção fora do prazo)' : ''}${l.reason ? ' · ' + esc(l.reason) : ''}</li>`).join('')}</ul></div>`;
+  box.querySelectorAll('[data-move]').forEach((b) => b.onclick = () => scMove(x, b.dataset.move));
+  box.querySelectorAll('[data-scfile]').forEach((b) => b.onclick = () => openDocFile(b.dataset.scfile, 'andaimes'));
+  if ($('#scins')) $('#scins').onclick = () => scInspect(x);
+  if ($('#screp')) $('#screp').onclick = () => scReport(x.id, x.number, loadScaffold);
+  if ($('#scwait')) $('#scwait').onclick = () => scWait(x);
+  if ($('#sctag')) $('#sctag').onclick = () => scTag(x);
+}
+async function scMove(x, to) {
+  const photo = to === 'awaiting_inspection' && x.status === 'erecting';
+  const why = ['blocked', 'cancelled', 'modifying'].includes(to);
+  const fd = await askSheet(`${SC_MOVE[to] || to} · ${x.number}`, `
+    ${why ? `<label for="smw">Porquê? *</label><input id="smw" name="w" required minlength="3" maxlength="300">` : ''}
+    ${photo ? `<label for="smf">Fotografia do andaime montado *</label><input id="smf" name="f" type="file" required accept="image/*" capture="environment">
+      <div class="row"><div><label for="smc">Pessoas a montar</label><input id="smc" name="c" inputmode="numeric"></div><div><label for="smh">Horas</label><input id="smh" name="h" inputmode="decimal"></div></div>
+      <p class="small muted">Continua vermelho até a Segurança ou a Qualidade o inspecionar.</p>` : ''}
+    ${to === 'dismantled' ? '<p class="small muted">O aluguer pára hoje e o custo entra na obra.</p>' : ''}
+    ${!why && !photo && to !== 'dismantled' ? '<p class="small muted">Fica registado com o teu nome e a hora.</p>' : ''}`, 'Confirmar');
+  if (!fd) return;
+  const p = {};
+  if (why) p.reason = String(fd.get('w')).trim();
+  if (photo) { const up = await scUpload(x.id, fd.get('f')); if (!up) return; Object.assign(p, up); p.crew_size = fd.get('c') || null; p.hours = String(fd.get('h') || '').replace(',', '.') || null; }
+  const { error } = await sb.rpc('mini_scaffold_move', { p_scaffold: x.id, p_to: to, p });
+  if (error) return toast(friendly(error));
+  toast('Feito.'); loadScaffold();
+}
+async function scInspect(x) {
+  const due = new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10);
+  const fd = await askSheet(`Inspecionar ${x.number}`, `<p class="small">${esc(x.site)} · ${esc(x.location || '')}</p>
+    <label>Resultado *</label><div class="chips"><label class="chip"><input type="radio" name="r" value="ok" required>Verde: aprovado</label>
+      <label class="chip"><input type="radio" name="r" value="restricted" required>Amarelo: com restrições</label>
+      <label class="chip"><input type="radio" name="r" value="not_ok" required>Vermelho: reprovado</label></div>
+    <label for="sin">Restrições ou o que está mal</label><textarea id="sin" name="n" rows="2" maxlength="500" placeholder="ex.: só 2 pessoas, sem material na plataforma de cima"></textarea>
+    <div class="row"><div><label for="sic">Classe de carga (1 a 6)${x.load_class ? '' : ' *'}</label><input id="sic" name="c" inputmode="numeric" value="${esc(x.load_class || '')}" ${x.load_class ? '' : 'required'}></div>
+      <div><label for="sim">Máximo de pessoas</label><input id="sim" name="m" inputmode="numeric" value="${esc(x.max_persons || '')}"></div></div>
+    <label for="sid">Próxima inspeção até</label><input id="sid" name="d" type="date" value="${due}">
+    <label for="sif">Fotografia da inspeção *</label><input id="sif" name="f" type="file" required accept="image/*" capture="environment">
+    <p class="small muted">Pede o código do telemóvel. Fica guardado com o teu nome e não se apaga.</p>`, 'Guardar inspeção', (d) => {
+    const n = d.querySelector('#sin');
+    d.querySelectorAll('input[name=r]').forEach((r) => r.onchange = () => { n.required = r.value !== 'ok'; });
+  });
+  if (!fd) return;
+  const up = await scUpload(x.id, fd.get('f')); if (!up) return;
+  const { error } = await sb.rpc('mini_scaffold_inspect', { p_scaffold: x.id, p: { result: fd.get('r'), note: String(fd.get('n') || '').trim() || null,
+    load_class: fd.get('c') || null, max_persons: fd.get('m') || null, next_due: fd.get('d') || null, ...up } });
+  if (error) return toast(friendly(error));
+  toast(fd.get('r') === 'ok' ? 'Verde: pode subir.' : fd.get('r') === 'restricted' ? 'Amarelo: pode subir com as restrições.' : 'Vermelho: ninguém sobe.');
+  loadScaffold();
+}
+async function scReport(id, number, reload) {
+  const fd = await askSheet(`Estrago no andaime ${number}`, `
+    <label for="srn">O que está mal *</label><textarea id="srn" name="n" required minlength="5" maxlength="500" rows="3" placeholder="ex.: falta o rodapé, prancha partida, alguém tirou uma diagonal"></textarea>
+    <label for="srf">Fotografia *</label><input id="srf" name="f" type="file" required accept="image/*" capture="environment">
+    <p class="small"><b>O andaime fica vermelho logo.</b> A Segurança e o encarregado são avisados.</p>`, 'Avisar e bloquear');
+  if (!fd) return;
+  const up = await scUpload(id, fd.get('f')); if (!up) return;
+  const { error } = await sb.rpc('mini_scaffold_report', { p_scaffold: id, p: { note: String(fd.get('n')).trim(), ...up } });
+  if (error) return toast(friendly(error));
+  toast('Obrigado. O andaime está bloqueado e a Segurança foi avisada.'); if (reload) reload();
+}
+async function scWait(x) {
+  const fd = await askSheet(`A equipa ficou à espera · ${x.number}`, `<p class="small">Pedido para ${esc(fmtDate(x.needed_by))}. Andaime do cliente.</p>
+    <label for="swd">Dia *</label><input id="swd" name="d" type="date" required max="${esc(isoDay(new Date()))}" value="${esc(isoDay(new Date()))}">
+    <div class="row"><div><label for="swc">Pessoas paradas *</label><input id="swc" name="c" required inputmode="numeric"></div>
+      <div><label for="swh">Horas paradas *</label><input id="swh" name="h" required inputmode="decimal"></div></div>
+    <label for="swn">Nota</label><input id="swn" name="n" maxlength="300" placeholder="ex.: andaime prometido para as 8h, pronto às 14h">
+    <label for="swf">Fotografia da frente parada *</label><input id="swf" name="f" type="file" required accept="image/*" capture="environment">
+    <p class="small muted">Fica como prova para pedir ao cliente as horas que a tua equipa esteve parada.</p>`, 'Registar espera');
+  if (!fd) return;
+  const p = { day: fd.get('d'), crew_size: fd.get('c'), hours: String(fd.get('h')).replace(',', '.'), note: String(fd.get('n') || '').trim() || null };
+  const up = await scUpload(x.id, fd.get('f')); if (!up) return; Object.assign(p, up);
+  const { error } = await sb.rpc('mini_scaffold_waiting_add', { p_scaffold: x.id, p });
+  if (error) return toast(friendly(error));
+  toast('Espera registada.'); loadScaffold();
+}
+// The tag on the scaffold: a QR code that opens "posso subir?" for this scaffold on any phone with the app.
+async function scTag(x) {
+  let img = '';
+  try { const qr = await loadQr(); const q = qr(0, 'M'); q.addData(appUrl() + '#andaime=' + x.id); q.make(); img = q.createDataURL(8, 16); }
+  catch (_) { return toast('Não foi possível desenhar o QR code. Tenta outra vez.'); }
+  const d = document.createElement('dialog'); d.className = 'dlg q-book sc-tagdlg';
+  d.innerHTML = `<div class="printable sc-tag"><b class="sc-tagno">${esc(x.number)}</b><span>${esc(x.site)} · ${esc(x.location || '')}</span>
+      <img alt="QR code do andaime ${esc(x.number)}" src="${img}"><b>Antes de subir, lê este código com o telemóvel.</b>
+      <span>A app diz se podes subir: inspeção em dia, a tua formação e as restrições.</span></div>
+    <div class="acts noprint"><button class="btn" data-print>${ic('print')}Imprimir</button><button class="btn ghost wide" data-x>Fechar</button></div>`;
+  document.body.appendChild(d); d.showModal();
+  d.querySelector('[data-x]').onclick = () => d.close();
+  d.querySelector('[data-print]').onclick = () => window.print();
+  d.addEventListener('close', () => d.remove());
+}
+// "Posso subir?": any person on the site, by number, by the tag's QR code (camera) or from the list. Green, amber or red, with the reasons.
+async function climbCheck(ref) {
+  if (!ref) return;
+  const { data: r, error } = await sb.rpc('mini_scaffold_can_climb', { p_ref: ref });
+  if (error) return toast(friendly(error));
+  const yes = r.answer === 'yes';
+  const d = document.createElement('dialog'); d.className = 'dlg sc-ans ' + esc(r.colour);
+  d.innerHTML = `<div class="sc-big">${ic(yes ? 'ok' : 'x')}<b>${yes ? (r.colour === 'amber' ? 'Podes subir, com restrições' : 'Podes subir') : 'Não subas'}</b></div>
+    <p><b>Andaime ${esc(r.number)}</b> · ${esc(r.location || '')}</p>
+    ${r.conditions ? `<p class="small"><b>Restrições:</b> ${esc(r.conditions)}</p>` : ''}
+    ${r.reasons && r.reasons.length ? `<ul class="q-list">${r.reasons.map((x) => `<li>${esc(scWhy(x))}</li>`).join('')}</ul>` : ''}
+    <p class="small muted">${r.load_class ? 'Classe de carga ' + esc(r.load_class) : ''}${r.max_persons ? ' · máximo ' + esc(r.max_persons) + ' pessoas' : ''}${r.inspected_at ? ' · inspecionado ' + esc(fmtTime(r.inspected_at)) + (r.inspector ? ' por ' + esc(r.inspector) : '') : ''}${r.next_inspection_due ? ' · próxima até ' + esc(fmtTime(r.next_inspection_due)) : ''}</p>
+    <div class="acts"><button class="btn ghost wide danger-t" data-rep>${ic('warn')}Avisar de um estrago</button><button class="btn wide" data-x>Fechar</button></div>`;
+  document.body.appendChild(d); d.showModal();
+  d.querySelector('[data-x]').onclick = () => d.close();
+  d.querySelector('[data-rep]').onclick = () => { d.close(); scReport(r.scaffold_id, r.number, () => { if (state.view === 'andaimes') loadScaffolds(); }); };
+  d.addEventListener('close', () => d.remove());
+}
+// A scaffold tag read with the phone's camera opens the app at #andaime=<id>: kept until the person is signed in.
+function takeClimbLink() {
+  const m = /[#&]andaime=([0-9a-f-]{36})/.exec(location.hash);
+  if (!m) return;
+  try { sessionStorage.setItem('gestnow.climb', m[1]); } catch (_) {}
+  history.replaceState(null, '', location.pathname + location.search);
+}
+function climbAfterLogin() {
+  let ref = null; try { ref = sessionStorage.getItem('gestnow.climb'); sessionStorage.removeItem('gestnow.climb'); } catch (_) {}
+  if (ref) setTimeout(() => climbCheck(ref), 400);
+}
+async function loadMyClimb() {
+  const box = $('#myclimb'); if (!box) return;
+  box.innerHTML = `<form class="card sc-climb" id="myclimbf"><h2 style="margin:0 0 6px">${ic('shield')} Andaimes: posso subir?</h2>
+    <div class="wk"><input name="r" required maxlength="60" placeholder="Número do andaime, ex.: A-012" aria-label="Número do andaime"><button class="btn">Ver</button></div>
+    <p class="small muted">Ou aponta a câmara do telemóvel à etiqueta do andaime. Viste um estrago? Vê o andaime e carrega em «Avisar de um estrago».</p></form>`;
+  $('#myclimbf').onsubmit = (e) => { e.preventDefault(); climbCheck(String(new FormData(e.target).get('r')).trim()); };
 }
