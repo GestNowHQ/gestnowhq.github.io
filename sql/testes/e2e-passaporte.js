@@ -1,0 +1,111 @@
+// Browser test of the passport (steps 2-5) against app_lead on PostgREST :3301.
+// node e2e-passaporte.js <app dir> <out dir> <collab id>
+process.env.PGDB = 'app_lead'; process.env.REST = 'http://127.0.0.1:3301';
+const h = require('./e2e-harness.js');
+const fs = require('fs');
+const [APP, OUT, C] = process.argv.slice(2);
+fs.mkdirSync(OUT, { recursive: true });
+const shot = (pg, n) => pg.screenshot({ path: `${OUT}/${n}.png`, fullPage: true });
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+const status = () => h.asUser({ sub: h.USERS.admin, role: 'authenticated', aal: 'aal2' }, `select onboarding_status from core.collaborators where id = '${C}'`).rows.pop();
+(async () => {
+  // ---- worker: the card
+  let { br, pg } = await h.session('ana');
+  h.check('trabalhadora vê o passo 2 (a ficha)', await pg.isVisible('#of'));
+  h.check('nada da app por trás (menu escondido)', await pg.isHidden('#nav'));
+  await shot(pg, '01-ficha-vazia');
+  await pg.fill('#o_birth_date', '1991-03-14');
+  await pg.fill('#o_id_number', '12345678 0 ZZ1'); await pg.fill('#o_id_expiry', '2031-05-01');
+  await pg.fill('#o_address', 'Rua do Porto, 12, 2.º Esq.'); await pg.fill('#o_postal_code', '7520-212'); await pg.fill('#o_locality', 'Sines');
+  await pg.fill('#o_phone', '961 234 567');
+  await pg.fill('#o_niss', '12345678901');
+  h.check('NISS errado fica vermelho logo', await pg.$eval('#o_niss', (e) => e.classList.contains('bad')));
+  await pg.fill('#o_niss', ''); await pg.type('#o_niss', '12345678902');
+  h.check('NISS certo fica verde', await pg.$eval('#o_niss', (e) => e.classList.contains('good')));
+  await pg.type('#o_iban', 'PT50000201231234567890154');
+  h.check('IBAN formatado em grupos de 4', (await pg.inputValue('#o_iban')).startsWith('PT50 0002 0123'));
+  await pg.selectOption('#o_marital_status', 'single'); await pg.fill('#o_dependents', '0');
+  await pg.fill('#o_emergency_name', 'Maria Martins'); await pg.fill('#o_emergency_relation', 'Mãe'); await pg.fill('#o_emergency_phone', '912345678');
+  await pg.selectOption('#o_size_top', 'M'); await pg.selectOption('#o_size_shoes', '39');
+  await shot(pg, '02-ficha-preenchida');
+  // the medical fitness document, with a photo
+  await pg.click('[data-doc]'); await pg.waitForTimeout(800);
+  await pg.fill('dialog input[name=issue]', '2026-09-01'); await pg.fill('dialog input[name=expiry]', '2027-09-01');
+  await pg.setInputFiles('dialog input[name=file]', { name: 'aptidao.png', mimeType: 'image/png', buffer: PNG });
+  await shot(pg, '03-documento');
+  await pg.click('dialog button[value=ok]'); await pg.waitForTimeout(2500);
+  h.check('documento enviado aparece como enviado', (await pg.textContent('#of')).includes('enviado, o RH vai ver'));
+  h.check('o que escreveu antes do documento não se perdeu', (await pg.inputValue('#o_locality')) === 'Sines');
+  await pg.click('#osend'); await pg.waitForTimeout(2500);
+  h.check('enviou ao RH', status() === 'pending_hr_validation', status());
+  await shot(pg, '04-espera-rh');
+  await br.close();
+
+  // ---- HR: the person's card
+  ({ br, pg } = await h.session('rh'));
+  await pg.evaluate((c) => { state.worker = c; go('ficha'); }, C); await pg.waitForTimeout(2500);
+  h.check('RH vê «Entrada na empresa» na ficha', await pg.isVisible('#wonb .onb-hr'));
+  h.check('RH não vê o IBAN inteiro', !(await pg.textContent('#wonb')).includes('PT50000201231234567890154'));
+  h.check('Confirmar dados fica bloqueado com documento por ver', await pg.isDisabled('#oval'));
+  await shot(pg, '05-rh-ficha');
+  await pg.click('#onote'); await pg.waitForTimeout(500);
+  await pg.fill('dialog textarea[name=n]', 'Confirma o número do cartão de cidadão, por favor.'); await pg.click('dialog button[value=ok]'); await pg.waitForTimeout(1500);
+  await pg.click('[data-verify]'); await pg.waitForTimeout(1500);
+  h.check('depois de confirmar o documento pode validar', !(await pg.isDisabled('#oval')));
+  await pg.click('#oval'); await pg.waitForTimeout(2000);
+  h.check('RH validou', status() === 'pending_contract', status());
+  await pg.click('#oissue'); await pg.waitForTimeout(800);
+  await pg.selectOption('dialog select[name=type]', 'fixed_term');
+  const d = (n) => { const x = new Date(); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };
+  await pg.fill('dialog input[name=start]', d(2)); await pg.fill('dialog input[name=end]', d(185));
+  await pg.fill('dialog input[name=loc]', 'Sines e obras da empresa'); await pg.fill('dialog input[name=base]', '9,75'.replace(',', '.'));
+  await pg.fill('dialog input[name=ot]', '13.50'); await pg.fill('dialog textarea[name=terms]', 'Ajudas de custo segundo a obra.');
+  await shot(pg, '06-rh-contrato');
+  await pg.click('dialog button[value=ok]'); await pg.waitForTimeout(2500);
+  h.check('contrato enviado', (await pg.textContent('#wonb')).includes('à espera da assinatura'));
+  await shot(pg, '07-rh-contrato-enviado');
+  await br.close();
+
+  // ---- worker: read, sign, accept
+  ({ br, pg } = await h.session('ana'));
+  h.check('vê a mensagem do RH', (await pg.textContent('#app')).includes('Confirma o número do cartão'));
+  h.check('assinar só aparece depois de ler', await pg.isHidden('#sg'));
+  await shot(pg, '08-contrato');
+  await pg.$eval('#kt', (e) => { e.scrollTop = e.scrollHeight; }); await pg.evaluate(() => window.scrollTo(0, document.body.scrollHeight)); await pg.waitForTimeout(500);
+  await pg.$eval('#kt', (e) => e.dispatchEvent(new Event('scroll'))); await pg.waitForTimeout(300);
+  await pg.$eval('#rt', (e) => { e.scrollIntoView(); e.scrollTop = e.scrollHeight; e.dispatchEvent(new Event('scroll')); }); await pg.waitForTimeout(500);
+  h.check('depois de ler os dois, aparece assinar', await pg.isVisible('#sg'));
+  await pg.fill('#sn', 'Ana Sofia Martins');
+  await pg.$eval('#sc', (e) => e.scrollIntoView({ block: 'center' })); await pg.waitForTimeout(300);
+  const b = await pg.$eval('#sc', (e) => { const r = e.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; });
+  await pg.mouse.move(b.x + 20, b.y + b.h * 0.6); await pg.mouse.down();
+  for (let i = 0; i <= 40; i++) await pg.mouse.move(b.x + 20 + i * (b.w - 40) / 40, b.y + b.h * (0.6 - 0.3 * Math.sin(i / 4)));
+  await pg.mouse.up();
+  await pg.check('#sg input[name=ok]');
+  await shot(pg, '09-assinar');
+  await pg.click('#sgo'); await pg.waitForTimeout(2500);
+  h.check('assinou', status() === 'pending_rate_approval', status());
+  await shot(pg, '10-valor-hora');
+  h.check('vê o valor hora 9,75 €', (await pg.textContent('#rf')).includes('9,75'));
+  await pg.check('#rf input[name=ok]'); await pg.click('#rgo'); await pg.waitForTimeout(2000);
+  h.check('ativa', status() === 'active', status());
+  await shot(pg, '11-bem-vinda');
+  await pg.click('#go'); await pg.waitForTimeout(3000);
+  h.check('entra na app', await pg.isVisible('#nav'));
+  h.check('o bot mostra a app a quem acabou de entrar', await pg.isVisible('#tour'));
+  if (await pg.isVisible('#tskip')) { await pg.click('#tskip'); await pg.waitForTimeout(500); }
+  await pg.evaluate(() => go('meucontrato')); await pg.waitForTimeout(1500);
+  h.check('«O meu contrato» mostra a assinatura', await pg.isVisible('#mp .sig-img'));
+  await shot(pg, '12-meu-contrato');
+  await br.close();
+  ({ br, pg } = await h.session('rh'));
+  await pg.evaluate((c) => { state.worker = c; go('ficha'); }, C); await pg.waitForTimeout(2500);
+  h.check('RH vê os 5 passos feitos na app', (await pg.$$('#wonb .onb-tl li.done')).length === 5);
+  await shot(pg, '13-rh-concluido');
+  await pg.evaluate(() => go('onbtextos')); await pg.waitForTimeout(1500);
+  h.check('RH abre o contrato e regulamento', (await pg.$$('#tx form')).length === 2);
+  await shot(pg, '14-textos');
+  await br.close();
+  console.log(h.fails ? `FALHAS: ${h.fails}` : 'TUDO OK');
+  process.exit(h.fails ? 1 : 0);
+})().catch((e) => { console.log('ERRO', e.message); process.exit(2); });

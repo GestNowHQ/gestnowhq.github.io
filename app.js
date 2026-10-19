@@ -37,6 +37,40 @@ const REASON_PREFIX = {
   'skill_missing:': 'Falta a competência: ',
 };
 const ERRORS = [
+  // Passaporte de entrada (sql/80)
+  [/social security number \(NISS\) is not valid/i, 'O NISS não está certo: confirma os 11 algarismos no cartão da Segurança Social.'],
+  [/IBAN is not valid/i, 'O IBAN não está certo: confirma na app do teu banco.'],
+  [/your data is already validated/i, 'Os teus dados já foram confirmados pelo RH. Para mudar alguma coisa, fala com o RH.'],
+  [/your ID document has expired/i, 'O teu documento de identificação está caducado: renova-o antes de começar.'],
+  [/birth date: the person must be 16 to 90/i, 'Confirma a data de nascimento.'],
+  [/postal code: 0000-000/i, 'O código postal escreve-se assim: 0000-000.'],
+  [/^.*missing: (.*)$/i, 'Ainda falta: $1.'],
+  [/documents are now handled by HR/i, 'Os documentos agora são tratados pelo RH.'],
+  [/the safety induction is recorded by the app itself/i, 'O acolhimento fica registado sozinho quando o terminas na app.'],
+  [/add the photo or PDF of the document/i, 'Junta a foto ou o PDF do documento.'],
+  [/the issue date cannot be in the future/i, 'A data de emissão não pode ser no futuro.'],
+  [/the expiry date is before the issue date/i, 'A validade é antes da data de emissão: confirma as datas.'],
+  [/the contract changed: open it again/i, 'O contrato foi mudado pelo RH entretanto: abre-o outra vez e lê a versão nova.'],
+  [/the internal rules changed: open them again/i, 'O regulamento foi mudado entretanto: abre-o outra vez.'],
+  [/write your full name exactly as in the contract: (.*)$/i, 'Escreve o teu nome completo como está no contrato: $1.'],
+  [/sign with your finger in the box/i, 'Assina com o dedo no quadro.'],
+  [/there is no contract waiting for your signature/i, 'Não há nenhum contrato à espera da tua assinatura.'],
+  [/HR has not set the pay terms yet/i, 'O RH ainda não pôs o valor hora. Avisamos-te quando estiver.'],
+  [/not waiting for HR/i, 'Esta pessoa ainda não enviou os dados (ou já foram confirmados).'],
+  [/check these documents first[^:]*: (.*)$/i, 'Confirma primeiro estes documentos (abre cada um): $1.'],
+  [/a fixed-term contract needs an end date/i, 'Um contrato a termo certo precisa da data de fim, depois do início.'],
+  [/overtime cannot be paid below the normal rate/i, 'A hora extra não pode ser mais baixa do que a hora normal.'],
+  [/place of work and job title are required/i, 'Falta o local de trabalho ou a função.'],
+  [/hourly rate missing or not valid/i, 'Falta o valor hora (ou não está certo).'],
+  [/weekly hours between 1 and 60/i, 'As horas por semana são entre 1 e 60.'],
+  [/the start date is required/i, 'Falta a data de início.'],
+  [/choose the type of contract/i, 'Escolhe o tipo de contrato.'],
+  [/IRS holders: 1 or 2/i, 'Titulares do IRS: um ou dois.'],
+  [/gloves size: 6 to 12/i, 'Luvas: tamanho 6 a 12.'],
+  [/write what is missing/i, 'Escreve o que falta.'],
+  [/the contract comes after HR validates the data/i, 'O contrato só se prepara depois de confirmares os dados da pessoa.'],
+  [/the contract model must keep at least/i, 'O modelo do contrato tem de manter pelo menos {{nome}} e {{preco_hora}}.'],
+  [/the text is too short/i, 'O texto é curto demais.'],
   [/this person may not take tool (\S+) \((.*)\)/i, 'Esta pessoa não pode levar a $1: falta formação ou documento válido ($2).'],
   [/tool (\S+) carries a tracker that is not Ex-certified/i, 'A $1 tem um localizador sem certificação Ex: tira-o antes de entrar em zona ATEX.'],
   [/tool (\S+) is in an ATEX zone: only an Ex-certified tracker/i, 'A $1 está em zona ATEX: só pode levar um localizador com certificação Ex.'],
@@ -699,8 +733,8 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(f
 const APP_VERSION = '47';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
-  project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
-const MORE_ORDER = ['equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'andaimes', 'processo', 'clientes'];
+  project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas', 'meucontrato'] };
+const MORE_ORDER = ['equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'meucontrato', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'andaimes', 'processo', 'clientes'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -840,8 +874,9 @@ async function boot() {
   nav.querySelector('[data-view=secretariado]').hidden = !canOffice();
   // The worker profile sees only their own hours; anyone with a person behind the login has them under Mais.
   const worker = me.role === 'worker';
-  nav.querySelectorAll('button[data-view]').forEach((b) => { if (b.dataset.view !== 'minhas' && b.dataset.view !== 'secretariado') b.hidden = worker; });
+  nav.querySelectorAll('button[data-view]').forEach((b) => { if (!['minhas', 'meucontrato', 'secretariado'].includes(b.dataset.view)) b.hidden = worker; });
   nav.querySelector('[data-view=minhas]').hidden = !me.collaborator_id;
+  nav.querySelector('[data-view=meucontrato]').hidden = !me.collaborator_id || state.offline;
   nav.querySelector('[data-view=painel]').hidden = worker || !canSiteDetails();
   nav.querySelector('[data-view=acolhimento]').hidden = worker || !can('acolhimento.gerir');
   nav.querySelector('[data-view=clientes]').hidden = worker || state.offline || !isOwner();
@@ -1223,7 +1258,7 @@ function bindSiteSelect(id, after) {
 
 function go(view) {
   if (!state.ready) return boot();   // never show a screen before login (and the phone code, when required)
-  if (state.me.role === 'worker') view = 'minhas';   // the worker profile has one screen (the database checks the same)
+  if (state.me.role === 'worker' && view !== 'meucontrato') view = 'minhas';   // the worker profile: their hours and their papers (the database checks the same)
   else if (state.offline && view !== 'picar' && view !== 'emergencia') { toast('Sem rede: por agora só podes picar.'); view = 'picar'; }
   stopNfc(); clearInterval(state.timer); clearInterval(state.tick); hideFlash(); openMore(false); Voice.stop(); dropRobots();
   if (state.uiEl && window.GNUI) { window.GNUI.unmount(state.uiEl); state.uiEl = null; }
@@ -1235,7 +1270,7 @@ function go(view) {
   nav.querySelector('button[data-more]').classList.toggle('on', !!cur && cur.parentElement.id === 'more');
   window.scrollTo(0, 0);
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
-     ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients,
+     ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, meucontrato: viewMyPapers, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients,
      processo: viewProcess, orcamentos: viewEstimates, lmra: viewLmra, emergencia: viewEmergency,
      armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, producao: viewProd, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
   checkEmergencyBar();
@@ -2044,6 +2079,7 @@ async function viewWorker() {
         ${w.card_uid ? chip('', 'cartão ' + w.card_uid, 'card') : chip('warn', 'sem cartão', 'card')}</div>
       ${need.length ? `<div class="ready ${pct === 100 ? 'ok' : 'bad'}"><div class="ready-t"><span>Pronto para entrar na obra</span><b>${fine} de ${need.length} documentos</b></div>
         <div class="prog"><i style="width:${pct}%"></i></div></div>` : ''}</div></div>
+    <div id="wonb"></div>
     <div class="card" id="ficha">${skel(2)}</div>
     <div class="card"><h2 style="margin-top:0">Documentos e formação</h2>
       <table class="rt"><tr><th>Documento</th><th>Validade</th><th>Estado</th></tr>${ds.data.map((d) => `<tr>
@@ -2164,7 +2200,7 @@ async function viewWorker() {
     if (error) return toast(friendly(error));
     toast(w.is_active ? 'Desativado.' : 'Reativado. Dá-lhe um cartão.'); await loadBasics(); viewWorker();
   };
-  loadWorkerProfile(id);
+  loadWorkerProfile(id); loadOnbCard(id);
 }
 
 // ------------------------------------------------------------------ Ficha do colaborador (a ficha de papel da empresa)
@@ -2360,8 +2396,8 @@ async function readOneCard(sel) {
 // ------------------------------------------------------------------ Acolhimento (the new worker's mandatory steps)
 // A person whose account is not active yet sees only this: the steps in order, nothing of the app behind them.
 // The database is the lock (is_fully_active); this screen only shows the way through it.
-const ONB_STEPS = ['Acolhimento', 'Os meus dados', 'Contrato', 'Assinar', 'Pronto'];
-const ONB_AT = { pending_video: 0, pending_data: 1, pending_hr_validation: 1, pending_contract: 2, pending_rate_approval: 3, active: 4 };
+const ONB_STEPS = ['Acolhimento', 'Os meus dados', 'RH confirma', 'Contrato', 'Valor hora'];
+const ONB_AT = { pending_video: 0, pending_data: 1, pending_hr_validation: 2, pending_contract: 3, pending_rate_approval: 4, active: 5 };
 const ytId = (s) => { const m = /(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/))([A-Za-z0-9_-]{11})/.exec(String(s || '')) || /^([A-Za-z0-9_-]{11})$/.exec(String(s || '').trim());
   return m ? m[1] : null; };
 const paras = (t) => String(t || '').split(/\n\s*\n/).map((x) => `<p>${esc(x.trim()).replace(/\n/g, '<br>')}</p>`).join('');
@@ -2375,7 +2411,7 @@ function onbShell(ob, inner) {
   app.innerHTML = `<div class="onb">
     <div class="onb-top"><span class="onb-logo">${LOGO('lgO')}<b>GestNow</b></span><span class="grow"></span><button class="btn ghost small" id="onbout">${ic('out')}Sair</button></div>
     <div class="onb-hello"><p class="ph-k">${esc(ob.company || '')}</p><h1>Bem-vindo, ${esc(String(ob.name || '').split(' ')[0])}</h1>
-      <p class="muted">Antes de começares a trabalhar connosco, há ${ONB_STEPS.length - 1} passos. Cada um abre quando o anterior estiver feito.</p></div>
+      <p class="muted">Antes de começares a trabalhar connosco, há ${ONB_STEPS.length} passos. Cada um abre quando o anterior estiver feito.</p></div>
     <ol class="onb-steps">${ONB_STEPS.map((s, i) => `<li class="${i < at ? 'done' : i === at ? 'now' : ''}"><span>${i < at ? ic('ok') : i + 1}</span><b>${esc(s)}</b></li>`).join('')}</ol>
     <div id="onbbody">${inner}</div></div>`;
   $('#onbout').onclick = () => { document.body.classList.remove('onboarding'); signOut(); };
@@ -2385,15 +2421,7 @@ async function showOnboarding(ob) {
   Voice.stop();
   if (!ob || ob.status === 'active' || ob.status === 'none') { if (state.onb && ob && ob.status === 'active') state.tourNext = true; state.onb = null; document.body.classList.remove('onboarding'); return boot(); }
   ob.skew = new Date(ob.server_now).getTime() - Date.now();
-  if (ob.status !== 'pending_video') {
-    const waiting = { pending_data: ['Os teus dados', 'O próximo passo é preencheres a tua ficha: morada, NISS, IBAN e documentos. Este ecrã ainda está a ser preparado; até lá, o RH trata disto contigo.'],
-      pending_hr_validation: ['À espera do RH', 'O RH está a confirmar os teus dados. Avisamos-te aqui quando estiver.'],
-      pending_contract: ['À espera do contrato', 'O RH está a preparar o teu contrato. Quando chegar, aparece aqui para leres e assinares.'],
-      pending_rate_approval: ['Quase pronto', 'Falta confirmares as condições do contrato.'] }[ob.status] || ['Em curso', ''];
-    return onbShell(ob, `<div class="card onb-wait">${ic('clock')}<h2>${esc(waiting[0])}</h2><p>${esc(waiting[1])}</p>
-      <p class="small muted">${ic('ok')} Acolhimento concluído${ob.steps && ob.steps.safety_videos ? ' em ' + esc(new Date(ob.steps.safety_videos).toLocaleDateString('pt-PT')) : ''}.</p>
-      <button class="btn ghost" id="onbre">Atualizar</button></div>`), ($('#onbre').onclick = () => showOnboarding());
-  }
+  if (ob.status !== 'pending_video') return onbPassport(ob);
   const items = ob.items || [];
   const done = items.filter((x) => x.passed_at).length;
   const cur = items.find((x) => !x.passed_at);
@@ -2465,6 +2493,352 @@ function onbQuiz(x, n, total, wrong) {
   };
 }
 
+// ------------------------------------------------------------------ Passaporte de entrada (steps 2 to 5, sql/80)
+// The person fills their own card, sends their documents, reads and signs the contract and the internal rules, and
+// accepts the pay terms. Every check is in the database (mini_onb_*); this only shows the way, one step at a time.
+const onbOpts = (map, cur, empty = 'Escolhe…') => `<option value="">${esc(empty)}</option>` + (Array.isArray(map) ? map.map((k) => [k, k]) : Object.entries(map))
+  .map(([k, t]) => `<option value="${esc(k)}" ${String(k) === String(cur ?? '') ? 'selected' : ''}>${esc(t)}</option>`).join('');
+const CONTRACT_TYPES = { permanent: 'Sem termo (efetivo)', fixed_term: 'A termo certo', unfixed_term: 'A termo incerto', temporary: 'Temporário', other: 'Outro' };
+const eur = (n) => n === null || n === undefined ? '—' : Number(n).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' });
+const nissFmt = (v) => String(v || '').replace(/\D/g, '').slice(0, 11);
+const ibanFmt = (v) => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 34).replace(/(.{4})/g, '$1 ').trim();
+// The same checks as the server (private.niss_ok / iban_ok), so a typo shows at once and not only after sending.
+function nissOk(v) {
+  const d = nissFmt(v); if (d.length !== 11 || !/^[12]/.test(d)) return false;
+  const w = [29, 23, 19, 17, 13, 11, 7, 5, 3, 2]; const s = w.reduce((a, x, i) => a + x * +d[i], 0);
+  return 9 - (s % 10) === +d[10];
+}
+function ibanOk(v) {
+  const s = String(v || '').toUpperCase().replace(/\s/g, ''); if (!/^[A-Z]{2}[0-9]{2}[A-Z0-9]{10,30}$/.test(s)) return false;
+  if (s.startsWith('PT') && s.length !== 25) return false;
+  const r = (s.slice(4) + s.slice(0, 4)).replace(/[A-Z]/g, (c) => String(c.charCodeAt(0) - 55));
+  let m = 0; for (const ch of r) m = (m * 10 + +ch) % 97; return m === 1;
+}
+async function onbPassport(ob) {
+  const { data: me, error } = await sb.rpc('mini_onb_me');
+  if (error) return onbShell(ob, `<div class="card onb-wait bad">${ic('warn')}<h2>Sem ligação</h2><p>${esc(friendly(error))}</p><button class="btn ghost" id="onbre">Tentar outra vez</button></div>`), ($('#onbre').onclick = () => showOnboarding());
+  state.onbMe = me;
+  if (me.status === 'pending_data') return onbData(ob, me);
+  if (me.status === 'pending_hr_validation') return onbWaitHr(ob, me);
+  if (me.status === 'pending_contract') return me.contract && me.contract.status === 'issued' ? onbContract(ob, me) : onbWait(ob, 'O RH está a preparar o teu contrato',
+    'Os teus dados já estão confirmados. Quando o contrato chegar, aparece aqui para leres e assinares com o dedo.', me);
+  if (me.status === 'pending_rate_approval') return onbRates(ob, me);
+  return showOnboarding();
+}
+const onbNote = (me) => me.note ? `<div class="onb-note">${ic('voice')}<div><b>Mensagem do RH</b><p>${esc(me.note.text)}</p><small>${esc(new Date(me.note.at).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' }))}</small></div></div>` : '';
+function onbWait(ob, title, text, me) {
+  onbShell(ob, `${onbNote(me)}<div class="card onb-wait">${ic('clock')}<h2>${esc(title)}</h2><p>${esc(text)}</p>
+    <p class="small muted">${ic('ok')} Já feito: ${Object.keys(me.steps || {}).length} de 5 passos.</p>
+    <button class="btn ghost" id="onbre">Atualizar</button></div>`);
+  $('#onbre').onclick = () => showOnboarding();
+}
+function onbWaitHr(ob, me) {
+  onbShell(ob, `${onbNote(me)}<div class="card onb-wait">${ic('clock')}<h2>O RH está a confirmar os teus dados</h2>
+    <p>Enviaste tudo. Se o RH precisar de alguma coisa, deixa-te uma mensagem aqui. Ainda podes corrigir um dado ou trocar um documento.</p>
+    <div class="onb-go"><button class="btn ghost wide" id="fix">Corrigir os meus dados</button><button class="btn ghost wide" id="onbre">Atualizar</button></div></div>`);
+  $('#onbre').onclick = () => showOnboarding();
+  $('#fix').onclick = () => onbData(ob, me);
+}
+
+// Step 2: the person's card. Saved as they go (nothing typed is lost), sent to HR when complete.
+function onbData(ob, me) {
+  const d = me.data || {}; const sending = me.status === 'pending_data';
+  const f = (name, label, val, extra = '', hint = '') => `<div><label for="o_${name}">${esc(label)}</label><input id="o_${name}" name="${name}" value="${esc(val ?? '')}" ${extra}>${hint ? `<small class="hint">${hint}</small>` : ''}</div>`;
+  const s = (name, label, map, cur, empty) => `<div><label for="o_${name}">${esc(label)}</label><select id="o_${name}" name="${name}">${onbOpts(map, cur, empty)}</select></div>`;
+  const docs = (me.documents || []).filter((x) => !x.automatic);
+  const need = docs.filter((x) => x.required || x.blocking); const opt = docs.filter((x) => !(x.required || x.blocking));
+  const docRow = (x) => `<div class="onb-doc ${x.doc ? 'has' : (x.required || x.blocking) ? 'miss' : ''}"><span class="oi">${x.doc ? ic('ok') : ic('doc')}</span>
+      <span class="grow"><b>${esc(x.name)}</b><small>${x.doc ? (x.doc.verified ? 'confirmado pelo RH' : 'enviado, o RH vai ver') + (x.doc.expiry ? ' · válido até ' + esc(fmtDate(x.doc.expiry)) : '')
+        : (x.required || x.blocking) ? 'obrigatório para entrar em obra' : 'se tiveres'}</small></span>
+      <button type="button" class="btn small ${x.doc ? 'ghost' : ''}" data-doc="${esc(x.type_id)}">${x.doc ? 'Trocar' : ic('camera') + 'Enviar'}</button></div>`;
+  onbShell(ob, `${onbNote(me)}<form class="onb-form" id="of" novalidate>
+    <div class="card"><p class="eyebrow" style="margin-top:0">Passo 2 · os teus dados</p><h2>A tua ficha</h2>
+      <p class="small muted">Só o RH vê estes dados. O NISS e o IBAN ficam fechados à chave na base de dados: nem o RH os vê inteiros no ecrã.</p>
+      <div class="onb-meter"><span id="om-t">…</span><div class="prog"><i id="om" style="width:0"></i></div></div></div>
+    <div class="card"><h3>${ic('user')}Identificação</h3>
+      <div class="row">${f('birth_date', 'Data de nascimento *', d.birth_date, `type="date" required max="${isoDay(new Date(Date.now() - 16 * 31557600000))}"`)}${s('nationality', 'Nacionalidade *', COUNTRIES, d.nationality || 'PT')}</div>
+      <div class="row">${f('birthplace', 'Naturalidade', d.birthplace, 'maxlength="80" placeholder="ex.: Sines"')}${s('sex', 'Sexo', SEXES, d.sex)}</div>
+      <div class="row">${s('id_type', 'Documento *', ID_TYPES, d.id_type || 'citizen_card')}${f('id_number', 'Número *', d.id_number, 'maxlength="30" autocomplete="off" required')}${f('id_expiry', 'Válido até *', d.id_expiry, `type="date" required min="${isoDay(new Date())}"`)}</div></div>
+    <div class="card"><h3>${ic('pin')}Morada e contacto</h3>
+      ${f('address', 'Morada *', d.address, 'maxlength="200" autocomplete="street-address" required placeholder="Rua, número, andar"')}
+      <div class="row">${f('postal_code', 'Código postal *', d.postal_code, 'maxlength="12" inputmode="numeric" autocomplete="postal-code" required placeholder="0000-000"')}${f('locality', 'Localidade *', d.locality, 'maxlength="80" required')}${f('municipality', 'Concelho', d.municipality, 'maxlength="80"')}</div>
+      ${f('phone', 'O teu telemóvel', d.phone, 'type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="912 345 678"')}</div>
+    <div class="card"><h3>${ic('calc')}Para o salário</h3>
+      ${f('niss', 'Número de Segurança Social (NISS) *', '', `inputmode="numeric" autocomplete="off" maxlength="14" placeholder="${d.niss_set ? 'já guardado: termina em ' + esc(d.niss_last3) : '11 algarismos'}"`, d.niss_set ? 'Já está guardado. Só escreves se quiseres trocar.' : 'Está no cartão da Segurança Social ou na Segurança Social Direta.')}
+      ${f('iban', 'IBAN da conta onde recebes *', '', `autocomplete="off" autocapitalize="characters" maxlength="42" placeholder="${d.iban_set ? 'já guardado: termina em ' + esc(d.iban_last4) : 'PT50 0000 0000 0000 0000 0000 0'}"`, d.iban_set ? 'Já está guardado. Só escreves se quiseres trocar.' : 'Vês na app do teu banco. Tem de estar em teu nome.')}
+      <div class="row">${s('marital_status', 'Estado civil *', MARITAL, d.marital_status)}${f('dependents', 'Dependentes *', d.dependents, 'type="number" min="0" max="20" inputmode="numeric" required placeholder="0"')}${s('irs_holders', 'Titulares (IRS)', { 1: 'Um titular', 2: 'Dois titulares' }, d.irs_holders, 'Não sei')}</div>
+      <p class="small muted">O estado civil e os dependentes servem para a taxa de IRS do recibo.</p></div>
+    <div class="card"><h3>${ic('warn')}Em caso de acidente, avisamos</h3>
+      <div class="row">${f('emergency_name', 'Nome *', d.emergency_name, 'maxlength="80" required')}${f('emergency_relation', 'Parentesco', d.emergency_relation, 'maxlength="40" placeholder="ex.: Mulher, Pai"')}${f('emergency_phone', 'Telefone *', d.emergency_phone, 'type="tel" inputmode="tel" maxlength="20" required')}</div></div>
+    <div class="card"><h3>${ic('shield')}Farda e EPI</h3><p class="small muted">Para teres a farda e as botas certas no primeiro dia.</p>
+      <div class="row">${s('size_top', 'Camisola *', SIZES_TOP, d.size_top)}${s('size_bottom', 'Calça', SIZES_BOTTOM, d.size_bottom)}${s('size_shoes', 'Botas (nº) *', SIZES_SHOES, d.size_shoes)}${s('size_gloves', 'Luvas', GLOVES, d.size_gloves)}</div></div>
+    <div class="card"><h3>${ic('doc')}Os teus documentos</h3><p class="small muted">Tira uma foto nítida, com o documento todo à vista, ou envia o PDF.</p>
+      ${need.map(docRow).join('') || '<p class="small muted">A empresa não pede documentos obrigatórios.</p>'}
+      ${opt.length ? `<details class="fold"><summary>Outros (formações, cartas)</summary><div>${opt.map(docRow).join('')}</div></details>` : ''}</div>
+    <div class="onb-go sticky"><button type="button" class="btn ghost" id="osave">Guardar</button>
+      <button class="btn big" id="osend">${sending ? 'Enviar ao RH' : 'Guardar correções'}</button></div></form>`);
+  const form = $('#of');
+  const must = ['birth_date', 'nationality', 'id_type', 'id_number', 'id_expiry', 'address', 'postal_code', 'locality', 'marital_status', 'dependents', 'emergency_name', 'emergency_phone', 'size_top', 'size_shoes'];
+  const meter = () => {
+    const fd = new FormData(form);
+    let done = must.filter((k) => String(fd.get(k) || '').trim() !== '').length;
+    done += (d.niss_set || nissOk(fd.get('niss'))) ? 1 : 0; done += (d.iban_set || ibanOk(fd.get('iban'))) ? 1 : 0;
+    const docsDone = need.filter((x) => x.doc).length; const total = must.length + 2 + need.length; const n = done + docsDone;
+    $('#om').style.width = Math.round(100 * n / total) + '%';
+    $('#om-t').textContent = n === total ? 'Tudo preenchido. Já podes enviar.' : `${n} de ${total} preenchidos`;
+  };
+  // Live checks on the two numbers that are most often mistyped.
+  const live = (name, ok, fmt, msg) => { const i = form.elements[name]; i.addEventListener('input', () => { const p = i.selectionStart === i.value.length; i.value = fmt(i.value); if (p) i.selectionStart = i.selectionEnd = i.value.length;
+    i.setCustomValidity(i.value && !ok(i.value) ? msg : ''); i.classList.toggle('bad', !!i.value && !ok(i.value)); i.classList.toggle('good', !!i.value && ok(i.value)); meter(); }); };
+  live('niss', nissOk, nissFmt, 'O NISS tem 11 algarismos. Confirma no cartão.');
+  live('iban', ibanOk, ibanFmt, 'Este IBAN não está certo. Confirma na app do banco.');
+  form.addEventListener('input', meter); form.addEventListener('change', meter); meter();
+  const body = () => {
+    const fd = new FormData(form); const o = {};
+    for (const [k, v] of fd.entries()) o[k] = String(v).trim();
+    o.niss = nissFmt(o.niss) || ''; o.iban = o.iban ? o.iban.replace(/\s/g, '') : '';
+    return o;
+  };
+  const save = async (btn) => {
+    const o = body();
+    if (o.niss && !nissOk(o.niss)) { toast('O NISS não está certo: confirma os 11 algarismos.'); form.elements.niss.focus(); return null; }
+    if (o.iban && !ibanOk(o.iban)) { toast('O IBAN não está certo: confirma na app do banco.'); form.elements.iban.focus(); return null; }
+    btn.disabled = true; const r = await sb.rpc('mini_onb_save_data', { p: o }); btn.disabled = false;
+    if (r.error) { toast(friendly(r.error)); return null; }
+    return r.data;
+  };
+  $('#osave').onclick = async (e) => { const r = await save(e.currentTarget); if (r) { toast('Guardado. Podes continuar depois.'); state.onbMe = r; onbData(ob, r); } };
+  form.onsubmit = async (e) => {
+    e.preventDefault(); const btn = $('#osend'); const r = await save(btn); if (!r) return;
+    if (!sending) { toast('Correções guardadas.'); return showOnboarding(); }
+    btn.disabled = true; const s2 = await sb.rpc('mini_onb_submit_data'); btn.disabled = false;
+    if (s2.error) { toast(friendly(s2.error)); return onbData(ob, r); }
+    toast('Enviado ao RH. Obrigado!'); showOnboarding();
+  };
+  form.querySelectorAll('[data-doc]').forEach((b) => b.onclick = async () => {
+    const t = docs.find((x) => x.type_id === b.dataset.doc);
+    // keep what was typed before opening the sheet
+    const typed = await save(b); if (!typed) return;
+    const fd = await askSheet(t.name, `<div class="row"><div><label>Data de emissão *</label><input name="issue" type="date" required max="${isoDay(new Date())}"></div>
+        <div><label>Válido até</label><input name="expiry" type="date" min="${isoDay(new Date())}"></div></div>
+      <label>Número (se tiver)</label><input name="num" maxlength="40" autocomplete="off">
+      <label>Foto ou PDF *</label><input name="file" type="file" accept="${FILE_ACCEPT}" capture="environment" required>
+      <p class="small muted">Até 10 MB. Fica guardado em privado e nunca se apaga.</p>`, 'Enviar documento');
+    if (!fd) return onbData(ob, typed);
+    const file = fd.get('file'); const bad = fileProblem(file); if (bad) { toast(bad); return onbData(ob, typed); }
+    toast('A enviar…');
+    const path = `${state.me.tenant_id}/${state.me.collaborator_id}/${uuid()}.${FILE_TYPES[file.type]}`;
+    const up = await sb.storage.from('documentos').upload(path, file, { contentType: file.type, upsert: false });
+    if (up.error) { toast(friendly(up.error)); return onbData(ob, typed); }
+    const r = await sb.rpc('mini_onb_add_document', { p_type: t.type_id, p_number: fd.get('num') || null, p_issue: fd.get('issue'),
+      p_expiry: fd.get('expiry') || null, p_file: path, p_sha256: await sha256Hex(file) });
+    if (r.error) { toast(friendly(r.error)); return onbData(ob, typed); }
+    toast('Documento enviado.');
+    const again = await sb.rpc('mini_onb_me'); onbData(ob, again.data || typed);
+  });
+}
+
+// Step 4: read the contract and the internal rules to the end, write the name, sign with the finger.
+function onbContract(ob, me) {
+  const k = me.contract; const r = me.rules;
+  onbShell(ob, `${onbNote(me)}<div class="card onb-view"><p class="eyebrow" style="margin-top:0">Passo 4 · contrato</p><h2>Lê o teu contrato</h2>
+      <div class="onb-facts"><div><span>Tipo</span><b>${esc(CONTRACT_TYPES[k.type] || k.type || '—')}</b></div><div><span>Começa</span><b>${esc(fmtDate(k.start))}</b></div>
+        ${k.end ? `<div><span>Termina</span><b>${esc(fmtDate(k.end))}</b></div>` : ''}<div><span>Horas/semana</span><b>${esc(String(k.weekly_hours ?? '—'))}</b></div>
+        <div><span>Função</span><b>${esc(k.job_title || '—')}</b></div></div>
+      <div class="onb-manual onb-paper" id="kt">${paras(k.body)}</div>
+      <p class="small muted" id="kth">${ic('go')}Desliza até ao fim do contrato.</p></div>
+    ${r ? `<div class="card onb-view" id="rbox" hidden><h2>${esc(r.title)} <span class="small muted">versão ${r.version}</span></h2>
+      <div class="onb-manual onb-paper" id="rt">${paras(r.body)}</div><p class="small muted" id="rth">${ic('go')}Desliza até ao fim das regras.</p></div>` : ''}
+    <form class="card" id="sg" hidden><h2>Assinar</h2>
+      <label for="sn">Escreve o teu nome completo, como está no contrato</label><input id="sn" name="name" autocomplete="name" required placeholder="${esc(me.name)}">
+      <label>Assina com o dedo</label><div class="sigpad"><canvas id="sc" aria-label="Quadro para assinar com o dedo"></canvas><button type="button" class="btn small ghost" id="sclr">Limpar</button></div>
+      <label class="check"><input type="checkbox" name="ok" required> Li o contrato${r ? ' e o regulamento interno' : ''} até ao fim e aceito-os.</label>
+      ${more('O que fica guardado', '<p>O texto exato que leste (com a sua impressão digital SHA-256), o teu nome escrito, a tua assinatura, a data e hora, e o telemóvel de onde assinaste. Vês tudo depois em «O meu contrato». Se tiveres dúvidas, não assines: fala primeiro com o RH.</p>')}
+      <button class="btn big" id="sgo">Assinar contrato</button></form>`);
+  const sg = $('#sg'); let readK = false; let readR = !r;
+  const endOf = (el) => el.scrollTop + el.clientHeight >= el.scrollHeight - 8 && el.getBoundingClientRect().bottom <= window.innerHeight + 4;
+  const check = () => {
+    if (!readK && endOf($('#kt'))) { readK = true; $('#kth').innerHTML = ic('ok') + ' Contrato lido.'; if ($('#rbox')) $('#rbox').hidden = false; }
+    if (readK && !readR && $('#rt') && endOf($('#rt'))) { readR = true; $('#rth').innerHTML = ic('ok') + ' Regulamento lido.'; }
+    if (readK && readR && sg.hidden) { sg.hidden = false; pad.size(); }
+  };
+  const pad = sigPad($('#sc'));
+  $('#sclr').onclick = () => pad.clear();
+  $('#kt').addEventListener('scroll', check, { passive: true }); if ($('#rt')) $('#rt').addEventListener('scroll', check, { passive: true });
+  window.addEventListener('scroll', check, { passive: true }); setTimeout(check, 300);
+  sg.onsubmit = async (e) => {
+    e.preventDefault(); const fd = new FormData(sg);
+    if (!fd.get('ok')) return toast('Marca que leste e aceitas.');
+    const svg = pad.svg(); if (!svg) return toast('Assina com o dedo no quadro.');
+    const btn = $('#sgo'); btn.disabled = true;
+    const { error: se } = await sb.rpc('mini_onb_sign', { p_contract: k.id, p_sha256: k.sha256, p_rules_sha256: r ? r.sha256 : null,
+      p_name: fd.get('name'), p_signature_svg: svg, p_agent: navigator.userAgent });
+    btn.disabled = false;
+    if (se) return toast(friendly(se));
+    window.removeEventListener('scroll', check); toast('Contrato assinado.'); showOnboarding();
+  };
+}
+// A finger signature as an SVG path (small, sharp at any size, no image file to forge or store).
+function sigPad(cv) {
+  let strokes = []; let cur = null; const ctx = cv.getContext('2d');
+  const size = () => { const r = cv.getBoundingClientRect(); if (!r.width) return; cv.width = Math.round(r.width * devicePixelRatio); cv.height = Math.round(r.height * devicePixelRatio); draw(); };
+  const pt = (e) => { const r = cv.getBoundingClientRect(); return [Math.round(e.clientX - r.left), Math.round(e.clientY - r.top)]; };
+  const draw = () => {
+    ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0); ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.lineWidth = 2.6; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = getComputedStyle(cv).color || '#0b1f2a';
+    for (const s of strokes) { ctx.beginPath(); s.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke(); }
+  };
+  cv.addEventListener('pointerdown', (e) => { e.preventDefault(); cv.setPointerCapture(e.pointerId); cur = [pt(e)]; strokes.push(cur); draw(); });
+  cv.addEventListener('pointermove', (e) => { if (!cur) return; const p = pt(e); const l = cur[cur.length - 1];
+    if (Math.abs(p[0] - l[0]) + Math.abs(p[1] - l[1]) >= 2) { cur.push(p); draw(); } });
+  const end = () => { cur = null; }; cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+  window.addEventListener('resize', size);
+  return {
+    size, clear: () => { strokes = []; draw(); },
+    svg: () => {
+      const pts = strokes.reduce((a, s) => a + s.length, 0); if (pts < 12) return null;
+      const r = cv.getBoundingClientRect(); let step = 1; let d;
+      do { d = strokes.map((s) => 'M' + s.filter((_, i) => i % step === 0 || i === s.length - 1).map(([x, y]) => `${x} ${y}`).join(' L')).join(' '); step++; } while (d.length > 55000);
+      const out = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${Math.round(r.width)} ${Math.round(r.height)}"><path d="${d}" fill="none" stroke="#0b1f2a" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+      return out;
+    },
+  };
+}
+// Step 5: the pay terms, as numbers, before the first day.
+function onbRates(ob, me) {
+  const r = me.rates || {}; const terms = r.terms && (r.terms.text || (typeof r.terms === 'string' ? r.terms : ''));
+  onbShell(ob, `${onbNote(me)}<form class="card onb-view" id="rf"><p class="eyebrow" style="margin-top:0">Passo 5 · condições</p><h2>O teu valor hora</h2>
+      <div class="onb-rate"><div><span>Hora normal</span><b>${esc(eur(r.base))}</b></div><div><span>Hora extra</span><b>${esc(eur(r.overtime))}</b></div></div>
+      ${terms ? `<p><b>Outras condições:</b> ${esc(terms)}</p>` : ''}
+      <p class="small muted">São os valores do contrato que assinaste. As horas que picas com o cartão são as que contam para o recibo; vês todas em «As minhas horas».</p>
+      <label class="check"><input type="checkbox" name="ok" required> Confirmo que estes são os valores combinados comigo.</label>
+      <button class="btn big" id="rgo">Aceitar e começar</button>
+      <p class="small muted">Se os valores não forem os combinados, não aceites: fala com o RH.</p></form>`);
+  $('#rf').onsubmit = async (e) => {
+    e.preventDefault(); const b = $('#rgo'); b.disabled = true;
+    const { error: ae } = await sb.rpc('mini_onb_accept_rates'); b.disabled = false;
+    if (ae) return toast(friendly(ae));
+    onbShell(ob, `<div class="card onb-wait onb-done">${ic('ok')}<h2>Bem-vindo à equipa!</h2>
+      <p>Está tudo feito. Falta só o RH dar-te o cartão pessoal: com ele picas a entrada e a saída na obra.</p>
+      <button class="btn big" id="go">Entrar na app</button></div>`);
+    $('#go').onclick = () => showOnboarding();
+  };
+}
+// «O meu contrato»: what the person signed and accepted, any time after.
+async function viewMyPapers() {
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Eu</p><h1>O meu contrato</h1></div></div><div id="mp">${skel(3)}</div>`;
+  const { data, error } = await sb.rpc('mini_my_papers'); const el = $('#mp'); if (!el) return;
+  if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  const k = data.contract; const r = data.rules; const a = data.rates;
+  if (!k && !a) { el.innerHTML = `<div class="card">${empty('doc', data.paper ? 'O teu contrato está em papel' : 'Ainda sem contrato na app', data.paper ? 'Assinaste em papel no escritório. Pede uma cópia ao RH.' : 'Quando assinares um contrato na app, fica aqui.')}</div>`; return; }
+  el.innerHTML = `${a ? `<div class="card"><h2 style="margin-top:0">Valor hora</h2><div class="onb-rate"><div><span>Hora normal</span><b>${esc(eur(a.base_hourly_rate))}</b></div>
+      <div><span>Hora extra</span><b>${esc(eur(a.overtime_hourly_rate))}</b></div></div><p class="small muted">Aceite em ${esc(new Date(a.accepted_at).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' }))}.</p></div>` : ''}
+    ${k ? `<div class="card"><h2 style="margin-top:0">Contrato</h2><div class="onb-facts"><div><span>Tipo</span><b>${esc(CONTRACT_TYPES[k.type] || k.type || '—')}</b></div>
+        <div><span>Começou</span><b>${esc(fmtDate(k.start))}</b></div>${k.end ? `<div><span>Termina</span><b>${esc(fmtDate(k.end))}</b></div>` : ''}<div><span>Função</span><b>${esc(k.job_title || '—')}</b></div></div>
+      <details class="fold"><summary>Ler o contrato</summary><div class="onb-paper">${paras(k.body)}</div></details>
+      <p class="small muted">Assinado por ${esc(k.signed_name || '')} em ${esc(new Date(k.signed_at).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' }))}. Impressão digital: <code class="sha">${esc(String(k.sha256 || '').slice(0, 16))}…</code></p>
+      ${k.signature_svg ? `<img class="sig-img" alt="A tua assinatura" src="data:image/svg+xml;utf8,${encodeURIComponent(k.signature_svg)}">` : ''}</div>` : ''}
+    ${r ? `<div class="card"><h2 style="margin-top:0">${esc(r.title)} <span class="small muted">versão ${r.version}</span></h2><details class="fold"><summary>Ler</summary><div class="onb-paper">${paras(r.body)}</div></details></div>` : ''}`;
+}
+
+// ---- HR side, on the person's card: check the documents, write a note, confirm, issue the contract.
+async function loadOnbCard(id) {
+  const box = $('#wonb'); if (!box || !canPeople()) return;
+  const { data: p, error } = await sb.rpc('mini_onb_person', { p_collab: id });
+  if (!box.isConnected || error || !p) return;
+  const k = p.contract; const st = p.status;
+  if (st === 'active' && !(k && k.status === 'signed')) return;
+  const ST = ['safety_videos', 'personal_data', 'hr_validation', 'contract_signed', 'rate_accepted'];
+  const STT = ['Acolhimento', 'Dados e documentos', 'RH confirmou', 'Contrato assinado', 'Valor hora aceite'];
+  const docs = (p.documents || []).filter((x) => !x.automatic && x.doc);
+  const toCheck = docs.filter((x) => !x.doc.verified);
+  const missing = (p.documents || []).filter((x) => !x.automatic && (x.required || x.blocking) && !x.doc);
+  const dd = p.data;
+  box.innerHTML = `<div class="card onb-hr"><div class="sec-h" style="margin-top:0"><h2>Entrada na empresa</h2>${st === 'active' ? chip('ok', 'concluída', 'ok') : chip('warn', ONB_LABEL[st] || st, 'clock')}</div>
+    <ol class="onb-tl">${ST.map((s, i) => { const x = p.steps[s]; return `<li class="${x ? 'done' : ''}"><span>${x ? ic('ok') : i + 1}</span><b>${STT[i]}</b>
+      <small>${x ? esc(new Date(x.at).toLocaleDateString('pt-PT')) + (x.paper ? ' · ' + chip('warn', 'verificado em papel') : ' · na app') : ''}</small></li>`; }).join('')}</ol>
+    ${st === 'pending_data' ? `<p class="small muted">${ic('clock')} A pessoa está a preencher a ficha no telemóvel. Quando enviar, aparece aqui para confirmares.</p>` : ''}
+    ${dd && st !== 'pending_video' ? `<details class="fold" ${st === 'pending_hr_validation' ? 'open' : ''}><summary>Dados que a pessoa preencheu</summary><div><dl class="kv">
+      ${[['Nascimento', dd.birth_date && fmtDate(dd.birth_date)], ['Nacionalidade', COUNTRIES[dd.nationality] || dd.nationality], ['Documento', [ID_TYPES[dd.id_type], dd.id_number].filter(Boolean).join(' nº ')],
+        ['Válido até', dd.id_expiry && fmtDate(dd.id_expiry)], ['Morada', [dd.address, [dd.postal_code, dd.locality].filter(Boolean).join(' ')].filter(Boolean).join(', ')],
+        ['NISS', dd.niss_set ? '••••••••' + dd.niss_last3 : null], ['IBAN', dd.iban_set ? '•••• ' + dd.iban_last4 : null], ['Estado civil', MARITAL[dd.marital_status]],
+        ['Dependentes', dd.dependents], ['Emergência', [dd.emergency_name, dd.emergency_phone].filter(Boolean).join(' · ')], ['Farda', [dd.size_top, dd.size_bottom, dd.size_shoes && 'botas ' + dd.size_shoes].filter(Boolean).join(' · ')]]
+        .map(([l, v]) => `<div><dt>${esc(l)}</dt><dd>${v === null || v === undefined || v === '' ? '<span class="muted">—</span>' : esc(String(v))}</dd></div>`).join('')}</dl>
+      <p class="small muted">O NISS e o IBAN completos só saem na exportação para o salário.</p></div></details>` : ''}
+    ${docs.length ? `<h3>Documentos enviados</h3>${docs.map((x) => `<div class="onb-doc ${x.doc.verified ? 'has' : ''}"><span class="oi">${x.doc.verified ? ic('ok') : ic('doc')}</span>
+      <span class="grow"><b>${esc(x.name)}</b><small>${x.doc.number ? 'nº ' + esc(x.doc.number) + ' · ' : ''}${x.doc.expiry ? 'até ' + esc(fmtDate(x.doc.expiry)) : 'sem validade'}${x.doc.verified ? ' · confirmado' : ''}</small></span>
+      ${x.doc.has_file && canDocs() ? `<button class="btn small ghost" data-docfile="${esc(x.doc.id)}">Ver</button>` : ''}
+      ${x.doc.verified ? '' : `<button class="btn small" data-verify="${esc(x.doc.id)}">Confirmar</button>`}</div>`).join('')}` : ''}
+    ${missing.length && st !== 'pending_video' ? `<p class="small">${chip('bad', 'falta', 'x')} ${missing.map((x) => esc(x.name)).join(', ')}</p>` : ''}
+    ${st === 'pending_hr_validation' ? `<div class="onb-go"><button class="btn ghost" id="onote">Pedir uma correção</button>
+      <button class="btn" id="oval" ${toCheck.length ? 'disabled' : ''}>Dados certos: confirmar</button></div>
+      ${toCheck.length ? `<p class="small muted">Confirma primeiro ${pl(toCheck.length, 'documento', 'documentos')}.</p>` : ''}` : ''}
+    ${st === 'pending_contract' && !(k && k.status === 'issued') ? `<div class="onb-go"><button class="btn big" id="oissue">${ic('doc')}Preparar o contrato</button></div>` : ''}
+    ${k ? `<h3>Contrato</h3><p class="small">${esc(CONTRACT_TYPES[k.type] || '')} · início ${esc(fmtDate(k.start))}${k.end ? ' · fim ' + esc(fmtDate(k.end)) : ''} · ${esc(String(k.weekly_hours))} h/semana · ${esc(k.job_title || '')}
+      · ${k.status === 'signed' ? chip('ok', 'assinado em ' + new Date(k.signed_at).toLocaleDateString('pt-PT'), 'ok') : chip('warn', 'à espera da assinatura', 'clock')}</p>
+      ${p.rates && p.rates.base ? `<p class="small">Valor hora ${esc(eur(p.rates.base))} · extra ${esc(eur(p.rates.overtime))}${p.accepted ? ' · ' + chip('ok', 'aceite', 'ok') : ''}</p>` : ''}
+      <details class="fold"><summary>Ler o contrato</summary><div class="onb-paper">${paras(k.body)}</div>
+        ${k.signature_svg ? `<p class="small muted">Assinado por ${esc(k.signed_name)}:</p><img class="sig-img" alt="Assinatura" src="data:image/svg+xml;utf8,${encodeURIComponent(k.signature_svg)}">` : ''}
+        <p class="small muted">Impressão digital do texto: <code class="sha">${esc(k.sha256)}</code></p></div></details>` : ''}
+    ${p.notes && p.notes.length ? `<details class="fold"><summary>Mensagens à pessoa (${p.notes.length})</summary><div>${p.notes.map((n) => `<p class="small"><b>${esc(new Date(n.at).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' }))}</b> ${esc(n.text)}</p>`).join('')}</div></details>` : ''}</div>`;
+  box.querySelectorAll('[data-verify]').forEach((b) => b.onclick = async () => {
+    b.disabled = true; const { error: e } = await sb.rpc('mini_onb_verify_document', { p_doc: b.dataset.verify });
+    if (e) { b.disabled = false; return toast(friendly(e)); } toast('Documento confirmado.'); loadOnbCard(id);
+  });
+  box.querySelectorAll('[data-docfile]').forEach((b) => b.onclick = async () => {
+    const f = ((await sb.rpc('mini_document_files', { p_collab: id })).data || []).find((x) => x.document_id === b.dataset.docfile);
+    if (f && f.file_path) openDocFile(f.file_path); else toast('Ficheiro não encontrado.');
+  });
+  if ($('#onote')) $('#onote').onclick = async () => {
+    const fd = await askSheet('Pedir uma correção', `<label>O que falta ou está errado? *</label><textarea name="n" required minlength="5" maxlength="1000" rows="4" placeholder="ex.: A foto do cartão de cidadão está desfocada, envia outra."></textarea>
+      <p class="small muted">A pessoa vê esta mensagem no telemóvel, no topo da ficha.</p>`, 'Enviar mensagem');
+    if (!fd) return; const { error: e } = await sb.rpc('mini_onb_note', { p_collab: id, p_note: fd.get('n') });
+    if (e) return toast(friendly(e)); toast('Mensagem enviada.'); loadOnbCard(id);
+  };
+  if ($('#oval')) $('#oval').onclick = async () => {
+    const b = $('#oval'); b.disabled = true; const { error: e } = await sb.rpc('mini_onb_validate', { p_collab: id, p_note: null });
+    b.disabled = false; if (e) return toast(friendly(e)); toast('Dados confirmados. Agora prepara o contrato.'); loadOnbCard(id);
+  };
+  if ($('#oissue')) $('#oissue').onclick = () => onbIssue(id, p);
+}
+async function onbIssue(id, p) {
+  const fd = await askSheet('Contrato de ' + p.name, `<label>Tipo de contrato *</label><select name="type" required>${onbOpts(CONTRACT_TYPES, 'fixed_term')}</select>
+    <div class="row"><div><label>Começa *</label><input name="start" type="date" required min="${isoDay(new Date())}"></div><div><label>Termina (a termo)</label><input name="end" type="date"></div></div>
+    <div class="row"><div><label>Função *</label><input name="job" required maxlength="120" value="${esc(p.job_title || '')}" placeholder="ex.: Serralheiro"></div><div><label>Horas por semana *</label><input name="hours" type="number" min="1" max="60" step="0.5" value="40" required></div></div>
+    <label>Local de trabalho *</label><input name="loc" required maxlength="200" placeholder="ex.: Sines e obras da empresa">
+    <div class="row"><div><label>Valor hora (€) *</label><input name="base" type="number" min="0" step="0.01" inputmode="decimal" required></div><div><label>Hora extra (€)</label><input name="ot" type="number" min="0" step="0.01" inputmode="decimal" placeholder="vazio = +50%"></div></div>
+    <label>Outras condições</label><textarea name="terms" rows="2" maxlength="1000" placeholder="ex.: Ajudas de custo segundo a obra; alojamento pago pela empresa."></textarea>
+    <p class="small muted">O texto vem do modelo da empresa (Secretariado › Contrato e regulamento). A pessoa recebe-o no telemóvel, lê, assina com o dedo e confirma o valor hora.</p>`, 'Enviar para assinar');
+  if (!fd) return;
+  const num = (v) => (v === null || v === '' ? null : Number(String(v).replace(',', '.')));
+  const { error: e } = await sb.rpc('mini_onb_issue_contract', { p_collab: id, p_type: fd.get('type'), p_start: fd.get('start'), p_end: fd.get('end') || null,
+    p_weekly_hours: num(fd.get('hours')), p_location: fd.get('loc'), p_job_title: fd.get('job'), p_base: num(fd.get('base')), p_overtime: num(fd.get('ot')), p_terms: fd.get('terms') || null });
+  if (e) { toast(friendly(e)); return onbIssue(id, p); }
+  toast('Contrato enviado. A pessoa já o vê no telemóvel.'); loadOnbCard(id);
+}
+// Secretariado › the company's contract model and internal rules (each change is a new version; signed ones keep theirs).
+async function viewOnbTexts() {
+  if (!canPeople()) return go('secretariado');
+  app.innerHTML = `<p><button class="btn ghost small" id="back">‹ Secretariado</button></p><div class="ph"><div><p class="ph-k">Pessoas</p><h1>Contrato e regulamento</h1></div></div>
+    <p class="muted lead">O texto que cada pessoa nova lê e assina no telemóvel. Mudar cria uma versão nova: quem já assinou fica com a versão que leu.</p><div id="tx">${skel(2)}</div>`;
+  $('#back').onclick = () => go('secretariado');
+  const { data, error } = await sb.rpc('mini_onb_texts'); const el = $('#tx'); if (!el) return;
+  if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  const one = (t, kind, label) => `<form class="card" data-kind="${kind}"><div class="sec-h" style="margin-top:0"><h2>${esc(label)}</h2><span class="count">versão ${t ? t.version : 1}</span></div>
+    ${t && t.model ? `<p class="small">${chip('warn', 'modelo da GestNow', 'warn')} Substitui pelo texto da tua empresa, revisto por um advogado do trabalho.</p>` : ''}
+    <label>Título</label><input name="title" value="${esc(t ? t.title : label)}" maxlength="120">
+    <label>Texto</label><textarea name="body" rows="16" maxlength="60000">${esc(t ? t.body : '')}</textarea>
+    ${kind === 'contract' ? `<p class="small muted">Campos que a app preenche: ${['nome', 'nif', 'empresa', 'nif_empresa', 'funcao', 'local', 'inicio', 'fim', 'horas_semana', 'preco_hora', 'preco_extra', 'condicoes', 'tipo', 'data'].map((x) => `<code>{{${x}}}</code>`).join(' ')}</p>` : ''}
+    <button class="btn wide">Guardar versão nova</button></form>`;
+  const byKind = (x) => (data || []).find((t) => t.kind === x);
+  el.innerHTML = one(byKind('contract'), 'contract', 'Contrato de trabalho') + one(byKind('rules'), 'rules', 'Regulamento interno');
+  el.querySelectorAll('form').forEach((f) => f.onsubmit = async (e) => {
+    e.preventDefault(); const fd = new FormData(f); const b = f.querySelector('button'); b.disabled = true;
+    const { error: se } = await sb.rpc('mini_onb_text_save', { p_kind: f.dataset.kind, p_title: fd.get('title'), p_body: fd.get('body') });
+    b.disabled = false; if (se) return toast(friendly(se)); toast('Versão nova guardada.'); viewOnbTexts();
+  });
+}
+
 // HR / safety: the videos and manuals of the onboarding, in order, each with its questions; and who is in onboarding now.
 async function viewInduction() {
   if (!can('acolhimento.gerir')) return go('trabalhadores');
@@ -2494,15 +2868,16 @@ async function loadInduction() {
   if ($('#tpl')) $('#tpl').onclick = useInductionTemplate;
   el.querySelectorAll('[data-id]').forEach((b) => b.onclick = () => editInduction(data.find((x) => x.id === b.dataset.id)));
 }
-const ONB_LABEL = { pending_video: 'Passo 1 · acolhimento', pending_data: 'Passo 2 · dados', pending_hr_validation: 'Passo 2 · à espera do RH',
-  pending_contract: 'Passo 3 · contrato', pending_rate_approval: 'Passo 4 · assinar' };
+const ONB_LABEL = { pending_video: 'Passo 1 · acolhimento', pending_data: 'Passo 2 · a preencher a ficha', pending_hr_validation: 'Passo 3 · o RH tem de confirmar',
+  pending_contract: 'Passo 4 · contrato', pending_rate_approval: 'Passo 5 · valor hora' };
 async function loadOnbBoard(sel, onlyIfAny) {
   const el = $(sel); if (!el) return;
   const { data, error } = await sb.rpc('mini_onboarding_board');
   if (!el.isConnected || error || (onlyIfAny && !data.length)) return;
   el.innerHTML = `<div class="card"><div class="sec-h" style="margin-top:0"><h2>Novas entradas</h2>${data.length ? `<span class="count">${data.length}</span>` : ''}</div>
     ${data.length ? data.map((p) => `<button class="onb-row" data-id="${esc(p.id)}">${avatar(p.name)}
-      <span class="grow"><b>${esc(p.name)}</b><small>${esc(ONB_LABEL[p.status] || p.status)}${p.status === 'pending_video' && p.items ? ` · ${p.passed}/${p.items} partes` : ''}${p.has_login ? '' : ' · ainda sem conta na app'}</small></span>
+      <span class="grow"><b>${esc(p.name)}</b><small>${esc(ONB_LABEL[p.status] || p.status)}${p.status === 'pending_video' && p.items ? ` · ${p.passed}/${p.items} partes` : ''}${p.docs_to_check ? ` · ${pl(p.docs_to_check, 'documento', 'documentos')} por ver` : ''}${p.status === 'pending_contract' && p.contract === 'issued' ? ' · à espera da assinatura' : ''}${p.has_login ? '' : ' · ainda sem conta na app'}</small></span>
+      ${p.waiting_hr ? chip('warn', 'é contigo', 'warn') : ''}
       ${p.status === 'pending_video' && p.items ? `<span class="mini-bar"><i style="width:${Math.round(100 * p.passed / p.items)}%"></i></span>` : ''}</button>`).join('')
       : `<p class="small muted">${ic('ok')} Ninguém a meio do acolhimento. Ao registar uma pessoa nova em Pessoas, escolhe «Faz o acolhimento na app».</p>`}</div>`;
   el.querySelectorAll('[data-id]').forEach((b) => b.onclick = () => { state.worker = b.dataset.id; go('ficha'); });
@@ -3815,6 +4190,9 @@ function viewOffice() {
       ${more('Porquê', '<p>Código do Trabalho, art. 202. Mostra-o se a inspeção pedir.</p>')}
       <label for="actsite">Obra</label><select id="actsite">${sites.map((s) => `<option value="${esc(s.id)}">${esc(s.title)} (${esc(s.cost_center_code)})</option>`).join('')}</select>
       <div class="acts"><button class="btn ghost wide" id="act">Descarregar o registo do mês (Excel)</button></div></div>` : ''}
+    ${canPeople() ? `<div class="card noprint"><h2 style="margin-top:0">Contrato e regulamento</h2>
+      <p class="small muted">O texto que cada pessoa nova lê e assina no telemóvel, com versões.</p>
+      <div class="acts"><button class="btn ghost wide" id="onbtx">Abrir o contrato e o regulamento</button></div></div>` : ''}
     ${can('contas.gerir') ? `<div class="card noprint"><h2 style="margin-top:0">Departamentos e acessos</h2>
       <p class="small muted">Quem faz o quê na empresa. Cada conta pertence a um ou mais departamentos e só faz o que eles permitem.</p>
       <div id="depts">${skel(2)}</div></div>` : ''}`;
@@ -3826,6 +4204,7 @@ function viewOffice() {
   const step = (n) => { const [y, m] = state.officeMonth.split('-').map(Number); const d = new Date(Date.UTC(y, m - 1 + n, 1)); state.officeMonth = d.toISOString().slice(0, 7); viewOffice(); };
   on('#mprev', 'onclick', () => step(-1)); on('#mnext', 'onclick', () => step(1));
   on('#sheet', 'onclick', () => downloadPayroll(from, to));
+  on('#onbtx', 'onclick', () => go('onbtextos'));
   on('#prim', 'onclick', () => downloadPrimavera(from, to));
   on('#primcfg', 'ontoggle', () => { if ($('#primcfg').open) showPrimaveraSettings(); });
   if ($('#payest')) sb.rpc('mini_pay_estimate_setting').then(({ data, error }) => {
