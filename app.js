@@ -352,6 +352,7 @@ const ERRORS = [
   [/up to 2 months/i, 'Escolhe um período até 2 meses.'],
   [/e-mail already has a login/i, 'Esse email já tem conta.'],
   [/person already has a login/i, 'Esta pessoa já tem conta.'],
+  [/only an approved estimate becomes a proposal/i, 'Só um orçamento aprovado vira proposta.'],
   [/login is already in use/i, 'Esta conta já foi usada: a pessoa já escolheu a palavra-passe.'],
   [/invite e-mail could not be sent/i, 'O email de convite não saiu. Usa o QR code em mão.'],
   [/invalid e-mail/i, 'O email não parece válido.'],
@@ -5266,6 +5267,7 @@ function renderEstimate() {
         <p class="small muted">${e.status === 'draft' ? 'Quando enviares, o orçamento fica congelado: o preço que se assina é este, ao cêntimo.' : e.status === 'review' ? (e.mine ? 'Fizeste este orçamento: não podes ser tu a assiná-lo.' : reqOk ? '' : 'Cada regra que se aplica tem de ficar completa.') : ''}</p>
         <div class="acts">${edit && can('orcamentos.gerir') ? `<button class="btn big" id="esub" ${e.lines.length ? '' : 'disabled'}>Enviar para assinatura</button>` : ''}
           ${e.can_sign ? `<button class="btn big" id="eok">${ic('ok')}Aprovar ${eur0(t.price)}</button><button class="btn ghost wide" id="eno">Recusar</button>` : ''}
+          ${e.status === 'approved' ? `<button class="btn big" id="eprop">${ic('print')}Proposta ao cliente (PDF)</button>` : ''}
           ${e.can_version ? `<button class="btn ghost wide" id="ever">Fazer nova versão (para mudar)</button>` : ''}</div>
       </div>
     </section></div>`;
@@ -5292,6 +5294,61 @@ function renderEstimate() {
   if ($('#eok')) $('#eok').onclick = () => signEstimate(true);
   if ($('#eno')) $('#eno').onclick = () => signEstimate(false);
   if ($('#ever')) $('#ever').onclick = newEstimateVersion;
+  if ($('#eprop')) $('#eprop').onclick = () => proposal(e);
+}
+
+// The client proposal: only from an approved estimate, so the price on paper is the one that was signed, to the cent.
+// The texts (scope, exclusions, validity, payment) are typed here and remembered on this phone for this estimate.
+const PROP_PAY = { hh: 'Faturação mensal por auto de medição das horas realizadas, a 30 dias.', up: 'Faturação mensal por auto de medição das quantidades realizadas, a 30 dias.',
+  ls: 'Faturação por marcos, conforme a tabela acima, a 30 dias.', mx: 'Parte fechada por marcos; trabalhos a mais por auto de medição mensal. Pagamento a 30 dias.',
+  cp: 'Faturação mensal do custo real comprovado mais a margem acordada, a 30 dias.' };
+const PROP_EXCL = 'Andaimes, gruas e meios de elevação não indicados.\nMateriais fornecidos pelo cliente.\nLicenças e autorizações do cliente.\nTrabalho fora do horário normal sem acordo prévio.';
+async function proposal(e) {
+  const key = 'gestnow.prop.' + e.id; let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(key) || '{}'); } catch (_) {}
+  const fd = await askSheet('Proposta ao cliente', `
+    <p class="small muted">${esc(estNo(e))} · ${esc(e.title)} · <b>${eur2(e.totals.price)}</b> · ${esc(EST_FORMS[e.form].n)}</p>
+    <label for="ps">Âmbito do trabalho *</label><textarea id="ps" name="scope" rows="4" required maxlength="2000">${esc(saved.scope || e.notes || e.title)}</textarea>
+    <label for="px">Não incluído</label><textarea id="px" name="excl" rows="4" maxlength="2000">${esc(saved.excl != null ? saved.excl : PROP_EXCL)}</textarea>
+    <label for="pp">Pagamento</label><textarea id="pp" name="pay" rows="2" maxlength="500">${esc(saved.pay || PROP_PAY[e.form])}</textarea>
+    <div class="row"><div><label for="pv">Válida por (dias)</label><input id="pv" name="days" inputmode="numeric" value="${esc(saved.days || 30)}"></div>
+      <div><label for="pc">Contacto</label><input id="pc" name="contact" maxlength="120" value="${esc(saved.contact || '')}" placeholder="nome · telefone · email"></div></div>
+    <p class="small muted">O preço e a tabela vêm do orçamento aprovado e não se mudam aqui.</p>`, 'Ver a proposta');
+  if (!fd) return;
+  const t = { scope: String(fd.get('scope') || '').trim(), excl: String(fd.get('excl') || '').trim(), pay: String(fd.get('pay') || '').trim(),
+    days: Math.max(1, Math.min(365, parseInt(fd.get('days'), 10) || 30)), contact: String(fd.get('contact') || '').trim() };
+  try { localStorage.setItem(key, JSON.stringify(t)); } catch (_) {}
+  const { data: p, error } = await sb.rpc('mini_estimate_proposal', { p_estimate: e.id });
+  if (error) return toast(friendly(error));
+  const face = estFace(e, e.form); const total = face.rows.reduce((a, r) => a + r[3], 0);
+  const today = new Date(); const until = new Date(today.getTime() + t.days * 86400000);
+  const d10 = (x) => x.toISOString().slice(0, 10);
+  const lines = (txt) => txt.split('\n').map((x) => x.trim()).filter(Boolean);
+  const d = document.createElement('dialog'); d.className = 'dlg q-book prop';
+  d.innerHTML = `<div class="printable prop-doc">
+    <header class="prop-h"><div><b class="prop-co">${esc(p.company.name || '')}</b>${p.company.tax_id ? `<small>NIF ${esc(p.company.tax_id)}</small>` : ''}</div>
+      <div class="prop-no"><b>Proposta ${esc(estNo(e))}</b><small>${esc(fmtDate(d10(today)))}</small></div></header>
+    <section class="prop-to"><small>Para</small><b>${esc(p.client ? p.client.name : e.client)}</b>
+      ${p.client && p.client.tax_id ? `<span>NIF ${esc(p.client.tax_id)}</span>` : ''}${p.client && p.client.address ? `<span>${esc(p.client.address)}</span>` : ''}</section>
+    <h2 class="prop-t">${esc(e.title)}</h2>
+    <h3>1. Âmbito</h3>${lines(t.scope).map((x) => `<p>${esc(x)}</p>`).join('')}
+    <h3>2. Preço · ${esc(EST_FORMS[e.form].n)}</h3>
+    <p class="small">${esc(EST_FORMS[e.form].what.split('.')[0])}.</p>
+    <table class="grid prop-tbl"><thead><tr>${face.head.map((h, i) => `<th class="${i >= 2 ? 'num' : ''}">${esc(h)}</th>`).join('')}</tr></thead>
+      <tbody>${face.rows.map((r) => `<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td><td class="num">${esc(r[2])}</td><td class="num">${eur2(r[3])}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td colspan="3">${esc(face.foot)}</td><td class="num">${eur2(total)}</td></tr></tfoot></table>
+    <p class="small">Valores em euros, sem IVA. Acresce IVA à taxa legal em vigor.</p>
+    ${t.excl ? `<h3>3. Não incluído</h3><ul>${lines(t.excl).map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+    <h3>${t.excl ? 4 : 3}. Condições</h3>
+    <ul><li>${esc(t.pay)}</li><li>Proposta válida até ${esc(fmtDate(d10(until)))} (${t.days} dias).</li>
+      <li>O início dos trabalhos depende da aceitação escrita desta proposta ou da nota de encomenda do cliente.</li></ul>
+    <footer class="prop-f"><div><small>Preparada por</small><b>${esc(p.prepared_by || '')}</b>${t.contact ? `<span>${esc(t.contact)}</span>` : ''}</div>
+      <div><small>Aceitação do cliente</small><i></i><span>Nome, data e assinatura</span></div></footer></div>
+    <div class="acts noprint"><button class="btn" data-print>${ic('print')}Imprimir ou guardar PDF</button><button class="btn ghost wide" data-x>Fechar</button></div>`;
+  document.body.appendChild(d); d.showModal();
+  d.querySelector('[data-x]').onclick = () => d.close();
+  d.querySelector('[data-print]').onclick = () => window.print();
+  d.addEventListener('close', () => d.remove());
 }
 async function saveEstimate(patch) {
   const st = orcState();
