@@ -660,10 +660,11 @@ table.grid .sel { width: 32px; padding-right: 0; }
 .kpi.on { border-color: var(--brand); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 25%, transparent); }
 /* Computer (≥1100px): the petrol top band turns the corner into a side rail (an L-shaped frame), and the page uses the width:
    up to 1280px of content, lists of cards in two columns (container query, so dialogs keep one column). */
-main, dialog { container-type: inline-size; }
+main, dialog.dlg { container-type: inline-size; }
 @container (min-width: 1000px) {
-  .list:not(.feed) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
-  .list:not(.feed) > * { margin: 0; }
+  /* only page-level lists (not lists inside a card or a column of a two-column screen) */
+  :is(main > .list, main > :not(.painel-grid, .pic-grid, .mine-grid, .office-grid, .ind-grid, .card) > .list):not(.feed) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+  :is(main > .list, main > :not(.painel-grid, .pic-grid, .mine-grid, .office-grid, .ind-grid, .card) > .list):not(.feed) > * { margin: 0; }
 }
 @media (min-width: 1100px) {
   :root { --side-w: 248px; }
