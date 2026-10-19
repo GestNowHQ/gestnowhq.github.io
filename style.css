@@ -1529,3 +1529,6 @@ dialog.prop { max-width: 820px; }
 .sc-tag img { width: 240px; max-width: 80%; height: auto; image-rendering: pixelated; }
 .sc-tagdlg .acts { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 @media print { .sc-tag { border-width: 4px; } .sc-tag img { width: 9cm; } .sc-tagno { font-size: 48pt; } }
+
+/* v46: the Mais sheet grew past the screen for the admin (top items unreachable): it scrolls inside now. */
+.sheet { max-height: calc(100dvh - var(--tab-h) - env(safe-area-inset-bottom) - 24px); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
