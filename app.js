@@ -37,6 +37,55 @@ const REASON_PREFIX = {
   'skill_missing:': 'Falta a competência: ',
 };
 const ERRORS = [
+  [/a confined space always needs an attendant and a gas test/i, 'Um espaço confinado precisa sempre de vigia e de medição de gases.'],
+  [/a gas reading is out of range/i, 'Uma leitura de gases não é possível. Confirma os valores.'],
+  [/a number is out of range/i, 'Um número está fora do limite.'],
+  [/a number or a date is not valid/i, 'Um número ou uma data não é válido.'],
+  [/a person enters only with their own card or login/i, 'Cada pessoa entra só com o próprio cartão ou login.'],
+  [/a waiting longer than 24 hours/i, 'Mais de 24 horas: regista uma espera por dia.'],
+  [/access and waiting evidence never changes/i, 'As provas de acessos e esperas nunca se alteram.'],
+  [/action not known|direction not known/i, 'Ação desconhecida.'],
+  [/^card not known/i, 'Cartão desconhecido.'],
+  [/choose the cause/i, 'Escolhe a causa da espera.'],
+  [/choose the kind of access point/i, 'Escolhe o tipo de ponto.'],
+  [/choose the type of permit/i, 'Escolhe o tipo de licença.'],
+  [/day out of range/i, 'O dia não é válido.'],
+  [/(start|end|tap|measurement) time out of range/i, 'A hora não é válida.'],
+  [/permit dates out of range/i, 'As datas da licença não são válidas.'],
+  [/evidence is added within 7 days/i, 'Só se juntam fotografias até 7 dias depois.'],
+  [/give the start and end, or the day and the hours/i, 'Diz a hora de início e de fim, ou o dia e as horas.'],
+  [/hours out of range/i, 'As horas não são válidas.'],
+  [/name the access point/i, 'Dá um nome ao ponto.'],
+  [/only the scheduler runs the sweep/i, 'Só o serviço automático faz esta verificação.'],
+  [/people are inside: another attendant must take over first/i, 'Há gente lá dentro: outro vigia tem de entrar primeiro.'],
+  [/people are inside: evacuate first/i, 'Há gente lá dentro: evacua primeiro.'],
+  [/people are still inside/i, 'Ainda há gente lá dentro.'],
+  [/^permit not found/i, 'Licença não encontrada.'],
+  [/purchase request not found/i, 'Pedido de compra não encontrado.'],
+  [/say what the crew waited for/i, 'Diz de que é que a equipa esteve à espera.'],
+  [/say what was checked before reopening/i, 'Diz o que foi verificado antes de reabrir (5 letras ou mais).'],
+  [/say who caused the waiting/i, 'Diz por culpa de quem foi a espera.'],
+  [/say who measured/i, 'Diz quem mediu: encosta o cartão de quem mediu.'],
+  [/say why the attendant leaves/i, 'Diz porque é que o vigia sai (5 letras ou mais).'],
+  [/say why the exit is recorded by hand/i, 'Diz porque é que a saída é registada à mão (5 letras ou mais).'],
+  [/several access points carry this code/i, 'Vários pontos têm este código: lê a etiqueta.'],
+  [/the gas detector (\S+) is not fit for use/i, 'O detetor $1 não pode ser usado (calibração ou estado).'],
+  [/this access point is not being evacuated/i, 'Este ponto não está a ser evacuado.'],
+  [/this access point is switched off/i, 'Este ponto está desligado.'],
+  [/this code is already used on this site/i, 'Este código já existe nesta obra.'],
+  [/this person is already the attendant here/i, 'Esta pessoa já é vigia aqui.'],
+  [/this person is not inside this access point/i, 'Esta pessoa não está dentro deste ponto.'],
+  [/this person is not the attendant here/i, 'Esta pessoa não é vigia aqui.'],
+  [/this person may not be the attendant \((.*)\)/i, 'Esta pessoa não pode ser vigia ($1).'],
+  [/this waiting is already closed/i, 'Esta espera já está fechada.'],
+  [/this waiting is already recorded on the scaffold/i, 'Esta espera já está registada no andaime.'],
+  [/^waiting not found/i, 'Espera não encontrada.'],
+  [/write the code of the point/i, 'Escreve o código do ponto (letras, números, - . /).'],
+  [/^write the crew size$/i, 'Escreve quantas pessoas ficaram paradas.'],
+  [/write the four gas readings/i, 'Escreve as quatro leituras: O2, LEL, H2S e CO.'],
+  [/write the permit number/i, 'Escreve o número da licença.'],
+  [/^access point not found/i, 'Ponto de acesso não encontrado.'],
+  [/^file not allowed here/i, 'Este ficheiro não pode ir para aqui.'],
   [/this person may not take tool (\S+) \((.*)\)/i, 'Esta pessoa não pode levar a $1: falta formação ou documento válido ($2).'],
   [/tool (\S+) carries a tracker that is not Ex-certified/i, 'A $1 tem um localizador sem certificação Ex: tira-o antes de entrar em zona ATEX.'],
   [/tool (\S+) is in an ATEX zone: only an Ex-certified tracker/i, 'A $1 está em zona ATEX: só pode levar um localizador com certificação Ex.'],
@@ -700,7 +749,7 @@ const APP_VERSION = '47';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
-const MORE_ORDER = ['equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'andaimes', 'processo', 'clientes'];
+const MORE_ORDER = ['equipa', 'picar', 'emergencia', 'lmra', 'acessos', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'andaimes', 'esperas', 'processo', 'clientes'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -794,7 +843,7 @@ async function boot() {
   stopNfc(); clearInterval(state.timer); clearInterval(state.tick); hideFlash(); openMore(false);
   state.ready = false; state.offline = false; nav.hidden = true; document.getElementById('whoami').hidden = true;
   document.getElementById('sol').hidden = true; document.getElementById('search').hidden = true; document.getElementById('help').hidden = true; closePalette(); signedOut(true); showNet();
-  takeClimbLink();
+  takeClimbLink(); takeAccessLink();
   if (await openInvite()) return;
   let session = null; let sErr = null;
   try { const r = await sb.auth.getSession(); session = r.data.session; sErr = r.error; } catch (e) { sErr = e; }
@@ -859,6 +908,8 @@ async function boot() {
   nav.querySelector('[data-view=qualidade]').hidden = worker || state.offline || !canQuality();
   nav.querySelector('[data-view=despesas]').hidden = worker || state.offline || !canExpenses();
   nav.querySelector('[data-view=andaimes]').hidden = worker || state.offline || !canScaffolds();
+  nav.querySelector('[data-view=acessos]').hidden = worker || state.offline || !canAccess();
+  nav.querySelector('[data-view=esperas]').hidden = worker || state.offline || !canWaits();
   if (me.role === 'supervisor' && !state.booted && state.view === 'picar' && canSiteDetails()) state.view = 'equipa';
   state.booted = true;
   if (state.view === 'minhas' && !me.collaborator_id) state.view = (TABS[me.role] || TABS.supervisor)[0];
@@ -873,7 +924,7 @@ async function boot() {
   const other = queue().filter((x) => x._u && x._u !== state.me.user_id);
   if (other.length) toast(`Há ${other.length} picagem(ns) de outra conta neste telemóvel, ainda por enviar.`);
   go(state.view);
-  climbAfterLogin();
+  climbAfterLogin(); accessAfterLogin();
   if (state.tourNext) { state.tourNext = false; setTimeout(startTour, 700); return; }   // just finished the onboarding: the bot shows the app
   showBrief();
 }
@@ -1237,7 +1288,7 @@ function go(view) {
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
      ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients,
      processo: viewProcess, orcamentos: viewEstimates, lmra: viewLmra, emergencia: viewEmergency,
-     armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, producao: viewProd, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
+     armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, producao: viewProd, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds, acessos: viewAccess, esperas: viewWaits }[view] || viewClock)();
   checkEmergencyBar();
 }
 
@@ -2995,6 +3046,8 @@ const TOUR_TEXT = {
   lmra: 'LMRA: a análise de risco antes de começar. Um «Não» para o trabalho; com tudo «Sim», a equipa assina com o cartão.',
   alojamento: 'Alojamento: casas e hotéis, quem dorme onde e as camas livres. Ninguém entra numa casa sem a vistoria de entrada com fotos.',
   producao: 'Produção: o painel da direção de obra. As obras que diriges, quem está lá agora, as horas por validar e os alertas, com os atalhos para agir.',
+  acessos: 'Acessos: espaços confinados, trabalhos em altura e zonas ATEX. Cada pessoa entra e sai com o cartão; sem formação, licença, gases ou vigia, não entra. Vês quem está dentro e podes evacuar.',
+  esperas: 'Esperas: quando a equipa fica parada (licença, cliente, material, andaime), regista com fotografia. No fim do mês sai o Excel com as horas-homem para cobrar ao cliente.',
   andaimes: 'Andaimes: pedir, montar, inspecionar (verde, amarelo, vermelho) e desmontar. Quem está na obra vê se pode subir e avisa de um estrago com fotografia.',
   qualidade: 'Qualidade: não conformidades com fotografia, o plano de inspeção de cada obra com os pontos de paragem, parar um trabalho e o Data Book.',
   despesas: 'Despesas: tira uma foto ao talão, escolhe a obra e entrega. A Produção aprova, o custo vai para a obra e o Secretariado reembolsa.',
@@ -3381,9 +3434,9 @@ function viewMine() {
   const me = state.people.find((x) => x.id === state.me.collaborator_id);
   app.innerHTML = `<div class="ph"><div><p class="ph-k">${esc((me && me.full_name) || '')}</p><h1>As minhas horas</h1></div></div>
     <div class="chips" style="margin-bottom:12px">${months.map((m) => `<button class="chip" data-m="${m}" aria-pressed="${m === state.mineMonth}">${esc(mName(m))}</button>`).join('')}</div>
-    <div id="mytrips"></div><div id="myexp"></div><div id="myclimb"></div><div id="mytools"></div><div class="mine-grid"><div><div id="minetop">${skel(1)}</div><div id="minepay"></div><div id="mine">${skel(3)}</div></div>
+    <div id="mytrips"></div><div id="myexp"></div><div id="myaccess"></div><div id="myclimb"></div><div id="mytools"></div><div class="mine-grid"><div><div id="minetop">${skel(1)}</div><div id="minepay"></div><div id="mine">${skel(3)}</div></div>
     <div><div id="minereq"></div><div id="minesite"></div><div id="pdmine"></div></div></div>`;
-  loadMyPerDiems(); loadMyRequests(); loadMyTravels(); loadMyExpenses(); loadMyClimb(); loadMyTools();
+  loadMyPerDiems(); loadMyRequests(); loadMyTravels(); loadMyExpenses(); loadMyClimb(); loadMyTools(); loadMyAccess();
   app.querySelectorAll('[data-m]').forEach((b) => b.onclick = () => { state.mineMonth = b.dataset.m; viewMine(); });
   loadMine();
   state.timer = setInterval(() => { if (state.view === 'minhas' && document.visibilityState === 'visible') loadMine(true); }, 60000);
@@ -5803,7 +5856,7 @@ async function loadEmergency() {
   }
   const people = ev.people || []; const safe = people.filter((p) => p.safe); const missing = people.filter((p) => !p.safe);
   const pts = d.points; if (!pts.find((p) => p.id === state.emerPoint)) state.emerPoint = (pts[0] || {}).id;
-  const nfcOk = 'NDEFReader' in window; const lastRes = ($('#result') || {}).innerHTML || '';
+  const nfcOk = 'NDEFReader' in window; const lastRes = ($('#result') || {}).innerHTML || ''; const lastMap = ($('#emap') || {}).innerHTML || '';
   el.innerHTML = `<section class="em-live ${ev.kind === 'drill' ? 'drill' : ''}">
       <div class="em-h">${ic('warn')}<div class="grow"><b>${ev.kind === 'drill' ? 'SIMULACRO' : 'EMERGÊNCIA'} · ${esc(EMER_KIND[ev.kind] || ev.kind)}</b>
         <small>desde as ${esc(fmtHour(ev.started, tz))}${ev.by ? ' · ' + esc(ev.by) : ''}</small></div></div>
@@ -5817,6 +5870,7 @@ async function loadEmergency() {
       ${cached ? `<div class="result warn">${ic('cloud')}<div><b>Sem rede</b>Lista de ${esc(new Date(cached).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }))}. As picagens ficam guardadas e vão quando a rede voltar.</div></div>` : ''}
       ${pending ? `<p class="small">${ic('cloud')} ${pending} picagem(ns) à espera de rede neste telemóvel.</p>` : ''}
     </section>
+    <div id="emap">${lastMap}</div>
     ${missing.length ? `<div class="sec-h"><h2 class="eyebrow" style="color:var(--bad)">Em falta (${missing.length})</h2></div>
       <div class="card em-list">${missing.map((p) => `<div class="em-p miss">${avatar(p.name)}<div class="grow"><b>${esc(p.name)}</b><small>visto às ${esc(fmtHour(p.last_seen, tz))}</small></div>
         ${p.phone ? `<a class="btn ghost small" href="tel:${esc(String(p.phone).replace(/[^\d+]/g, ''))}">${ic('phone')}Ligar</a>` : ''}
@@ -5832,6 +5886,7 @@ async function loadEmergency() {
   $('#emanual').onsubmit = (e) => { e.preventDefault(); const i = $('#euid'); musterTap(i.value); i.value = ''; i.focus(); };
   el.querySelectorAll('[data-mark]').forEach((b) => b.onclick = () => markSafe(b.dataset.mark, b.dataset.name));
   $('#eend').onclick = () => endEmergency(ev);
+  if (!cached) loadEmerMap(site);
 }
 async function musterNfc() {
   try {
@@ -5913,6 +5968,411 @@ async function checkEmergencyBar() {
     bar.innerHTML = `${ic('warn')}<b>${ev.kind === 'drill' ? 'SIMULACRO' : 'EMERGÊNCIA'} em ${esc(site.title)}</b><span>${miss} em falta · tocar para contar</span>`; }
 }
 setInterval(() => { if (document.visibilityState === 'visible') checkEmergencyBar(); }, 20000);
+
+// ------------------------------------------------------------------ Acessos controlados (sql/77)
+// Espaço confinado, trabalho em altura, zona ATEX ou restrita: cada pessoa entra e sai com o cartão no ponto.
+// A base de dados diz sim ou não (formação, licença, gases, vigia, lotação); a saída nunca é recusada.
+// Lista viva de quem está dentro, alarme de tempo, evacuação. Tudo fica registado e nunca se altera.
+const AC_KIND = { confined_space: 'Espaço confinado', work_at_height: 'Trabalho em altura', atex: 'Zona ATEX', restricted: 'Zona restrita' };
+const AC_WHY = { point_inactive: 'o ponto está desligado', site_emergency: 'há uma emergência na obra', point_evacuating: 'o ponto está a ser evacuado',
+  not_on_site: 'não picou a entrada na obra', site_stopped: 'a obra está parada', no_permit: 'não há licença de trabalho válida',
+  gas_test_missing: 'falta a medição de gases', gas_test_failed: 'a medição de gases reprovou', gas_test_expired: 'a medição de gases caducou',
+  no_attendant: 'não há vigia à entrada', attendant_cannot_enter: 'o vigia não pode entrar', inside_other_point: 'está dentro de outro ponto',
+  point_full: 'o ponto está cheio', unknown_card: 'cartão desconhecido', o2_low: 'oxigénio baixo', o2_high: 'oxigénio alto',
+  lel_high: 'explosividade (LEL) alta', h2s_high: 'H2S alto', co_high: 'CO alto' };
+const AC_WARN = { gas_expires_soon: 'a medição de gases caduca em breve', permit_expires_soon: 'a licença caduca em breve' };
+const AC_ALARM = { overdue: 'passou o tempo', no_exit: 'sem saída registada', gas_failed: 'gases reprovados', attendant_left: 'o vigia saiu' };
+const PERMIT_T = { confined_space: 'Espaço confinado', work_at_height: 'Trabalho em altura', hot_work: 'Trabalho a quente', electrical: 'Elétrica',
+  excavation: 'Escavação', lifting: 'Elevação de cargas', general: 'Geral' };
+const acWhy = (r) => AC_WHY[r] || wtWhy(r);
+const canAccess = () => ['acessos.gerir', 'seguranca.emergencia', 'seguranca.lmra'].some(can);
+
+function viewAccess() {
+  if (!canAccess()) return viewClock();   // code guard as well as the database's
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Espaço confinado, altura, ATEX</p><h1>Acessos</h1></div></div>
+    <div class="team-site">${siteSelect('asite')}</div><div id="abody">${skel(3)}</div>`;
+  bindSiteSelect('asite', loadAccess);
+  loadAccess();
+  state.timer = setInterval(() => { if (state.view === 'acessos' && document.visibilityState === 'visible' && !document.querySelector('dialog[open]')) loadAccess(true); }, 15000);
+}
+async function loadAccess(quiet) {
+  const el = $('#abody'); const site = currentSite(); if (!el) return;
+  if (!site) { el.innerHTML = `<div class="card">${empty('helmet', 'Sem obras abertas', 'Abre uma obra em Obras.')}</div>`; return; }
+  const { data: d, error } = await sb.rpc('mini_access_live', { p_site: site.id });
+  if (!el.isConnected) return;
+  if (error) { el.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
+  const tz = siteTz(site.id); const pts = d.points || []; const mgr = can('acessos.gerir');
+  if (!pts.find((p) => p.id === state.acPoint)) state.acPoint = (pts.find((p) => p.active) || {}).id;
+  const keep = quiet ? (($('#result') || {}).innerHTML || '') : '';
+  el.innerHTML = `<div class="kpis"><div class="kpi ${d.inside ? 'info' : ''}"><b>${d.inside}</b><span>dentro agora</span></div>
+      <div class="kpi ${d.overdue ? 'warn' : ''}"><b>${d.overdue}</b><span>passaram o tempo</span></div>
+      <div class="kpi"><b>${pts.filter((p) => p.active).length}</b><span>pontos ativos</span></div></div>
+    ${(d.alarms || []).length ? `<div class="alert bad">${ic('warn')}<div><b>Alarmes</b>${d.alarms.slice(0, 6).map((a) => `<div>${esc(a.code || '')} · ${esc(AC_ALARM[a.kind] || a.kind)}${a.name ? ' · ' + esc(a.name) : ''} · ${esc(fmtHour(a.at, tz))}</div>`).join('')}</div></div>` : ''}
+    ${pts.some((p) => p.active) ? `<form class="card ac-tap" id="actap"><h2 style="margin:0 0 8px">${ic('tap')} Entrar ou sair</h2>
+      <label for="acp">Ponto</label><select id="acp">${pts.filter((p) => p.active).map((p) => `<option value="${esc(p.id)}" ${p.id === state.acPoint ? 'selected' : ''}>${esc(p.code)} · ${esc(p.name)}</option>`).join('')}</select>
+      <label for="acu">Cartão</label><div class="wk"><input id="acu" autocomplete="off" autocapitalize="characters" placeholder="Encosta o cartão ou escreve o número"><button class="btn">Picar</button></div>
+      ${'NDEFReader' in window ? '<button type="button" class="btn ghost wide" id="acnfc">Ler cartão com o telemóvel</button>' : ''}
+      <p class="small muted" style="margin:6px 0 0">Se a pessoa está dentro, sai; se está fora, entra. A saída nunca é recusada.</p>
+      <div id="result" aria-live="polite">${keep}</div></form>` : ''}
+    <div class="sec-h"><h2>Pontos desta obra</h2>${mgr ? '<button class="btn ghost small" id="acnew">+ Ponto</button>' : ''}</div>
+    ${pts.length ? `<div class="list">${pts.map((p) => acRow(p, tz)).join('')}</div>`
+      : `<div class="card">${empty('shield', 'Ainda sem pontos de acesso', mgr ? 'Carrega em «+ Ponto»: um espaço confinado, um trabalho em altura, uma zona ATEX ou restrita. Depois cola a etiqueta NFC à entrada.' : 'A Segurança cria os pontos de acesso.')}</div>`}`;
+  if ($('#acp')) $('#acp').onchange = (e) => { state.acPoint = e.target.value; };
+  if ($('#actap')) $('#actap').onsubmit = (e) => { e.preventDefault(); const i = $('#acu'); const v = i.value; i.value = ''; acTap(state.acPoint, v); };
+  if ($('#acnfc')) $('#acnfc').onclick = () => wtReadTag((uid) => acTap(state.acPoint, uid));
+  if ($('#acnew')) $('#acnew').onclick = () => acPointForm(site, null);
+  el.querySelectorAll('[data-acp]').forEach((b) => b.onclick = () => acPointCard(b.dataset.acp));
+}
+function acRow(p, tz) {
+  const full = p.max_people && p.inside.length >= p.max_people; const late = p.inside.filter((x) => x.overdue).length;
+  const gas = p.gas_test_required ? (p.gas ? (p.gas.valid ? chip('ok', 'gases OK até ' + fmtHour(p.gas.valid_until, tz)) : chip('bad', p.gas.pass ? 'gases caducados' : 'gases reprovados')) : chip('bad', 'sem medição de gases')) : '';
+  return `<button type="button" class="card ac-row ${p.evacuation ? 'evac' : late ? 'late' : ''}" data-acp="${esc(p.id)}">
+    <span class="wk"><span class="wh-tag">${esc(p.code)}</span><span class="grow"><span class="nm">${esc(p.name)}</span>
+      <span class="sub">${esc(AC_KIND[p.kind] || p.kind)}${p.zone ? ' · ' + esc(p.zone.code) : ''}${p.attendants.length ? ' · vigia ' + esc(p.attendants.map((a) => a.name).join(', ')) : p.attendant_required ? ' · <b class="bad-t">sem vigia</b>' : ''}</span></span>
+      <span class="ac-count ${full ? 'full' : ''}"><b>${p.inside.length}</b>${p.max_people ? '<small>/' + p.max_people + '</small>' : ''}<small>dentro</small></span></span>
+    <span class="ac-chips">${!p.active ? chip('', 'desligado') : ''}${p.evacuation ? chip('bad', 'A EVACUAR') : ''}${late ? chip('bad', late + ' passou o tempo') : ''}${gas}
+      ${p.permit_required ? (p.permit ? chip('ok', 'licença ' + p.permit.number) : chip('bad', 'sem licença')) : ''}</span>
+    ${p.inside.length ? `<span class="ac-inside">${p.inside.map((x) => `<span class="${x.overdue ? 'bad-t' : ''}">${esc(x.name)} · ${x.minutes} min</span>`).join('')}</span>` : ''}</button>`;
+}
+// One tap at the point: big green or red answer, with the reasons in plain words.
+async function acTap(point, raw, extra = {}) {
+  const uid = normUid(raw || '');
+  if (!point) return toast('Escolhe o ponto.');
+  if (!uid && !extra.collaborator_id) return toast('Encosta o cartão ou escreve o número.');
+  const p = { client_id: uuid(), ...extra }; if (uid) p.uid = uid;
+  const { data: r, error } = await sb.rpc('mini_access_tap', { p_ref: point, p });
+  if (error) { beep(false); showResult('bad', 'Não ficou registado', friendly(error)); return null; }
+  const who = (r.person && r.person.name) || 'Cartão desconhecido';
+  if (r.answer === 'yes') {
+    beep(true);
+    const w = (r.warnings || []).map((x) => AC_WARN[x] || x);
+    showResult(w.length ? 'warn' : 'ok', who, `${r.action === 'exit' ? 'SAIU de' : 'ENTROU em'} ${r.point.code} · ${r.inside_count}${r.max_people ? '/' + r.max_people : ''} dentro${r.action === 'entry' && r.max_minutes ? ' · sair até ' + fmtHour(r.due_out_at, siteTz(r.point.site_id)) : ''}${w.length ? '. Atenção: ' + w.join('; ') : ''}`);
+  } else {
+    beep(false);
+    showResult('bad', 'NÃO ENTRA · ' + who, (r.reasons || []).map(acWhy).join(' · ') || 'Recusado.');
+  }
+  if (state.view === 'acessos') setTimeout(() => loadAccess(true), 300);
+  return r;
+}
+async function acPointCard(id) {
+  const { data: p, error } = await sb.rpc('mini_access_point_get', { p_point: id });
+  if (error) return toast(friendly(error));
+  const tz = siteTz(p.site_id); const c = p.can || {}; const g = p.gas;
+  const acts = [
+    c.manage && ['att', 'Vigia entra ou sai', 'ghost'],
+    c.gas_test && p.active && ['gas', 'Medir gases', 'ghost'],
+    c.manage && p.active && ['permit', 'Licença de trabalho', 'ghost'],
+    c.evacuate && p.active && !p.evacuation && ['evac', 'EVACUAR', 'danger'],
+    c.manage && p.evacuation && ['reopen', 'Reabrir o ponto', ''],
+    c.manage && ['tagnfc', 'Ligar etiqueta NFC', 'ghost'],
+    c.manage && ['tagqr', 'Etiqueta QR', 'ghost'],
+    c.manage && ['edit', 'Regras do ponto', 'ghost'],
+  ].filter(Boolean);
+  const d = document.createElement('dialog'); d.className = 'dlg wt-card';
+  d.innerHTML = `<div class="wk"><span class="wh-tag big">${esc(p.code)}</span><div class="grow"><h2 style="margin:0">${esc(p.name)}</h2>
+      <p class="small muted" style="margin:0">${esc(AC_KIND[p.kind] || p.kind)} · ${esc(p.site || '')}${p.zone ? ' · ' + esc(p.zone.code) + (p.zone.atex ? ' (ATEX)' : '') : ''}</p></div></div>
+    ${p.evacuation ? `<div class="alert bad">${ic('warn')}<div><b>A EVACUAR</b>desde as ${esc(fmtHour(p.evacuation.at, tz))}${p.evacuation.note ? ' · ' + esc(p.evacuation.note) : ''}</div></div>` : ''}
+    ${(p.blockers || []).length ? `<p class="small"><b>Agora ninguém entra:</b> ${p.blockers.map((b) => esc(acWhy(b))).join(' · ')}</p>` : p.active ? `<p class="small">${chip('ok', 'pode entrar quem cumpre as regras')}</p>` : ''}
+    <ul class="fl-papers">
+      <li><span>Dentro</span><b>${p.inside.length}${p.max_people ? ' de ' + p.max_people : ''}${p.max_minutes ? ' · máx. ' + p.max_minutes + ' min' : ''}</b></li>
+      <li><span>Vigia</span><b>${p.attendants.length ? esc(p.attendants.map((a) => a.name + ' desde ' + fmtHour(a.since, tz)).join(', ')) : p.attendant_required ? 'falta' : 'não é preciso'}</b></li>
+      ${p.gas_test_required ? `<li><span>Gases</span><b>${g ? `${g.pass ? 'OK' : 'REPROVADO'} às ${esc(fmtHour(g.at, tz))} · O2 ${g.o2}% · LEL ${g.lel}% · H2S ${g.h2s} · CO ${g.co}${g.valid ? ' · válido até ' + esc(fmtHour(g.valid_until, tz)) : ' · já não vale'}` : 'sem medição'}</b></li>` : ''}
+      ${p.permit_required ? `<li><span>Licença</span><b>${p.permit ? esc(p.permit.number) + ' até ' + esc(fmtTime(p.permit.valid_to, tz)) : 'falta'}</b></li>` : ''}
+      ${(p.requirements || []).length ? `<li><span>Formação</span><b>${esc(p.requirements.map((r) => r.name).join(', '))}</b></li>` : ''}</ul>
+    ${p.inside.length ? `<h3>Quem está dentro</h3><div class="em-list">${p.inside.map((x) => `<div class="em-p ${x.overdue ? 'miss' : ''}">${avatar(x.name)}<div class="grow"><b>${esc(x.name)}</b><small>desde ${esc(fmtHour(x.since, tz))} · ${x.minutes} min${x.overdue ? ' · passou o tempo' : ''}</small></div>
+        ${c.manage ? `<button class="btn ghost small" data-out="${esc(x.collaborator_id)}" data-name="${esc(x.name)}">Saída à mão</button>` : ''}</div>`).join('')}</div>` : ''}
+    ${(p.movements || []).length ? `<details><summary>Últimos movimentos</summary><ul class="q-list small">${p.movements.slice(0, 25).map((m) => `<li>${esc(fmtTime(m.at, tz))} · ${esc(m.name || ('cartão ' + (m.raw_uid || '?')))} · ${m.kind === 'entry' ? 'entrou' : m.kind === 'exit' ? 'saiu' : '<b class="bad-t">recusado</b>'}${(m.reasons || []).length ? ' (' + esc(m.reasons.map(acWhy).join(', ')) + ')' : ''}${m.method === 'manual' ? ' · à mão por ' + esc(m.by || '') : ''}</li>`).join('')}</ul></details>` : ''}
+    <div class="acts wt-acts">${acts.map(([a, lb, cls]) => `<button class="btn ${cls} wide" data-a="${a}">${lb}</button>`).join('')}<button class="btn ghost wide" data-x>Fechar</button></div>`;
+  document.body.appendChild(d); d.showModal();
+  const close = () => d.close(); const after = () => { if (state.view === 'acessos') loadAccess(true); acPointCard(p.id); };
+  d.querySelector('[data-x]').onclick = close;
+  d.addEventListener('close', () => d.remove());
+  d.querySelectorAll('[data-out]').forEach((b) => b.onclick = async () => {
+    close();
+    const fd = await askSheet(`Saída de ${b.dataset.name}`, `<label for="aon">Porquê à mão? *</label><input id="aon" name="n" required minlength="5" maxlength="300" placeholder="ex.: saiu sem picar, confirmado pelo vigia">`, 'Registar saída');
+    if (!fd) return acPointCard(p.id);
+    const r = await acTap(p.id, '', { collaborator_id: b.dataset.out, direction: 'exit', note: String(fd.get('n')).trim() });
+    if (r) toast('Saída registada.'); after();
+  });
+  const run = { att: acAttendant, gas: acGas, permit: acPermit, evac: acEvacuate, reopen: acReopen, tagnfc: acTagNfc, tagqr: acTagQr,
+    edit: (x) => acPointForm({ id: x.site_id }, x) };
+  d.querySelectorAll('[data-a]').forEach((b) => b.onclick = async () => { close(); if (await run[b.dataset.a](p)) after(); });
+}
+// Photo or PDF to a private bucket: tenant/folder/uuid.ext, with its fingerprint.
+async function acUpload(bucket, folder, f, pdfOk) {
+  if (!f || !f.size) return null;
+  if (!f.type.startsWith('image/') && !(pdfOk && f.type === 'application/pdf')) { toast(pdfOk ? 'Só PDF ou fotografia.' : 'Só fotografias (JPG, PNG ou WebP).'); return false; }
+  if (f.type.startsWith('image/')) f = await shrinkPhoto(f);
+  const bad = fileProblem(f); if (bad) { toast(bad); return false; }
+  const path = `${state.me.tenant_id}/${folder}/${uuid()}.${FILE_TYPES[f.type]}`;
+  const sha = await sha256Hex(f);
+  const up = await sb.storage.from(bucket).upload(path, f, { contentType: f.type, upsert: false });
+  if (up.error) { toast(friendly(up.error)); return false; }
+  return { file: path, sha256: sha };
+}
+async function acPointForm(site, p) {
+  const v = p || { kind: 'confined_space', max_people: 4, max_minutes: 120 };
+  const fd = await askSheet(p ? `Regras de ${p.code}` : 'Novo ponto de acesso', `
+    <label>Tipo *</label><div class="chips reasons" role="radiogroup">${Object.entries(AC_KIND).map(([k, l]) => `<label class="chip"><input type="radio" name="k" value="${k}" ${v.kind === k ? 'checked' : ''} ${p ? 'disabled' : ''} required>${l}</label>`).join('')}</div>
+    <div class="row"><div><label for="apc">Código *</label><input id="apc" name="c" required maxlength="20" autocapitalize="characters" value="${esc(v.code || '')}" placeholder="ex.: EC-01" ${p ? 'disabled' : ''}></div>
+      <div><label for="apn">Nome *</label><input id="apn" name="n" required minlength="2" maxlength="120" value="${esc(v.name || '')}" placeholder="ex.: Tanque T-301"></div></div>
+    <div class="row"><div><label for="apm">Máximo de pessoas</label><input id="apm" name="m" type="number" min="1" max="200" inputmode="numeric" value="${v.max_people || ''}"></div>
+      <div><label for="apt">Máximo de minutos lá dentro</label><input id="apt" name="t" type="number" min="5" max="1440" inputmode="numeric" value="${v.max_minutes || ''}"></div></div>
+    <label class="check inline"><input type="checkbox" name="a" ${v.attendant_required ? 'checked' : ''}> Precisa de vigia à entrada</label>
+    <label class="check inline"><input type="checkbox" name="g" ${v.gas_test_required ? 'checked' : ''}> Precisa de medição de gases</label>
+    <label class="check inline"><input type="checkbox" name="w" ${v.permit_required ? 'checked' : ''}> Precisa de licença de trabalho do cliente</label>
+    <p class="small muted">Espaço confinado tem sempre vigia e gases. A formação pedida vem do tipo (espaço confinado, altura); quem não a tem válida, não entra.</p>`, p ? 'Guardar' : 'Criar', (d) => {
+    if (!p) d.querySelectorAll('input[name=k]').forEach((r) => r.onchange = () => {
+      const cs = r.value === 'confined_space'; d.querySelector('[name=a]').checked = cs; d.querySelector('[name=g]').checked = cs;
+      d.querySelector('[name=w]').checked = ['confined_space', 'work_at_height'].includes(r.value); });
+    if (!p) { d.querySelector('[name=a]').checked = true; d.querySelector('[name=g]').checked = true; d.querySelector('[name=w]').checked = true; }
+  });
+  if (!fd) return false;
+  const kind = p ? p.kind : fd.get('k');
+  const body = { name: String(fd.get('n')).trim(), max_people: fd.get('m') ? Number(fd.get('m')) : null, max_minutes: fd.get('t') ? Number(fd.get('t')) : null,
+    attendant_required: !!fd.get('a'), gas_test_required: !!fd.get('g'), permit_required: !!fd.get('w') };
+  if (body.permit_required) body.permit_type = (p && p.permit_type) || (['confined_space', 'work_at_height'].includes(kind) ? kind : 'general');
+  if (p) body.id = p.id; else Object.assign(body, { site_id: site.id, code: String(fd.get('c')).trim().toUpperCase(), kind });
+  const { data, error } = await sb.rpc('mini_access_point_save', { p: body });
+  if (error) { toast(friendly(error)); return false; }
+  toast(p ? 'Guardado.' : `Ponto ${data.code} criado. Agora cola a etiqueta NFC à entrada.`);
+  if (!p && state.view === 'acessos') { state.acPoint = data.id; loadAccess(); }
+  return true;
+}
+async function acAttendant(p) {
+  const fd = await askSheet(`Vigia de ${p.code}`, `<label>O quê? *</label><div class="chips reasons" role="radiogroup"><label class="chip"><input type="radio" name="a" value="on" checked>Entra de vigia</label><label class="chip"><input type="radio" name="a" value="off">Sai de vigia</label></div>
+    <label for="aau">Cartão do vigia</label><div class="wk"><input id="aau" name="u" maxlength="40" autocomplete="off" placeholder="Vazio: és tu">${'NDEFReader' in window ? '<button type="button" class="btn ghost small" id="aar">Ler</button>' : ''}</div>
+    <label for="aan">Nota</label><input id="aan" name="n" maxlength="300" placeholder="Obrigatória para tirar outro vigia">
+    <p class="small muted">Com gente lá dentro, o último vigia só sai quando outro entra.</p>`, 'Registar', (d) => {
+    if (d.querySelector('#aar')) d.querySelector('#aar').onclick = () => wtReadTag((uid) => { d.querySelector('#aau').value = uid; });
+  });
+  if (!fd) return false;
+  const q = { action: fd.get('a'), note: String(fd.get('n') || '').trim() || null }; const u = normUid(String(fd.get('u') || '')); if (u) q.uid = u;
+  const { data, error } = await sb.rpc('mini_access_attendant', { p_ref: p.id, p: q });
+  if (error) { toast(friendly(error)); return false; }
+  toast(`${data.name} ${data.action === 'on' ? 'está de vigia' : 'saiu de vigia'}.`); return true;
+}
+async function acGas(p) {
+  const L = p.limits || {};
+  const fd = await askSheet(`Gases em ${p.code}`, `<div class="row"><div><label for="ag1">O2 (%) *</label><input id="ag1" name="o2" type="number" step="0.1" min="0" max="100" inputmode="decimal" required placeholder="${L.o2_min}–${L.o2_max}"></div>
+      <div><label for="ag2">LEL (%) *</label><input id="ag2" name="lel" type="number" step="0.1" min="0" max="100" inputmode="decimal" required placeholder="≤ ${L.lel_max}"></div></div>
+    <div class="row"><div><label for="ag3">H2S (ppm) *</label><input id="ag3" name="h2s" type="number" step="0.1" min="0" max="1000" inputmode="decimal" required placeholder="≤ ${L.h2s_max}"></div>
+      <div><label for="ag4">CO (ppm) *</label><input id="ag4" name="co" type="number" step="0.1" min="0" max="5000" inputmode="decimal" required placeholder="≤ ${L.co_max}"></div></div>
+    <label for="agt">Detetor usado (nº da ferramenta)</label><input id="agt" name="t" maxlength="64" autocapitalize="characters" placeholder="ex.: F-002 (tem de estar calibrado)">
+    <label for="agu">Cartão de quem mediu</label><input id="agu" name="u" maxlength="40" autocomplete="off" placeholder="Vazio: foste tu">
+    <label for="agf">Fotografia do detetor</label><input id="agf" name="f" type="file" accept="image/*" capture="environment">
+    <p class="small muted">Se reprovar com gente lá dentro, o ponto é evacuado logo e a Segurança é avisada.</p>`, 'Registar medição');
+  if (!fd) return false;
+  const q = { o2: Number(fd.get('o2')), lel: Number(fd.get('lel')), h2s: Number(fd.get('h2s')), co: Number(fd.get('co')) };
+  if (String(fd.get('t') || '').trim()) q.tool = String(fd.get('t')).trim().toUpperCase();
+  const u = normUid(String(fd.get('u') || '')); if (u) q.uid = u;
+  const up = await acUpload('acessos', p.id, fd.get('f'), false); if (up === false) return false; if (up) Object.assign(q, up);
+  const { data, error } = await sb.rpc('mini_access_gas_test', { p_ref: p.id, p: q });
+  if (error) { toast(friendly(error)); return false; }
+  if (data.pass) toast(`Gases OK. Válido até ${fmtHour(data.valid_until, siteTz(p.site_id))}.`);
+  else { beep(false); showFlash('bad', 'GASES REPROVADOS', (data.reasons || []).map(acWhy).join(' · ') + (data.evacuation_id ? '. Ponto evacuado.' : '')); }
+  return true;
+}
+async function acPermit(p) {
+  const tz = siteTz(p.site_id); const now = localInput(new Date().toISOString(), tz);
+  const fd = await askSheet(`Licença para ${p.code}`, `<label for="apw">Número da licença do cliente *</label><input id="apw" name="n" required minlength="2" maxlength="64">
+    <label for="apy">Tipo</label><select id="apy" name="y">${Object.entries(PERMIT_T).map(([k, l]) => `<option value="${k}" ${k === (p.permit_type || p.kind) ? 'selected' : ''}>${l}</option>`).join('')}</select>
+    <div class="row"><div><label for="apf">Válida de</label><input id="apf" name="f" type="datetime-local" value="${esc(now)}"></div><div><label for="apv">Até *</label><input id="apv" name="v" type="datetime-local" required></div></div>
+    <label for="api">Quem emitiu</label><input id="api" name="i" maxlength="255" placeholder="ex.: Segurança do cliente">
+    <label for="apd">Cópia (PDF ou foto)</label><input id="apd" name="d" type="file" accept="image/*,application/pdf">`, 'Guardar licença');
+  if (!fd) return false;
+  const q = { site_id: p.site_id, point_id: p.id, number: String(fd.get('n')).trim(), type: fd.get('y'), issuer: String(fd.get('i') || '').trim() || null,
+    valid_from: fd.get('f') ? zonedToUtc(fd.get('f'), tz) : null, valid_to: zonedToUtc(fd.get('v'), tz) };
+  const up = await acUpload('acessos', p.id, fd.get('d'), true); if (up === false) return false; if (up) Object.assign(q, up);
+  const { error } = await sb.rpc('mini_access_permit_add', { p: q });
+  if (error) { toast(friendly(error)); return false; }
+  toast('Licença ligada ao ponto.'); return true;
+}
+async function acEvacuate(p) {
+  const fd = await askSheet(`EVACUAR ${p.code}`, `<p class="small" style="color:var(--bad)"><b>Ninguém entra até reabrir. Quem está dentro (${p.inside.length}) é avisado e tem de sair.</b></p>
+    <label for="aev">Porquê</label><input id="aev" name="n" maxlength="300" placeholder="ex.: alarme de gás, pessoa indisposta">`, 'EVACUAR');
+  if (!fd) return false;
+  const { data, error } = await sb.rpc('mini_access_evacuate', { p_point: p.id, p_note: String(fd.get('n') || '').trim() || null });
+  if (error) { toast(friendly(error)); return false; }
+  toast(`${p.code} a evacuar: ${data.people_inside} pessoa(s) dentro.`); return true;
+}
+async function acReopen(p) {
+  const fd = await askSheet(`Reabrir ${p.code}`, `<label for="arn">O que foi verificado? *</label><input id="arn" name="n" required minlength="5" maxlength="300" placeholder="ex.: nova medição de gases OK, ventilação ligada">`, 'Reabrir');
+  if (!fd) return false;
+  const { error } = await sb.rpc('mini_access_point_reopen', { p_point: p.id, p_note: String(fd.get('n')).trim() });
+  if (error) { toast(friendly(error)); return false; }
+  toast('Ponto reaberto.'); return true;
+}
+async function acTagNfc(p) {
+  const fd = await askSheet(`Etiqueta NFC de ${p.code}`, `<label for="anu">Código da etiqueta *</label><div class="wk"><input id="anu" name="u" required maxlength="64" autocomplete="off">${'NDEFReader' in window ? '<button type="button" class="btn ghost small" id="anr">Ler</button>' : ''}</div>
+    <p class="small muted">Cola a etiqueta à entrada do ponto. Quem tem login encosta o telemóvel para entrar e sair.</p>`, 'Ligar', (d) => {
+    if (d.querySelector('#anr')) d.querySelector('#anr').onclick = () => wtReadTag((uid) => { d.querySelector('#anu').value = uid; });
+  });
+  if (!fd) return false;
+  const { error } = await sb.rpc('mini_access_point_tag', { p_point: p.id, p_kind: 'nfc', p_code: String(fd.get('u')).trim(), p_label: null });
+  if (error) { toast(friendly(error)); return false; }
+  toast('Etiqueta ligada.'); return true;
+}
+async function acTagQr(p) {
+  let img = '';
+  try { const qr = await loadQr(); const q = qr(0, 'M'); q.addData(appUrl() + '#acesso=' + p.id); q.make(); img = q.createDataURL(8, 16); }
+  catch (_) { toast('Não foi possível desenhar o QR code.'); return false; }
+  const d = document.createElement('dialog'); d.className = 'dlg q-book sc-tagdlg';
+  d.innerHTML = `<div class="printable sc-tag"><b class="sc-tagno">${esc(p.code)}</b><span>${esc(AC_KIND[p.kind] || '')} · ${esc(p.name)}</span><img alt="QR code do ponto ${esc(p.code)}" src="${img}">
+      <span>Aponta a câmara para entrar e sair. Sem formação válida, não entras.</span></div>
+    <div class="acts noprint"><button class="btn" data-print>${ic('print')}Imprimir</button><button class="btn ghost wide" data-x>Fechar</button></div>`;
+  document.body.appendChild(d); d.showModal();
+  d.querySelector('[data-x]').onclick = () => d.close(); d.querySelector('[data-print]').onclick = () => window.print();
+  d.addEventListener('close', () => d.remove()); return false;
+}
+// The QR at the point opens the app at #acesso=<id>: kept until the person is signed in, then they tap with their login.
+function takeAccessLink() {
+  const m = /[#&]acesso=([0-9a-f-]{36})/.exec(location.hash);
+  if (!m) return;
+  try { sessionStorage.setItem('gestnow.access', m[1]); } catch (_) {}
+  history.replaceState(null, '', location.pathname + location.search);
+}
+function accessAfterLogin() {
+  let ref = null; try { ref = sessionStorage.getItem('gestnow.access'); sessionStorage.removeItem('gestnow.access'); } catch (_) {}
+  if (ref) setTimeout(() => acSelf(ref), 400);
+}
+async function acSelf(ref) {
+  const { data: r, error } = await sb.rpc('mini_access_tap', { p_ref: ref, p: { client_id: uuid() } });
+  if (error) { beep(false); return showFlash('bad', 'Não ficou registado', friendly(error)); }
+  if (r.answer === 'yes') { beep(true); showFlash('ok', r.action === 'exit' ? 'SAÍSTE' : 'PODES ENTRAR', `${r.point.code} · ${r.point.name}${r.action === 'entry' && r.max_minutes ? ' · sai até ' + fmtHour(r.due_out_at, siteTz(r.point.site_id)) : ''}`); }
+  else { beep(false); showFlash('bad', 'NÃO ENTRAS', (r.reasons || []).map(acWhy).join(' · ')); }
+  if (state.view === 'minhas') loadMyAccess();
+}
+// On As minhas horas: the point the worker is inside, and the points where they are the attendant.
+async function loadMyAccess() {
+  const box = $('#myaccess'); if (!box) return;
+  const { data, error } = await sb.rpc('mini_access_mine');
+  if (!box.isConnected) return;
+  if (error || !data || (!data.inside && !(data.attendant_of || []).length)) { box.innerHTML = ''; return; }
+  const i = data.inside;
+  box.innerHTML = `<div class="card ac-mine">${i ? `<h2 style="margin-top:0">${ic('lock')} Estás dentro de ${esc(i.code || '')}</h2>
+      <p>${esc(i.name || '')} desde ${esc(fmtHour(i.since))}${i.due_out_at ? ' · sai até <b>' + esc(fmtHour(i.due_out_at)) + '</b>' : ''}</p>
+      <button class="btn wide" id="acout" data-p="${esc(i.point_id)}">Saí</button>` : ''}
+    ${(data.attendant_of || []).map((a) => `<p style="margin:${i ? '12px' : '0'} 0 0">${ic('shield')} És vigia de <b>${esc(a.code)}</b> desde ${esc(fmtHour(a.since))} · ${a.inside} dentro</p>`).join('')}</div>`;
+  if ($('#acout')) $('#acout').onclick = async (e) => {
+    const { error: er } = await sb.rpc('mini_access_tap', { p_ref: e.target.dataset.p, p: { direction: 'exit', client_id: uuid() } });
+    if (er) return toast(friendly(er)); toast('Saída registada.'); loadMyAccess(); };
+}
+// Emergency: who is inside a confined space or at height first, then where each missing person was seen last.
+const LS_SRC = { gate_in: 'entrou na obra', gate_out: 'saiu da obra', access_entry: 'entrou em', access_exit: 'saiu de', access_refused: 'recusado em',
+  attendant_on: 'vigia em', attendant_off: 'deixou a vigia em', muster: 'no ponto de encontro' };
+const lsText = (s, tz) => {
+  if (!s) return 'sem registo hoje';
+  const src = LS_SRC[s.source] || (s.source.startsWith('scaffold_') ? 'andaime' : s.source.startsWith('tool_') ? 'ferramenta' : s.source);
+  return `${src}${s.place ? ' ' + s.place : ''}${s.zone ? ' (' + s.zone + ')' : ''} às ${fmtHour(s.at, tz)}`;
+};
+async function loadEmerMap(site) {
+  const box = $('#emap'); if (!box || state.offline || navigator.onLine === false) return;
+  const { data: m, error } = await sb.rpc('mini_emergency_map', { p_site: site.id });
+  if (!box.isConnected || error || !m) return;
+  const tz = siteTz(site.id); const inside = m.inside_points || [];
+  const miss = (m.missing || []).slice().sort((a, b) => (a.priority || 3) - (b.priority || 3));
+  box.innerHTML = `${inside.length ? `<div class="alert bad">${ic('lock')}<div><b>Dentro de espaços (tirar primeiro)</b>
+      ${inside.map((p) => `<div><b>${esc(p.code)}</b> ${esc(p.name)}${p.evacuating ? ' · a evacuar' : ''}: ${p.people.map((x) => esc(x.name) + ' (' + x.minutes + ' min)').join(', ')}</div>`).join('')}</div></div>` : ''}
+    ${miss.length ? `<div class="card em-seen"><h3 style="margin:0 0 6px">Onde foram vistos por último</h3><ul class="q-list">${miss.map((p) => `<li class="${p.priority === 1 ? 'bad-t' : ''}"><b>${esc(p.name)}</b> · ${esc(p.inside ? 'DENTRO de ' + (p.inside.code || '') : lsText(p.last_seen, tz))}</li>`).join('')}</ul></div>` : ''}`;
+}
+
+// ------------------------------------------------------------------ Esperas (sql/77): prova para cobrar
+// Qualquer espera (licença, cliente, material, andaime, equipamento, isolamento, tempo) com quem, quanto tempo, porquê e fotografia.
+// Junta as esperas dos andaimes. O Excel vai para o cliente e para a faturação; o Primavera continua a faturar.
+const WAIT_CAUSE = { permit: 'Licença de trabalho', client: 'Cliente', material: 'Material', scaffold: 'Andaime', equipment: 'Equipamento',
+  isolation: 'Isolamento / consignação', weather: 'Tempo', other: 'Outro' };
+const WAIT_BY = { client: 'Cliente', us: 'Nós', subcontractor: 'Subempreiteiro', other: 'Outro' };
+const canWaits = () => ['esperas.registar', 'obras.gerir', 'faturacao.gerir', 'comercial.gerir'].some(can);
+function viewWaits() {
+  if (!canWaits()) return viewClock();   // code guard as well as the database's
+  if (!state.wt) state.wt = { m: isoDay(new Date()).slice(0, 7) };
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Prova para cobrar o tempo parado</p><h1>Esperas</h1></div>
+      ${can('esperas.registar') ? '<button class="btn" id="wtnew">+ Registar espera</button>' : ''}</div>
+    <div class="team-site">${siteSelect('wsite')}</div><div id="wbody">${skel(3)}</div>`;
+  bindSiteSelect('wsite', loadWaits);
+  if ($('#wtnew')) $('#wtnew').onclick = () => waitForm(currentSite());
+  loadWaits();
+}
+async function loadWaits() {
+  const el = $('#wbody'); const site = currentSite(); if (!el) return;
+  if (!site) { el.innerHTML = `<div class="card">${empty('helmet', 'Sem obras abertas', 'Abre uma obra em Obras.')}</div>`; return; }
+  const { from, to } = monthRange(state.wt.m);
+  const [l, t] = await Promise.all([sb.rpc('mini_wait_list', { p: { site_id: site.id, from, to } }), sb.rpc('mini_wait_totals', { p_from: from, p_to: to, p_site: site.id })]);
+  if (!el.isConnected) return;
+  if (l.error || t.error) { el.innerHTML = `<div class="card"><p>${esc(friendly(l.error || t.error))}</p></div>`; return; }
+  const tz = siteTz(site.id); const rows = l.data || []; const T = t.data; const h1 = (n) => (Math.round(Number(n || 0) * 10) / 10).toLocaleString('pt-PT');
+  const cli = (T.by_caused_by || []).find((x) => x.caused_by === 'client');
+  el.innerHTML = `<div class="card"><div class="wk"><label for="wm" class="grow">Mês</label><input id="wm" type="month" value="${esc(state.wt.m)}"></div></div>
+    <div class="kpis"><div class="kpi warn"><b>${h1(T.person_hours)}</b><span>horas-homem paradas</span></div>
+      <div class="kpi hot"><b>${h1(cli ? cli.person_hours : 0)}</b><span>por causa do cliente</span></div>
+      <div class="kpi ${T.open ? 'info' : ''}"><b>${T.open}</b><span>a decorrer</span></div></div>
+    ${(T.by_cause || []).length ? `<div class="card"><table class="tbl"><thead><tr><th>Causa</th><th class="num">Registos</th><th class="num">Horas-homem</th></tr></thead>
+      <tbody>${T.by_cause.map((x) => `<tr><td>${esc(WAIT_CAUSE[x.cause] || x.cause)}</td><td class="num">${x.records}</td><td class="num">${h1(x.person_hours)}</td></tr>`).join('')}</tbody></table></div>` : ''}
+    <button class="btn ghost" id="wx">${ic('doc')}Excel para o cliente (esperas do cliente)</button>
+    <div class="sec-h"><h2>Registos</h2></div>
+    ${rows.length ? `<div class="list">${rows.map((w) => `<article class="card ${w.open ? 'wt-open' : ''}"><div class="wk"><div class="grow">
+        <div class="nm">${esc(WAIT_CAUSE[w.cause] || w.cause)} · ${esc(WAIT_BY[w.caused_by] || w.caused_by)}${w.scaffold ? ' · andaime ' + esc(w.scaffold) : ''}${w.permit ? ' · licença ' + esc(w.permit) : ''}</div>
+        <div class="sub">${esc(fmtDate(w.day))} · ${w.crew_size} pessoa(s) · ${w.started_at ? esc(fmtHour(w.started_at, tz)) + (w.ended_at ? '–' + esc(fmtHour(w.ended_at, tz)) : ' até agora') : h1(w.hours) + ' h'} · <b>${h1(w.person_hours)} h-h</b></div>
+        ${w.note ? `<div class="sub">«${esc(w.note)}»</div>` : ''}<div class="sub">${esc(w.by || '')}${w.zone ? ' · ' + esc(w.zone) : ''}</div></div>
+        ${w.open ? chip('warn', 'a decorrer') : chip('', (w.evidence || 0) + ' foto(s)')}</div>
+      ${w.open && w.source === 'mini' && can('esperas.registar') ? `<div class="acts"><button class="btn small" data-wend="${esc(w.id)}">Acabou a espera</button></div>` : ''}</article>`).join('')}</div>`
+      : `<div class="card">${empty('clock', 'Sem esperas neste mês', 'Quando a equipa fica parada à espera (licença, cliente, material…), regista logo com fotografia. É a prova para cobrar.')}</div>`}`;
+  $('#wm').onchange = (e) => { state.wt.m = e.target.value || state.wt.m; loadWaits(); };
+  el.querySelectorAll('[data-wend]').forEach((b) => b.onclick = () => waitEnd(b.dataset.wend, site));
+  $('#wx').onclick = () => excelExport(async () => {
+    const r = await sb.rpc('mini_wait_export', { p_from: from, p_to: to, p_site: site.id, p_caused_by: 'client' });
+    if (r.error) { toast(friendly(r.error)); return null; }
+    if (!r.data.rows.length) { toast('Sem esperas do cliente fechadas neste mês.'); return null; }
+    return r.data;
+  }, (X, e) => {
+    const doc = xlDoc([], 'Tempo parado por causa do cliente', `Obra ${site.cost_center_code} · ${site.title} · ${periodLabel(from, to)}`, null);
+    const wb = xlBook(X, doc);
+    const s = xlSheet(wb, 'Esperas', doc, [{ h: 'Data', t: 'date', w: 11 }, { h: 'Início', t: 'text', w: 7 }, { h: 'Fim', t: 'text', w: 7 }, { h: 'Causa', t: 'text', w: 18 },
+      { h: 'Zona', t: 'text', w: 9 }, { h: 'Pessoas', t: 'n', w: 8 }, { h: 'Horas', t: 'h', w: 7 }, { h: 'Horas-homem', t: 'h', w: 11 }, { h: 'Nota', t: 'text', w: 30, max: 60 },
+      { h: 'Fotos', t: 'n', w: 6 }, { h: 'Andaime / licença', t: 'text', w: 14 }, { h: 'Registado por', t: 'text', w: 18 }, { h: 'Ref.', t: 'text', w: 10 }]);
+    let r = s.head + 1;
+    for (const x of e.rows) xlRow(s, r++, [xlDate(String(x.date).slice(0, 10)), x.started_at ? fmtHour(x.started_at, tz) : '', x.ended_at ? fmtHour(x.ended_at, tz) : '',
+      WAIT_CAUSE[x.cause] || x.cause, x.zone || '', x.crew_size, Number(x.hours || 0), Number(x.person_hours || 0), x.note || '', x.evidence_count || 0,
+      x.scaffold || x.permit || '', x.recorded_by || '', String(x.id).slice(0, 8)]);
+    return { wb, name: `gestnow-esperas-${site.cost_center_code}-${from.slice(0, 7)}.xlsx`, msg: 'Excel descarregado. As fotografias ficam na app como prova.' };
+  });
+}
+async function waitForm(site) {
+  if (!site) return toast('Escolhe a obra.');
+  const tz = siteTz(site.id); const today = localDay(new Date().toISOString(), tz); const nowT = localInput(new Date().toISOString(), tz).slice(11);
+  const fd = await askSheet('Registar espera', `
+    <label>À espera de quê? *</label><div class="chips reasons" role="radiogroup">${Object.entries(WAIT_CAUSE).map(([k, l]) => `<label class="chip"><input type="radio" name="c" value="${k}" required>${l}</label>`).join('')}</div>
+    <label>Por culpa de quem? *</label><div class="chips reasons" role="radiogroup">${Object.entries(WAIT_BY).map(([k, l], i) => `<label class="chip"><input type="radio" name="b" value="${k}" ${i ? '' : 'checked'} required>${l}</label>`).join('')}</div>
+    <div class="row"><div><label for="wcz">Pessoas paradas *</label><input id="wcz" name="n" type="number" min="1" max="200" inputmode="numeric" required></div>
+      <div><label for="wdy">Dia</label><input id="wdy" name="d" type="date" value="${esc(today)}" max="${esc(today)}"></div></div>
+    <div class="row"><div><label for="wst">Começou às *</label><input id="wst" name="s" type="time" required value="${esc(nowT)}"></div>
+      <div><label for="wen">Acabou às</label><input id="wen" name="e" type="time"></div></div>
+    <label for="wnt">O que aconteceu</label><input id="wnt" name="t" maxlength="300" placeholder="ex.: licença do tanque só assinada às 10h">
+    <label for="wph">Fotografia *</label><input id="wph" name="f" type="file" required accept="image/*" capture="environment">
+    <p class="small muted">Sem hora de fim, fica «a decorrer» e carregas em «Acabou a espera» quando a equipa recomeçar. Mais de 24 h: um registo por dia.</p>`, 'Registar');
+  if (!fd) return;
+  const day = fd.get('d') || today;
+  const q = { site_id: site.id, cause: fd.get('c'), caused_by: fd.get('b'), crew_size: Number(fd.get('n')), start: zonedToUtc(`${day}T${fd.get('s')}`, tz),
+    note: String(fd.get('t') || '').trim() || null, client_id: uuid() };
+  if (fd.get('e')) q.end = zonedToUtc(`${day}T${fd.get('e')}`, tz);
+  const up = await acUpload('esperas', site.id, fd.get('f'), false); if (!up) { if (up === null) toast('Tira uma fotografia: é a prova.'); return; }
+  Object.assign(q, up);
+  const { error } = await sb.rpc('mini_wait_add', { p: q });
+  if (error) return toast(friendly(error));
+  toast(q.end ? 'Espera registada.' : 'Espera a decorrer. Carrega em «Acabou a espera» quando recomeçarem.'); if (state.view === 'esperas') loadWaits();
+}
+async function waitEnd(id, site) {
+  const tz = siteTz(site.id); const nowT = localInput(new Date().toISOString(), tz);
+  const fd = await askSheet('Acabou a espera', `<label for="wee">Acabou às *</label><input id="wee" name="e" type="datetime-local" required value="${esc(nowT)}">
+    <label for="wef">Fotografia</label><input id="wef" name="f" type="file" accept="image/*" capture="environment">`, 'Fechar a espera');
+  if (!fd) return;
+  const q = { end: zonedToUtc(fd.get('e'), tz) };
+  const up = await acUpload('esperas', site.id, fd.get('f'), false); if (up === false) return; if (up) Object.assign(q, up);
+  const { error } = await sb.rpc('mini_wait_end', { p_wait: id, p: q });
+  if (error) return toast(friendly(error));
+  toast('Espera fechada.'); loadWaits();
+}
 
 // ------------------------------------------------------------------ Armazém (sql/65): EPI, farda, consumíveis e ferramentas
 // Entregar: a pessoa encosta o cartão (quem recebe), escolhes o que leva, e ela encosta outra vez para assinar.

@@ -1558,3 +1558,24 @@ dialog.prop { max-width: 820px; }
 .wt-tier b { display: block; font-size: 16px; }
 .wt-tier small { display: block; color: var(--ink-2); font-size: 13.5px; line-height: 1.4; margin-top: 2px; }
 .bad-t { color: var(--bad); font-weight: 650; }
+
+/* Acessos e esperas (v47) */
+.ac-tap select, .ac-tap .wk { margin-bottom: 8px; }
+.ac-tap .wk { display: flex; gap: 8px; } .ac-tap .wk input { flex: 1; min-width: 0; }
+.ac-row { display: block; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.ac-row .wk { display: flex; align-items: center; gap: 10px; }
+.ac-row .grow { flex: 1; min-width: 0; }
+.ac-row .nm { display: block; font-weight: 650; }
+.ac-row .sub { display: block; font-size: 13px; color: var(--ink-2); margin-top: 2px; }
+.ac-row.late { box-shadow: inset 4px 0 0 var(--warn-fill), var(--sh-1); }
+.ac-row.evac { box-shadow: inset 6px 0 0 var(--bad-fill), var(--sh-1); }
+.ac-count { flex: 0 0 auto; text-align: right; line-height: 1; }
+.ac-count b { font-size: 26px; font-weight: 750; } .ac-count small { color: var(--ink-2); font-size: 12px; }
+.ac-count small:last-child { display: block; margin-top: 3px; }
+.ac-count.full b { color: var(--bad); }
+.ac-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.ac-chips:empty { display: none; }
+.ac-inside { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 8px; font-size: 13px; }
+.ac-mine { box-shadow: inset 4px 0 0 var(--info), var(--sh-1); }
+.em-seen li { margin: 4px 0; }
+.wt-open { box-shadow: inset 4px 0 0 var(--warn-fill), var(--sh-1); }
