@@ -352,6 +352,8 @@ const ERRORS = [
   [/up to 2 months/i, 'Escolhe um período até 2 meses.'],
   [/e-mail already has a login/i, 'Esse email já tem conta.'],
   [/person already has a login/i, 'Esta pessoa já tem conta.'],
+  [/login is already in use/i, 'Esta conta já foi usada: a pessoa já escolheu a palavra-passe.'],
+  [/invite e-mail could not be sent/i, 'O email de convite não saiu. Usa o QR code em mão.'],
   [/invalid e-mail/i, 'O email não parece válido.'],
   [/this person is inactive/i, 'Esta pessoa está inativa.'],
   [/your own login/i, 'Não podes desligar a tua própria conta.'],
@@ -595,7 +597,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '45';
+const APP_VERSION = '46';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -693,6 +695,7 @@ async function boot() {
   stopNfc(); clearInterval(state.timer); clearInterval(state.tick); hideFlash(); openMore(false);
   state.ready = false; state.offline = false; nav.hidden = true; document.getElementById('whoami').hidden = true;
   document.getElementById('sol').hidden = true; document.getElementById('search').hidden = true; document.getElementById('help').hidden = true; closePalette(); signedOut(true); showNet();
+  if (await openInvite()) return;
   let session = null; let sErr = null;
   try { const r = await sb.auth.getSession(); session = r.data.session; sErr = r.error; } catch (e) { sErr = e; }
   if (!session) return (sErr && isNetErr(sErr)) || (navigator.onLine === false && storedSessionExists()) ? showNetworkError() : showLogin();
@@ -913,10 +916,35 @@ async function showMfaVerify() {
   $('#f').onsubmit = (e) => { e.preventDefault(); verifyCode(factor.id, new FormData(e.target).get('code')); };
 }
 
+// An invite opens the app with a one-time code in the address (QR code) or with Supabase's own link (e-mail).
+// The code is used once, then removed from the address so it never stays in the history.
+async function openInvite() {
+  const h = new URLSearchParams(location.hash.slice(1));
+  const bad = h.get('error_code') || h.get('error');
+  const code = h.get('convite');
+  if (!code && !bad) return false;
+  await null;   // boot() starts before the rest of this file has run: let it finish first
+  history.replaceState(null, '', location.pathname + location.search);
+  if (bad) { showInviteFailed(); return true; }
+  const { error } = await sb.auth.verifyOtp({ token_hash: code, type: 'invite' });   // replaces any session open on this phone
+  if (error) { if (isNetErr(error)) showNetworkError(); else showInviteFailed(); return true; }
+  touch();   // just signed in: not an idle phone
+  return false;   // signed in: boot goes on to "choose your password"
+}
+
+function showInviteFailed() {
+  nav.hidden = true;
+  authScreen(`<h1>Este convite já não serve</h1>
+    <p>O link de convite só funciona uma vez e expira. Se não foste tu a abri-lo antes, avisa já o administrador: alguém pode ter usado o teu convite.</p>
+    <p>Pede ao administrador um convite novo.</p>
+    <div class="acts"><button class="btn big" id="tologin">Ir para Entrar</button></div>`);
+  $('#tologin').onclick = () => showLogin();
+}
+
 function showNewPassword() {
   nav.hidden = true;
   authScreen(`<h1>Escolhe a tua palavra-passe</h1>
-    <p>Entraste com uma palavra-passe temporária. Escolhe agora a tua. Não a digas a ninguém.</p>
+    <p>Bem-vindo à GestNow. Escolhe agora a tua palavra-passe: só tu a sabes, nem o administrador a vê. Não a digas a ninguém.</p>
     <form id="f"><label>Palavra-passe nova (pelo menos 10 caracteres)</label>
     <input name="p1" type="password" autocomplete="new-password" minlength="10" required>
     <label>Repete a palavra-passe</label><input name="p2" type="password" autocomplete="new-password" minlength="10" required>
@@ -926,7 +954,7 @@ function showNewPassword() {
     e.preventDefault(); const f = new FormData(e.target);
     if (f.get('p1') !== f.get('p2')) return toast('As duas palavras-passe não são iguais.');
     const { error } = await sb.auth.updateUser({ password: f.get('p1'), data: { must_change_password: false } });
-    if (error) return toast(/same|different/i.test(error.message) ? 'Escolhe uma palavra-passe diferente da temporária.' : friendly(error));
+    if (error) return toast(/same|different/i.test(error.message) ? 'Escolhe uma palavra-passe diferente da anterior.' : friendly(error));
     toast('Palavra-passe guardada.'); boot();
   };
 }
@@ -1825,6 +1853,53 @@ async function viewPeople() {
     c.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); c.onclick(); } }; });
 }
 
+// Logins by invite: nobody sees a password. E-mail to the person's own address, or a QR code scanned in person.
+async function inviteCall(body) {
+  const { data, error } = await sb.functions.invoke('mini-criar-conta', { body });
+  if (!error) return { data };
+  let msg = error.message;
+  if (error.context && error.context.json) { try { msg = (await error.context.json()).error || msg; } catch (_) {} }
+  return { error: friendly({ message: msg }) };
+}
+
+const QR_LIB = 'vendor/qrcode-generator-1.4.4.js';
+let qrLib = null;
+function loadQr() {
+  if (window.qrcode) return Promise.resolve(window.qrcode);
+  if (!qrLib) {
+    qrLib = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = QR_LIB; s.onload = () => (window.qrcode ? resolve(window.qrcode) : reject(new Error('qr')));
+      s.onerror = () => { s.remove(); qrLib = null; reject(new Error('load')); };
+      document.head.appendChild(s);
+    });
+  }
+  return qrLib;
+}
+
+async function showInvite(data) {
+  const box = $('#newpw'); if (!box) return;
+  if (data.sent) {
+    box.innerHTML = `<div class="result ok">${ic('key')}<div><b>Convite enviado</b>para ${esc(data.email)}</div></div>
+      <p>A pessoa abre o email no telemóvel, toca no link e escolhe a sua palavra-passe. O link só funciona uma vez.
+      Se o email não chegar (ver também o spam), usa «Entregar em mão».</p><p><button class="btn wide" id="pwdone">Feito</button></p>`;
+    $('#pwdone').onclick = () => viewWorker();
+    return;
+  }
+  let img = '';
+  try {
+    const qr = await loadQr(); const q = qr(0, 'M'); q.addData(data.link); q.make();
+    img = q.createDataURL(6, 12);
+  } catch (_) { return toast('Não foi possível desenhar o QR code. Tenta outra vez.'); }
+  box.innerHTML = `<div class="qr invite"><img alt="QR code do convite" src="${img}"></div>
+    <p><b>Mostra este código à pessoa.</b> Ela lê-o com a câmara do telemóvel dela e escolhe a sua palavra-passe.</p>
+    <p class="small muted">Funciona uma vez e expira. Não tires fotografia ao código nem o envies: quem o usar primeiro fica com a conta.
+    Se a pessoa disser que o convite «já não serve», alguém o usou: desliga a conta e dá um convite novo.</p>
+    <p><button class="btn wide" id="pwdone">A pessoa já entrou</button></p>`;
+  $('#pwdone').onclick = () => viewWorker();
+  box.scrollIntoView({ block: 'center' });
+}
+
 // One worker: documents, card, sites, active.
 async function viewWorker() {
   const id = state.worker; if (!id) return go('trabalhadores');
@@ -1837,6 +1912,11 @@ async function viewWorker() {
   const current = (typeId) => files.find((x) => x.type_id === typeId && x.is_current);
   const older = files.filter((x) => !x.is_current);
   const login = ((us && us.data) || []).find((u) => u.collaborator_id === id);
+  let pending = false;
+  if (login && login.is_active && !login.is_me && can('contas.gerir')) {
+    const { data: pend } = await sb.rpc('mini_invites_pending');
+    pending = (pend || []).some((x) => x.collaborator_id === id);
+  }
   // Departments the admin can give (Administração only goes with the admin role) and the ones this login is in.
   let depts = []; let mine = []; let adminDept = null;
   if (can('contas.gerir')) {
@@ -1903,12 +1983,17 @@ async function viewWorker() {
         `<label class="chip"><input type="checkbox" name="d" value="${esc(d.id)}" ${mine.includes(d.id) ? 'checked' : ''}>${esc(d.name)}</label>`).join('')}</div>
         <p class="small muted">Cada departamento dá as suas permissões. Com departamentos de tipos diferentes, a pessoa muda de perfil no nome lá em cima. Nunca valida as próprias horas.</p>
         <p><button class="btn ghost wide">Guardar departamentos</button></p></form>` : ''}
+      ${pending ? `<div class="result warn">${ic('key')}<div><b>Convite por abrir</b>A pessoa ainda não escolheu a palavra-passe.</div></div>
+        <p><button class="btn ghost wide" id="againMail">Enviar o convite outra vez por email</button></p>
+        <p><button class="btn ghost wide" id="againQr">Entregar em mão (QR code)</button></p><div id="newpw"></div>` : ''}
       ${login.is_me ? '' : `<p><button class="btn ghost wide" id="toggleLogin">${login.is_active ? 'Desligar a conta' : 'Ligar a conta'}</button></p>`}` : w.is_active ? `
       <p class="small muted">Dá a esta pessoa acesso à app para picar, ver quem está na obra e validar horas.</p>
       <form id="login"><label>Email *</label><input name="email" type="email" required autocomplete="off">
         <label>Departamento *</label><select name="dept" required><option value="">Escolhe…</option>${depts.map((d) => `<option value="${esc(d.id)}">${esc(d.name)} (${esc(KIND_NAMES[d.kind] || d.kind)})</option>`).join('')}</select>
         ${more('O que cada departamento vê', '<p>Cada departamento só faz o que as suas permissões dizem (vê-as no Secretariado, em «Departamentos e acessos»). O colaborador só vê as horas dele, as diárias e os avisos de desconto. Escritório e segurança usam sempre a app de códigos.</p>')}
-        <p><button class="btn wide">Criar conta</button></p></form><div id="newpw"></div>` : '<p class="muted">Pessoa inativa: sem conta.</p>'}</div>` : ''}
+        <p class="small muted">A pessoa recebe um convite e escolhe a sua palavra-passe. Ninguém a vê, nem tu.</p>
+        <p><button class="btn wide" name="how" value="email">Enviar convite por email</button></p>
+        <p><button class="btn ghost wide" name="how" value="link">Entregar em mão (QR code)</button></p></form><div id="newpw"></div>` : '<p class="muted">Pessoa inativa: sem conta.</p>'}</div>` : ''}
     ${canPeople() ? `<div class="card"><h2 style="margin-top:0">${w.is_active ? 'Desativar' : 'Reativar'}</h2>
       <form id="act"><label>Porquê? *</label><input name="why" required placeholder="${w.is_active ? 'ex.: terminou o contrato' : 'ex.: voltou a ser contratado'}">
       <p class="small muted">${w.is_active ? 'Deixa de poder entrar em qualquer obra e o cartão é anulado. O histórico fica guardado.' : 'Depois de reativar, dá-lhe um cartão.'}</p>
@@ -1936,21 +2021,24 @@ async function viewWorker() {
       ? 'Foi posto nesta obra hoje: só deixa de poder picar a partir de amanhã.' : 'Já não pode picar nesta obra.');
   });
   if ($('#login')) $('#login').onsubmit = async (e) => {
-    e.preventDefault(); const f = new FormData(e.target); const btn = e.target.querySelector('.btn'); btn.disabled = true;
-    const dept = depts.find((d) => d.id === f.get('dept')); if (!dept) { btn.disabled = false; return toast('Escolhe o departamento.'); }
-    const { data, error } = await sb.functions.invoke('mini-criar-conta', { body: { email: f.get('email'), collaborator_id: id, role: dept.kind } });
-    btn.disabled = false;
-    let msg = error && error.message;
-    if (error && error.context && error.context.json) { try { msg = (await error.context.json()).error || msg; } catch (_) {} }
-    if (error) return toast(friendly({ message: msg }));
+    e.preventDefault(); const f = new FormData(e.target); const how = (e.submitter && e.submitter.value) || 'email';
+    const btns = e.target.querySelectorAll('.btn'); btns.forEach((b) => { b.disabled = true; });
+    const dept = depts.find((d) => d.id === f.get('dept')); if (!dept) { btns.forEach((b) => { b.disabled = false; }); return toast('Escolhe o departamento.'); }
+    const { data, error } = await inviteCall({ email: f.get('email'), collaborator_id: id, role: dept.kind, mode: how });
+    btns.forEach((b) => { b.disabled = false; });
+    if (error) return toast(error);
     const { error: de } = await sb.rpc('mini_set_user_departments', { p_user: data.user_id, p_depts: [dept.id] });
     if (de) toast('Conta criada, mas o departamento não ficou guardado: ' + friendly(de));
     e.target.hidden = true;
-    $('#newpw').innerHTML = `<div class="result warn">${ic('key')}<div><b>${esc(data.password)}</b>Palavra-passe temporária de ${esc(data.email)}</div></div>
-      <p><b>Dá-a à pessoa em mão ou diz-lha de viva voz.</b> Não a envies por mensagem nem email. Só aparece agora.
-      No primeiro login, a pessoa escolhe a sua palavra-passe.</p><p><button class="btn wide" id="pwdone">Já entreguei</button></p>`;
-    $('#pwdone').onclick = () => viewWorker();
+    showInvite(data);
   };
+  const again = async (how) => {
+    const { data, error } = await inviteCall({ collaborator_id: id, again: true, mode: how });
+    if (error) return toast(error);
+    showInvite(data);
+  };
+  if ($('#againMail')) $('#againMail').onclick = () => again('email');
+  if ($('#againQr')) $('#againQr').onclick = () => again('link');
   if ($('#profs')) $('#profs').onsubmit = async (e) => {
     e.preventDefault();
     const ids = [...e.target.querySelectorAll('input[name=d]')].filter((c) => c.checked).map((c) => c.value);
