@@ -1459,3 +1459,29 @@ table.tbl th { white-space: nowrap; vertical-align: bottom; }
 .tv-mine .tv-trip .nm { font-weight: 600; }
 .tv-mine h2 .i { vertical-align: -3px; }
 .tv-card.cancelled, .tv-card.rejected, .tv-card.done { opacity: .78; }
+/* Produção (v43) */
+.pr-acts { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+.pr-acts .btn { display: inline-flex; align-items: center; gap: 6px; }
+.pr-acts .btn small { opacity: .75; font-weight: 500; }
+.fl-sum:has(> :nth-child(4)) { grid-template-columns: repeat(2, 1fr); }
+@media (min-width: 700px) { .fl-sum:has(> :nth-child(4)) { grid-template-columns: repeat(4, 1fr); } }
+/* Qualidade (v44) */
+.q-stop { border-left: 4px solid var(--bad-fill); background: var(--bad-bg); }
+.q-stop .nm { color: var(--bad); font-weight: 700; }
+.q-chips { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+.q-nc.closed { opacity: .85; }
+.q-pt.hold { border-left: 4px solid var(--warn-fill); }
+.q-type { flex: none; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; font-weight: 800; background: var(--info-bg); color: var(--info); }
+.q-type.tH { background: var(--warn-bg); color: var(--warn); }
+.q-type.tR { background: var(--ok-bg); color: var(--ok); }
+.q-list { margin: 6px 0 0; padding-left: 18px; font-size: .9rem; }
+.q-list li { margin: 3px 0; }
+.linkbtn { background: none; border: 0; padding: 0; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .85em; word-break: break-all; }
+.q-book { max-width: 760px; }
+@media print { body:has(dialog.q-book[open]) > *:not(dialog) { display: none !important; }
+  dialog.q-book { position: static; border: 0; box-shadow: none; max-width: none; width: 100%; } dialog.q-book::backdrop { display: none; } }
+/* Despesas (v45) */
+.ex-card.rejected { opacity: .85; }
+.ex-mine { margin-bottom: 12px; }
+.ex-mine .wk { align-items: center; gap: 10px; }

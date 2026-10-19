@@ -37,6 +37,45 @@ const REASON_PREFIX = {
   'skill_missing:': 'Falta a competência: ',
 };
 const ERRORS = [
+  [/choose the site this expense goes to/i, 'Escolhe a obra: cada despesa vai para uma obra.'],
+  [/say who paid/i, 'Diz quem pagou: tu (para te reembolsarem) ou a empresa.'],
+  [/write the amount and the date of the receipt/i, 'Escreve o valor e a data do talão.'],
+  [/VAT cannot be more than the amount/i, 'O IVA não pode ser maior do que o valor.'],
+  [/receipt date out of range/i, 'A data do talão tem de ser dos últimos 6 meses, e não do futuro.'],
+  [/supplier tax number is not valid/i, 'O NIF do fornecedor não é válido.'],
+  [/file not allowed for this expense/i, 'Este ficheiro não pode ir para esta despesa.'],
+  [/this receipt was already handed in/i, 'Este talão já foi entregue. O mesmo talão não se pede duas vezes.'],
+  [/expense not found/i, 'Despesa não encontrada.'],
+  [/this expense was already decided/i, 'Esta despesa já foi decidida.'],
+  [/you cannot approve your own expense/i, 'Não podes decidir uma despesa tua ou que entregaste. Outra pessoa da Produção decide.'],
+  [/the expense must be approved first/i, 'A despesa tem de estar aprovada primeiro.'],
+  [/the company paid this one directly/i, 'Esta foi paga pela empresa: não há nada a reembolsar.'],
+  [/choose the site$/i, 'Escolhe a obra.'],
+  [/describe what is wrong/i, 'Descreve o que está mal (título e descrição).'],
+  [/say how serious it is/i, 'Diz se é ligeira, grave ou crítica.'],
+  [/non-conformity not found/i, 'Não conformidade não encontrada.'],
+  [/this non-conformity is closed/i, 'Esta não conformidade já está fechada.'],
+  [/file not allowed for this non-conformity/i, 'Este ficheiro não pode ir para esta não conformidade.'],
+  [/at most 8 photos per non-conformity/i, 'No máximo 8 fotografias por não conformidade.'],
+  [/choose the decision/i, 'Escolhe a decisão: reparar, refazer, rejeitar ou usar como está.'],
+  [/write the cause/i, 'Escreve a causa.'],
+  [/write the corrective action/i, 'Escreve a ação corretiva.'],
+  [/graded job: use as is needs the client approval/i, 'Obra com grau nuclear: «usar como está» precisa da aprovação do cliente escrita (quem e quando).'],
+  [/decide the non-conformity first/i, 'Primeiro decide a não conformidade.'],
+  [/write what was checked/i, 'Escreve o que verificaste.'],
+  [/choose the kind of point/i, 'Escolhe o tipo de ponto: R, W ou H.'],
+  [/write the activity/i, 'Escreve a atividade a inspecionar.'],
+  [/at most 300 points per site/i, 'No máximo 300 pontos de inspeção por obra.'],
+  [/point not found/i, 'Ponto de inspeção não encontrado.'],
+  [/this point is already accepted/i, 'Este ponto já está aceite.'],
+  [/choose the result/i, 'Escolhe o resultado: aceite ou rejeitado.'],
+  [/say what failed/i, 'Diz o que falhou.'],
+  [/write who witnessed it for the client/i, 'Escreve quem assistiu pelo cliente (pontos W e H).'],
+  [/this instrument is not calibrated/i, 'Este aparelho não tem a calibração em dia. Escolhe outro.'],
+  [/say what is stopped/i, 'Diz o que fica parado.'],
+  [/stop not found/i, 'Paragem não encontrada.'],
+  [/this stop was already lifted/i, 'Esta paragem já foi levantada.'],
+  [/write why work can go on/i, 'Escreve porque é que o trabalho pode retomar.'],
   [/choose the site this trip goes to/i, 'Escolhe a obra: cada viagem vai para uma obra.'],
   [/write where from and where to/i, 'Escreve de onde parte e para onde vai.'],
   [/from and to are the same/i, 'A partida e o destino são iguais.'],
@@ -556,11 +595,11 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '42';
+const APP_VERSION = '45';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
-const MORE_ORDER = ['equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'obras', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'processo', 'clientes'];
+const MORE_ORDER = ['equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'processo', 'clientes'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -713,6 +752,9 @@ async function boot() {
   nav.querySelector('[data-view=frota]').hidden = worker || state.offline || !canFleet();
   nav.querySelector('[data-view=alojamento]').hidden = worker || state.offline || !canHousing();
   nav.querySelector('[data-view=viagens]').hidden = worker || state.offline || !canTravel();
+  nav.querySelector('[data-view=producao]').hidden = worker || state.offline || !canProd();
+  nav.querySelector('[data-view=qualidade]').hidden = worker || state.offline || !canQuality();
+  nav.querySelector('[data-view=despesas]').hidden = worker || state.offline || !canExpenses();
   if (me.role === 'supervisor' && !state.booted && state.view === 'picar' && canSiteDetails()) state.view = 'equipa';
   state.booted = true;
   if (state.view === 'minhas' && !me.collaborator_id) state.view = (TABS[me.role] || TABS.supervisor)[0];
@@ -1065,7 +1107,7 @@ function go(view) {
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
      ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients,
      processo: viewProcess, orcamentos: viewEstimates, lmra: viewLmra, emergencia: viewEmergency,
-     armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel }[view] || viewClock)();
+     armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, producao: viewProd, qualidade: viewQuality, despesas: viewExpenses }[view] || viewClock)();
   checkEmergencyBar();
 }
 
@@ -2762,6 +2804,9 @@ const TOUR_TEXT = {
   emergencia: 'Emergência: carregas no botão vermelho e cada pessoa pica o cartão no ponto de encontro. Vês logo quem está em falta, com o telefone.',
   lmra: 'LMRA: a análise de risco antes de começar. Um «Não» para o trabalho; com tudo «Sim», a equipa assina com o cartão.',
   alojamento: 'Alojamento: casas e hotéis, quem dorme onde e as camas livres. Ninguém entra numa casa sem a vistoria de entrada com fotos.',
+  producao: 'Produção: o painel da direção de obra. As obras que diriges, quem está lá agora, as horas por validar e os alertas, com os atalhos para agir.',
+  qualidade: 'Qualidade: não conformidades com fotografia, o plano de inspeção de cada obra com os pontos de paragem, parar um trabalho e o Data Book.',
+  despesas: 'Despesas: tira uma foto ao talão, escolhe a obra e entrega. A Produção aprova, o custo vai para a obra e o Secretariado reembolsa.',
   viagens: 'Viagens: pedes a viagem de avião, comboio ou autocarro, o RH aprova e marca, e a pessoa vê o bilhete no telemóvel. O custo vai para a obra.',
   frota: 'Frota: cada viatura com semáforo: seguro, inspeção, IUC, revisão e contrato de aluguer. Entregas e devoluções com km.',
   compras: 'Compras: pedes o que falta; acima do limite o Secretariado aprova; depois encomenda-se e regista-se o que chega.',
@@ -3145,9 +3190,9 @@ function viewMine() {
   const me = state.people.find((x) => x.id === state.me.collaborator_id);
   app.innerHTML = `<div class="ph"><div><p class="ph-k">${esc((me && me.full_name) || '')}</p><h1>As minhas horas</h1></div></div>
     <div class="chips" style="margin-bottom:12px">${months.map((m) => `<button class="chip" data-m="${m}" aria-pressed="${m === state.mineMonth}">${esc(mName(m))}</button>`).join('')}</div>
-    <div id="mytrips"></div><div class="mine-grid"><div><div id="minetop">${skel(1)}</div><div id="minepay"></div><div id="mine">${skel(3)}</div></div>
+    <div id="mytrips"></div><div id="myexp"></div><div class="mine-grid"><div><div id="minetop">${skel(1)}</div><div id="minepay"></div><div id="mine">${skel(3)}</div></div>
     <div><div id="minereq"></div><div id="minesite"></div><div id="pdmine"></div></div></div>`;
-  loadMyPerDiems(); loadMyRequests(); loadMyTravels();
+  loadMyPerDiems(); loadMyRequests(); loadMyTravels(); loadMyExpenses();
   app.querySelectorAll('[data-m]').forEach((b) => b.onclick = () => { state.mineMonth = b.dataset.m; viewMine(); });
   loadMine();
   state.timer = setInterval(() => { if (state.view === 'minhas' && document.visibilityState === 'visible') loadMine(true); }, 60000);
@@ -6827,6 +6872,458 @@ async function hoInspection(id) {
 // Someone with viagens.pedir asks for a trip by plane, train or bus for a person, always to a site. The RH approves
 // (never the one who asked, nor their own trip), books it with the company, number and cost (the cost goes to the
 // site at once) and adds the tickets. The traveller sees the trip and opens the ticket in As minhas horas (sql/69).
+// Despesas com recibo: the photo of the receipt, the site it goes to, Produção approves (the cost goes to the site),
+// the Secretariado pays back. A worker hands in their own in As minhas horas; the database checks the same.
+const canExpenses = () => ['despesas.registar', 'despesas.aprovar', 'despesas.pagar'].some(can);
+const EX_CAT = { fuel: 'Combustível', meal: 'Refeição', lodging: 'Alojamento', toll: 'Portagem', parking: 'Estacionamento',
+  transport: 'Transporte', material: 'Material', other: 'Outro' };
+const EX_STATE = { submitted: ['warn', 'Por aprovar'], approved: ['info', 'Aprovada'], rejected: ['bad', 'Recusada'], reimbursed: ['ok', 'Reembolsada'] };
+function viewExpenses() {
+  if (!canExpenses()) return viewClock();   // code guard as well as the database's
+  if (!state.exp) state.exp = { tab: 'tratar' };
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Talões, aprovação e reembolso</p><h1>Despesas</h1></div></div>
+    <div id="extop">${skel(1)}</div><div id="exbody"></div>`;
+  loadExpenses();
+}
+async function loadExpenses() {
+  const top = $('#extop'); if (!top) return;
+  const { data: h, error } = await sb.rpc('mini_expense_home');
+  if (!top.isConnected) return;
+  if (error) { top.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  const X = state.exp; X.home = h;
+  const todo = (x) => x.can_decide || x.can_pay || (x.mine && x.status === 'submitted');
+  const n = (f) => h.expenses.filter(f).length;
+  const sumOf = (f) => h.expenses.filter(f).reduce((a, x) => a + Number(x.amount), 0);
+  top.innerHTML = `<div class="fl-sum">
+      ${h.can_approve ? `<div class="fl-n ${n((x) => x.can_decide) ? 'warn' : ''}"><b>${n((x) => x.can_decide)}</b><span>por aprovar</span></div>` : ''}
+      ${h.can_pay ? `<div class="fl-n ${n((x) => x.can_pay) ? 'warn' : ''}"><b>${esc(eur2(sumOf((x) => x.can_pay)))}</b><span>a reembolsar</span></div>` : ''}
+      <div class="fl-n"><b>${n((x) => x.mine && x.status === 'submitted')}</b><span>minhas à espera</span></div></div>
+    <button class="btn big wide" id="exnew">+ Entregar despesa</button>
+    <div class="seg" role="tablist">${[['tratar', 'Por tratar'], ['todas', 'Todas']].map(([k, l]) =>
+      `<button role="tab" data-extab="${k}" aria-selected="${X.tab === k}">${esc(l)} <small>${n(k === 'tratar' ? todo : () => true)}</small></button>`).join('')}</div>`;
+  top.querySelectorAll('[data-extab]').forEach((b) => b.onclick = () => { X.tab = b.dataset.extab; loadExpenses(); });
+  $('#exnew').onclick = () => exSubmit(h, loadExpenses);
+  const list = h.expenses.filter(X.tab === 'tratar' ? todo : () => true);
+  const body = $('#exbody');
+  body.innerHTML = list.length ? `<div class="list">${list.map(exCard).join('')}</div>`
+    : `<div class="card">${empty('box', X.tab === 'tratar' ? 'Nada por tratar' : 'Ainda sem despesas', 'Pagaste combustível, uma refeição ou uma portagem para a obra? Carrega em «+ Entregar despesa» e tira uma foto ao talão.')}</div>`;
+  exWire(body, h.expenses, loadExpenses);
+}
+function exCard(x) {
+  const [k, l] = EX_STATE[x.status] || ['', x.status];
+  return `<article class="card ex-card ${esc(x.status)}"><div class="wk"><span class="ho-ic">${ic('card')}</span><div class="grow">
+      <div class="nm">${esc(eur2(x.amount))} · ${esc(EX_CAT[x.category] || x.category)} <small class="muted">· ${esc(x.person)}</small></div>
+      <div class="sub">${esc(x.site)} · talão de ${esc(fmtDate(x.day))}${x.vat != null ? ' · IVA ' + esc(eur2(x.vat)) : ''}${x.nif ? ' · NIF ' + esc(x.nif) : ''}${x.receipt_no ? ' · nº ' + esc(x.receipt_no) : ''}</div></div>${chip(k, l)}</div>
+    <p class="small muted">${x.payment === 'out_of_pocket' ? 'Pago pela pessoa (a reembolsar)' : 'Pago pela empresa'} · entregue por ${esc(x.by || '—')} · ${esc(fmtTime(x.at))}${x.decided_by ? ` · ${x.status === 'rejected' ? 'recusada' : 'aprovada'} por ${esc(x.decided_by)}` : ''}${x.reason ? ': «' + esc(x.reason) + '»' : ''}${x.paid_by ? ' · reembolsada por ' + esc(x.paid_by) : ''}</p>
+    ${x.note ? `<p class="small">${esc(x.note)}</p>` : ''}
+    <div class="acts"><button class="btn ghost small" data-exfile="${esc(x.file)}">${ic('doc')}Ver talão</button>
+      ${x.can_decide ? `<button class="btn small" data-exok="${esc(x.id)}">Aprovar</button><button class="btn ghost small" data-exno="${esc(x.id)}">Recusar</button>` : ''}
+      ${x.can_pay ? `<button class="btn small" data-expay="${esc(x.id)}">Marcar reembolsada</button>` : ''}</div></article>`;
+}
+function exWire(root, list, reload) {
+  root.querySelectorAll('[data-exfile]').forEach((b) => b.onclick = () => openDocFile(b.dataset.exfile, 'despesas'));
+  root.querySelectorAll('[data-exok]').forEach((b) => b.onclick = () => exDecide(list.find((x) => x.id === b.dataset.exok), true, reload));
+  root.querySelectorAll('[data-exno]').forEach((b) => b.onclick = () => exDecide(list.find((x) => x.id === b.dataset.exno), false, reload));
+  root.querySelectorAll('[data-expay]').forEach((b) => b.onclick = () => exPaid(list.find((x) => x.id === b.dataset.expay), reload));
+}
+async function exSubmit(h, reload) {
+  if (!h.sites.length) return toast('Não estás em nenhuma obra aberta. Cada despesa vai para uma obra.');
+  const today = isoDay(new Date());
+  const people = h.can_register ? state.people.filter((p) => p.is_active !== false) : [];
+  const fd = await askSheet('Entregar despesa', `
+    <label for="exf">Fotografia do talão *</label><input id="exf" name="f" type="file" required accept="image/*,application/pdf" capture="environment">
+    ${people.length ? `<label for="exp">De quem é a despesa *</label><select id="exp" name="p" required>${people.map((p) => `<option value="${esc(p.id)}" ${p.id === h.me ? 'selected' : ''}>${esc(p.full_name)}${p.employee_number ? ' · ' + esc(p.employee_number) : ''}</option>`).join('')}</select>` : ''}
+    <label for="exs">Obra *</label><select id="exs" name="s" required>${h.sites.length > 1 ? '<option value="">Escolhe</option>' : ''}${h.sites.map((x) => `<option value="${esc(x.id)}">${esc(x.code)} · ${esc(x.title)}</option>`).join('')}</select>
+    <label>O que é *</label><div class="chips">${Object.entries(EX_CAT).map(([k, l]) => `<label class="chip"><input type="radio" name="c" value="${k}" required>${esc(l)}</label>`).join('')}</div>
+    <div class="row"><div><label for="exa">Valor total (€) *</label><input id="exa" name="a" type="number" inputmode="decimal" step="0.01" min="0.01" max="10000" required></div>
+      <div><label for="exv">IVA (€)</label><input id="exv" name="v" type="number" inputmode="decimal" step="0.01" min="0"></div></div>
+    <div class="row"><div><label for="exd">Data do talão *</label><input id="exd" name="d" type="date" required value="${today}" max="${today}"></div>
+      <div><label for="exn">Nº do talão</label><input id="exn" name="n" maxlength="64" placeholder="ex.: FS 1/123"></div></div>
+    <label for="exi">NIF do fornecedor</label><input id="exi" name="i" maxlength="16" inputmode="numeric" placeholder="ex.: 500000000">
+    <label>Quem pagou *</label><div class="chips"><label class="chip"><input type="radio" name="w" value="out_of_pocket" required checked>Paguei eu (reembolso)</label>
+      <label class="chip"><input type="radio" name="w" value="direct_billing">A empresa pagou</label></div>
+    <label for="exo">Nota</label><input id="exo" name="o" maxlength="300" placeholder="ex.: gasóleo da carrinha 12-AB-34">
+    <p class="small muted">A Produção aprova e o custo vai para a obra. O mesmo talão não se pode entregar duas vezes. O talão fica guardado e não se apaga.</p>`, 'Entregar');
+  if (!fd) return;
+  let f = fd.get('f'); if (!f || !f.size) return;
+  if (f.type.startsWith('image/')) f = await shrinkPhoto(f);
+  const bad = fileProblem(f); if (bad) return toast(bad);
+  const person = fd.get('p') || h.me;
+  const path = `${state.me.tenant_id}/${person}/${uuid()}.${FILE_TYPES[f.type]}`;
+  const sha = await sha256Hex(f);
+  const up = await sb.storage.from('despesas').upload(path, f, { contentType: f.type, upsert: false });
+  if (up.error) return toast(friendly(up.error));
+  const nif = String(fd.get('i') || '').replace(/\s/g, '').toUpperCase();
+  const { error } = await sb.rpc('mini_expense_submit', { p: { person_id: person, site_id: fd.get('s'), category: fd.get('c'), payment: fd.get('w'),
+    day: fd.get('d'), amount: fd.get('a'), vat: fd.get('v') || null, nif, receipt_no: String(fd.get('n') || '').trim(), note: String(fd.get('o') || '').trim(),
+    file: path, sha256: sha } });
+  if (error) return toast(friendly(error));
+  toast('Despesa entregue. A Produção foi avisada.'); reload();
+}
+async function exDecide(x, yes, reload) {
+  if (!x) return;
+  let reason = null;
+  if (!yes) {
+    const fd = await askSheet('Recusar despesa', `<p><b>${esc(eur2(x.amount))}</b> · ${esc(EX_CAT[x.category])} · ${esc(x.person)}</p>
+      <label for="exr">Porquê *</label><input id="exr" name="r" required minlength="3" maxlength="300" placeholder="ex.: talão ilegível, entrega outra foto">`, 'Recusar');
+    if (!fd) return; reason = String(fd.get('r')).trim();
+  }
+  const { error } = await sb.rpc('mini_expense_decide', { p_id: x.id, p_approve: yes, p_reason: reason });
+  if (error) return toast(friendly(error));
+  toast(yes ? 'Aprovada. O custo já está na obra.' : 'Recusada. A pessoa foi avisada.'); reload();
+}
+async function exPaid(x, reload) {
+  if (!x) return;
+  const fd = await askSheet('Marcar reembolsada', `<p>Confirmas que <b>${esc(x.person)}</b> já recebeu <b>${esc(eur2(x.amount))}</b>?</p>`, 'Sim, está pago');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_expense_paid', { p_id: x.id });
+  if (error) return toast(friendly(error));
+  toast('Marcada como reembolsada. A pessoa foi avisada.'); reload();
+}
+// The worker's own receipts on As minhas horas: hand one in, see what happened to it.
+async function loadMyExpenses() {
+  const box = $('#myexp'); if (!box) return;
+  const { data: h, error } = await sb.rpc('mini_expense_home');
+  if (!box.isConnected) return;
+  if (error || !h || !h.sites.length && !h.expenses.length) { box.innerHTML = ''; return; }
+  const mine = h.expenses.filter((x) => x.person_id === h.me).slice(0, 8);
+  box.innerHTML = `<div class="card ex-mine"><div class="wk"><h2 class="grow" style="margin:0">${ic('card')} As minhas despesas</h2>
+      ${h.sites.length ? '<button class="btn small" id="myexnew">+ Entregar talão</button>' : ''}</div>
+    ${mine.length ? `<ul class="q-list">${mine.map((x) => `<li><b>${esc(eur2(x.amount))}</b> ${esc(EX_CAT[x.category])} · ${esc(fmtDate(x.day))} · ${esc(EX_STATE[x.status][1])}${x.reason ? ': «' + esc(x.reason) + '»' : ''}</li>`).join('')}</ul>`
+      : '<p class="small muted">Pagaste algo para a obra? Tira uma foto ao talão e entrega aqui.</p>'}</div>`;
+  if ($('#myexnew')) $('#myexnew').onclick = () => exSubmit(h, loadMyExpenses);
+}
+// Qualidade: non-conformities, the inspection and test plan with its hold points, stopping work, the instruments
+// to re-check and the Data Book. Each action shows only with its permission; the database checks the same.
+const canQuality = () => ['qualidade.reportar', 'qualidade.gerir', 'qualidade.parar_obra'].some(can);
+const NC_KIND = { work: 'Trabalho', material: 'Material', supplier: 'Fornecedor', client: 'Reclamação do cliente', audit: 'Auditoria' };
+const NC_SEV = { minor: ['info', 'Ligeira'], major: ['warn', 'Grave'], critical: ['bad', 'Crítica'] };
+const NC_STATE = { open: ['warn', 'Por decidir'], decided: ['info', 'Ação em curso'], closed: ['ok', 'Fechada'] };
+const NC_DISP = { repair: 'Reparar', rework: 'Refazer', reject: 'Rejeitar', use_as_is: 'Usar como está' };
+const ITP_TYPE = { R: 'R · registo', W: 'W · testemunho', H: 'H · paragem' };
+function viewQuality() {
+  if (!canQuality()) return viewClock();   // code guard as well as the database's
+  if (!state.quality) state.quality = { tab: 'nc', site: null };
+  if (state.quality.site) return viewQualitySite();
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Não conformidades, inspeções e Data Book</p><h1>Qualidade</h1></div></div>
+    <div id="qtop">${skel(1)}</div><div id="qbody"></div>`;
+  loadQuality();
+}
+async function loadQuality() {
+  const top = $('#qtop'); if (!top) return;
+  const { data: h, error } = await sb.rpc('mini_quality_home');
+  if (!top.isConnected) return;
+  if (error) { top.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  const Q = state.quality; Q.home = h;
+  const n = (st) => h.ncs.filter((x) => x.status === st).length;
+  const tabs = [['nc', 'Não conformidades'], ['obras', 'Obras e inspeções'], h.can_manage && ['aparelhos', `Aparelhos${h.tools.length ? ` (${h.tools.length})` : ''}`]].filter(Boolean);
+  if (!tabs.find(([k]) => k === Q.tab)) Q.tab = 'nc';
+  top.innerHTML = `${h.stops.map((s) => `<div class="card q-stop"><div class="wk"><span class="ho-ic">${ic('warn')}</span><div class="grow">
+        <div class="nm">PARAGEM · ${esc(s.site)} · ${esc(s.scope)}</div><div class="sub">${esc(s.reason)} · ${esc(s.by || '')} · ${esc(fmtTime(s.at))}</div></div>
+        ${h.can_stop ? `<button class="btn small" data-resume="${esc(s.id)}">Retomar</button>` : ''}</div></div>`).join('')}
+    <div class="fl-sum">
+      <div class="fl-n ${n('open') ? 'warn' : ''}"><b>${n('open')}</b><span>por decidir</span></div>
+      <div class="fl-n"><b>${n('decided')}</b><span>com ação em curso</span></div>
+      <div class="fl-n ${h.stops.length ? 'warn' : 'ok'}"><b>${h.stops.length}</b><span>paragem(ns) ativa(s)</span></div></div>
+    <div class="pr-acts">${h.can_report ? `<button class="btn big" id="qnew">+ Não conformidade</button>` : ''}
+      ${h.can_stop ? `<button class="btn ghost" id="qstop">${ic('warn')}Parar um trabalho</button>` : ''}</div>
+    <div class="seg" role="tablist">${tabs.map(([k, l]) => `<button role="tab" data-qtab="${k}" aria-selected="${Q.tab === k}">${esc(l)}</button>`).join('')}</div>`;
+  top.querySelectorAll('[data-qtab]').forEach((b) => b.onclick = () => { Q.tab = b.dataset.qtab; loadQuality(); });
+  top.querySelectorAll('[data-resume]').forEach((b) => b.onclick = () => qResume(b.dataset.resume));
+  if ($('#qnew')) $('#qnew').onclick = () => qRaise(null);
+  if ($('#qstop')) $('#qstop').onclick = () => qStop(null);
+  const body = $('#qbody');
+  if (Q.tab === 'obras') {
+    body.innerHTML = h.sites.length ? `<div class="list">${h.sites.map((x) => `<article class="card pr-site"><div class="wk"><span class="ho-ic">${ic('crane')}</span>
+        <div class="grow"><div class="nm">${esc(x.code)} · ${esc(x.title)}</div><div class="sub">${x.grade ? 'Grau nuclear ' + esc(x.grade) : 'Convencional'} · ${x.points} ponto(s) de inspeção</div></div>
+        ${x.stopped ? chip('bad', 'Parada') : x.holds ? chip('warn', x.holds + ' paragem(ns) por assinar') : chip('ok', 'Em ordem')}</div>
+        <ul class="fl-papers"><li class="fl-p ${x.open_ncs ? 'bad' : 'ok'}"><span>Não conformidades abertas</span><b>${x.open_ncs}</b></li>
+          <li class="fl-p ${x.holds ? 'warn' : 'ok'}"><span>Pontos H por assinar</span><b>${x.holds}</b></li></ul>
+        <div class="acts"><button class="btn small" data-qsite="${esc(x.id)}">Abrir o plano de inspeção</button></div></article>`).join('')}</div>`
+      : `<div class="card">${empty('helmet', 'Sem obras', 'As obras que vês aparecem aqui com o plano de inspeção.')}</div>`;
+    body.querySelectorAll('[data-qsite]').forEach((b) => b.onclick = () => { Q.site = b.dataset.qsite; viewQualitySite(); });
+  } else if (Q.tab === 'aparelhos') {
+    body.innerHTML = h.tools.length ? `<div class="list">${h.tools.map((t) => `<article class="card"><div class="wk"><span class="ho-ic">${ic('calc')}</span>
+        <div class="grow"><div class="nm">${esc(t.tag)} · ${esc(t.name)}</div><div class="sub">${t.failed ? 'Chumbou na última calibração' : t.expired ? 'Calibração caducada' : 'Calibração a caducar'}${t.valid_until ? ' · válida até ' + esc(fmtDate(t.valid_until)) : ''}</div></div>
+        ${chip(t.failed || t.expired ? 'bad' : 'warn', t.failed ? 'Chumbou' : t.expired ? 'Caducada' : 'A caducar')}</div>
+        ${t.used ? `<p class="small"><b>${t.used} inspeção(ões)</b> foram assinadas com este aparelho desde a última calibração boa. Revê-as.</p>
+          <div class="acts"><button class="btn small" data-impact="${esc(t.id)}">Ver as inspeções a rever</button></div>` : '<p class="small muted">Nenhuma inspeção usou este aparelho desde a última calibração boa.</p>'}</article>`).join('')}</div>`
+      : `<div class="card">${empty('box', 'Aparelhos em dia', 'Quando um aparelho chumba ou deixa caducar a calibração, aparece aqui com as inspeções feitas com ele.')}</div>`;
+    body.querySelectorAll('[data-impact]').forEach((b) => b.onclick = () => qImpact(h.tools.find((t) => t.id === b.dataset.impact)));
+  } else {
+    body.innerHTML = h.ncs.length ? `<div class="list">${h.ncs.map(ncCard).join('')}</div>`
+      : `<div class="card">${empty('box', 'Sem não conformidades', h.can_report ? 'Viste algo mal feito, um material sem certificado ou uma queixa do cliente? Carrega em «+ Não conformidade».' : 'As não conformidades aparecem aqui.')}</div>`;
+    ncWire(body, h.ncs, loadQuality);
+  }
+}
+function ncCard(x) {
+  const [sk, sl] = NC_STATE[x.status] || ['', x.status]; const [vk, vl] = NC_SEV[x.severity] || ['', x.severity];
+  return `<article class="card q-nc ${esc(x.status)}"><div class="wk"><div class="grow"><div class="nm">${esc(x.number)} · ${esc(x.title)}</div>
+      <div class="sub">${esc(x.site)} · ${esc(NC_KIND[x.kind] || x.kind)}${x.location ? ' · ' + esc(x.location) : ''} · ${esc(x.by || '')} · ${esc(fmtTime(x.at))}</div></div>
+      <div class="q-chips">${chip(vk, vl)}${chip(x.late ? 'bad' : sk, x.late ? 'Atrasada' : sl)}</div></div>
+    <p class="small">${esc(x.description)}</p>
+    ${x.disposition ? `<ul class="fl-papers"><li class="fl-p ok"><span>Decisão</span><b>${esc(NC_DISP[x.disposition])}</b></li>
+      <li class="fl-p ${x.late ? 'bad' : 'ok'}"><span>Ação até</span><b>${esc(fmtDate(x.due))}</b></li></ul>
+      <p class="small"><b>Causa:</b> ${esc(x.cause)}<br><b>Ação:</b> ${esc(x.action)}${x.client_approval ? `<br><b>Aprovação do cliente:</b> ${esc(x.client_approval)}` : ''}</p>
+      <p class="small muted">Decidida por ${esc(x.decided_by || '—')}${x.verify_note ? ` · verificação: «${esc(x.verify_note)}»` : ''}${x.closed_by ? ` · fechada por ${esc(x.closed_by)}` : ''}</p>` : ''}
+    ${x.photos.length ? `<div class="chips">${x.photos.map((p, i) => `<button class="chip" data-qfile="${esc(p)}">${ic('camera')}Foto ${i + 1}</button>`).join('')}</div>` : ''}
+    <div class="acts">${x.can_decide ? `<button class="btn small" data-qdec="${esc(x.id)}">${x.status === 'open' ? 'Decidir' : 'Mudar decisão'}</button>` : ''}
+      ${x.can_close ? `<button class="btn ghost small" data-qver="${esc(x.id)}">Verificar e fechar</button>` : ''}
+      ${x.can_photo ? `<button class="btn ghost small" data-qphoto="${esc(x.id)}">${ic('camera')}Foto</button>` : ''}</div></article>`;
+}
+function ncWire(root, list, reload) {
+  const find = (id) => list.find((x) => x.id === id);
+  root.querySelectorAll('[data-qdec]').forEach((b) => b.onclick = () => qDecide(find(b.dataset.qdec), reload));
+  root.querySelectorAll('[data-qver]').forEach((b) => b.onclick = () => qVerify(find(b.dataset.qver), reload));
+  root.querySelectorAll('[data-qphoto]').forEach((b) => b.onclick = () => qPhoto(find(b.dataset.qphoto), reload));
+  root.querySelectorAll('[data-qfile]').forEach((b) => b.onclick = () => openDocFile(b.dataset.qfile, 'qualidade'));
+}
+const qSiteOptions = (sel) => (state.quality.home ? state.quality.home.sites : []).map((x) => `<option value="${esc(x.id)}" ${x.id === sel ? 'selected' : ''}>${esc(x.code)} · ${esc(x.title)}</option>`).join('');
+async function qRaise(siteId) {
+  if (!state.quality.home) { const { data } = await sb.rpc('mini_quality_home'); state.quality.home = data; }
+  const fd = await askSheet('Nova não conformidade', `
+    <label for="qs">Obra *</label><select id="qs" name="s" required><option value="">Escolhe</option>${qSiteOptions(siteId)}</select>
+    <label for="qt">O que está mal *</label><input id="qt" name="t" required minlength="3" maxlength="120" placeholder="ex.: solda com porosidade na linha 3">
+    <label for="qd">Descrição *</label><textarea id="qd" name="d" required minlength="5" maxlength="2000" rows="3" placeholder="O que viste, quantas peças, desde quando"></textarea>
+    <label for="ql">Onde</label><input id="ql" name="l" maxlength="120" placeholder="ex.: rack 2, junta J-14">
+    <label>Tipo</label><div class="chips">${Object.entries(NC_KIND).map(([k, l], i) => `<label class="chip"><input type="radio" name="k" value="${k}" ${i ? '' : 'checked'}>${esc(l)}</label>`).join('')}</div>
+    <label>Gravidade *</label><div class="chips">${Object.entries(NC_SEV).map(([k, [, l]]) => `<label class="chip"><input type="radio" name="v" value="${k}" required>${esc(l)}</label>`).join('')}</div>
+    <label for="qf">Fotografia</label><input id="qf" name="f" type="file" accept="image/*" capture="environment">
+    <p class="small muted">A Qualidade é avisada logo. Fica numerada e nunca se apaga.</p>`, 'Abrir não conformidade');
+  if (!fd) return;
+  const { data: id, error } = await sb.rpc('mini_nc_raise', { p: { site_id: fd.get('s'), kind: fd.get('k'), severity: fd.get('v'),
+    title: String(fd.get('t')).trim(), description: String(fd.get('d')).trim(), location: String(fd.get('l') || '').trim() } });
+  if (error) return toast(friendly(error));
+  const f = fd.get('f'); if (f && f.size) await qUpload(id, f);
+  toast('Não conformidade aberta. A Qualidade já foi avisada.'); state.quality.site ? loadQualitySite() : loadQuality();
+}
+async function qUpload(ncId, f) {
+  if (f.type.startsWith('image/')) f = await shrinkPhoto(f);
+  const bad = fileProblem(f); if (bad) { toast(bad); return false; }
+  const path = `${state.me.tenant_id}/${ncId}/${uuid()}.${FILE_TYPES[f.type]}`;
+  const sha = await sha256Hex(f);
+  const up = await sb.storage.from('qualidade').upload(path, f, { contentType: f.type, upsert: false });
+  if (up.error) { toast(friendly(up.error)); return false; }
+  const { error } = await sb.rpc('mini_nc_photo_add', { p_nc: ncId, p_file: path, p_sha256: sha });
+  if (error) { toast(friendly(error)); return false; }
+  return true;
+}
+async function qPhoto(x, reload) {
+  if (!x) return;
+  const fd = await askSheet('Juntar fotografia', `<p><b>${esc(x.number)}</b> · ${esc(x.title)}</p>
+    <label for="qpf">Fotografia ou PDF *</label><input id="qpf" name="f" type="file" required accept="image/*,application/pdf">
+    <p class="small muted">Fica guardada com a impressão digital e não se apaga.</p>`, 'Juntar');
+  if (!fd) return;
+  if (await qUpload(x.id, fd.get('f'))) { toast('Fotografia junta.'); reload(); }
+}
+async function qDecide(x, reload) {
+  if (!x) return;
+  const due = new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10);
+  const fd = await askSheet(`Decidir ${x.number}`, `<p><b>${esc(x.title)}</b> · ${esc(x.site)}${x.grade ? ' · grau nuclear ' + esc(x.grade) : ''}</p>
+    <label>Decisão *</label><div class="chips">${Object.entries(NC_DISP).map(([k, l]) => `<label class="chip"><input type="radio" name="d" value="${k}" required ${x.disposition === k ? 'checked' : ''}>${esc(l)}</label>`).join('')}</div>
+    <label for="qc">Causa *</label><textarea id="qc" name="c" required minlength="3" maxlength="1000" rows="2" placeholder="Porque aconteceu?">${esc(x.cause || '')}</textarea>
+    <label for="qa">Ação corretiva *</label><textarea id="qa" name="a" required minlength="3" maxlength="1000" rows="2" placeholder="O que se faz para corrigir e não voltar a acontecer">${esc(x.action || '')}</textarea>
+    <label for="qu">Fazer até *</label><input id="qu" name="u" type="date" required value="${esc(x.due || due)}">
+    <div id="qcli" ${x.grade ? '' : 'hidden'}><label for="qk">Aprovação do cliente${x.grade ? ' *' : ''}</label><input id="qk" name="k" maxlength="300" placeholder="Quem aprovou e quando" value="${esc(x.client_approval || '')}"></div>
+    <p class="small muted">${x.grade ? 'Obra nuclear: «usar como está» precisa da aprovação do cliente.' : ''} O encarregado da obra é avisado da ação e do prazo.</p>`, 'Guardar decisão', (d) => {
+    const k = d.querySelector('#qk'), box = d.querySelector('#qcli');
+    d.querySelectorAll('input[name=d]').forEach((r) => r.onchange = () => { const need = x.grade && r.value === 'use_as_is'; box.hidden = !need && !x.grade; k.required = !!need; });
+  });
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_nc_decide', { p_nc: x.id, p: { disposition: fd.get('d'), cause: String(fd.get('c')).trim(), action: String(fd.get('a')).trim(),
+    due: fd.get('u'), client_approval: String(fd.get('k') || '').trim() } });
+  if (error) return toast(friendly(error));
+  toast('Decisão guardada. O encarregado foi avisado.'); reload();
+}
+async function qVerify(x, reload) {
+  if (!x) return;
+  const fd = await askSheet(`Verificar ${x.number}`, `<p><b>${esc(x.title)}</b></p><p class="small">Ação: ${esc(x.action)}</p>
+    <label>A correção resultou? *</label><div class="chips"><label class="chip"><input type="radio" name="r" value="1" required>Sim, fechar</label>
+      <label class="chip"><input type="radio" name="r" value="0">Não, volta à ação</label></div>
+    <label for="qv">O que verificaste *</label><textarea id="qv" name="v" required minlength="3" maxlength="1000" rows="2" placeholder="ex.: ensaio por líquidos penetrantes sem indicações"></textarea>`, 'Guardar');
+  if (!fd) return;
+  const okv = fd.get('r') === '1';
+  const { error } = await sb.rpc('mini_nc_verify', { p_nc: x.id, p_ok: okv, p_note: String(fd.get('v')).trim() });
+  if (error) return toast(friendly(error));
+  toast(okv ? 'Fechada.' : 'Voltou à ação. A obra foi avisada.'); reload();
+}
+async function qStop(siteId) {
+  const fd = await askSheet('Parar um trabalho', `
+    <label for="qss">Obra *</label><select id="qss" name="s" required><option value="">Escolhe</option>${qSiteOptions(siteId)}</select>
+    <label for="qsw">O que fica parado *</label><input id="qsw" name="w" required minlength="3" maxlength="160" placeholder="ex.: soldadura da linha 3">
+    <label for="qsr">Porquê *</label><textarea id="qsr" name="r" required minlength="5" maxlength="500" rows="2"></textarea>
+    <p class="small muted">O encarregado e o gestor da obra são avisados logo. Retomar precisa de um motivo. Fica tudo registado.</p>`, 'Parar');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_quality_stop', { p_site: fd.get('s'), p_scope: String(fd.get('w')).trim(), p_reason: String(fd.get('r')).trim() });
+  if (error) return toast(friendly(error));
+  toast('Trabalho parado. A obra foi avisada.'); state.quality.site ? loadQualitySite() : loadQuality();
+}
+async function qResume(id) {
+  const fd = await askSheet('Retomar o trabalho', `<label for="qrn">Porque pode retomar *</label>
+    <textarea id="qrn" name="n" required minlength="3" maxlength="500" rows="2" placeholder="ex.: elétrodos secos e soldador requalificado"></textarea>`, 'Retomar');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_quality_resume', { p_stop: id, p_note: String(fd.get('n')).trim() });
+  if (error) return toast(friendly(error));
+  toast('O trabalho pode retomar. A obra foi avisada.'); state.quality.site ? loadQualitySite() : loadQuality();
+}
+async function qImpact(t) {
+  if (!t) return;
+  const { data, error } = await sb.rpc('mini_quality_tool_impact', { p_tool: t.id });
+  if (error) return toast(friendly(error));
+  await askSheet(`Inspeções com ${t.tag}`, `<p class="small">Desde a última calibração boa${data.since ? ' (' + esc(fmtDate(data.since)) + ')' : ''}. Revê cada uma: se a medição pode estar errada, abre uma não conformidade.</p>
+    <ul class="q-list">${data.signs.map((s) => `<li><b>${esc(s.site)} · ${s.seq}</b> ${esc(s.activity)} <span class="muted">· ${esc(ITP_TYPE[s.type])} · ${s.result === 'accepted' ? 'aceite' : 'rejeitado'} · ${esc(s.by || '')} · ${esc(fmtTime(s.at))}</span></li>`).join('')}</ul>`, 'Fechar');
+}
+// One site: the inspection plan (R/W/H), its NCs, its stops and its Data Books.
+function viewQualitySite() {
+  app.innerHTML = `<div class="ph"><div><p class="ph-k"><button class="linkbtn" id="qback">‹ Qualidade</button></p><h1 id="qsh">Plano de inspeção</h1></div></div>
+    <div id="qsbody">${skel(2)}</div>`;
+  $('#qback').onclick = () => { state.quality.site = null; viewQuality(); };
+  loadQualitySite();
+}
+async function loadQualitySite() {
+  const box = $('#qsbody'); if (!box) return;
+  const { data: x, error } = await sb.rpc('mini_quality_site', { p_site: state.quality.site });
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  state.quality.cur = x;
+  $('#qsh').textContent = `${x.code} · ${x.title}`;
+  const live = x.stops.filter((s) => !s.lifted_at);
+  box.innerHTML = `${live.map((s) => `<div class="card q-stop"><div class="wk"><span class="ho-ic">${ic('warn')}</span><div class="grow"><div class="nm">PARAGEM · ${esc(s.scope)}</div>
+      <div class="sub">${esc(s.reason)} · ${esc(s.by || '')}</div></div>${x.can_stop ? `<button class="btn small" data-resume="${esc(s.id)}">Retomar</button>` : ''}</div></div>`).join('')}
+    <p class="small muted">${x.grade ? `Obra com grau nuclear <b>${esc(x.grade)}</b>.` : 'Obra convencional.'} R = só registo. W = o cliente pode assistir. H = paragem: o trabalho seguinte não avança sem este ponto aceite.</p>
+    <div class="pr-acts">${x.can_manage ? '<button class="btn" id="qpadd">+ Ponto de inspeção</button>' : ''}
+      ${x.can_report ? '<button class="btn ghost" id="qsnc">+ Não conformidade</button>' : ''}
+      ${x.can_stop ? `<button class="btn ghost" id="qsstop">${ic('warn')}Parar</button>` : ''}</div>
+    <h2 class="sec">Plano de inspeção e ensaio</h2>
+    ${x.points.length ? `<div class="list">${x.points.map((p) => `<article class="card q-pt ${p.hold ? 'hold' : ''}"><div class="wk"><span class="q-type t${esc(p.type)}">${esc(p.type)}</span>
+        <div class="grow"><div class="nm">${p.seq} · ${esc(p.activity)}</div>${p.criterion ? `<div class="sub">${esc(p.criterion)}</div>` : ''}</div>
+        ${chip(p.status === 'accepted' ? 'ok' : p.status === 'rejected' ? 'bad' : p.type === 'H' ? 'warn' : '', p.status === 'accepted' ? 'Aceite' : p.status === 'rejected' ? 'Rejeitado' : p.type === 'H' ? 'Paragem por assinar' : 'Por fazer')}</div>
+        ${p.signs.length ? `<ul class="q-list">${p.signs.map((s) => `<li>${s.result === 'accepted' ? 'Aceite' : 'Rejeitado'} · ${esc(s.by || '')} · ${esc(fmtTime(s.at))}${s.witness ? ' · cliente: ' + esc(s.witness) : ''}${s.tool ? ' · aparelho ' + esc(s.tool) : ''}${s.note ? ' · «' + esc(s.note) + '»' : ''}</li>`).join('')}</ul>` : ''}
+        ${x.can_manage && p.status !== 'accepted' ? `<div class="acts"><button class="btn small" data-sign="${esc(p.id)}">Assinar</button></div>` : ''}</article>`).join('')}</div>`
+      : `<div class="card">${empty('box', 'Ainda sem plano de inspeção', x.can_manage ? 'Carrega em «+ Ponto de inspeção» e escreve as atividades a inspecionar, por ordem.' : 'A Qualidade escreve aqui as inspeções desta obra.')}</div>`}
+    <h2 class="sec">Não conformidades da obra</h2>
+    ${x.ncs.length ? `<div class="list">${x.ncs.map(ncCard).join('')}</div>` : '<p class="small muted">Nenhuma.</p>'}
+    ${x.can_manage ? `<h2 class="sec">Data Book</h2>
+      <p class="small">Junta o plano de inspeção, as assinaturas, as não conformidades e as paragens num índice com impressão digital. Cada versão fica guardada.</p>
+      <div class="pr-acts"><button class="btn" id="qbook">${ic('doc')}Compilar o Data Book</button></div>
+      ${x.books.length ? `<ul class="q-list">${x.books.map((b) => `<li><button class="linkbtn" data-book="${esc(b.id)}">${esc(fmtTime(b.at))}</button> · ${esc(b.by || '')} · <span class="mono">${esc(b.sha.slice(0, 12))}…</span></li>`).join('')}</ul>` : ''}` : ''}`;
+  box.querySelectorAll('[data-resume]').forEach((b) => b.onclick = () => qResume(b.dataset.resume));
+  box.querySelectorAll('[data-sign]').forEach((b) => b.onclick = () => qSign(x, x.points.find((p) => p.id === b.dataset.sign)));
+  box.querySelectorAll('[data-book]').forEach((b) => b.onclick = async () => {
+    const { data, error: e } = await sb.rpc('mini_quality_databook_get', { p_book: b.dataset.book }); if (e) return toast(friendly(e)); qBookShow(data); });
+  ncWire(box, x.ncs, loadQualitySite);
+  if ($('#qpadd')) $('#qpadd').onclick = () => qPointAdd(x);
+  if ($('#qsnc')) $('#qsnc').onclick = () => qRaise(x.id);
+  if ($('#qsstop')) $('#qsstop').onclick = () => qStop(x.id);
+  if ($('#qbook')) $('#qbook').onclick = async () => {
+    const { data, error: e } = await sb.rpc('mini_quality_databook', { p_site: x.id }); if (e) return toast(friendly(e));
+    toast('Data Book compilado e guardado.'); qBookShow(data); };
+}
+async function qPointAdd(x) {
+  const fd = await askSheet('Novo ponto de inspeção', `<p><b>${esc(x.code)}</b> · ${esc(x.title)}</p>
+    <label for="qpa">Atividade *</label><input id="qpa" name="a" required minlength="3" maxlength="160" placeholder="ex.: teste hidráulico da linha 3">
+    <label for="qpc">Critério de aceitação</label><input id="qpc" name="c" maxlength="300" placeholder="ex.: 1,5 × pressão de projeto durante 30 min, sem fugas">
+    <label>Tipo *</label><div class="chips">${Object.entries(ITP_TYPE).map(([k, l]) => `<label class="chip"><input type="radio" name="t" value="${k}" required>${esc(l)}</label>`).join('')}</div>
+    <p class="small muted">H = paragem: o trabalho seguinte não avança sem este ponto aceite. W e H pedem quem assistiu pelo cliente.</p>`, 'Juntar ao plano');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_itp_add', { p_site: x.id, p: { type: fd.get('t'), activity: String(fd.get('a')).trim(), criterion: String(fd.get('c') || '').trim() } });
+  if (error) return toast(friendly(error));
+  toast('Ponto juntado ao plano.'); loadQualitySite();
+}
+async function qSign(x, p) {
+  if (!p) return;
+  const fd = await askSheet(`Assinar ponto ${p.seq}`, `<p><b>${esc(p.activity)}</b> · ${esc(ITP_TYPE[p.type])}</p>${p.criterion ? `<p class="small">Critério: ${esc(p.criterion)}</p>` : ''}
+    <label>Resultado *</label><div class="chips"><label class="chip"><input type="radio" name="r" value="accepted" required>Aceite</label>
+      <label class="chip"><input type="radio" name="r" value="rejected">Rejeitado</label></div>
+    ${p.type !== 'R' ? '<label for="qsgw">Quem assistiu pelo cliente</label><input id="qsgw" name="w" maxlength="120" placeholder="Nome e função">' : ''}
+    <label for="qsgt">Aparelho de medida</label><select id="qsgt" name="t"><option value="">Nenhum</option>${x.tools.map((t) => `<option value="${esc(t.id)}">${esc(t.tag)} · ${esc(t.name)}</option>`).join('')}</select>
+    <label for="qsgn">Nota</label><input id="qsgn" name="n" maxlength="500" placeholder="Valores medidos, o que falhou">
+    <p class="small muted">Só aparecem os aparelhos com a calibração em dia. Rejeitado abre uma não conformidade sozinho.</p>`, 'Assinar');
+  if (!fd) return;
+  const { data: nc, error } = await sb.rpc('mini_itp_sign', { p_point: p.id, p: { result: fd.get('r'), witness: String(fd.get('w') || '').trim(), tool_id: fd.get('t') || null, note: String(fd.get('n') || '').trim() } });
+  if (error) return toast(friendly(error));
+  toast(nc ? 'Rejeitado. Abriu-se uma não conformidade e a obra foi avisada.' : 'Ponto aceite.'); loadQualitySite();
+}
+// The Data Book index, on screen and ready to print (or save as PDF from the print dialog).
+function qBookShow(b) {
+  if (!b) return;
+  const s = b.summary || {};
+  const d = document.createElement('dialog'); d.className = 'dlg q-book';
+  d.innerHTML = `<div class="printable"><h2>Data Book · ${esc(b.site.code)} · ${esc(b.site.title)}</h2>
+    <p class="small">Compilado a ${esc(fmtTime(b.compiled_at))}${b.site.grade ? ' · grau nuclear ' + esc(b.site.grade) : ''}${b.site.po ? ' · PO ' + esc(b.site.po) : ''}</p>
+    <p class="small">Impressão digital (SHA-256): <span class="mono">${esc(b.sha256)}</span></p>
+    <ul class="fl-papers"><li class="fl-p ok"><span>Pontos de inspeção</span><b>${s.points_accepted}/${s.points} aceites</b></li>
+      <li class="fl-p ${s.holds_open ? 'bad' : 'ok'}"><span>Paragens por assinar</span><b>${s.holds_open}</b></li>
+      <li class="fl-p ${s.ncs_open ? 'bad' : 'ok'}"><span>Não conformidades</span><b>${s.ncs} (${s.ncs_open} abertas)</b></li></ul>
+    <h3>1. Plano de inspeção e ensaio</h3><ol class="q-list">${b.inspection_plan.map((p) => `<li><b>${esc(p.type)}</b> ${esc(p.activity)} · ${p.status === 'accepted' ? 'aceite' : p.status === 'rejected' ? 'rejeitado' : 'por fazer'}${p.signs.length ? ' · ' + p.signs.map((g) => `${esc(g.by || '')} ${esc(fmtTime(g.at))}${g.witness ? ' (cliente: ' + esc(g.witness) + ')' : ''}`).join('; ') : ''}</li>`).join('') || '<li>Sem pontos.</li>'}</ol>
+    <h3>2. Não conformidades</h3><ol class="q-list">${b.nonconformities.map((n) => `<li><b>${esc(n.number)}</b> ${esc(n.title)} · ${esc(NC_STATE[n.status][1])}${n.disposition ? ' · ' + esc(NC_DISP[n.disposition]) : ''}${n.photo_sha256.length ? ' · ' + n.photo_sha256.length + ' foto(s)' : ''}</li>`).join('') || '<li>Nenhuma.</li>'}</ol>
+    <h3>3. Paragens</h3><ol class="q-list">${b.stops.map((p) => `<li>${esc(p.scope)} · ${esc(fmtTime(p.issued_at))}${p.lifted_at ? ' · retomou ' + esc(fmtTime(p.lifted_at)) : ' · ativa'}</li>`).join('') || '<li>Nenhuma.</li>'}</ol></div>
+    <div class="acts noprint"><button class="btn" data-print>${ic('print')}Imprimir ou guardar PDF</button><button class="btn ghost wide" data-x>Fechar</button></div>`;
+  document.body.appendChild(d); d.showModal();
+  d.querySelector('[data-x]').onclick = () => d.close();
+  d.querySelector('[data-print]').onclick = () => window.print();
+  d.addEventListener('close', () => d.remove());
+}
+// Produção (direção de obra): the sites this login runs, what is waiting on them today, and the shortcuts to act.
+// Only reads what the other screens already serve (control room, purchases, trips); each block shows only with its permission.
+const canProd = () => can('obras.gerir') || can('horas.validar_obra');
+function viewProd() {
+  if (!canProd()) return viewClock();   // code guard as well as the database's
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Direção de obra e encarregados</p><h1>Produção</h1></div></div>
+    <div id="prtop">${skel(1)}</div><div id="prbody"></div>`;
+  loadProd();
+}
+async function loadProd() {
+  const top = $('#prtop'); if (!top) return;
+  const [room, buy, trips] = await Promise.all([
+    canSiteDetails() ? sb.rpc('mini_control_room') : { data: { sites: [] } },
+    canBuy() ? sb.rpc('mini_buy_home') : { data: null },
+    canTravel() ? sb.rpc('mini_travel_home') : { data: null }]);
+  if (!top.isConnected) return;
+  if (room.error) { top.innerHTML = `<p>${esc(friendly(room.error))}</p>`; return; }
+  const sites = (room.data && room.data.sites) || [];
+  const sum = (k) => sites.reduce((a, x) => a + (x[k] || 0), 0);
+  const myBuys = buy.data ? buy.data.requests.filter((r) => r.mine && ['pending', 'approved'].includes(r.status)).length : 0;
+  const myTrips = trips.data ? trips.data.trips.filter((t) => t.mine && ['requested', 'approved'].includes(t.status)).length : 0;
+  top.innerHTML = `<div class="fl-sum">
+      <div class="fl-n"><b>${sites.length}</b><span>obra(s) em execução</span></div>
+      <div class="fl-n ok"><b>${sum('on_site')}</b><span>pessoa(s) na obra agora</span></div>
+      <div class="fl-n ${sum('to_validate') ? 'warn' : ''}"><b>${sum('to_validate')}</b><span>dia(s) por validar</span></div>
+      <div class="fl-n ${sum('blocked') + sum('missing_out') ? 'warn' : ''}"><b>${sum('blocked') + sum('missing_out')}</b><span>alerta(s): bloqueados e saídas em falta</span></div></div>
+    <div class="pr-acts">
+      ${can('horas.validar_obra') ? `<button class="btn" data-pgo="horas">${ic('clock')}Validar horas</button>` : ''}
+      ${can('compras.pedir') ? `<button class="btn ghost" data-pgo="compras">${ic('cart')}Pedir compra${myBuys ? ` <small>(${myBuys} à espera)</small>` : ''}</button>` : ''}
+      ${can('viagens.pedir') ? `<button class="btn ghost" data-pgo="viagens">${ic('plane')}Pedir viagem${myTrips ? ` <small>(${myTrips} à espera)</small>` : ''}</button>` : ''}
+      ${can('obras.gerir') ? `<button class="btn ghost" data-pgo="obras">${ic('crane')}Obras</button>` : ''}
+      ${canProcess() ? `<button class="btn ghost" data-pgo="processo">${ic('map')}O meu papel no processo</button>` : ''}
+    </div>`;
+  top.querySelectorAll('[data-pgo]').forEach((b) => b.onclick = () => go(b.dataset.pgo));
+  const body = $('#prbody');
+  if (!sites.length) {
+    body.innerHTML = `<div class="card">${empty('helmet', 'Ainda não diriges nenhuma obra em execução',
+      'Uma obra aparece aqui quando estás atribuído a ela: Pessoas › a tua ficha › Obras.')}</div>`;
+    return;
+  }
+  body.innerHTML = `<h2 class="sec">As tuas obras</h2><div class="list">${sites.map((x) => {
+    const alerts = [[x.blocked, 'não pode(m) entrar'], [x.missing_out, 'saída(s) em falta'], [x.to_validate, 'dia(s) por validar'],
+      [x.expiring, 'documento(s) a caducar'], [x.disputes_open, 'reclamação(ões) de horas']].filter(([n]) => n > 0);
+    const pct = x.budget_hours ? Math.round((x.used || 0) / 60 / x.budget_hours * 100) : null;
+    return `<article class="card pr-site">
+      <div class="wk"><span class="ho-ic">${ic('crane')}</span><div class="grow"><div class="nm">${esc(x.code)} · ${esc(x.title)}</div>
+        <div class="sub">${esc(x.client || 'sem cliente')}${x.grade ? ' · grau ' + esc(x.grade) : ''} · encarregado: ${esc(x.supervisor || '—')} · gestor: ${esc(x.manager || '—')}</div></div>
+        ${chip(alerts.length ? 'warn' : 'ok', alerts.length ? 'Atenção' : 'Em ordem')}</div>
+      <ul class="fl-papers">
+        <li class="fl-p ok"><span>Na obra agora</span><b>${x.on_site || 0} de ${x.team || 0}</b></li>
+        ${x.worked != null ? `<li class="fl-p ok"><span>Horas este mês</span><b>${esc(fmtMin(x.worked))}</b></li>` : ''}
+        ${pct != null ? `<li class="fl-p ${pct > 100 ? 'bad' : pct > 85 ? 'warn' : 'ok'}"><span>Horas gastas do orçamento</span><b>${pct}%</b></li>` : ''}
+        ${alerts.map(([n, t]) => `<li class="fl-p bad"><span>${esc(t)}</span><b>${n}</b></li>`).join('')}
+      </ul>
+      <div class="acts"><button class="btn small" data-panel="${esc(x.id)}">Abrir o dashboard</button>
+        ${can('horas.validar_obra') && x.to_validate ? `<button class="btn ghost small" data-hours="${esc(x.id)}">Validar ${x.to_validate} dia(s)</button>` : ''}</div>
+    </article>`; }).join('')}</div>`;
+  body.querySelectorAll('[data-panel]').forEach((b) => b.onclick = () => { state.panelSite = b.dataset.panel; go('painel'); });
+  body.querySelectorAll('[data-hours]').forEach((b) => b.onclick = () => { store(SITE_KEY, b.dataset.hours); go('horas'); });
+}
 const canTravel = () => ['viagens.pedir', 'viagens.aprovar', 'viagens.gerir'].some(can);
 const TV_MODE = { plane: 'Avião', train: 'Comboio', bus: 'Autocarro', other: 'Outro' };
 const TV_STATE = { requested: ['warn', 'Por aprovar'], approved: ['info', 'Aprovada, por marcar'], booked: ['ok', 'Marcada'], done: ['', 'Feita'],
