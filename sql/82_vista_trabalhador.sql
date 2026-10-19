@@ -389,3 +389,74 @@ END;
 $$;
 REVOKE EXECUTE ON FUNCTION public.mini_my_summary() FROM anon, PUBLIC;
 GRANT EXECUTE ON FUNCTION public.mini_my_summary() TO authenticated, service_role;
+
+-- ---------------------------------------------------------------- V5: a photo or PDF with a holiday / absence request
+-- (art. 254.º CT: the employer may ask for proof of the reason). Health data: the file is seen by the person and by
+-- the office that decides (horas.aprovar), never by the team leader. Files live in the private bucket «pedidos»,
+-- path <tenant>/<person>/<uuid>.<ext>; once attached, the file stays.
+ALTER TABLE core.collaborator_absences ADD COLUMN IF NOT EXISTS attachment_path TEXT;
+ALTER TABLE core.collaborator_absences ADD COLUMN IF NOT EXISTS attachment_sha256 TEXT CHECK (attachment_sha256 ~ '^[0-9a-f]{64}$');
+ALTER TABLE core.collaborator_absences ADD COLUMN IF NOT EXISTS attachment_at TIMESTAMPTZ;
+
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES ('pedidos', 'pedidos', FALSE, 10485760, ARRAY['image/jpeg', 'image/png', 'image/webp', 'application/pdf'])
+ON CONFLICT (id) DO UPDATE SET public = FALSE, file_size_limit = EXCLUDED.file_size_limit,
+    allowed_mime_types = EXCLUDED.allowed_mime_types;
+
+CREATE OR REPLACE FUNCTION private.absence_file_ok(p_name TEXT, p_send BOOLEAN)
+RETURNS BOOLEAN LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
+    SELECT coalesce(p_name, '') ~ '^[0-9a-f-]{36}/[0-9a-f-]{36}/[0-9a-f-]{36}\.(pdf|jpg|png|webp)$'
+       AND NOT (SELECT private.is_external())
+       AND split_part(p_name, '/', 1) = (SELECT private.tenant_id())::text
+       AND CASE WHEN p_send THEN split_part(p_name, '/', 2) = (SELECT private.me())::text
+                ELSE EXISTS (SELECT 1 FROM core.collaborator_absences a WHERE a.attachment_path = p_name AND a.tenant_id = (SELECT private.tenant_id())
+                             AND (a.collaborator_id = (SELECT private.me()) OR (SELECT private.can('horas.aprovar')))) END;
+$$;
+REVOKE EXECUTE ON FUNCTION private.absence_file_ok(TEXT, BOOLEAN) FROM anon, PUBLIC;
+GRANT EXECUTE ON FUNCTION private.absence_file_ok(TEXT, BOOLEAN) TO authenticated;
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'storage' AND tablename = 'objects' AND policyname = 'pedidos_enviar') THEN
+        CREATE POLICY pedidos_enviar ON storage.objects FOR INSERT TO authenticated
+            WITH CHECK (bucket_id = 'pedidos' AND (SELECT private.absence_file_ok(name, TRUE)));
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'storage' AND tablename = 'objects' AND policyname = 'pedidos_ver') THEN
+        CREATE POLICY pedidos_ver ON storage.objects FOR SELECT TO authenticated
+            USING (bucket_id = 'pedidos' AND (SELECT private.absence_file_ok(name, FALSE)));
+    END IF;
+END $$;
+
+-- The worker attaches the file to their own request, while it waits for an answer. Once.
+CREATE OR REPLACE FUNCTION public.mini_absence_attach(p_id UUID, p_file TEXT, p_sha256 TEXT)
+RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE v_me UUID := (SELECT private.me()); a core.collaborator_absences;
+BEGIN
+    IF v_me IS NULL OR NOT (SELECT private.is_fully_active()) THEN RAISE EXCEPTION 'not allowed' USING ERRCODE = 'insufficient_privilege'; END IF;
+    SELECT * INTO a FROM core.collaborator_absences x WHERE x.id = p_id AND x.collaborator_id = v_me FOR UPDATE;
+    IF NOT FOUND THEN RAISE EXCEPTION 'request not found'; END IF;
+    IF a.status <> 'requested' THEN RAISE EXCEPTION 'this request was already answered'; END IF;
+    IF a.attachment_path IS NOT NULL THEN RAISE EXCEPTION 'this request already has a file'; END IF;
+    IF p_sha256 IS NULL OR p_sha256 !~ '^[0-9a-f]{64}$' THEN RAISE EXCEPTION 'the file fingerprint is not valid'; END IF;
+    IF NOT private.absence_file_ok(p_file, TRUE) OR NOT EXISTS (SELECT 1 FROM storage.objects o WHERE o.bucket_id = 'pedidos' AND o.name = p_file) THEN
+        RAISE EXCEPTION 'send the file first';
+    END IF;
+    UPDATE core.collaborator_absences SET attachment_path = p_file, attachment_sha256 = p_sha256, attachment_at = now() WHERE id = a.id;
+END;
+$$;
+REVOKE EXECUTE ON FUNCTION public.mini_absence_attach(UUID, TEXT, TEXT) FROM anon, PUBLIC;
+GRANT EXECUTE ON FUNCTION public.mini_absence_attach(UUID, TEXT, TEXT) TO authenticated, service_role;
+
+-- Which requests have a file: the person sees their own; the office (horas.aprovar) every request of the company.
+CREATE OR REPLACE FUNCTION public.mini_absence_files(p_ids UUID[])
+RETURNS JSONB LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = '' AS $$
+DECLARE v_me UUID := (SELECT private.me()); v_office BOOLEAN := (SELECT private.can('horas.aprovar'));
+BEGIN
+    IF NOT (SELECT private.is_fully_active()) OR (v_me IS NULL AND NOT v_office) THEN RAISE EXCEPTION 'not allowed' USING ERRCODE = 'insufficient_privilege'; END IF;
+    IF cardinality(coalesce(p_ids, '{}')) > 200 THEN RAISE EXCEPTION 'too many requests at once'; END IF;
+    RETURN (SELECT coalesce(jsonb_object_agg(a.id, jsonb_build_object('path', a.attachment_path, 'at', a.attachment_at)), '{}'::jsonb)
+            FROM core.collaborator_absences a
+            WHERE a.id = ANY (p_ids) AND a.attachment_path IS NOT NULL AND a.tenant_id = (SELECT private.tenant_id())
+              AND (a.collaborator_id = v_me OR v_office));
+END;
+$$;
+REVOKE EXECUTE ON FUNCTION public.mini_absence_files(UUID[]) FROM anon, PUBLIC;
+GRANT EXECUTE ON FUNCTION public.mini_absence_files(UUID[]) TO authenticated, service_role;

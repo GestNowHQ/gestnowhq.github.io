@@ -37,9 +37,9 @@ LW=$($P -c "select '$MON'::date - 7"); D=$($P -c "select '$MON'::date - 12"); DW
 DB=$($P -c "select current_date - 160")
 
 # ---- closed doors
-FN="mini_dispute_day,mini_my_day_more,mini_my_weeks,mini_confirm_week,mini_week_confirmations,mini_my_documents,mini_my_kit,mini_my_stay,mini_my_summary"
+FN="mini_dispute_day,mini_my_day_more,mini_my_weeks,mini_confirm_week,mini_week_confirmations,mini_my_documents,mini_my_kit,mini_my_stay,mini_my_summary,mini_absence_attach,mini_absence_files"
 o=$($P -c "select count(*) from pg_proc p where p.pronamespace='public'::regnamespace and p.proname = any(string_to_array('$FN', ',')) and has_function_privilege('anon', p.oid, 'execute')"); t "nenhuma função aberta a anónimos" '[ "$o" = 0 ]'
-o=$($P -c "select count(*) from pg_proc p where p.pronamespace='public'::regnamespace and p.proname = any(string_to_array('$FN', ',')) and has_function_privilege('authenticated', p.oid, 'execute') and p.prosecdef and 'search_path=\"\"' = any(p.proconfig)"); t "9 funções para a app, todas com search_path vazio" '[ "$o" = 9 ]'
+o=$($P -c "select count(*) from pg_proc p where p.pronamespace='public'::regnamespace and p.proname = any(string_to_array('$FN', ',')) and has_function_privilege('authenticated', p.oid, 'execute') and p.prosecdef and 'search_path=\"\"' = any(p.proconfig)"); t "11 funções para a app, todas com search_path vazio" '[ "$o" = 11 ]'
 o=$($P -c "select count(*) from pg_proc p where p.pronamespace='private'::regnamespace and p.proname like 'mw\_%' and has_function_privilege('authenticated', p.oid, 'execute')"); t "ajudantes privados fechados à app" '[ "$o" = 0 ]'
 o=$($P -c "set role anon; select public.mini_my_summary()" 2>&1); t "sem login: recusado" 'echo "$o" | grep -qi "permission denied"'
 o=$(as $W1 "select count(*) from hours.week_confirmations"); t "tabela nova fechada à app" 'echo "$o" | grep -qi "permission denied"'
@@ -139,4 +139,21 @@ o=$(J $W1 "select (s->>'name')||'/'||(s->>'room')||'/'||(s->>'bed')||'/'||(s->>'
 o=$(J $W2 "select jsonb_array_length(public.mini_my_stay())"); t "a cama dos outros não aparece" '[ "$o" = 0 ]'
 o=$(J $W1 "select (x->>'stay')||'/'||(x->'ppe'->>'due')||'/'||(x->>'disputes_open')||'/'||(x->>'week_minutes') from public.mini_my_summary() x"); t "resumo: casa, 1 EPI a trocar, 1 reclamação, 40 h" '[ "$o" = "Casa 82 (inventada)/1/1/2400" ]'
 o=$(as $O "select public.mini_my_summary()"); t "outra empresa (sem pessoa): recusado" 'echo "$o" | grep -qi "not allowed"'
+
+# ---- V5: a file with an absence request (only the person and the office see it)
+AB=$(J $W1 "select public.mini_request_absence('medical_appointment', current_date + 2, current_date + 2, 120, 'Consulta no centro de saúde')")
+F1="$T0/$C1/$(cat /proc/sys/kernel/random/uuid).pdf"; F2="$T0/$C2/$(cat /proc/sys/kernel/random/uuid).pdf"; SH=$(printf '%064d' 7)
+o=$(J $W1 "select private.absence_file_ok('$F1', true)::text || private.absence_file_ok('$F2', true)::text"); t "só envia ficheiros para a sua pasta" '[ "$o" = truefalse ]'
+o=$(as $W1 "select public.mini_absence_attach('$AB', '$F1', '$SH')"); t "ficheiro que não foi enviado: recusado" 'echo "$o" | grep -qi "send the file first"'
+$P -c "insert into storage.objects (bucket_id, name) values ('pedidos', '$F1'), ('pedidos', '$F2')" >/dev/null
+o=$(as $W2 "select public.mini_absence_attach('$AB', '$F2', '$SH')"); t "outro trabalhador não junta ao pedido dos outros" 'echo "$o" | grep -qi "request not found"'
+o=$(as $W1 "select public.mini_absence_attach('$AB', '$F1', 'x')"); t "impressão digital inválida: recusada" 'echo "$o" | grep -qi "fingerprint"'
+as $W1 "select public.mini_absence_attach('$AB', '$F1', '$SH')" >/dev/null
+o=$(J $W1 "select public.mini_absence_files(array['$AB'::uuid])->'$AB'->>'path'"); t "o trabalhador vê o seu ficheiro" '[ "$o" = "$F1" ]'
+o=$(as $W1 "select public.mini_absence_attach('$AB', '$F1', '$SH')"); t "só um ficheiro por pedido" 'echo "$o" | grep -qi "already has a file"'
+o=$(J $R "select public.mini_absence_files(array['$AB'::uuid]) ? '$AB'"); t "o escritório vê o ficheiro" '[ "$o" = t ]'
+o=$(J $E "select public.mini_absence_files(array['$AB'::uuid])::text"); t "o encarregado não (dados de saúde)" '[ "$o" = "{}" ]'
+o=$(J $W2 "select public.mini_absence_files(array['$AB'::uuid])::text"); t "outro trabalhador não" '[ "$o" = "{}" ]'
+o=$(J $E "select private.absence_file_ok('$F1', false)"); t "o encarregado não abre o ficheiro" '[ "$o" = f ]'
+o=$(J $O "select private.absence_file_ok('$F1', false)"); t "outra empresa não abre o ficheiro" '[ "$o" = f ]'
 echo "t82: $ok OK, $bad FALHA"
