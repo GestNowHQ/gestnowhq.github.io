@@ -175,7 +175,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--b
 input::placeholder, textarea::placeholder { color: var(--ink-3); }
 textarea { min-height: 96px; }
 button { cursor: pointer; font: inherit; }
-.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: var(--tap); padding: 0 20px; border: 1px solid var(--brand-fill); border-radius: var(--r-md);
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: var(--tap); padding: 0 16px; border: 1px solid var(--brand-fill); border-radius: var(--r-md);
   background: var(--brand-fill); color: var(--on-brand-fill); font-weight: 650; font-size: var(--t-md); line-height: 1.2; text-decoration: none; box-shadow: var(--sh-btn);
   transition: transform .12s var(--ease), background .15s, box-shadow .15s, filter .15s; }
 .btn:hover { filter: brightness(1.1); }
@@ -1625,10 +1625,13 @@ dialog.prop { max-width: 820px; }
 .sc-head .acts { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .sc-climb label { font-weight: 650; font-size: var(--t-lg); }
 .sc-climb .wk { display: flex; gap: 8px; } .sc-climb .wk input { flex: 1; min-width: 0; }
-.sc-ans { border-top: 10px solid var(--line); } .sc-ans.green { border-top-color: var(--ok-fill); } .sc-ans.amber { border-top-color: var(--warn-fill); } .sc-ans.red { border-top-color: var(--bad-fill); }
-.sc-big { display: flex; align-items: center; gap: 12px; font-size: var(--t-xl); line-height: 1.2; margin: 4px 0 12px; }
-.sc-big .i { width: 40px; height: 40px; flex: none; }
-.sc-ans.green .sc-big { color: var(--ok-fill); } .sc-ans.red .sc-big { color: var(--bad-fill); } .sc-ans.amber .sc-big .i { color: var(--warn-fill); }
+/* the answer to «posso subir?» is a status headline: a full-width coloured band (same look as .status-hero) */
+.sc-ans { border-top: 0; }
+.sc-big { display: flex; align-items: center; gap: 16px; font-size: var(--t-xl); line-height: 1.15; margin: 0 0 16px; padding: 16px 20px; border-radius: var(--r-lg); background: var(--surface-2); }
+.sc-big b { font-weight: 800; text-transform: uppercase; letter-spacing: -.01em; }
+.sc-big .i { width: 48px; height: 48px; padding: 10px; flex: none; border-radius: 50%; stroke-width: 2.8; background: rgba(255,255,255,.2); }
+.sc-ans.green .sc-big { background: var(--ok-fill); color: var(--on-fill); } .sc-ans.red .sc-big { background: var(--bad-fill); color: var(--on-fill); }
+.sc-ans.amber .sc-big { background: var(--warn-fill); color: var(--on-warn-fill); } .sc-ans.amber .sc-big .i { background: rgba(0,0,0,.08); }
 .sc-ans .acts { display: flex; flex-direction: column; gap: 8px; }
 .sc-tag { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 12px; border: 3px solid var(--paper-ink); border-radius: var(--r-sm); background: var(--paper); color: var(--paper-ink); }
 .sc-tagno { font-size: 40px; letter-spacing: .02em; }
