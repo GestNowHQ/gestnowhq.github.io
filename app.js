@@ -37,6 +37,24 @@ const REASON_PREFIX = {
   'skill_missing:': 'Falta a competência: ',
 };
 const ERRORS = [
+  [/say what you need/i, 'Escreve o que é preciso (3 letras ou mais) ou escolhe do catálogo.'],
+  [/this request is not waiting for approval/i, 'Este pedido já não está à espera de aprovação.'],
+  [/you cannot approve your own request/i, 'Não podes aprovar o teu próprio pedido: outra pessoa do Secretariado aprova.'],
+  [/say why it is refused/i, 'Escreve porque recusas (5 letras ou mais).'],
+  [/this request can no longer be cancelled/i, 'Este pedido já não pode ser cancelado (já foi encomendado ou decidido).'],
+  [/say why it is cancelled/i, 'Escreve porque cancelas.'],
+  [/name the supplier/i, 'Escreve o nome do fornecedor.'],
+  [/tax number: 9 digits/i, 'NIF: 9 algarismos.'],
+  [/this supplier already exists/i, 'Este fornecedor já existe.'],
+  [/choose what to order/i, 'Escolhe o que vais encomendar.'],
+  [/supplier not found/i, 'Escolhe o fornecedor.'],
+  [/request "(.+?)" is not approved yet/i, 'O pedido «$1» ainda não está aprovado: o Secretariado tem de aprovar primeiro.'],
+  [/price of "(.+?)" \(([\d.]+) €\) is above what was approved \(([\d.]+) €\)/i, 'O preço de «$1» ($2 €) passa o que foi aprovado ($3 €). Pede nova aprovação ou negoceia o preço.'],
+  [/receiving more than ordered/i, 'Estás a receber mais do que foi encomendado.'],
+  [/delivery note/i, 'Escreve o número da guia de remessa do fornecedor.'],
+  [/only an order with nothing received/i, 'Só se cancela uma encomenda de que ainda não chegou nada.'],
+  [/only the administration changes the approval limit/i, 'Só a administração muda o limite de aprovação.'],
+  [/order line not found/i, 'Linha da encomenda não encontrada.'],
   [/not enough stock of (.+?) \(there are ([\d.]+)\)/i, 'Não há stock suficiente de $1 (há $2).'],
   [/the card is not this person/i, 'Este cartão não é desta pessoa. Quem recebe é quem assina, com o próprio cartão.'],
   [/needs a reason: .*early/i, 'Ainda não chegou a data de troca. Escreve porquê (ex.: rasgado, perdido) e assina outra vez.'],
@@ -469,11 +487,11 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '37';
+const APP_VERSION = '38';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
-const MORE_ORDER = ['equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'obras', 'orcamentos', 'armazem', 'processo', 'clientes'];
+const MORE_ORDER = ['equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'obras', 'orcamentos', 'armazem', 'compras', 'processo', 'clientes'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -622,6 +640,7 @@ async function boot() {
   nav.querySelector('[data-view=lmra]').hidden = worker || state.offline || !canLmra();
   nav.querySelector('[data-view=emergencia]').hidden = worker || !canEmergency();
   nav.querySelector('[data-view=armazem]').hidden = worker || state.offline || !canWh();
+  nav.querySelector('[data-view=compras]').hidden = worker || state.offline || !canBuy();
   if (me.role === 'supervisor' && !state.booted && state.view === 'picar' && canSiteDetails()) state.view = 'equipa';
   state.booted = true;
   if (state.view === 'minhas' && !me.collaborator_id) state.view = (TABS[me.role] || TABS.supervisor)[0];
@@ -974,7 +993,7 @@ function go(view) {
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
      ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients,
      processo: viewProcess, orcamentos: viewEstimates, lmra: viewLmra, emergencia: viewEmergency,
-     armazem: viewWarehouse, fichaepi: viewPpeRecord }[view] || viewClock)();
+     armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy }[view] || viewClock)();
   checkEmergencyBar();
 }
 
@@ -2670,6 +2689,7 @@ const TOUR_TEXT = {
   naobra: 'Na obra: quem está lá dentro neste momento.',
   emergencia: 'Emergência: carregas no botão vermelho e cada pessoa pica o cartão no ponto de encontro. Vês logo quem está em falta, com o telefone.',
   lmra: 'LMRA: a análise de risco antes de começar. Um «Não» para o trabalho; com tudo «Sim», a equipa assina com o cartão.',
+  compras: 'Compras: pedes o que falta; acima do limite o Secretariado aprova; depois encomenda-se e regista-se o que chega.',
   armazem: 'Armazém: EPIs, farda e ferramentas. Quem recebe assina com o cartão; os tamanhos vêm da ficha.',
   horas: 'Horas: as horas da equipa, dia a dia, para corrigir e validar.',
   minhas: 'As minhas horas: as tuas horas, o teu mês, e os pedidos de férias e faltas. Se um dia estiver mal, dizes aqui.',
@@ -5742,10 +5762,11 @@ async function whStock() {
           <div class="sub">${esc(WH_CAT[f.category] || f.category)} · ${tot} ${esc(f.items[0].unit)}${f.items[0].life_days ? ` · troca a cada ${f.items[0].life_days} dias` : ''}${f.items[0].allowance ? ` · ${f.items[0].allowance} por ano` : ''}</div></div>
           ${low ? chip('warn', 'no mínimo', 'warn') : ''}</div>
         <div class="wh-sizes">${f.items.map((x) => `<span class="wh-sz ${x.low ? 'low' : Number(x.qty) ? '' : 'zero'}" title="mínimo ${Number(x.min)}"><b>${esc(x.size || 'un')}</b>${Number(x.qty)}</span>`).join('')}</div>
-        ${m ? `<div class="acts"><button class="btn ghost small" data-in="${i}">Entrada</button><button class="btn ghost small" data-min="${i}">Mínimo</button><button class="btn ghost small" data-edit="${i}">Editar</button></div>` : ''}</article>`; }).join('')}</div>`
+        ${m || can('compras.pedir') ? `<div class="acts">${can('compras.pedir') ? `<button class="btn ghost small" data-buy="${i}">Pedir compra</button>` : ''}${m ? `<button class="btn ghost small" data-in="${i}">Entrada</button><button class="btn ghost small" data-min="${i}">Mínimo</button><button class="btn ghost small" data-edit="${i}">Editar</button>` : ''}</div>` : ''}</article>`; }).join('')}</div>`
       : `<div class="card">${empty('box', 'Ainda sem artigos', m ? 'Carrega em «Lista base» para criar os EPIs e a farda do costume, ou em «+ Outro EPI ou artigo».' : 'Quem gere o armazém cria os artigos.')}</div>`}`;
   if ($('#whnew')) $('#whnew').onclick = () => itemSheet(null);
   if ($('#whbase')) $('#whbase').onclick = () => whBaseList(have);
+  body.querySelectorAll('[data-buy]').forEach((b) => b.onclick = () => { const f = fams[+b.dataset.buy]; const it = f.items.find((x) => x.low) || f.items[0]; buySheet({ item: it.id, qty: Math.max(1, Number(it.min) * 2 - Number(it.qty)) }); });
   body.querySelectorAll('[data-in]').forEach((b) => b.onclick = () => stockIn(fams[+b.dataset.in]));
   body.querySelectorAll('[data-min]').forEach((b) => b.onclick = () => setMin(fams[+b.dataset.min]));
   body.querySelectorAll('[data-edit]').forEach((b) => b.onclick = () => itemSheet(fams[+b.dataset.edit]));
@@ -5914,4 +5935,202 @@ async function loadWorkerKit(id) {
       ${p.tools.map((t) => `<li>${ic('key')} ${esc(t.name)} <b>${esc(t.tag)}</b> ${t.late ? chip('bad', 'atrasada') : ''}</li>`).join('')}</ul>` : '<p class="small muted">Nada entregue.</p>'}
     <button class="btn ghost small" id="fwhrec">${ic('doc')}Ficha de EPI</button>`;
   $('#fwhrec').onclick = () => { state.recordFor = id; state.recordBack = 'ficha'; go('fichaepi'); };
+}
+
+// ============================================================================ Compras (v38)
+// Ask → (Secretariado approves above the company's limit) → order to a supplier → receive. The database decides every
+// rule (sql/66); this screen only shows what each person can do next.
+const canBuy = () => ['compras.pedir', 'compras.aprovar', 'compras.gerir', 'armazem.gerir'].some(can);
+const BUY_ST = { pending: ['warn', 'à espera de aprovação'], approved: ['ok', 'aprovado'], ordered: ['info', 'encomendado'],
+  rejected: ['bad', 'recusado'], cancelled: ['', 'cancelado'] };
+const PO_ST = { issued: ['info', 'encomendada'], partially_received: ['warn', 'chegou uma parte'], received: ['ok', 'recebida'], cancelled: ['', 'cancelada'] };
+function viewBuy() {
+  if (!canBuy()) return viewClock();   // code guard as well as the database's
+  if (!state.buy) state.buy = { tab: null, pick: [] };
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Pedidos, aprovações e encomendas</p><h1>Compras</h1></div></div>
+    <div id="bytop">${skel(1)}</div><div id="bybody"></div>`;
+  loadBuy();
+}
+async function loadBuy() {
+  const top = $('#bytop'); if (!top) return;
+  const { data: h, error } = await sb.rpc('mini_buy_home');
+  if (!top.isConnected) return;
+  if (error) { top.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  const B = state.buy; B.home = h;
+  const toApprove = h.requests.filter((r) => r.needs_person && ['pending', 'approved'].includes(r.status));
+  const toOrder = h.requests.filter((r) => r.status === 'approved' && !r.needs_person);
+  const toReceive = h.orders.filter((o) => ['issued', 'partially_received'].includes(o.status));
+  Object.assign(B, { toApprove, toOrder, toReceive });
+  const tabs = [['pedidos', 'Pedidos'], h.can_approve && ['aprovar', `Aprovar${toApprove.length ? ` (${toApprove.length})` : ''}`],
+    h.can_order && ['encomendar', `Encomendar${toOrder.length ? ` (${toOrder.length})` : ''}`],
+    h.can_receive && ['receber', `Receber${toReceive.length ? ` (${toReceive.length})` : ''}`]].filter(Boolean);
+  if (!B.tab || !tabs.find(([k]) => k === B.tab)) B.tab = h.can_approve && toApprove.length ? 'aprovar' : h.can_order && toOrder.length ? 'encomendar' : h.can_receive && toReceive.length ? 'receber' : 'pedidos';
+  top.innerHTML = `<div class="by-limit card"><div class="grow"><b>Compras acima de ${esc(eur2(h.limit))}</b> precisam de aprovação do Secretariado. Até esse valor ficam aprovadas na hora.</div>
+      ${h.is_admin ? '<button class="btn ghost small" id="bylim">Mudar valor</button>' : ''}</div>
+    ${h.can_ask ? `<button class="btn big wide" id="bynew">+ Novo pedido de compra</button>` : ''}
+    <div class="seg by-tabs" role="tablist">${tabs.map(([k, l]) => `<button role="tab" data-bytab="${k}" aria-selected="${B.tab === k}">${esc(l)}</button>`).join('')}</div>`;
+  top.querySelectorAll('[data-bytab]').forEach((b) => b.onclick = () => { B.tab = b.dataset.bytab; loadBuy(); });
+  if ($('#bynew')) $('#bynew').onclick = () => buySheet({});
+  if ($('#bylim')) $('#bylim').onclick = buyLimit;
+  ({ pedidos: buyList, aprovar: buyApprove, encomendar: buyOrder, receber: buyReceive }[B.tab] || buyList)();
+}
+function buyCard(r, acts = '') {
+  const [k, l] = r.needs_person && r.status === 'approved' ? BUY_ST.pending : BUY_ST[r.status] || ['', r.status];
+  const where = r.site ? `Obra ${r.site}` : r.warehouse ? r.warehouse : '';
+  return `<article class="card by-req ${r.needs_person && ['pending', 'approved'].includes(r.status) ? 'wait' : ''}" data-id="${esc(r.id)}">
+    <div class="wk"><div class="grow"><div class="nm">${esc(r.desc)}</div>
+      <div class="sub">${Number(r.qty)} ${esc(r.unit)} · ${r.total > 0 ? `<b>${esc(eur2(r.total))}</b>` : '<b>sem preço</b>'}${where ? ' · ' + esc(where) : ''}</div>
+      <div class="sub">${esc(r.by || 'Automático')} · ${esc(fmtTime(r.at))}${r.needed_by ? ` · preciso até <b>${esc(fmtDate(r.needed_by))}</b>` : ''}</div></div>
+      ${chip(k, r.status === 'ordered' && r.order ? `encomendado ${r.order.number}` : l)}</div>
+    ${r.source === 'auto_min_stock' ? `<p class="small muted" style="margin:6px 0 0">Reposição automática: o stock chegou ao mínimo.</p>` : ''}
+    ${r.note ? `<p class="small" style="margin:6px 0 0">«${esc(r.note)}»</p>` : ''}
+    ${r.decision ? `<p class="small ${r.decision.approve ? '' : 'by-no'}" style="margin:6px 0 0">${r.decision.approve ? 'Aprovado' : 'Recusado'} por ${esc(r.decision.by || '')}${r.decision.comment ? `: «${esc(r.decision.comment)}»` : ''}</p>` : ''}
+    ${r.cancel_reason ? `<p class="small muted" style="margin:6px 0 0">Cancelado: «${esc(r.cancel_reason)}»</p>` : ''}
+    ${r.order && r.status === 'ordered' ? `<p class="small" style="margin:6px 0 0">${esc(r.order.supplier)} · ${Number(r.order.received) >= Number(r.qty) ? 'já chegou' : r.order.expected ? 'chega a ' + esc(fmtDate(r.order.expected)) : 'à espera do fornecedor'}</p>` : ''}
+    ${acts ? `<div class="acts">${acts}</div>` : ''}</article>`;
+}
+function buyList() {
+  const B = state.buy; const body = $('#bybody'); if (!body) return;
+  const rs = B.home.requests;
+  body.innerHTML = rs.length ? `<div class="list">${rs.map((r) => buyCard(r, r.mine && ['pending', 'approved'].includes(r.status) ? `<button class="btn ghost small" data-cancel="${esc(r.id)}">Cancelar pedido</button>` : '')).join('')}</div>`
+    : `<div class="card">${empty('cart', 'Ainda sem pedidos', B.home.can_ask ? 'Carrega em «+ Novo pedido de compra»: diz o que precisas, quanto, e para que obra.' : 'Os pedidos aparecem aqui.')}</div>`;
+  body.querySelectorAll('[data-cancel]').forEach((b) => b.onclick = () => buyCancel(b.dataset.cancel));
+}
+function buyApprove() {
+  const B = state.buy; const body = $('#bybody'); if (!body) return;
+  body.innerHTML = B.toApprove.length ? `<div class="list">${B.toApprove.map((r) => buyCard(r, r.mine && !B.home.is_admin
+      ? '<span class="small muted">É um pedido teu: outra pessoa do Secretariado aprova.</span>'
+      : `<button class="btn ghost small" data-no="${esc(r.id)}">Recusar</button><button class="btn small" data-yes="${esc(r.id)}">${ic('ok')}Aprovar</button>`)).join('')}</div>`
+    : `<div class="card">${empty('ok', 'Nada para aprovar', 'Quando alguém pedir uma compra acima do limite, aparece aqui e recebes um aviso.')}</div>`;
+  body.querySelectorAll('[data-yes]').forEach((b) => b.onclick = () => buyDecide(b.dataset.yes, true));
+  body.querySelectorAll('[data-no]').forEach((b) => b.onclick = () => buyDecide(b.dataset.no, false));
+}
+async function buyDecide(id, yes) {
+  const r = state.buy.home.requests.find((x) => x.id === id);
+  const fd = await askSheet(yes ? 'Aprovar a compra' : 'Recusar a compra', `<p><b>${esc(r.desc)}</b><br>${Number(r.qty)} ${esc(r.unit)} · ${r.total > 0 ? esc(eur2(r.total)) : 'sem preço'}</p>
+    <label for="bc">${yes ? 'Nota (opcional)' : 'Porquê? *'}</label><textarea id="bc" name="c" rows="2" maxlength="300" ${yes ? '' : 'required minlength="5"'}
+      placeholder="${yes ? 'ex.: comprar no fornecedor do costume' : 'ex.: já temos no armazém de Sines'}"></textarea>
+    ${yes && !(r.total > 0) ? '<p class="small muted">Não tem preço: quem encomenda pode gastar até ao limite da empresa, ou volta a pedir aprovação.</p>' : ''}`, yes ? 'Aprovar' : 'Recusar');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_buy_decide', { p_req: id, p_approve: yes, p_comment: String(fd.get('c') || '').trim() || null });
+  if (error) return toast(friendly(error));
+  toast(yes ? 'Aprovado. Quem pediu já foi avisado.' : 'Recusado. Quem pediu já foi avisado.'); loadBuy();
+}
+async function buyCancel(id) {
+  const fd = await askSheet('Cancelar o pedido', '<label for="bx">Porquê? *</label><input id="bx" name="x" required minlength="3" maxlength="300" placeholder="ex.: já não é preciso">', 'Cancelar pedido');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_buy_cancel', { p_req: id, p_reason: String(fd.get('x')).trim() });
+  if (error) return toast(friendly(error));
+  toast('Pedido cancelado.'); loadBuy();
+}
+// A new request. From the warehouse catalogue (sizes, price) or free text (a service, a rental, something new).
+async function buySheet(pre) {
+  const B = state.buy || {}; const sites = activeSites(); const cur = currentSite();
+  let items = [];
+  if (canWh()) { const h = await sb.rpc('mini_wh_home'); if (!h.error) { const s = await sb.rpc('mini_wh_stock', { p_warehouse: h.data.central }); items = s.data || []; } }
+  const limit = (B.home && B.home.limit) ?? 50;
+  const fd = await askSheet('Novo pedido de compra', `
+    ${items.length ? `<label for="bi">Do catálogo do armazém</label><select id="bi" name="item"><option value="">— Outra coisa (escrevo em baixo) —</option>
+      ${items.map((x) => `<option value="${esc(x.id)}" data-cost="${Number(x.unit_cost) || ''}" data-unit="${esc(x.unit)}" ${pre.item === x.id ? 'selected' : ''}>${esc(x.name)} (tem ${Number(x.qty)})</option>`).join('')}</select>` : ''}
+    <label for="bd">O que é preciso${items.length ? ' (se não está no catálogo)' : ''} *</label><input id="bd" name="desc" maxlength="300" placeholder="ex.: Aluguer de plataforma elevatória 12 m, 1 semana" value="${esc(pre.desc || '')}">
+    <div class="row"><div><label for="bq">Quantidade *</label><input id="bq" name="qty" type="number" min="0.001" step="any" inputmode="decimal" required value="${esc(pre.qty || 1)}"></div>
+      <div><label for="bp">Preço por unidade (€)</label><input id="bp" name="price" type="number" min="0" step="0.01" inputmode="decimal" placeholder="se souberes"></div></div>
+    <p class="small by-hint" id="bh"></p>
+    <div class="row"><div><label for="bs">Para</label><select id="bs" name="site"><option value="">Armazém da empresa</option>${sites.map((s) => `<option value="${esc(s.id)}" ${!pre.item && cur && cur.id === s.id ? 'selected' : ''}>Obra ${esc(s.cost_center_code)} · ${esc(s.title)}</option>`).join('')}</select></div>
+      <div><label for="bn">Preciso até</label><input id="bn" name="need" type="date" min="${esc(isoDay(new Date()))}"></div></div>
+    <label for="bo">Nota</label><input id="bo" name="note" maxlength="500" placeholder="ex.: marca, medida, porque é urgente">`, 'Pedir', (d) => {
+    const hint = () => {
+      const it = d.querySelector('#bi') && d.querySelector('#bi').selectedOptions[0];
+      const p = Number(d.querySelector('#bp').value) || (it && Number(it.dataset.cost)) || 0; const q = Number(d.querySelector('#bq').value) || 0;
+      const t = Math.round(p * q * 100) / 100;
+      d.querySelector('#bd').required = !(it && it.value);
+      d.querySelector('#bh').innerHTML = !p ? `Sem preço: vai para aprovação do Secretariado.`
+        : t > limit ? `Total ${esc(eur2(t))}: <b>acima de ${esc(eur2(limit))}</b>, vai para aprovação do Secretariado.`
+          : `Total ${esc(eur2(t))}: <b>fica aprovado na hora.</b>`;
+    };
+    d.querySelectorAll('input, select').forEach((x) => x.addEventListener('input', hint)); hint();
+  });
+  if (!fd) return;
+  const { data, error } = await sb.rpc('mini_buy_request', { p_item: fd.get('item') || null, p_desc: String(fd.get('desc') || '').trim() || null,
+    p_qty: Number(fd.get('qty')), p_unit_price: fd.get('price') ? Number(fd.get('price')) : null, p_site: fd.get('site') || null, p_warehouse: null,
+    p_needed_by: fd.get('need') || null, p_note: String(fd.get('note') || '').trim() || null });
+  if (error) return toast(friendly(error));
+  toast(data.auto ? 'Pedido aprovado na hora. Segue para encomenda.' : 'Pedido enviado ao Secretariado para aprovação.');
+  if (state.view === 'compras') { state.buy.tab = 'pedidos'; loadBuy(); }
+}
+async function buyLimit() {
+  const fd = await askSheet('Limite de aprovação', `<p class="small muted">Os pedidos até este valor ficam aprovados na hora. Acima dele, o Secretariado aprova.</p>
+    <label for="bl">Valor (€) *</label><input id="bl" name="v" type="number" min="0" max="1000000" step="1" inputmode="decimal" required value="${Number(state.buy.home.limit)}">`, 'Guardar');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_buy_limit_save', { p_amount: Number(fd.get('v')) });
+  if (error) return toast(friendly(error));
+  toast('Limite guardado.'); loadBuy();
+}
+function buyOrder() {
+  const B = state.buy; const body = $('#bybody'); if (!body) return;
+  B.pick = B.pick.filter((id) => B.toOrder.find((r) => r.id === id));
+  body.innerHTML = `<div class="acts-row"><button class="btn ghost" id="bysup">+ Fornecedor</button></div>
+    ${B.toOrder.length ? `<p class="small muted">Escolhe o que vai no mesmo fornecedor e carrega em «Encomendar».</p>
+      <div class="list">${B.toOrder.map((r) => `<label class="card by-pick"><input type="checkbox" data-pick="${esc(r.id)}" ${B.pick.includes(r.id) ? 'checked' : ''}>
+        <div class="grow"><div class="nm">${esc(r.desc)}</div><div class="sub">${Number(r.qty)} ${esc(r.unit)} · ${r.total > 0 ? esc(eur2(r.total)) : 'sem preço'} · ${esc(r.site ? 'Obra ' + r.site : r.warehouse || '')} · ${esc(r.by || 'Automático')}</div></div></label>`).join('')}</div>
+      <button class="btn big wide" id="bygo" ${B.pick.length ? '' : 'disabled'}>Encomendar ${B.pick.length ? `(${B.pick.length})` : ''}</button>`
+      : `<div class="card">${empty('ok', 'Nada para encomendar', 'Os pedidos aprovados aparecem aqui.')}</div>`}`;
+  $('#bysup').onclick = () => buySupplier().then((ok) => ok && loadBuy());
+  body.querySelectorAll('[data-pick]').forEach((c) => c.onchange = () => { const id = c.dataset.pick; B.pick = c.checked ? [...B.pick, id] : B.pick.filter((x) => x !== id); buyOrder(); });
+  if ($('#bygo')) $('#bygo').onclick = buyOrderSheet;
+}
+async function buySupplier() {
+  const fd = await askSheet('Novo fornecedor', `<label for="sn2">Nome *</label><input id="sn2" name="n" required minlength="2" maxlength="200" placeholder="ex.: Ferragens do Sul, Lda">
+    <div class="row"><div><label for="sf">NIF</label><input id="sf" name="f" maxlength="11" inputmode="numeric" placeholder="9 algarismos"></div>
+      <div><label for="se">Email</label><input id="se" name="e" type="email" maxlength="200"></div></div>`, 'Criar');
+  if (!fd) return false;
+  const { error } = await sb.rpc('mini_buy_supplier_add', { p_name: String(fd.get('n')).trim(), p_nif: String(fd.get('f') || '').replace(/\s/g, '') || null, p_email: String(fd.get('e') || '').trim() || null });
+  if (error) { toast(friendly(error)); return false; }
+  toast('Fornecedor criado.'); return true;
+}
+async function buyOrderSheet() {
+  const B = state.buy; const rs = B.pick.map((id) => B.toOrder.find((r) => r.id === id)).filter(Boolean);
+  if (!B.home.suppliers.length) { toast('Cria primeiro o fornecedor.'); if (await buySupplier()) await loadBuy(); return; }
+  const fd = await askSheet('Encomendar', `<label for="os">Fornecedor *</label><select id="os" name="sup" required><option value="">—</option>${B.home.suppliers.map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('')}</select>
+    <h3>Preços finais</h3>${rs.map((r) => `<div class="by-line"><div class="grow"><b>${esc(r.desc)}</b><small>${Number(r.qty)} ${esc(r.unit)}${r.total > 0 ? ' · pedido: ' + esc(eur2(r.total)) : ''}</small></div>
+      <input name="p_${esc(r.id)}" type="number" min="0" step="0.01" inputmode="decimal" required aria-label="Preço por unidade de ${esc(r.desc)}" placeholder="€/un" value="${r.price != null ? Number(r.price) : ''}"></div>`).join('')}
+    <div class="row"><div><label for="oe">Chega até</label><input id="oe" name="exp" type="date" min="${esc(isoDay(new Date()))}"></div></div>
+    <label for="on">Nota para a encomenda</label><input id="on" name="note" maxlength="500" placeholder="ex.: entregar na portaria da obra">
+    <p class="small muted">Se o preço passar mais de 10 % do aprovado (ou o limite, quando foi aprovado na hora), a app recusa e é preciso pedir nova aprovação.</p>`, 'Encomendar');
+  if (!fd) return;
+  const { data, error } = await sb.rpc('mini_buy_order', { p_reqs: rs.map((r) => r.id), p_prices: rs.map((r) => Number(fd.get('p_' + r.id))),
+    p_supplier: fd.get('sup'), p_expected: fd.get('exp') || null, p_note: String(fd.get('note') || '').trim() || null });
+  if (error) return toast(friendly(error));
+  B.pick = []; toast(`Encomenda ${data.number} feita: ${eur2(data.total)}.`); B.tab = 'receber'; loadBuy();
+}
+function buyReceive() {
+  const B = state.buy; const body = $('#bybody'); if (!body) return;
+  const os = B.home.orders;
+  body.innerHTML = os.length ? `<div class="list">${os.map((o) => { const [k, l] = PO_ST[o.status] || ['', o.status]; const open = ['issued', 'partially_received'].includes(o.status);
+    return `<article class="card by-po"><div class="wk"><span class="wh-tag">${esc(o.number)}</span><div class="grow"><div class="nm">${esc(o.supplier)}</div>
+        <div class="sub">${esc(eur2(o.total))}${o.site ? ' · Obra ' + esc(o.site) : ''}${o.expected ? ' · chega a ' + esc(fmtDate(o.expected)) : ''} · ${esc(o.by || '')}</div></div>${chip(k, l)}</div>
+      ${o.note ? `<p class="small" style="margin:6px 0 0">«${esc(o.note)}»</p>` : ''}
+      <ul class="by-lines">${(o.lines || []).map((x) => { const left = Number(x.qty) - Number(x.received);
+        return `<li><span class="grow">${esc(x.desc)}<small>${Number(x.received)} de ${Number(x.qty)} ${esc(x.unit)} · ${esc(eur2(x.price))}/un · ${x.item ? 'vai para ' + esc(x.warehouse || 'o armazém') : 'custo da obra ' + esc(x.site || '')}</small></span>
+          ${open && left > 0 && B.home.can_receive ? `<button class="btn small" data-rcv="${esc(x.id)}" data-left="${left}" data-item="${x.item ? 1 : ''}">Chegou</button>` : left <= 0 ? chip('ok', 'recebido') : ''}</li>`; }).join('')}</ul>
+      ${o.status === 'issued' && B.home.can_order ? `<div class="acts"><button class="btn ghost small" data-pocancel="${esc(o.id)}">Cancelar encomenda</button></div>` : ''}</article>`; }).join('')}</div>`
+    : `<div class="card">${empty('box', 'Sem encomendas', 'As encomendas feitas aparecem aqui até chegarem.')}</div>`;
+  body.querySelectorAll('[data-rcv]').forEach((b) => b.onclick = () => buyReceiveLine(b.dataset.rcv, Number(b.dataset.left), !!b.dataset.item));
+  body.querySelectorAll('[data-pocancel]').forEach((b) => b.onclick = async () => {
+    const fd = await askSheet('Cancelar a encomenda', '<label for="pc">Porquê? *</label><input id="pc" name="x" required minlength="3" maxlength="300" placeholder="ex.: o fornecedor não tem">', 'Cancelar encomenda');
+    if (!fd) return;
+    const { error } = await sb.rpc('mini_buy_order_cancel', { p_order: b.dataset.pocancel, p_reason: String(fd.get('x')).trim() });
+    if (error) return toast(friendly(error));
+    toast('Encomenda cancelada. Os pedidos voltam a «Encomendar».'); loadBuy();
+  });
+}
+async function buyReceiveLine(id, left, toStock) {
+  const need = state.buy.home.need_note;
+  const fd = await askSheet('Chegou', `<div class="row"><div><label for="rq">Quantidade que chegou *</label><input id="rq" name="q" type="number" min="0.001" max="${left}" step="any" inputmode="decimal" required value="${left}"></div>
+      <div><label for="rg">Guia de remessa nº${need ? ' *' : ''}</label><input id="rg" name="g" maxlength="64" ${need ? 'required' : ''} placeholder="ex.: GR 2026/118"></div></div>
+    <p class="small muted">${toStock ? 'Entra no stock do armazém, ao preço da encomenda.' : 'Não é artigo do armazém: o valor vai para o custo da obra.'}</p>`, 'Registar');
+  if (!fd) return;
+  const { data, error } = await sb.rpc('mini_buy_receive', { p_line: id, p_qty: Number(fd.get('q')), p_warehouse: null, p_delivery_note: String(fd.get('g') || '').trim() || null });
+  if (error) return toast(friendly(error));
+  toast(data.complete ? 'Recebido. Quem pediu já foi avisado.' : 'Parte recebida. O resto fica à espera.'); loadBuy();
 }

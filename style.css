@@ -1371,3 +1371,22 @@ table.tbl td { padding: 9px 6px; border-bottom: var(--bw) solid var(--line); ver
 .wh-miss { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .wh-miss p { margin: 0; flex: 1 1 220px; }
 table.tbl th { white-space: nowrap; vertical-align: bottom; }
+
+/* ---------------------------------------------------------------- Compras (v38) */
+.by-limit { display: flex; align-items: center; gap: 12px; padding: 12px 16px; margin: 0 0 12px; font-size: 14px; }
+#bynew { margin: 0 0 14px; }
+.by-req.wait { box-shadow: inset 4px 0 0 var(--warn-fill), var(--sh-1); }
+.by-req .wk { align-items: flex-start; }
+.by-no { color: var(--bad); }
+.by-pick { display: flex; gap: 12px; align-items: flex-start; cursor: pointer; }
+.by-pick input { width: 22px; height: 22px; margin: 2px 0 0; flex: 0 0 auto; }
+.by-pick .nm { font-weight: 650; }
+.by-pick .sub { font-size: 13px; color: var(--ink-2); }
+.by-line { display: flex; gap: 10px; align-items: center; padding: 8px 0; border-top: var(--bw) solid var(--line); }
+.by-line .grow b { display: block; }
+.by-line small, .by-lines small { display: block; color: var(--ink-2); font-size: 13px; }
+.by-line input { width: 110px; margin: 0; }
+.by-lines { list-style: none; margin: 10px 0 0; padding: 0; }
+.by-lines li { display: flex; gap: 10px; align-items: center; padding: 9px 0; border-top: var(--bw) solid var(--line); }
+.by-hint { background: var(--surface-2); border-radius: var(--r-md); padding: 8px 12px; }
+#bygo { margin-top: 12px; }
