@@ -424,7 +424,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '34';
+const APP_VERSION = '35';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['seguranca', 'naobra', 'trabalhadores', 'picar'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -611,7 +611,7 @@ async function showBrief() {
     : `Tudo em ordem nas tuas ${data.sites.length} obra(s).`;
   const el = document.createElement('div'); el.id = 'brief'; el.className = 'brief' + (parts.length ? '' : ' ok'); el.setAttribute('role', 'status');
   el.innerHTML = `<span class="brief-ic">${ic(parts.length ? 'warn' : 'ok')}</span><div class="grow"><b>${esc(hello)}.</b> <span>${text}</span></div>
-    ${parts.length ? '<button class="btn small" data-go>Ver o painel</button>' : ''}<button class="iconbtn" data-x aria-label="Fechar">${ic('x')}</button>`;
+    ${parts.length ? '<button class="btn small" data-go>Ver o dashboard</button>' : ''}<button class="iconbtn" data-x aria-label="Fechar">${ic('x')}</button>`;
   app.prepend(el);
   el.querySelector('[data-x]').onclick = () => el.remove();
   if (el.querySelector('[data-go]')) el.querySelector('[data-go]').onclick = () => go('painel');
@@ -833,7 +833,7 @@ function paletteItems(q) {
   }
   if (n) for (const st of state.sites) if (has(st.title) || has(st.cost_center_code)) {
     const panel = open('painel') && st.status === 'execution';
-    out.push({ g: 'Obras', label: st.title, sub: st.cost_center_code + (panel ? ' · abrir painel' : ''), icon: 'crane',
+    out.push({ g: 'Obras', label: st.title, sub: st.cost_center_code + (panel ? ' · abrir dashboard' : ''), icon: 'crane',
       run: () => { if (panel) { state.panelSite = st.id; go('painel'); } else go('obras'); } });
   }
   const acts = [];
@@ -1438,7 +1438,7 @@ function viewOnSite() {
   if (!state.onsiteFilter) state.onsiteFilter = 'all';
   app.innerHTML = `<div class="ph"><div><p class="ph-k">Ao vivo</p><h1>Na obra agora</h1></div></div>
     <div class="toolbar noprint"><div class="tb-site">${siteSelect('site')}</div>
-    ${canSiteDetails() ? `<button class="btn ghost" id="openPanel">${ic('crane')}Painel da obra</button>` : ''}</div>
+    ${canSiteDetails() ? `<button class="btn ghost" id="openPanel">${ic('crane')}Dashboard da obra</button>` : ''}</div>
     <div id="list" style="margin-top:14px">${skel(4)}</div>
     <p class="noprint"><button class="btn ghost wide" id="print">${ic('print')}Imprimir lista (emergência)</button></p>`;
   bindSiteSelect('site', () => { $('#list').innerHTML = skel(4); loadOnSite(); });
@@ -1823,6 +1823,7 @@ async function loadWorkerProfile(id, editing) {
       ${farda.some(([, x]) => !x) ? '<p class="small muted">Faltam tamanhos da farda: vão ser precisos para entregar EPIs.</p>' : ''}
       <dl class="kv">${item('Telefone', wk.phone ? `<a href="tel:${esc(wk.phone.replace(/ /g, ''))}">${esc(wk.phone)}</a>` : v(null))}
         ${item('Email', v(wk.email))}${item('Profissão', v(wk.job_title))}${item('Categoria profissional', v(wk.category))}</dl>
+      ${can('salarios.exportar') || can('salarios.configurar') ? '<div id="frate"></div>' : ''}
       ${p ? `<h3>Dados pessoais</h3><dl class="kv">
         ${item('Morada', v([p.address, [p.postal_code, p.locality].filter(Boolean).join(' ')].filter(Boolean).join(', ')))}
         ${item('Concelho', v(p.municipality))}
@@ -1837,6 +1838,7 @@ async function loadWorkerProfile(id, editing) {
         </dl>${p.notes ? `<p class="small"><b>Observações:</b> ${esc(p.notes)}</p>` : ''}`
       : '<p class="small muted">Os dados pessoais só aparecem a quem tem a permissão «dados pessoais» (Recursos Humanos).</p>'}`;
     if ($('#fedit')) $('#fedit').onclick = () => loadWorkerProfile(id, true);
+    loadWorkerRate(id);
     return;
   }
   const inp = (name, label, val, extra = '') => `<div><label>${esc(label)}</label><input name="${name}" value="${esc(val ?? '')}" ${extra}></div>`;
@@ -1869,6 +1871,27 @@ async function loadWorkerProfile(id, editing) {
     btn.disabled = false;
     if (se) return toast(friendly(se));
     toast('Ficha guardada.'); loadWorkerProfile(id);
+  };
+}
+
+// The hourly rate on the card: read with the salary permissions, changed only with salarios.configurar (never one's own).
+// It feeds the site's team in the Dashboard de obra and the pay estimate in «As minhas horas».
+async function loadWorkerRate(id) {
+  const box = $('#frate'); if (!box) return;
+  const { data, error } = await sb.rpc('mini_worker_rate', { p_collab: id });
+  if (!box.isConnected) return;
+  if (error) { box.remove(); return; }
+  const n2 = (x) => x == null ? '' : Number(x).toFixed(2);
+  box.innerHTML = `<h3>Valor à hora</h3><dl class="kv"><div><dt>Normal</dt><dd>${data.rate == null ? '<span class="muted">por definir</span>' : esc(euro(data.rate)) + '/h'}</dd></div>
+      <div><dt>Extra</dt><dd>${data.overtime_rate == null ? '<span class="muted">pelas regras da lei</span>' : esc(euro(data.overtime_rate)) + '/h'}</dd></div></dl>
+    ${data.can_edit ? `<form id="rform" class="row" style="align-items:end"><div><label>Normal (€/h)</label><input name="rate" type="number" min="0" max="500" step="0.01" inputmode="decimal" value="${n2(data.rate)}"></div>
+      <div><label>Extra (€/h, opcional)</label><input name="ot" type="number" min="0" max="1000" step="0.01" inputmode="decimal" value="${n2(data.overtime_rate)}"></div>
+      <div><button class="btn small">Guardar valor</button></div></form>` : ''}`;
+  if ($('#rform')) $('#rform').onsubmit = async (e) => {
+    e.preventDefault(); const f = new FormData(e.target); const num = (k) => (f.get(k) || '').trim() === '' ? null : Number(f.get(k));
+    const { error: se } = await sb.rpc('mini_set_worker_rate', { p_collab: id, p_rate: num('rate'), p_overtime_rate: num('ot') });
+    if (se) return toast(friendly(se));
+    toast('Valor à hora guardado.'); loadWorkerRate(id);
   };
 }
 
@@ -2586,7 +2609,7 @@ async function onbHunt(x, items) {
 const TOUR_TEXT = {
   equipa: 'A minha equipa: quem está na obra agora, quem ainda não chegou e o que tens de validar.',
   picar: 'Picar: o leitor de cartões. Cada pessoa encosta o cartão à entrada e à saída.',
-  painel: 'Painel: todas as obras num só ecrã, com o que precisa de atenção.',
+  painel: 'Dashboard de obra: todas as obras num só ecrã, com o que precisa de atenção, vistas pela produção, faturação e secretariado.',
   naobra: 'Na obra: quem está lá dentro neste momento. Numa emergência, é aqui que contas as pessoas.',
   horas: 'Horas: as horas da equipa, dia a dia, para corrigir e validar.',
   minhas: 'As minhas horas: as tuas horas, o teu mês, e os pedidos de férias e faltas. Se um dia estiver mal, dizes aqui.',
@@ -4338,7 +4361,7 @@ function viewSites() {
       <div class="wk"><span class="av a${s.country === 'ES' ? 7 : s.country === 'FR' ? 3 : 0}" aria-hidden="true">${ic('crane')}</span><div class="grow"><div class="nm">${esc(s.title)}</div>
         <div class="sub">${esc(addr(s))}${s.municipality && s.municipality.toLowerCase() !== addr(s).toLowerCase() ? (addr(s) ? ' · ' : '') + 'concelho ' + esc(s.municipality) : ''}</div></div></div>
       <div class="tags"><span class="chip code">${esc(s.cost_center_code)}</span>${label[s.status] || chip('', s.status)}${flag(s.country, s.id)}</div>
-      ${canSiteDetails() ? `<p class="site-go"><button class="btn ghost small" data-panel="${esc(s.id)}">${ic('crane')}Abrir painel da obra</button></p>` : ''}</div>`).join('')}</div>`
+      ${canSiteDetails() ? `<p class="site-go"><button class="btn ghost small" data-panel="${esc(s.id)}">${ic('crane')}Abrir no dashboard</button></p>` : ''}</div>`).join('')}</div>`
       : `<div class="card">${empty('helmet', 'Ainda não há obras', 'Abre a primeira obra aqui em baixo.')}</div>`}
     ${can('obras.gerir') ? `<details class="fold" ${state.sites.length ? '' : 'open'}><summary><span>+ Abrir obra<span class="sub">Cliente, código e nome</span></span></summary><div>
     <form id="f"><div class="row"><div><label>Cliente *</label><input name="client" required placeholder="ex.: Refinaria de Sines"></div>
@@ -4458,7 +4481,7 @@ async function loadSiteDetails(id) {
   });
 }
 
-// ------------------------------------------------------------------ Painel da obra
+// ------------------------------------------------------------------ Dashboard de obra
 // Everything the base already knows about one site, on one screen. Phones only with pessoas.ver, hours only with
 // horas.ver (the server leaves them out otherwise). Housing, vehicle, tools and PPE say only who provides them for now.
 const PROVIDER = { company: 'Empresa', client: 'Cliente', other: 'Outro', none: 'Não precisa' };
@@ -4481,7 +4504,7 @@ async function viewSitePanel() {
   // The tab opens the control room (all sites); a site's button in Obras opens that site directly.
   const chosen = state.panelSite; state.panelSite = null;
   const id = chosen || (currentSite() && currentSite().id);
-  if (!id) { app.innerHTML = `<h1>Painel da obra</h1><div class="card">${empty('helmet', 'Ainda não há obras', 'Abre a primeira obra em Obras.')}</div>`; return; }
+  if (!id) { app.innerHTML = `<h1>Dashboard de obra</h1><div class="card">${empty('helmet', 'Ainda não há obras', 'Abre a primeira obra em Obras.')}</div>`; return; }
   if (chosen && activeSites().some((x) => x.id === chosen)) store(SITE_KEY, chosen);
   app.innerHTML = `<div id="gnp" class="gnpage">${skel(4)}</div>`;
   // The new look (React + Tailwind, ui/gnui.*), loaded the first time; the old screen stays as the fallback.
