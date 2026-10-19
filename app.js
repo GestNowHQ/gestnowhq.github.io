@@ -37,6 +37,21 @@ const REASON_PREFIX = {
   'skill_missing:': 'Falta a competência: ',
 };
 const ERRORS = [
+  [/choose the site this trip goes to/i, 'Escolhe a obra: cada viagem vai para uma obra.'],
+  [/write where from and where to/i, 'Escreve de onde parte e para onde vai.'],
+  [/from and to are the same/i, 'A partida e o destino são iguais.'],
+  [/the way back must be after the way out/i, 'A volta tem de ser depois da ida.'],
+  [/this person already has this trip/i, 'Esta pessoa já tem esta viagem pedida para esse dia.'],
+  [/trip not found/i, 'Viagem não encontrada.'],
+  [/this trip was already decided/i, 'Esta viagem já foi decidida.'],
+  [/you cannot approve your own trip/i, 'Não podes aprovar uma viagem que pediste ou que é tua. Outra pessoa do RH aprova.'],
+  [/the trip must be approved first/i, 'A viagem tem de estar aprovada primeiro.'],
+  [/write the cost of the trip/i, 'Escreve o custo da viagem.'],
+  [/write the company/i, 'Escreve a companhia (ex.: TAP, CP, Rede Expressos).'],
+  [/file not allowed for this trip/i, 'Este ficheiro não pode ir para esta viagem.'],
+  [/at most 6 tickets per trip/i, 'No máximo 6 bilhetes por viagem.'],
+  [/this trip is already closed/i, 'Esta viagem já está fechada.'],
+  [/time is not valid/i, 'A hora não é válida.'],
   [/do the entry inspection with photos first/i, 'Primeiro faz a vistoria de entrada da casa, com fotos de cada divisão.'],
   [/choose the site this house serves/i, 'Escolhe a obra que esta casa serve: os custos vão para essa obra.'],
   [/choose the site this house cost goes to/i, 'Escolhe a obra: cada despesa da casa vai para uma obra.'],
@@ -485,10 +500,10 @@ async function addDocument(collab, type, issue, expiry, number, file) {
     p_number: number || null, p_file: path, p_sha256: sha });
 }
 // Open a file with a link that only works for 2 minutes.
-async function openDocFile(path) {
+async function openDocFile(path, bucket = 'documentos') {
   const win = window.open('', '_blank');
   if (win) win.opener = null;
-  const { data, error } = await sb.storage.from('documentos').createSignedUrl(path, 120);
+  const { data, error } = await sb.storage.from(bucket).createSignedUrl(path, 120);
   if (error || !data) { if (win) win.close(); return toast(friendly(error || 'sem link')); }
   if (win) win.location = data.signedUrl; else location.href = data.signedUrl;
 }
@@ -541,11 +556,11 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '40';
+const APP_VERSION = '41';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
-const MORE_ORDER = ['equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'obras', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'processo', 'clientes'];
+const MORE_ORDER = ['equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'obras', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'processo', 'clientes'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -697,6 +712,7 @@ async function boot() {
   nav.querySelector('[data-view=compras]').hidden = worker || state.offline || !canBuy();
   nav.querySelector('[data-view=frota]').hidden = worker || state.offline || !canFleet();
   nav.querySelector('[data-view=alojamento]').hidden = worker || state.offline || !canHousing();
+  nav.querySelector('[data-view=viagens]').hidden = worker || state.offline || !canTravel();
   if (me.role === 'supervisor' && !state.booted && state.view === 'picar' && canSiteDetails()) state.view = 'equipa';
   state.booted = true;
   if (state.view === 'minhas' && !me.collaborator_id) state.view = (TABS[me.role] || TABS.supervisor)[0];
@@ -1049,7 +1065,7 @@ function go(view) {
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
      ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients,
      processo: viewProcess, orcamentos: viewEstimates, lmra: viewLmra, emergencia: viewEmergency,
-     armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing }[view] || viewClock)();
+     armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel }[view] || viewClock)();
   checkEmergencyBar();
 }
 
@@ -2746,6 +2762,7 @@ const TOUR_TEXT = {
   emergencia: 'Emergência: carregas no botão vermelho e cada pessoa pica o cartão no ponto de encontro. Vês logo quem está em falta, com o telefone.',
   lmra: 'LMRA: a análise de risco antes de começar. Um «Não» para o trabalho; com tudo «Sim», a equipa assina com o cartão.',
   alojamento: 'Alojamento: casas e hotéis, quem dorme onde e as camas livres. Ninguém entra numa casa sem a vistoria de entrada com fotos.',
+  viagens: 'Viagens: pedes a viagem de avião, comboio ou autocarro, o RH aprova e marca, e a pessoa vê o bilhete no telemóvel. O custo vai para a obra.',
   frota: 'Frota: cada viatura com semáforo: seguro, inspeção, IUC, revisão e contrato de aluguer. Entregas e devoluções com km.',
   compras: 'Compras: pedes o que falta; acima do limite o Secretariado aprova; depois encomenda-se e regista-se o que chega.',
   armazem: 'Armazém: EPIs, farda e ferramentas. Quem recebe assina com o cartão; os tamanhos vêm da ficha.',
@@ -3128,9 +3145,9 @@ function viewMine() {
   const me = state.people.find((x) => x.id === state.me.collaborator_id);
   app.innerHTML = `<div class="ph"><div><p class="ph-k">${esc((me && me.full_name) || '')}</p><h1>As minhas horas</h1></div></div>
     <div class="chips" style="margin-bottom:12px">${months.map((m) => `<button class="chip" data-m="${m}" aria-pressed="${m === state.mineMonth}">${esc(mName(m))}</button>`).join('')}</div>
-    <div class="mine-grid"><div><div id="minetop">${skel(1)}</div><div id="minepay"></div><div id="mine">${skel(3)}</div></div>
+    <div id="mytrips"></div><div class="mine-grid"><div><div id="minetop">${skel(1)}</div><div id="minepay"></div><div id="mine">${skel(3)}</div></div>
     <div><div id="minereq"></div><div id="minesite"></div><div id="pdmine"></div></div></div>`;
-  loadMyPerDiems(); loadMyRequests();
+  loadMyPerDiems(); loadMyRequests(); loadMyTravels();
   app.querySelectorAll('[data-m]').forEach((b) => b.onclick = () => { state.mineMonth = b.dataset.m; viewMine(); });
   loadMine();
   state.timer = setInterval(() => { if (state.view === 'minhas' && document.visibilityState === 'visible') loadMine(true); }, 60000);
@@ -6802,4 +6819,176 @@ async function hoInspection(id) {
     await hoRefreshHome();
     if (r.closed) loadHousing(); else hoDetail(v.property_id);
   };
+}
+
+// ============================================================================ Viagens (v41)
+// Someone with viagens.pedir asks for a trip by plane, train or bus for a person, always to a site. The RH approves
+// (never the one who asked, nor their own trip), books it with the company, number and cost (the cost goes to the
+// site at once) and adds the tickets. The traveller sees the trip and opens the ticket in As minhas horas (sql/69).
+const canTravel = () => ['viagens.pedir', 'viagens.aprovar', 'viagens.gerir'].some(can);
+const TV_MODE = { plane: 'Avião', train: 'Comboio', bus: 'Autocarro', other: 'Outro' };
+const TV_STATE = { requested: ['warn', 'Por aprovar'], approved: ['info', 'Aprovada, por marcar'], booked: ['ok', 'Marcada'], done: ['', 'Feita'],
+  rejected: ['bad', 'Recusada'], cancelled: ['', 'Cancelada'] };
+const TV_LABELS = ['Ida', 'Volta', 'Ida e volta', 'Cartão de embarque', 'Outro'];
+// A trip time is kept in Lisbon time; 00:00 means only the day was given.
+const tvWhen = (iso) => {
+  if (!iso) return '';
+  const h = fmtHour(iso, 'Europe/Lisbon');
+  const d = new Date(iso).toLocaleDateString('pt-PT', { weekday: 'short', day: '2-digit', month: '2-digit', timeZone: 'Europe/Lisbon' });
+  return h === '00:00' ? d : `${d} às ${h}`;
+};
+const tvDay = (iso) => iso ? new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Europe/Lisbon' }) : '';
+const tvHour = (iso) => { const h = iso ? fmtHour(iso, 'Europe/Lisbon') : ''; return h === '00:00' ? '' : h; };
+function viewTravel() {
+  if (!canTravel()) return viewClock();   // code guard as well as the database's
+  if (!state.travel) state.travel = { tab: 'tratar' };
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Avião, comboio e autocarro</p><h1>Viagens</h1></div></div>
+    <div id="tvtop">${skel(1)}</div><div id="tvbody"></div>`;
+  loadTravel();
+}
+async function loadTravel() {
+  const top = $('#tvtop'); if (!top) return;
+  const { data: h, error } = await sb.rpc('mini_travel_home');
+  if (!top.isConnected) return;
+  if (error) { top.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  const S = state.travel; S.home = h;
+  const soon = Date.now() + 7 * 864e5;
+  const n = (f) => h.trips.filter(f).length;
+  const groups = { tratar: (x) => x.status === 'requested' || x.status === 'approved', marcadas: (x) => x.status === 'booked',
+    historico: (x) => ['done', 'rejected', 'cancelled'].includes(x.status) };
+  top.innerHTML = `<div class="fl-sum">
+      <div class="fl-n warn"><b>${n((x) => x.status === 'requested')}</b><span>por aprovar</span></div>
+      <div class="fl-n"><b>${n((x) => x.status === 'approved')}</b><span>por marcar</span></div>
+      <div class="fl-n ok"><b>${n((x) => x.status === 'booked' && new Date(x.go).getTime() < soon)}</b><span>partem nos próximos 7 dias</span></div></div>
+    ${h.can_request ? '<button class="btn big wide" id="tvnew">+ Pedir viagem</button>' : ''}
+    <div class="seg" role="tablist">${[['tratar', 'Por tratar'], ['marcadas', 'Marcadas'], ['historico', 'Histórico']].map(([k, l]) =>
+      `<button role="tab" data-tvtab="${k}" aria-selected="${S.tab === k}">${esc(l)} <small>${n(groups[k])}</small></button>`).join('')}</div>`;
+  top.querySelectorAll('[data-tvtab]').forEach((b) => b.onclick = () => { S.tab = b.dataset.tvtab; loadTravel(); });
+  if ($('#tvnew')) $('#tvnew').onclick = () => tvRequest();
+  const list = h.trips.filter(groups[S.tab] || groups.tratar);
+  const body = $('#tvbody');
+  const emptyText = { tratar: h.can_request ? 'Carrega em «+ Pedir viagem». O RH aprova e marca, e a pessoa vê o bilhete no telemóvel.' : 'Os pedidos de viagem aparecem aqui.',
+    marcadas: 'Quando o RH marcar uma viagem, aparece aqui com o bilhete.', historico: 'As viagens feitas, recusadas e canceladas ficam aqui.' }[S.tab];
+  body.innerHTML = list.length ? `<div class="list">${list.map(tvCard).join('')}</div>`
+    : `<div class="card">${empty('box', S.tab === 'tratar' ? 'Nada por tratar' : 'Ainda sem viagens', emptyText)}</div>`;
+  body.querySelectorAll('[data-ok]').forEach((b) => b.onclick = () => tvDecide(b.dataset.ok, true));
+  body.querySelectorAll('[data-no]').forEach((b) => b.onclick = () => tvDecide(b.dataset.no, false));
+  body.querySelectorAll('[data-book]').forEach((b) => b.onclick = () => tvBook(h.trips.find((x) => x.id === b.dataset.book)));
+  body.querySelectorAll('[data-tk]').forEach((b) => b.onclick = () => tvTicket(h.trips.find((x) => x.id === b.dataset.tk)));
+  body.querySelectorAll('[data-cx]').forEach((b) => b.onclick = () => tvCancel(b.dataset.cx));
+  body.querySelectorAll('[data-file]').forEach((b) => b.onclick = () => openDocFile(b.dataset.file, 'viagens'));
+}
+function tvCard(x) {
+  const [k, l] = TV_STATE[x.status] || ['', x.status];
+  const tickets = x.tickets || [];
+  return `<article class="card fl-car tv-card ${esc(x.status)}" data-id="${esc(x.id)}">
+    <div class="wk"><span class="ho-ic">${ic('plane')}</span><div class="grow"><div class="nm">${esc(x.person)} <small class="muted">· ${esc(TV_MODE[x.mode] || x.mode)}</small></div>
+      <div class="sub">${esc(x.origin)} → ${esc(x.destination)}</div></div>${chip(k, l)}</div>
+    <ul class="fl-papers">
+      <li class="fl-p ok"><span>Ida</span><b>${esc(tvWhen(x.go))}</b></li>
+      ${x.back ? `<li class="fl-p ok"><span>Volta</span><b>${esc(tvWhen(x.back))}</b></li>` : ''}
+      <li class="fl-p ${x.site ? 'ok' : 'bad'}"><span>Obra</span><b>${x.site ? esc(x.site) + ' · ' + esc(x.site_title) : 'sem obra'}</b></li>
+      ${x.carrier ? `<li class="fl-p ok"><span>Companhia</span><b>${esc(x.carrier)}${x.ref ? ' · ' + esc(x.ref) : ''}</b></li>` : ''}
+      ${x.cost != null ? `<li class="fl-p ok"><span>Custo</span><b>${esc(eur2(x.cost))}</b></li>` : ''}
+    </ul>
+    ${x.purpose ? `<p class="small">${esc(x.purpose)}</p>` : ''}
+    <p class="small muted">Pedido por ${esc(x.by || '—')}${x.decided_by ? ` · ${x.status === 'rejected' ? 'recusado' : 'aprovado'} por ${esc(x.decided_by)}` : ''}${x.note ? ': «' + esc(x.note) + '»' : ''}${x.cancel_reason ? ' · cancelada: «' + esc(x.cancel_reason) + '»' : ''}</p>
+    ${tickets.length ? `<div class="chips">${tickets.map((t) => `<button class="chip" data-file="${esc(t.path)}">${ic('doc')}${esc(t.label)}</button>`).join('')}</div>` : ''}
+    <div class="acts">
+      ${x.can_decide ? `<button class="btn small" data-ok="${esc(x.id)}">Aprovar</button><button class="btn ghost small" data-no="${esc(x.id)}">Recusar</button>` : ''}
+      ${x.can_book ? `<button class="btn small" data-book="${esc(x.id)}">${x.status === 'booked' ? 'Corrigir reserva' : 'Marcar viagem'}</button>` : ''}
+      ${x.can_book && x.status === 'booked' ? `<button class="btn ghost small" data-tk="${esc(x.id)}">+ Bilhete</button>` : ''}
+      ${x.can_cancel ? `<button class="btn ghost small" data-cx="${esc(x.id)}">Cancelar</button>` : ''}</div></article>`;
+}
+async function tvRequest() {
+  const sites = activeSites(); const today = isoDay(new Date());
+  const people = (state.people || []).filter((p) => p.is_active !== false);
+  const fd = await askSheet('Pedir viagem', `
+    <label for="tvp">Quem viaja *</label><select id="tvp" name="person_id" required><option value="">—</option>${people.map((p) => `<option value="${esc(p.id)}">${esc(p.full_name)}${p.employee_number ? ' · ' + esc(p.employee_number) : ''}</option>`).join('')}</select>
+    <label for="tvs">Obra (o custo vai para ela) *</label><select id="tvs" name="site_id" required><option value="">—</option>${sites.map((s) => `<option value="${esc(s.id)}">Obra ${esc(s.cost_center_code)} · ${esc(s.title)}</option>`).join('')}</select>
+    <div class="row"><div><label for="tvo">De *</label><input id="tvo" name="origin" required minlength="2" maxlength="120" placeholder="ex.: Lisboa"></div>
+      <div><label for="tvd">Para *</label><input id="tvd" name="destination" required minlength="2" maxlength="120" placeholder="ex.: Sines"></div></div>
+    <label>Como *</label><div class="chips" role="radiogroup">${Object.entries(TV_MODE).map(([k, l], i) => `<label class="chip"><input type="radio" name="mode" value="${k}" ${i ? '' : 'required'}>${esc(l)}</label>`).join('')}</div>
+    <div class="row"><div><label for="tvg">Dia da ida *</label><input id="tvg" name="go_day" type="date" required min="${esc(today)}"></div>
+      <div><label for="tvgt">Hora (se souberes)</label><input id="tvgt" name="go_time" type="time"></div></div>
+    <div class="row"><div><label for="tvb">Dia da volta</label><input id="tvb" name="back_day" type="date" min="${esc(today)}"></div>
+      <div><label for="tvbt">Hora</label><input id="tvbt" name="back_time" type="time"></div></div>
+    <label for="tvw">Porquê</label><input id="tvw" name="purpose" maxlength="300" placeholder="ex.: paragem da refinaria">
+    <p class="small muted">O RH aprova e marca. Quando estiver marcada, a pessoa vê a viagem e o bilhete no telemóvel.</p>`, 'Pedir', (d) => {
+    d.querySelector('#tvg').onchange = (e) => { d.querySelector('#tvb').min = e.target.value; };
+  });
+  if (!fd) return;
+  const p = {}; for (const [k, v] of fd.entries()) if (k !== '_v') p[k] = String(v).trim();
+  const { error } = await sb.rpc('mini_travel_request', { p });
+  if (error) return toast(friendly(error));
+  toast('Pedido enviado ao RH.'); state.travel.tab = 'tratar'; loadTravel();
+}
+async function tvDecide(id, ok) {
+  const x = state.travel.home.trips.find((t) => t.id === id); if (!x) return;
+  const fd = await askSheet(ok ? 'Aprovar viagem' : 'Recusar viagem', `<p><b>${esc(x.person)}</b> · ${esc(x.origin)} → ${esc(x.destination)}<br><span class="small muted">${esc(tvWhen(x.go))}</span></p>
+    <label for="tvn">${ok ? 'Nota (opcional)' : 'Motivo *'}</label><input id="tvn" name="n" maxlength="300" ${ok ? '' : 'required minlength="3"'} placeholder="${ok ? '' : 'ex.: vai de carrinha da empresa'}">`, ok ? 'Aprovar' : 'Recusar');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_travel_decide', { p_trip: id, p_approve: ok, p_note: String(fd.get('n') || '').trim() || null });
+  if (error) return toast(friendly(error));
+  toast(ok ? 'Aprovada. Falta marcar.' : 'Recusada. Quem pediu foi avisado.'); loadTravel();
+}
+async function tvBook(x) {
+  if (!x) return;
+  const fd = await askSheet(x.status === 'booked' ? 'Corrigir reserva' : 'Marcar viagem', `<p><b>${esc(x.person)}</b> · ${esc(TV_MODE[x.mode])} · ${esc(x.origin)} → ${esc(x.destination)}</p>
+    <div class="row"><div><label for="tvc">Companhia *</label><input id="tvc" name="carrier" required minlength="2" maxlength="80" value="${esc(x.carrier || '')}" placeholder="ex.: TAP, CP, Rede Expressos"></div>
+      <div><label for="tvr">N.º da reserva</label><input id="tvr" name="ref" maxlength="64" value="${esc(x.ref || '')}"></div></div>
+    <div class="row"><div><label for="tvgd">Ida *</label><input id="tvgd" name="go_day" type="date" required value="${esc(tvDay(x.go))}"></div>
+      <div><label for="tvgh">Hora</label><input id="tvgh" name="go_time" type="time" value="${esc(tvHour(x.go))}"></div></div>
+    <div class="row"><div><label for="tvbd">Volta</label><input id="tvbd" name="back_day" type="date" value="${esc(tvDay(x.back))}"></div>
+      <div><label for="tvbh">Hora</label><input id="tvbh" name="back_time" type="time" value="${esc(tvHour(x.back))}"></div></div>
+    <label for="tvk">Custo total (€) *</label><input id="tvk" name="cost" type="number" required min="0" step="0.01" inputmode="decimal" value="${x.cost ?? ''}">
+    <p class="small muted">O custo vai para a obra ${esc(x.site || '')}. A seguir juntas o bilhete.</p>`, x.status === 'booked' ? 'Guardar' : 'Marcar');
+  if (!fd) return;
+  const p = {}; for (const [k, v] of fd.entries()) if (k !== '_v') p[k] = String(v).trim();
+  const { error } = await sb.rpc('mini_travel_book', { p_trip: x.id, p });
+  if (error) return toast(friendly(error));
+  toast(x.status === 'booked' ? 'Reserva corrigida.' : 'Viagem marcada. O custo foi para a obra.');
+  if (x.status !== 'booked') { state.travel.tab = 'marcadas'; await loadTravel(); return tvTicket(state.travel.home.trips.find((t) => t.id === x.id)); }
+  loadTravel();
+}
+async function tvTicket(x) {
+  if (!x) return;
+  const fd = await askSheet('Juntar bilhete', `<p><b>${esc(x.person)}</b> · ${esc(x.origin)} → ${esc(x.destination)}</p>
+    <label for="tvl">É</label><select id="tvl" name="l">${TV_LABELS.map((l) => `<option>${esc(l)}</option>`).join('')}</select>
+    <label for="tvf">Bilhete (PDF ou foto) *</label><input id="tvf" name="f" type="file" required accept="${esc(FILE_ACCEPT)}">
+    <p class="small muted">A pessoa vê o bilhete no telemóvel, em «As minhas horas». O bilhete fica guardado e não se apaga.</p>`, 'Juntar');
+  if (!fd) return;
+  let f = fd.get('f'); if (!f || !f.size) return;
+  if (f.type.startsWith('image/')) f = await shrinkPhoto(f);
+  const bad = fileProblem(f); if (bad) return toast(bad);
+  const path = `${state.me.tenant_id}/${x.id}/${uuid()}.${FILE_TYPES[f.type]}`;
+  const sha = await sha256Hex(f);
+  const up = await sb.storage.from('viagens').upload(path, f, { contentType: f.type, upsert: false });
+  if (up.error) return toast(friendly(up.error));
+  const { error } = await sb.rpc('mini_travel_ticket_add', { p_trip: x.id, p_file: path, p_sha256: sha, p_label: fd.get('l') });
+  if (error) return toast(friendly(error));
+  toast('Bilhete junto. A pessoa já o vê no telemóvel.'); loadTravel();
+}
+async function tvCancel(id) {
+  const x = state.travel.home.trips.find((t) => t.id === id); if (!x) return;
+  const fd = await askSheet('Cancelar viagem', `<p><b>${esc(x.person)}</b> · ${esc(x.origin)} → ${esc(x.destination)}</p>
+    <label for="tvx">Motivo *</label><input id="tvx" name="x" required minlength="3" maxlength="300" placeholder="ex.: paragem adiada">
+    <p class="small muted">${x.status === 'booked' ? 'A viagem fica no histórico e o custo sai da obra. Lembra-te de cancelar também na companhia.' : 'O pedido fica no histórico.'}</p>`, 'Cancelar viagem');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_travel_cancel', { p_trip: id, p_reason: String(fd.get('x')).trim() });
+  if (error) return toast(friendly(error));
+  toast('Viagem cancelada.'); loadTravel();
+}
+// The traveller's trips on top of As minhas horas: where, when, the company and the tickets (V4).
+async function loadMyTravels() {
+  const box = $('#mytrips'); if (!box) return;
+  const { data, error } = await sb.rpc('mini_my_travels');
+  if (!box.isConnected) return;
+  if (error || !data || !data.length) { box.innerHTML = ''; return; }
+  box.innerHTML = `<div class="card tv-mine"><h2 style="margin-top:0">${ic('plane')} As minhas viagens</h2>
+    ${data.map((x) => `<div class="tv-trip"><div class="nm">${esc(x.origin)} → ${esc(x.destination)} <small class="muted">· ${esc(TV_MODE[x.mode] || '')}</small></div>
+      <div class="sub">Ida ${esc(tvWhen(x.go))}${x.back ? ' · volta ' + esc(tvWhen(x.back)) : ''}</div>
+      ${x.status === 'approved' ? `<p class="small muted">Aprovada. O RH está a marcar.</p>` : `<p class="small">${esc(x.carrier || '')}${x.ref ? ' · reserva ' + esc(x.ref) : ''}</p>`}
+      ${(x.tickets || []).length ? `<div class="chips">${x.tickets.map((t) => `<button class="chip" data-file="${esc(t.path)}">${ic('doc')}Abrir bilhete: ${esc(t.label)}</button>`).join('')}</div>` : ''}</div>`).join('')}</div>`;
+  box.querySelectorAll('[data-file]').forEach((b) => b.onclick = () => openDocFile(b.dataset.file, 'viagens'));
 }
