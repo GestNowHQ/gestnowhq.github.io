@@ -5735,18 +5735,56 @@ async function whStock() {
   if (error) { body.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
   W.stock = data; const m = W.home.can_manage;
   const fams = []; for (const it of data) { let f = fams.find((x) => x.family === it.family); if (!f) fams.push(f = { family: it.family, category: it.category, items: [] }); f.items.push(it); }
-  body.innerHTML = `${m ? '<div class="acts-row"><button class="btn" id="whnew">+ Artigo</button></div>' : ''}
+  const have = new Set(fams.map((f) => String(f.family).toLowerCase())); const missing = WH_BASE.filter((b) => !have.has(b.family.toLowerCase())).length;
+  body.innerHTML = `${m ? `<div class="acts-row">${missing ? `<button class="btn ghost" id="whbase">Lista base (${missing})</button>` : ''}<button class="btn" id="whnew">+ Outro EPI ou artigo</button></div>` : ''}
     ${fams.length ? `<div class="list">${fams.map((f, i) => { const low = f.items.some((x) => x.low); const tot = f.items.reduce((s, x) => s + Number(x.qty), 0);
       return `<article class="card wh-row ${low ? 'low' : ''}"><div class="wk"><div class="grow"><div class="nm">${esc(f.family)}</div>
           <div class="sub">${esc(WH_CAT[f.category] || f.category)} · ${tot} ${esc(f.items[0].unit)}${f.items[0].life_days ? ` · troca a cada ${f.items[0].life_days} dias` : ''}${f.items[0].allowance ? ` · ${f.items[0].allowance} por ano` : ''}</div></div>
           ${low ? chip('warn', 'no mínimo', 'warn') : ''}</div>
         <div class="wh-sizes">${f.items.map((x) => `<span class="wh-sz ${x.low ? 'low' : Number(x.qty) ? '' : 'zero'}" title="mínimo ${Number(x.min)}"><b>${esc(x.size || 'un')}</b>${Number(x.qty)}</span>`).join('')}</div>
         ${m ? `<div class="acts"><button class="btn ghost small" data-in="${i}">Entrada</button><button class="btn ghost small" data-min="${i}">Mínimo</button><button class="btn ghost small" data-edit="${i}">Editar</button></div>` : ''}</article>`; }).join('')}</div>`
-      : `<div class="card">${empty('box', 'Ainda sem artigos', m ? 'Carrega em «+ Artigo»: botas, capacetes, luvas, farda.' : 'Quem gere o armazém cria os artigos.')}</div>`}`;
+      : `<div class="card">${empty('box', 'Ainda sem artigos', m ? 'Carrega em «Lista base» para criar os EPIs e a farda do costume, ou em «+ Outro EPI ou artigo».' : 'Quem gere o armazém cria os artigos.')}</div>`}`;
   if ($('#whnew')) $('#whnew').onclick = () => itemSheet(null);
+  if ($('#whbase')) $('#whbase').onclick = () => whBaseList(have);
   body.querySelectorAll('[data-in]').forEach((b) => b.onclick = () => stockIn(fams[+b.dataset.in]));
   body.querySelectorAll('[data-min]').forEach((b) => b.onclick = () => setMin(fams[+b.dataset.min]));
   body.querySelectorAll('[data-edit]').forEach((b) => b.onclick = () => itemSheet(fams[+b.dataset.edit]));
+}
+// The usual list for industrial maintenance crews (Diogo, 2026-10-19). One tap creates what is missing; the storekeeper adds
+// anything else with «+ Outro EPI ou artigo». Sizes per family; «size_kind» picks the worker's size from his card.
+const TOPS = ['S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
+const WH_BASE = [
+  { family: 'Botas de segurança S3', category: 'ppe', size_kind: 'shoes', sizes: ['37', '38', '39', '40', '41', '42', '43', '44', '45', '46', '47'], unit: 'par', life_days: 365 },
+  { family: 'Calças de trabalho', category: 'workwear', size_kind: 'bottom', sizes: ['S', 'M', 'L', 'XL', 'XXL'], allowance: 2 },
+  { family: 'T-shirt', category: 'workwear', size_kind: 'top', sizes: TOPS, allowance: 4 },
+  { family: 'Camisola', category: 'workwear', size_kind: 'top', sizes: TOPS, allowance: 2 },
+  { family: 'Casaco de farda', category: 'workwear', size_kind: 'top', sizes: TOPS, allowance: 1 },
+  { family: 'Blusão de inverno', category: 'workwear', size_kind: 'top', sizes: TOPS, allowance: 1 },
+  { family: 'Franclete', category: 'ppe', size_kind: 'top', sizes: TOPS, allowance: 2 },
+  { family: 'Luvas de eletricista', category: 'ppe', size_kind: 'gloves', sizes: ['8', '9', '10', '11'], unit: 'par', life_days: 180 },
+  { family: 'Luvas de mecânico', category: 'ppe', size_kind: 'gloves', sizes: ['7', '8', '9', '10', '11'], unit: 'par', life_days: 30 },
+  { family: 'Luvas de soldador', category: 'ppe', size_kind: 'gloves', sizes: ['9', '10', '11'], unit: 'par', life_days: 90 },
+  { family: 'Capacete', category: 'ppe', life_days: 1095 },
+  { family: 'Capacete com viseira', category: 'ppe', life_days: 1095 },
+  { family: 'Óculos de proteção', category: 'ppe', life_days: 180 },
+  { family: 'Óculos de sobreposição', category: 'ppe', life_days: 180 },
+  { family: 'Máscara FFP2', category: 'consumable' },
+  { family: 'Máscara FFP3 (poeiras)', category: 'consumable' },
+  { family: 'Protetores auriculares', category: 'consumable', unit: 'par' },
+];
+async function whBaseList(have) {
+  const miss = WH_BASE.filter((b) => !have.has(b.family.toLowerCase()));
+  if (!miss.length) return toast('A lista base já está toda criada.');
+  const fd = await askSheet('Criar a lista base', `<p>Cria de uma vez ${miss.length} artigo(s), já com os tamanhos:</p>
+    <ul class="small">${miss.map((b) => `<li><b>${esc(b.family)}</b>${b.sizes ? ' · ' + esc(b.sizes[0]) + ' a ' + esc(b.sizes[b.sizes.length - 1]) : ''}</li>`).join('')}</ul>
+    <p class="small muted">Depois podes mudar o que quiseres em «Editar» e acrescentar outros em «+ Outro EPI ou artigo». O stock começa a zero: dá entrada do que tens.</p>`, 'Criar ' + miss.length);
+  if (!fd) return;
+  let ok = 0;
+  for (const b of miss) {
+    const { error } = await sb.rpc('mini_wh_item_save', { p_item: null, p_data: { unit: 'un', ...b } });
+    if (!error) ok++; else if (!/already exists/i.test(error.message || '')) { toast(friendly(error)); break; }
+  }
+  toast(`${ok} artigo(s) criados. Agora dá entrada do stock.`); loadWarehouse();
 }
 async function itemSheet(f) {
   const it = f && f.items[0];
