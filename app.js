@@ -37,6 +37,21 @@ const REASON_PREFIX = {
   'skill_missing:': 'Falta a competência: ',
 };
 const ERRORS = [
+  [/no worker card/i, 'O LMRA é feito por alguém da equipa no local. Este login não tem ficha de trabalhador.'],
+  [/LMRA failed \(stop work\)/i, 'Este LMRA falhou: o trabalho está parado. Resolve o risco e faz um novo.'],
+  [/LMRA is from another shift/i, 'Este LMRA é de outro turno. Faz um novo.'],
+  [/this card is not known/i, 'Cartão desconhecido. Regista o cartão na ficha da pessoa.'],
+  [/say where the work is/i, 'Diz onde é o trabalho.'],
+  [/say why the work can go on/i, 'Escreve o que foi resolvido (pelo menos 10 letras).'],
+  [/open stop work not found/i, 'Esta paragem já foi levantada.'],
+  [/active emergency not found/i, 'Esta emergência já foi terminada.'],
+  [/emergency not found/i, 'Emergência não encontrada.'],
+  [/assembly point not found/i, 'Ponto de encontro não encontrado.'],
+  [/this person is not on the list/i, 'Esta pessoa não estava na lista de quem estava dentro.'],
+  [/say how you know the person is safe/i, 'Escreve como sabes que a pessoa está salva.'],
+  [/name the assembly point/i, 'Dá um nome ao ponto de encontro.'],
+  [/write how the emergency ended/i, 'Escreve como acabou.'],
+  [/kind of emergency not known/i, 'Escolhe o tipo de emergência.'],
   [/disagreement\(s\) of workers still to answer/i, 'Há reclamações de trabalhadores por responder neste mês. Responde primeiro (Secretaria › Pedidos e reclamações).'],
   [/finish the previous ones first/i, 'Acaba primeiro as partes anteriores.'],
   [/see it to the end first \((\d+) s left\)/i, 'Ainda não chegaste ao fim. Faltam $1 s.'],
@@ -278,6 +293,8 @@ function friendly(err) {
   const msg = (err && (err.message || err.error_description || err.hint)) || String(err);
   if (AUTH_LOST.test(msg)) checkSession();
   // A missed entry for a person who was blocked at that time (inactive, documents): say why, in plain words.
+  const nosign = /access denied for LMRA signature:\s*(.*)$/i.exec(msg);
+  if (nosign) return `Esta pessoa não pode assinar nem trabalhar: ${nosign[1].split(/,\s*/).map(reasonText).join(' · ')}.`;
   const blocked = /could not enter at that time:\s*(.*)$/i.exec(msg);
   if (blocked) return `Esta pessoa não podia entrar a essa hora: ${blocked[1].split(/,\s*/).map(reasonText).join(' · ')}. Resolve isso primeiro ou fala com o escritório.`;
   for (const [re, pt] of ERRORS) if (re.test(msg)) return pt.replace(/\$(\d)/g, (_, n) => (re.exec(msg) || [])[+n] || '');
@@ -424,11 +441,11 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '35';
+const APP_VERSION = '36';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
-  hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['seguranca', 'naobra', 'trabalhadores', 'picar'],
+  hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
-const MORE_ORDER = ['equipa', 'picar', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'obras', 'orcamentos', 'processo', 'clientes'];
+const MORE_ORDER = ['equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'obras', 'orcamentos', 'processo', 'clientes'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -497,7 +514,7 @@ setInterval(() => { if (state.ready && queue().length) flushQueue(); }, 60000);
 setInterval(() => { if (state.ready && !state.offline) syncClock(); }, 10 * 60000);
 window.addEventListener('online', () => {
   if (!state.ready || state.offline) return boot();   // the network-error screen, or Picar opened without network
-  flushQueue(); syncClock();
+  flushQueue(); syncClock(); flushMuster();
 });
 window.addEventListener('offline', () => { showQueue(); });
 // The app shell (these files, never the Supabase data or the login) is kept on the phone, so Picar opens without network.
@@ -574,6 +591,8 @@ async function boot() {
   nav.querySelector('[data-view=processo]').hidden = worker || state.offline || !canProcess();
   nav.querySelector('[data-view=orcamentos]').hidden = worker || state.offline || !canEstimates();
   nav.querySelector('[data-view=equipa]').hidden = me.role !== 'supervisor' || !canSiteDetails();
+  nav.querySelector('[data-view=lmra]').hidden = worker || state.offline || !canLmra();
+  nav.querySelector('[data-view=emergencia]').hidden = worker || !canEmergency();
   if (me.role === 'supervisor' && !state.booted && state.view === 'picar' && canSiteDetails()) state.view = 'equipa';
   state.booted = true;
   if (state.view === 'minhas' && !me.collaborator_id) state.view = (TABS[me.role] || TABS.supervisor)[0];
@@ -913,7 +932,7 @@ function bindSiteSelect(id, after) {
 function go(view) {
   if (!state.ready) return boot();   // never show a screen before login (and the phone code, when required)
   if (state.me.role === 'worker') view = 'minhas';   // the worker profile has one screen (the database checks the same)
-  else if (state.offline && view !== 'picar') { toast('Sem rede: por agora só podes picar.'); view = 'picar'; }
+  else if (state.offline && view !== 'picar' && view !== 'emergencia') { toast('Sem rede: por agora só podes picar.'); view = 'picar'; }
   stopNfc(); clearInterval(state.timer); clearInterval(state.tick); hideFlash(); openMore(false); Voice.stop(); dropRobots();
   if (state.uiEl && window.GNUI) { window.GNUI.unmount(state.uiEl); state.uiEl = null; }
   state.view = view;
@@ -925,7 +944,8 @@ function go(view) {
   window.scrollTo(0, 0);
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
      ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients,
-     processo: viewProcess, orcamentos: viewEstimates }[view] || viewClock)();
+     processo: viewProcess, orcamentos: viewEstimates, lmra: viewLmra, emergencia: viewEmergency }[view] || viewClock)();
+  checkEmergencyBar();
 }
 
 // ------------------------------------------------------------------ Clientes (the GestNow owner's console, sql/59)
@@ -1000,6 +1020,7 @@ function viewTeam() {
     <div class="team-site">${siteSelect('tsite')}</div>
     <div id="tkpis">${skel(1)}</div>
     <div class="team-acts"><button class="btn big" id="tpic">${ic('tap')}Picar a equipa</button><button class="btn big ghost" id="tval">${ic('ok')}Validar a semana</button>
+      ${canLmra() ? `<button class="btn big ghost" id="tlmra">${ic('shield')}LMRA</button>` : ''}${canEmergency() ? `<button class="btn big danger" id="temer">${ic('warn')}Emergência</button>` : ''}
       <button class="btn ghost wide look" id="tlook">${ic('card')}<span><b>O colaborador quer ver as horas</b><small>Ele encosta o cartão dele ao teu telemóvel</small></span></button></div>
     <div id="talert"></div>
     <div id="treq"></div>
@@ -1007,6 +1028,8 @@ function viewTeam() {
   bindSiteSelect('tsite', loadTeam);
   $('#tpic').onclick = () => go('picar');
   $('#tval').onclick = () => go('horas');
+  if ($('#tlmra')) $('#tlmra').onclick = () => go('lmra');
+  if ($('#temer')) $('#temer').onclick = () => go('emergencia');
   $('#tlook').onclick = () => cardGlance(currentSite() && currentSite().id);
   loadTeam();
   state.timer = setInterval(() => { if (state.view === 'equipa' && document.visibilityState === 'visible') loadTeam(); }, 60000);
@@ -1101,6 +1124,7 @@ function viewClock() {
       <button class="out" data-d="out">${ic('out')}SAÍDA</button></div>
       <p class="small" id="dirhelp"></p>
     </section>
+    ${canEmergency() ? `<button class="btn danger wide pic-emer" id="pemer">${ic('warn')}Emergência: contar pessoas no ponto de encontro</button>` : ''}
     <div id="result" aria-live="polite"></div><div id="taplog" class="taplog"></div><div id="queue"></div>
     <form id="manual" class="manual card"><div><label for="uid">Número do cartão (ou leitor USB)</label>
       <input id="uid" name="uid" autocomplete="off" autocapitalize="characters" placeholder="ex.: 04:A1:B2:C3"></div>
@@ -1118,6 +1142,7 @@ function viewClock() {
     if (normUid(input.value)) clock(input.value); input.value = ''; input.focus();
   };
   if (nfcOk) $('#nfc').onclick = toggleNfc;
+  if ($('#pemer')) $('#pemer').onclick = () => go('emergencia');
   renderDir(); renderTapLog(); showQueue(); showRejected(); showClockWarn(); loadRecent(); loadLive();
   tickClock(); state.tick = setInterval(tickClock, 1000);
   state.timer = setInterval(() => { loadRecent(); loadLive(); }, 60000);
@@ -2610,7 +2635,9 @@ const TOUR_TEXT = {
   equipa: 'A minha equipa: quem está na obra agora, quem ainda não chegou e o que tens de validar.',
   picar: 'Picar: o leitor de cartões. Cada pessoa encosta o cartão à entrada e à saída.',
   painel: 'Dashboard de obra: todas as obras num só ecrã, com o que precisa de atenção, vistas pela produção, faturação e secretariado.',
-  naobra: 'Na obra: quem está lá dentro neste momento. Numa emergência, é aqui que contas as pessoas.',
+  naobra: 'Na obra: quem está lá dentro neste momento.',
+  emergencia: 'Emergência: carregas no botão vermelho e cada pessoa pica o cartão no ponto de encontro. Vês logo quem está em falta, com o telefone.',
+  lmra: 'LMRA: a análise de risco antes de começar. Um «Não» para o trabalho; com tudo «Sim», a equipa assina com o cartão.',
   horas: 'Horas: as horas da equipa, dia a dia, para corrigir e validar.',
   minhas: 'As minhas horas: as tuas horas, o teu mês, e os pedidos de férias e faltas. Se um dia estiver mal, dizes aqui.',
   secretariado: 'Secretaria: o mês de toda a gente, fechar o mês e tirar o ficheiro para os salários.',
@@ -5189,3 +5216,280 @@ async function delegateSignature() {
   if (error) return toast(friendly(error));
   toast('Delegado. Acaba sozinho nessa data.'); viewEstimateRules();
 }
+
+// ------------------------------------------------------------------ LMRA (sql/64): the last-minute risk check, before the work starts
+// The team leader answers the questions on the spot; every «Não» stops the work (a stop-work order, the safety team is told).
+// When all is «Sim», each person of the team taps their card to sign. A blocked person (documents) cannot sign.
+const canLmra = () => can('seguranca.lmra') || can('seguranca.parar_obra');
+const canEmergency = () => can('seguranca.emergencia');
+function viewLmra() {
+  if (!canLmra()) return viewClock();   // code guard as well as the database's
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Antes de começar o trabalho</p><h1>LMRA</h1></div></div>
+    <p class="muted lead">Análise de risco de última hora. Respondes no local, com a equipa. Um «Não» para o trabalho; com tudo «Sim», cada pessoa encosta o cartão para assinar.</p>
+    <div class="team-site">${siteSelect('lsite')}</div>
+    <div id="lbody">${skel(3)}</div>`;
+  bindSiteSelect('lsite', loadLmra);
+  loadLmra();
+  state.timer = setInterval(() => { if (state.view === 'lmra' && !state.lmraForm && !state.nfc && document.visibilityState === 'visible') loadLmra(); }, 60000);
+}
+async function loadLmra() {
+  const el = $('#lbody'); const site = currentSite(); if (!el) return;
+  if (!site) { el.innerHTML = `<div class="card">${empty('helmet', 'Sem obras abertas', 'Abre uma obra em Obras.')}</div>`; return; }
+  const { data: d, error } = await sb.rpc('mini_lmra_day', { p_site: site.id });
+  if (!el.isConnected) return;
+  if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  state.lmra = d; const tz = siteTz(site.id);
+  const un = d.inside_unsigned || [];
+  el.innerHTML = `${d.stops.map((w) => `<div class="alert bad lm-stop">${ic('warn')}<div class="grow"><b>TRABALHO PARADO</b><span>${esc(stopText(w.reason))} · ${esc(fmtHour(w.at, tz))}</span></div>
+        ${d.can_lift ? `<button class="btn small ghost" data-lift="${esc(w.id)}">Levantar</button>` : ''}</div>`).join('')}
+    <div class="kpis team-kpis">
+      <div class="kpi"><b>${d.on_site}</b><span>na obra agora</span></div>
+      <div class="kpi ${d.signed_today ? 'ok' : ''}"><b>${d.signed_today}</b><span>assinaram hoje</span></div>
+      <div class="kpi ${un.length ? 'warn' : 'ok'}"><b>${un.length}</b><span>dentro sem LMRA</span></div></div>
+    ${un.length ? `<p class="small muted">${ic('warn')} Dentro sem LMRA assinado: ${esc(un.join(', '))}.</p>` : ''}
+    ${d.can_do ? `<button class="btn big" id="lnew">${ic('ok')}Fazer LMRA agora</button>` : ''}
+    <div id="lform"></div>
+    <div class="sec-h"><h2 class="eyebrow">LMRA de hoje</h2></div>
+    ${d.records.length ? `<div class="list">${d.records.map((r) => `<article class="card lm-rec ${r.safe ? 'ok' : 'bad'}">
+        <div class="wk"><span class="lm-dot">${ic(r.safe ? 'ok' : 'x')}</span><div class="grow"><div class="nm">${esc(r.place)}${r.task ? ' · ' + esc(r.task) : ''}</div>
+          <div class="sub">${esc(fmtHour(r.at, tz))} · ${esc(r.leader || '')}</div></div>
+          ${r.safe ? chip('ok', r.signed.length + ' assinaram', 'ok') : chip('bad', 'parado', 'x')}</div>
+        ${!r.safe ? `<p class="small" style="margin:8px 0 0">Falhou: ${esc((r.failed || []).map((c) => lmraQ(c)).join(' · '))}</p>` : ''}
+        ${r.signed.length ? `<p class="small muted" style="margin:8px 0 0">${esc(r.signed.map((s) => s.name).join(', '))}</p>` : ''}
+        ${r.safe && d.can_do ? `<button class="btn ghost small" data-sign="${esc(r.id)}">${ic('card')}Assinar com cartão</button>` : ''}</article>`).join('')}</div>`
+      : `<div class="card">${empty('check', 'Ainda sem LMRA hoje', d.can_do ? 'Carrega em «Fazer LMRA agora» antes de começar.' : 'O encarregado faz o LMRA antes de começar.')}</div>`}`;
+  if ($('#lnew')) $('#lnew').onclick = () => lmraForm(site);
+  el.querySelectorAll('[data-sign]').forEach((b) => b.onclick = () => lmraSign(b.dataset.sign, b.closest('.lm-rec')));
+  el.querySelectorAll('[data-lift]').forEach((b) => b.onclick = () => liftStop(b.dataset.lift));
+}
+// The stop order says «LMRA NOK: isolation, ppe»: show the questions instead of the codes.
+const stopText = (r) => { const m = /^LMRA NOK:\s*(.*)$/.exec(r || ''); return m ? 'LMRA com «Não»: ' + m[1].split(/,\s*/).map((c) => lmraQ(c)).join(' · ') : r; };
+const lmraQ = (code) => { const it = ((state.lmra && state.lmra.template.items) || []).find((i) => i.code === code); return it ? it.question : code; };
+function lmraForm(site) {
+  const box = $('#lform'); const items = state.lmra.template.items; state.lmraForm = true;
+  $('#lnew').hidden = true;
+  box.innerHTML = `<form class="card lm-form" id="lf"><h2 style="margin-top:0">${esc(state.lmra.template.name)}</h2>
+    <label for="lp">Onde é o trabalho? *</label><input id="lp" name="place" required minlength="2" maxlength="255" placeholder="ex.: Bomba P-101, piso 2">
+    <label for="lt">Que trabalho?</label><input id="lt" name="task" maxlength="200" placeholder="ex.: trocar o vedante">
+    <ol class="lm-q">${items.map((i) => `<li data-code="${esc(i.code)}"><span>${esc(i.question)}</span>
+      <div class="yn" role="radiogroup"><label class="y"><input type="radio" name="${esc(i.code)}" value="1" required>Sim</label>
+      <label class="n"><input type="radio" name="${esc(i.code)}" value="0">Não</label></div></li>`).join('')}</ol>
+    <p class="small muted">Um «Não» numa pergunta crítica para o trabalho e avisa a segurança.</p>
+    <div class="acts"><button class="btn big">Gravar LMRA</button><button class="btn ghost wide" type="button" id="lcancel">Cancelar</button></div></form>`;
+  box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  $('#lcancel').onclick = () => { state.lmraForm = false; loadLmra(); };
+  $('#lf').onsubmit = async (e) => {
+    e.preventDefault(); const f = e.target; const fd = new FormData(f); const answers = {};
+    for (const i of items) answers[i.code] = fd.get(i.code) === '1';
+    f.querySelector('button.big').disabled = true;
+    let pos = null;
+    try { pos = await new Promise((ok) => { if (!navigator.geolocation) return ok(null); navigator.geolocation.getCurrentPosition((p) => ok(p.coords), () => ok(null), { timeout: 4000, maximumAge: 300000 }); }); } catch (_) { pos = null; }
+    const { data, error } = await sb.rpc('mini_lmra_save', { p_site: site.id, p_place: String(fd.get('place')).trim(), p_task: String(fd.get('task') || '').trim(),
+      p_answers: answers, p_lat: pos ? +pos.latitude.toFixed(6) : null, p_lng: pos ? +pos.longitude.toFixed(6) : null });
+    state.lmraForm = false;
+    if (error) { f.querySelector('button.big').disabled = false; return toast(friendly(error)); }
+    if (data.safe) { beep(true); showFlash('ok', 'PODE TRABALHAR', 'Agora cada pessoa encosta o cartão para assinar.'); await loadLmra(); lmraSign(data.id); }
+    else { beep(false); showFlash('bad', 'PARAR', 'Não começar. A segurança foi avisada.'); loadLmra(); }
+  };
+}
+// Signing: the leader's phone reads each card in turn (or the number typed). A signature is one person, once.
+function lmraSign(id, anchor) {
+  stopNfc(); const nfcOk = 'NDEFReader' in window;
+  const d = document.createElement('dialog'); d.className = 'dlg';
+  d.innerHTML = `<form method="dialog"><h2>Assinar o LMRA</h2><p class="small muted">Cada pessoa da equipa encosta o cartão. Quem tem documentos em falta não pode assinar.</p>
+    ${nfcOk ? `<button class="tapzone reading" type="button" id="snfc"><span class="ring">${ic('tap')}</span><b>Encoste o cartão</b></button>` : ''}
+    <div class="manual"><input id="suid" autocomplete="off" autocapitalize="characters" placeholder="Número do cartão"><button class="btn ghost" type="button" id="sgo">Assinar</button></div>
+    <div id="sres" aria-live="polite"></div><ul class="lm-signed" id="slist"></ul>
+    <div class="acts"><button class="btn big" value="ok">Terminar</button></div></form>`;
+  document.body.appendChild(d); d.showModal();
+  const res = d.querySelector('#sres'); const list = d.querySelector('#slist'); let last = { uid: '', at: 0 }; let ctrl = null;
+  const sign = async (raw) => {
+    const uid = normUid(raw); if (!uid) return;
+    if (uid === last.uid && Date.now() - last.at < 3000) return; last = { uid, at: Date.now() };
+    const { data, error } = await sb.rpc('mini_lmra_sign', { p_lmra: id, p_uid: uid });
+    if (error) { beep(false); res.innerHTML = `<div class="result bad">${ic('x')}<div><b>Não assinou</b>${esc(friendly(error))}</div></div>`; return; }
+    beep(true);
+    res.innerHTML = `<div class="result ok">${ic('ok')}<div><b>${esc(data.name)}</b>${data.again ? 'Já tinha assinado.' : 'Assinou.'}</div></div>`;
+    if (!data.again) list.insertAdjacentHTML('afterbegin', `<li>${ic('ok')}${esc(data.name)}</li>`);
+  };
+  if (nfcOk) (async () => {
+    try { ctrl = new AbortController(); const r = new NDEFReader(); await r.scan({ signal: ctrl.signal });
+      r.onreading = (ev) => sign(ev.serialNumber); r.onreadingerror = () => { beep(false); res.innerHTML = `<div class="result bad">${ic('x')}<div><b>NÃO LIDO</b>Encosta outra vez, devagar.</div></div>`; };
+    } catch (err) { res.innerHTML = `<div class="result warn">${ic('warn')}<div><b>O leitor não ligou</b>${esc(err.name === 'NotAllowedError' ? 'Dá permissão ao NFC no Chrome.' : 'Escreve o número do cartão.')}</div></div>`; }
+  })();
+  d.querySelector('#sgo').onclick = () => { const i = d.querySelector('#suid'); sign(i.value); i.value = ''; i.focus(); };
+  d.querySelector('#suid').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); d.querySelector('#sgo').click(); } };
+  d.addEventListener('close', () => { if (ctrl) ctrl.abort(); d.remove(); if (state.view === 'lmra') loadLmra(); });
+}
+async function liftStop(id) {
+  const fd = await askSheet('Levantar a paragem', `<p class="small muted">O trabalho só recomeça quando o risco estiver resolvido. Fica registado com o teu nome.</p>
+    <label for="lr">O que foi resolvido? *</label><textarea id="lr" name="r" required minlength="10" maxlength="500" placeholder="ex.: luvas novas entregues, área isolada"></textarea>`, 'Levantar');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_stop_work_lift', { p_stop: id, p_reason: String(fd.get('r')).trim() });
+  if (error) return toast(friendly(error));
+  toast('Paragem levantada. Façam um LMRA novo antes de recomeçar.'); loadLmra();
+}
+
+// ------------------------------------------------------------------ Emergência (sql/64): counting people at the assembly points
+// Who was inside when it started is frozen; each person taps their card at their assembly point (one site can have many).
+// Without network the taps wait on this phone and go when it comes back (the server keeps the time of the tap).
+const MUSTER_Q = 'gn.muster.q';
+const EMER_KIND = { fire: 'Incêndio', gas_leak: 'Fuga de gás', explosion: 'Explosão', chemical: 'Derrame químico', drill: 'Simulacro', other: 'Outra' };
+function viewEmergency() {
+  if (!canEmergency()) return viewClock();   // code guard as well as the database's
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Contagem no ponto de encontro</p><h1>Emergência</h1></div></div>
+    <div class="team-site">${siteSelect('esite')}</div><div id="ebody">${skel(3)}</div>`;
+  bindSiteSelect('esite', () => { stopNfc(); loadEmergency(); });
+  loadEmergency();
+  state.timer = setInterval(() => { if (state.view === 'emergencia' && document.visibilityState === 'visible') loadEmergency(); }, 5000);
+}
+async function flushMuster() {
+  const q = load(MUSTER_Q, []); if (!q.length || state.offline || navigator.onLine === false) return;
+  const left = [];
+  for (const x of q) {
+    const { error } = await sb.rpc('mini_muster_scan', x);
+    if (error && /fetch|network|Failed/i.test(error.message || '')) left.push(x);
+  }
+  store(MUSTER_Q, left);
+}
+let emerSeq = 0;
+async function loadEmergency() {
+  const el = $('#ebody'); const site = currentSite(); if (!el) return;
+  if (!site) { el.innerHTML = `<div class="card">${empty('helmet', 'Sem obras abertas', 'Abre uma obra em Obras.')}</div>`; return; }
+  await flushMuster();
+  const seq = ++emerSeq; const ck = 'gn.emer.' + site.id;
+  let d = null; let error = null; let cached = false;
+  if (!state.offline && navigator.onLine !== false) ({ data: d, error } = await sb.rpc('mini_emergency', { p_site: site.id }));
+  if (seq !== emerSeq || !el.isConnected) return;
+  // Without network: the last list this phone saw, so the count can go on (the taps wait here).
+  if (!d && (!error || /fetch|network|Failed/i.test(error.message || ''))) { const c = load(ck, null); if (c) { d = c.d; cached = c.at; error = null; } }
+  if (error || !d) { el.innerHTML = `<p>${esc(error ? friendly(error) : 'Sem rede e sem lista guardada neste telemóvel.')}</p>`; return; }
+  if (!cached) store(ck, { d, at: Date.now() });
+  state.emer = d; const tz = siteTz(site.id); const ev = d.event;
+  const pending = load(MUSTER_Q, []).filter((x) => ev && x.p_event === ev.id).length;
+  if (!ev) {
+    stopNfc();
+    el.innerHTML = `<div class="em-idle card"><p class="muted" style="margin-top:0">Na obra agora: <b>${d.on_site}</b> pessoa(s). Quando começas, a lista de quem está dentro fica congelada e cada pessoa pica no ponto de encontro.</p>
+      <button class="btn big danger em-start" id="estart">${ic('warn')}COMEÇAR EMERGÊNCIA</button>
+      <button class="btn ghost wide" id="edrill">${ic('play')}Fazer um simulacro</button></div>
+      <div class="sec-h"><h2 class="eyebrow">Pontos de encontro desta obra</h2><button class="btn ghost small" id="eadd">+ Ponto</button></div>
+      <div class="card">${d.points.length ? `<ul class="em-points">${d.points.map((p) => `<li><b>${esc(p.code)}</b> ${esc(p.name)}</li>`).join('')}</ul>`
+        : '<p class="small muted" style="margin:0">Ainda sem pontos. Se começares uma emergência, a app cria o «Ponto de encontro principal».</p>'}</div>
+      ${d.last ? `<p class="small muted">Última: ${esc(EMER_KIND[d.last.kind] || d.last.kind)} em ${esc(fmtTime(d.last.started, tz))}, fechada às ${esc(fmtHour(d.last.ended, tz))}.</p>` : ''}`;
+    $('#estart').onclick = () => startEmergency(site, false);
+    $('#edrill').onclick = () => startEmergency(site, true);
+    $('#eadd').onclick = () => addPoint(site);
+    return;
+  }
+  const people = ev.people || []; const safe = people.filter((p) => p.safe); const missing = people.filter((p) => !p.safe);
+  const pts = d.points; if (!pts.find((p) => p.id === state.emerPoint)) state.emerPoint = (pts[0] || {}).id;
+  const nfcOk = 'NDEFReader' in window; const lastRes = ($('#result') || {}).innerHTML || '';
+  el.innerHTML = `<section class="em-live ${ev.kind === 'drill' ? 'drill' : ''}">
+      <div class="em-h">${ic('warn')}<div class="grow"><b>${ev.kind === 'drill' ? 'SIMULACRO' : 'EMERGÊNCIA'} · ${esc(EMER_KIND[ev.kind] || ev.kind)}</b>
+        <small>desde as ${esc(fmtHour(ev.started, tz))}${ev.by ? ' · ' + esc(ev.by) : ''}</small></div></div>
+      <div class="em-count"><div class="${missing.length ? 'miss' : 'all'}"><b>${missing.length}</b><span>em falta</span></div><div><b>${safe.length}<small>/${people.length}</small></b><span>no ponto de encontro</span></div></div>
+      <label>Estou no ponto</label><div class="chips em-pts" role="radiogroup">${pts.map((p) => `<button type="button" class="chip ${p.id === state.emerPoint ? 'on' : ''}" data-pt="${esc(p.id)}">${esc(p.code)} · ${esc(p.name)}</button>`).join('')}
+        <button type="button" class="chip" id="eadd">+ Ponto</button></div>
+      ${nfcOk ? `<button class="tapzone ${state.nfc ? 'reading' : ''}" id="nfc" aria-pressed="${state.nfc ? 'true' : 'false'}"><span class="ring">${ic('tap')}</span><b id="nfclbl">${state.nfc ? 'Encoste o cartão' : 'Tocar para ligar o leitor'}</b>
+        <span class="small" id="nfchelp">${state.nfc ? 'Cada pessoa encosta o cartão ao chegar ao ponto.' : 'Depois cada pessoa encosta o cartão.'}</span></button>` : ''}
+      <form class="manual" id="emanual"><input id="euid" autocomplete="off" autocapitalize="characters" placeholder="Número do cartão"><button class="btn ghost">Picar</button></form>
+      <div id="result" aria-live="polite">${lastRes}</div>
+      ${cached ? `<div class="result warn">${ic('cloud')}<div><b>Sem rede</b>Lista de ${esc(new Date(cached).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }))}. As picagens ficam guardadas e vão quando a rede voltar.</div></div>` : ''}
+      ${pending ? `<p class="small">${ic('cloud')} ${pending} picagem(ns) à espera de rede neste telemóvel.</p>` : ''}
+    </section>
+    ${missing.length ? `<div class="sec-h"><h2 class="eyebrow" style="color:var(--bad)">Em falta (${missing.length})</h2></div>
+      <div class="card em-list">${missing.map((p) => `<div class="em-p miss">${avatar(p.name)}<div class="grow"><b>${esc(p.name)}</b><small>visto às ${esc(fmtHour(p.last_seen, tz))}</small></div>
+        ${p.phone ? `<a class="btn ghost small" href="tel:${esc(String(p.phone).replace(/[^\d+]/g, ''))}">${ic('phone')}Ligar</a>` : ''}
+        <button class="btn ghost small" data-mark="${esc(p.id)}" data-name="${esc(p.name)}">Está salvo</button></div>`).join('')}</div>`
+      : `<div class="alert ok">${ic('ok')}<div><b>Todos contados.</b> Ninguém em falta.</div></div>`}
+    ${(ev.extra || []).length ? `<p class="small muted">Picaram sem estarem na lista: ${esc(ev.extra.join(', '))}.</p>` : ''}
+    ${safe.length ? `<div class="sec-h"><h2 class="eyebrow">No ponto de encontro (${safe.length})</h2></div>
+      <div class="card em-list">${safe.map((p) => `<div class="em-p">${avatar(p.name)}<div class="grow"><b>${esc(p.name)}</b><small>${esc(p.point || '')} · ${esc(fmtHour(p.at, tz))}${p.manual ? ' · marcado à mão' : ''}</small></div>${chip('ok', 'salvo', 'ok')}</div>`).join('')}</div>` : ''}
+    <button class="btn ghost wide" id="eend" style="margin-top:16px">Terminar ${ev.kind === 'drill' ? 'simulacro' : 'emergência'}</button>`;
+  el.querySelectorAll('[data-pt]').forEach((b) => b.onclick = () => { state.emerPoint = b.dataset.pt; el.querySelectorAll('[data-pt]').forEach((x) => x.classList.toggle('on', x === b)); });
+  $('#eadd').onclick = () => addPoint(site);
+  if (nfcOk) $('#nfc').onclick = () => (state.nfc ? stopNfc() : musterNfc());
+  $('#emanual').onsubmit = (e) => { e.preventDefault(); const i = $('#euid'); musterTap(i.value); i.value = ''; i.focus(); };
+  el.querySelectorAll('[data-mark]').forEach((b) => b.onclick = () => markSafe(b.dataset.mark, b.dataset.name));
+  $('#eend').onclick = () => endEmergency(ev);
+}
+async function musterNfc() {
+  try {
+    const ctrl = new AbortController(); const reader = new NDEFReader();
+    await reader.scan({ signal: ctrl.signal }); state.nfc = ctrl; nfcLook(true);
+    $('#nfchelp').textContent = 'Cada pessoa encosta o cartão ao chegar ao ponto.';
+    let last = { uid: '', at: 0 };
+    reader.onreading = (ev) => { const uid = normUid(ev.serialNumber); if (!uid || (uid === last.uid && Date.now() - last.at < 3000)) return; last = { uid, at: Date.now() }; musterTap(uid); };
+    reader.onreadingerror = () => { beep(false); showResult('bad', 'NÃO LIDO', 'Encosta outra vez, devagar.'); };
+  } catch (err) { toast(err.name === 'NotAllowedError' ? 'Dá permissão ao NFC no Chrome.' : 'O NFC não arrancou: ' + err.message); }
+}
+async function musterTap(raw) {
+  const uid = normUid(raw); const ev = state.emer && state.emer.event; if (!uid || !ev) return;
+  if (!state.emerPoint) return toast('Escolhe o ponto de encontro.');
+  const x = { p_event: ev.id, p_point: state.emerPoint, p_uid: uid, p_client_id: uuid(), p_at: serverNow().toISOString() };
+  let data = null; let error = null;
+  if (!state.offline && navigator.onLine !== false) ({ data, error } = await sb.rpc('mini_muster_scan', x));
+  if (state.offline || navigator.onLine === false || (error && /fetch|network|Failed/i.test(error.message || ''))) {
+    store(MUSTER_Q, [...load(MUSTER_Q, []), x]); beep(true);
+    return showResult('warn', 'GUARDADO', 'Sem rede: a picagem vai quando a rede voltar.');
+  }
+  if (error) { beep(false); return showResult('bad', 'Não ficou registado', friendly(error)); }
+  beep(true);
+  if (!data.known) showResult('warn', 'Cartão desconhecido', 'Ficou registado. Pergunta o nome à pessoa.');
+  else showResult('ok', data.name, data.expected ? 'Está no ponto de encontro.' : 'Não estava na lista de quem estava dentro. Ficou registado.');
+  loadEmergency();
+}
+async function startEmergency(site, drill) {
+  const kinds = drill ? { drill: EMER_KIND.drill } : Object.fromEntries(Object.entries(EMER_KIND).filter(([k]) => k !== 'drill'));
+  const fd = await askSheet(drill ? 'Começar simulacro' : 'Começar emergência', `
+    ${drill ? '' : '<p class="small" style="color:var(--bad)"><b>Primeiro a segurança das pessoas. Liga 112 se for preciso.</b></p>'}
+    <label>O quê? *</label><div class="chips reasons" role="radiogroup">${Object.entries(kinds).map(([k, v], i) => `<label class="chip"><input type="radio" name="k" value="${k}" ${i ? '' : 'checked'} required>${esc(v)}</label>`).join('')}</div>
+    <label for="en">Nota</label><input id="en" name="n" maxlength="500" placeholder="ex.: alarme na unidade 3">
+    <p class="small muted">Quem está na obra agora fica na lista. O encarregado, a segurança e o gestor são avisados.</p>`, drill ? 'Começar simulacro' : 'COMEÇAR');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_emergency_start', { p_site: site.id, p_kind: fd.get('k'), p_note: String(fd.get('n') || '').trim() || null });
+  if (error) return toast(friendly(error));
+  loadEmergency().then(() => { if ('NDEFReader' in window && !state.nfc) musterNfc(); });
+}
+async function addPoint(site) {
+  const fd = await askSheet('Novo ponto de encontro', `<label for="pn">Nome *</label><input id="pn" name="n" required minlength="2" maxlength="120" placeholder="ex.: Portaria Norte">
+    <p class="small muted">Uma obra pode ter vários pontos (fábricas grandes têm muitos). Ficam numerados PE1, PE2…</p>`, 'Acrescentar');
+  if (!fd) return;
+  const { data, error } = await sb.rpc('mini_assembly_point_add', { p_site: site.id, p_name: String(fd.get('n')).trim() });
+  if (error) return toast(friendly(error));
+  state.emerPoint = data; loadEmergency();
+}
+async function markSafe(id, name) {
+  const pts = (state.emer && state.emer.points) || [];
+  const fd = await askSheet(`${name} está salvo`, `<p class="small muted">Para quem não tem o cartão. Fica registado com o teu nome.</p>
+    <label for="mp">Em que ponto?</label><select id="mp" name="p">${pts.map((p) => `<option value="${esc(p.id)}" ${p.id === state.emerPoint ? 'selected' : ''}>${esc(p.code)} · ${esc(p.name)}</option>`).join('')}</select>
+    <label for="mn">Como sabes? *</label><input id="mn" name="n" required minlength="3" maxlength="200" placeholder="ex.: vi-o no ponto, sem cartão">`, 'Marcar salvo');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_muster_mark', { p_event: state.emer.event.id, p_point: fd.get('p'), p_collab: id, p_note: String(fd.get('n')).trim() });
+  if (error) return toast(friendly(error));
+  loadEmergency();
+}
+async function endEmergency(ev) {
+  const missing = (ev.people || []).filter((p) => !p.safe).length;
+  const fd = await askSheet(`Terminar ${ev.kind === 'drill' ? 'simulacro' : 'emergência'}`, `
+    ${missing ? `<p class="small" style="color:var(--bad)"><b>Ainda há ${missing} pessoa(s) em falta.</b> Só termines se souberes onde estão.</p>` : ''}
+    <label for="ee">Como acabou? *</label><textarea id="ee" name="n" required minlength="5" maxlength="500" placeholder="ex.: todos contados, alarme falso"></textarea>`, 'Terminar');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_emergency_end', { p_event: ev.id, p_note: String(fd.get('n')).trim() });
+  if (error) return toast(friendly(error));
+  stopNfc(); toast('Terminada. Fica no registo.'); loadEmergency();
+}
+// A red bar on every screen while an emergency is open at the chosen site, so nobody misses one someone else started.
+async function checkEmergencyBar() {
+  let bar = document.getElementById('emerbar');
+  const site = currentSite();
+  if (!state.ready || !canEmergency() || state.offline || !site || state.view === 'emergencia') { if (bar) bar.hidden = true; return; }
+  const { data } = await sb.rpc('mini_emergency', { p_site: site.id });
+  const ev = data && data.event;
+  if (!bar) { bar = document.createElement('button'); bar.id = 'emerbar'; bar.type = 'button'; bar.onclick = () => go('emergencia'); document.querySelector('header.top').after(bar); }
+  bar.hidden = !ev || state.view === 'emergencia';
+  if (ev) { const miss = (ev.people || []).filter((p) => !p.safe).length;
+    bar.className = ev.kind === 'drill' ? 'drill' : '';
+    bar.innerHTML = `${ic('warn')}<b>${ev.kind === 'drill' ? 'SIMULACRO' : 'EMERGÊNCIA'} em ${esc(site.title)}</b><span>${miss} em falta · tocar para contar</span>`; }
+}
+setInterval(() => { if (document.visibilityState === 'visible') checkEmergencyBar(); }, 20000);
