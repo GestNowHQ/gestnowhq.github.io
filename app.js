@@ -784,22 +784,65 @@ WIDE.addEventListener('change', () => {
   layoutNav(state.me.role);
   if (state.view === 'secretariado') viewOffice();
 });
+// «Mais» grouped under headings (founder-approved v48): each screen once, each icon with one meaning. «Processo» left the
+// menu (the «?» button and the search still open it); «Produção» is reached from the Dashboard when this login sees it.
+const MENU_GROUPS = [
+  ['Obra', ['picar', 'naobra', 'painel', 'obras', 'equipa', 'lmra', 'emergencia', 'seguranca', 'andaimes']],
+  ['Pessoas', ['trabalhadores', 'acolhimento', 'horas', 'minhas']],
+  ['Logística', ['armazem', 'compras', 'frota', 'alojamento', 'viagens']],
+  ['Gestão', ['orcamentos', 'qualidade', 'despesas', 'producao']],
+  ['Empresa', ['secretariado', 'clientes', 'processo']],
+];
+// Icons drawn for the menu so no two screens share one (M-3): added to the page's sprite once.
+const ENC_ICONS = {
+  gauge: '<path d="M4 17a8 8 0 1 1 16 0M12 17l4-5M7 17h.01M17 17h.01M12 9h.01"/>',
+  chart: '<path d="M4 20h16M7 16v-4M11 16V8M15 16v-6M19 16V5"/>',
+  hhat: '<path d="M4 16a8 8 0 0 1 16 0M3 16h18v2.5H3zM10 8.5V5.5h4v3"/>',
+  crew: '<path d="M7.5 9a4.5 4.5 0 0 1 9 0M6 9h12M9 12.5a3 3 0 0 0 6 0M5 21a7 7 0 0 1 14 0"/>',
+  myclock: '<path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2.5 21a6.5 6.5 0 0 1 9-6M17 13a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM17 15.5V17l1 1"/>',
+  gate: '<path d="M3 21V7M21 21V7M3 10h18M3 15h18M8 10v5M13 10v5M18 10v5M3 7l4-3h10l4 3"/>',
+  medal: '<path d="M12 14a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM9.5 13.3 8 21l4-2 4 2-1.5-7.7M10 9l1.5 1.5L14.5 7.5"/>',
+};
+const MENU_ICON = { painel: 'gauge', producao: 'chart', seguranca: 'hhat', equipa: 'crew', minhas: 'myclock', naobra: 'gate', qualidade: 'medal' };
+(function encIcons() {
+  const ns = 'http://www.w3.org/2000/svg'; const sp = document.createElementNS(ns, 'svg');
+  sp.setAttribute('width', '0'); sp.setAttribute('height', '0'); sp.setAttribute('aria-hidden', 'true'); sp.style.position = 'absolute';
+  sp.innerHTML = Object.entries(ENC_ICONS).map(([k, d]) => `<symbol id="i-${k}" viewBox="0 0 24 24">${d}</symbol>`).join('');
+  document.body.prepend(sp);
+  for (const [v, k] of Object.entries(MENU_ICON)) { const u = document.querySelector(`#nav button[data-view="${v}"] use`); if (u) u.setAttribute('href', '#i-' + k); }
+})();
 function layoutNav(role) {
   const tabs = document.getElementById('tabs'); const sheet = document.getElementById('more');
   const btn = (v) => nav.querySelector(`button[data-view="${v}"]`);
+  const all = [...nav.querySelectorAll('button[data-view]')].map((b) => b.dataset.view);
+  // Out of the menu, still reachable: Processo by «?» and the search; Produção by the Dashboard (only when this login opens it).
+  const off = (v) => v === 'processo' || (v === 'producao' && !btn('painel').hidden);
+  for (const v of all) btn(v).classList.toggle('enc-off', off(v));
+  const shown = (v) => !btn(v).hidden && !off(v);
+  const grouped = MENU_GROUPS.flatMap((g) => g[1]);
+  const groups = [...MENU_GROUPS, ['Outros', all.filter((v) => !grouped.includes(v))]];
   const first = (TABS[role] || TABS.supervisor).filter((v) => !btn(v).hidden);
-  const main = isWide() ? [...first, ...MORE_ORDER.filter((v) => !first.includes(v) && !btn(v).hidden)] : first;
   const moreBtn = nav.querySelector('button[data-more]');
-  for (const v of main) tabs.insertBefore(btn(v), moreBtn);
-  for (const v of MORE_ORDER) if (!main.includes(v) && !btn(v).hidden) sheet.appendChild(btn(v));
-  for (const v of MORE_ORDER) if (btn(v).hidden && btn(v).parentElement !== sheet) sheet.appendChild(btn(v));
+  nav.querySelectorAll('.enc-mh').forEach((h) => h.remove());
+  sheet.querySelectorAll('hr').forEach((h) => h.remove());
+  const head = (t) => Object.assign(document.createElement('h3'), { className: 'enc-mh', textContent: t });
+  for (const v of first) tabs.insertBefore(btn(v), moreBtn);
+  // Phone: the role's tabs at the bottom, the rest in the sheet by group. Computer: everything in the left column, by group.
+  const place = isWide() ? (el) => tabs.insertBefore(el, moreBtn) : (el) => sheet.appendChild(el);
+  for (const [title, views] of groups) {
+    const rest = views.filter((v) => all.includes(v) && !first.includes(v) && shown(v));
+    if (!rest.length) continue;
+    place(head(title)); for (const v of rest) place(btn(v));
+  }
+  for (const v of all) if (!first.includes(v) && !shown(v)) sheet.appendChild(btn(v));   // hidden ones wait in the sheet
   sheet.appendChild(nav.querySelector('button[data-action=tour]'));
   sheet.appendChild(Object.assign(document.createElement('hr'), {}));
   sheet.appendChild(nav.querySelector('button[data-action=sair]'));
-  sheet.querySelectorAll('hr').forEach((h, i, all) => { if (i < all.length - 1) h.remove(); });
   // Which version this phone is running, so anyone can check that an update arrived.
-  if (!sheet.querySelector('.ver')) sheet.appendChild(Object.assign(document.createElement('p'), { className: 'ver', textContent: 'Versão ' + APP_VERSION }));
+  const ver = sheet.querySelector('.ver') || Object.assign(document.createElement('p'), { className: 'ver', textContent: 'Versão ' + APP_VERSION });
+  sheet.appendChild(ver);
   if (isWide()) { tabs.insertBefore(nav.querySelector('button[data-action=tour]'), moreBtn); tabs.insertBefore(nav.querySelector('button[data-action=sair]'), moreBtn); }
+  encBadges(true);
 }
 function openMore(open) {
   const sheet = document.getElementById('more'); if (!sheet) return;
@@ -947,6 +990,8 @@ async function boot() {
   nav.querySelector('[data-view=despesas]').hidden = worker || state.offline || !canExpenses();
   nav.querySelector('[data-view=andaimes]').hidden = worker || state.offline || !canScaffolds();
   if (me.role === 'supervisor' && !state.booted && state.view === 'picar' && canSiteDetails()) state.view = 'equipa';
+  // v48: the office opens on its own first tab (Secretariado for HR), not on Picar, which it rarely uses.
+  if (!state.booted && state.view === 'picar' && TABS[me.role] && !TABS[me.role].includes('picar')) state.view = TABS[me.role][0];
   state.booted = true;
   if (state.view === 'minhas' && !me.collaborator_id) state.view = (TABS[me.role] || TABS.supervisor)[0];
   layoutNav(me.role);
@@ -1346,7 +1391,7 @@ function go(view) {
      ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients,
      processo: viewProcess, orcamentos: viewEstimates, lmra: viewLmra, emergencia: viewEmergency,
      armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, producao: viewProd, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
-  checkEmergencyBar();
+  checkEmergencyBar(); encBadges();
 }
 
 // ------------------------------------------------------------------ Clientes (the GestNow owner's console, sql/59)
@@ -1415,19 +1460,27 @@ async function newClient() {
 
 // ------------------------------------------------------------------ A minha equipa (the team leader's start screen)
 // One site at a time: who is in, who has not arrived, who may not enter, and what is waiting for the team leader.
+// The team leader's home (v48): today on one board. Big counts, one row per person with the time in, and the two
+// things he does from here in one tap: a missed tap, and why someone cannot enter. Picar is the first button.
+const TEAM_FILTERS = [['all', 'Todos'], ['in', 'Dentro'], ['absent', 'Em falta'], ['blocked', 'Bloqueados'], ['left', 'Saíram']];
 function viewTeam() {
   if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canSiteDetails()) return viewClock();   // code guard as well as the database's
   const today = new Date().toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long' });
-  app.innerHTML = `<div class="ph"><div><p class="ph-k">${esc(today)}</p><h1>A minha equipa</h1></div></div>
+  state.teamFilter = state.teamFilter || 'all';
+  app.innerHTML = `<div class="enc-board"><div class="enc-main">
+    <div class="ph"><div><p class="ph-k">${esc(today)}</p><h1>A minha equipa</h1></div></div>
     <div class="team-site">${siteSelect('tsite')}</div>
+    <button class="enc-picar" id="tpic">${ic('tap')}<span><b>PICAR</b><small>Entrada, saída e almoço · cartão ou número</small></span>${ic('go', 'enc-go')}</button>
     <div id="tkpis">${skel(1)}</div>
-    <div class="team-acts"><button class="btn big" id="tpic">${ic('tap')}Picar a equipa</button><button class="btn big ghost" id="tval">${ic('ok')}Validar a semana</button>
+    <div id="talert"></div>
+    <div class="enc-filter" id="tfilter" role="group" aria-label="Mostrar"></div>
+    <div id="tlist">${skel(4)}</div>
+    </div><aside class="enc-side">
+    <div class="team-acts"><button class="btn big ghost" id="tval">${ic('ok')}<span>Validar a semana</span></button>
       ${canLmra() ? `<button class="btn big ghost" id="tlmra">${ic('shield')}LMRA</button>` : ''}${canEmergency() ? `<button class="btn big danger" id="temer">${ic('warn')}Emergência</button>` : ''}
       <button class="btn ghost wide look" id="tlook">${ic('card')}<span><b>O colaborador quer ver as horas</b><small>Ele encosta o cartão dele ao teu telemóvel</small></span></button></div>
-    <div id="talert"></div>
-    <div id="treq"></div>
-    <div class="sec-h"><h2 class="eyebrow">Hoje na obra</h2></div><div id="tlist">${skel(4)}</div>`;
+    <div id="treq"></div></aside></div>`;
   bindSiteSelect('tsite', loadTeam);
   $('#tpic').onclick = () => go('picar');
   $('#tval').onclick = () => go('horas');
@@ -1437,32 +1490,113 @@ function viewTeam() {
   loadTeam();
   state.timer = setInterval(() => { if (state.view === 'equipa' && document.visibilityState === 'visible') loadTeam(); }, 60000);
 }
+// What a person's day looks like right now: blocked (cannot enter), in, at lunch (out less than 2 h ago), left, or not here yet.
+function teamState(p) {
+  if (p.blocked && p.state !== 'in') return 'blocked';
+  if (p.state === 'left' && p.last_at && Date.now() - new Date(p.last_at).getTime() < 2 * 3600000) return 'pause';
+  return p.state;
+}
 let teamSeq = 0;
 async function loadTeam() {
   const site = currentSite(); const el = $('#tlist'); if (!el) return;
   if (!site) { el.innerHTML = `<div class="card">${empty('box', 'Sem obras abertas', 'Quando tiveres uma obra, a tua equipa aparece aqui.')}</div>`; $('#tkpis').innerHTML = ''; return; }
   const seq = ++teamSeq; const tz = siteTz(site.id);
-  const [{ data: team, error }, room] = await Promise.all([sb.rpc('mini_team_today', { p_project: site.id }), sb.rpc('mini_control_room')]);
+  const dayStart = zonedToUtc(localDay(new Date().toISOString(), tz) + 'T00:00', tz);
+  const [{ data: team, error }, room, refused] = await Promise.all([sb.rpc('mini_team_today', { p_project: site.id }), sb.rpc('mini_control_room'),
+    core().from('time_events').select('collaborator_id, event_time, reasons').eq('project_id', site.id).eq('status', 'rejected')
+      .gte('event_time', dayStart || new Date(Date.now() - 86400000).toISOString()).order('event_time', { ascending: false }).limit(50)]);
   if (seq !== teamSeq || !el.isConnected) return;
   if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
   const s = ((room.data && room.data.sites) || []).find((x) => x.id === site.id) || {};
-  const n = (k) => team.filter((p) => p.state === k).length;
-  const blocked = team.filter((p) => p.blocked).length;
-  $('#tkpis').innerHTML = `<div class="kpis k4 team-kpis">
-    <div class="kpi ok"><b>${n('in')}<small>/${team.length}</small></b><span>na obra agora</span></div>
-    <div class="kpi ${n('absent') ? 'warn' : ''}"><b>${n('absent')}</b><span>ainda não chegaram</span></div>
-    <div class="kpi ${blocked ? 'bad' : ''}"><b>${blocked}</b><span>não podem entrar</span></div>
-    <button class="kpi ${s.to_validate ? 'info' : ''}" data-go="horas"><b>${s.to_validate || 0}</b><span>dias por validar</span></button></div>`;
-  $('#tkpis').querySelector('[data-go]').onclick = () => go('horas');
-  $('#talert').innerHTML = s.missing_out ? `<div class="result warn">${ic('warn')}<div><b>${s.missing_out} saída(s) em falta nos últimos 7 dias</b>Marca-as em Horas, com o motivo.</div></div>` : '';
-  if (!team.length) { el.innerHTML = `<div class="card">${empty('box', 'Ninguém atribuído a esta obra', 'O escritório atribui as pessoas à obra em Pessoas.')}</div>`; return; }
-  const ST = { in: (p) => chip('val', 'na obra desde ' + fmtHour(p.first_in, tz), 'ok'), left: (p) => chip('', 'saiu às ' + fmtHour(p.last_at, tz)),
-    absent: () => chip('reg', 'ainda não picou') };
-  el.innerHTML = `<div class="card team-list">${team.map((p) => `<button class="tm ${p.state}" data-id="${esc(p.id)}">
-      <span class="tm-av">${avatar(p.name)}<i></i></span><span class="grow"><b>${esc(p.name)}</b><small>${esc(p.number || '')}</small></span>
-      <span class="tags">${p.blocked ? chip('anom', 'não pode entrar: faltam documentos', 'warn') : ST[p.state](p)}</span></button>`).join('')}</div>`;
+  const tried = {};   // today's refused taps per person: the newest one says why
+  for (const e of (refused && refused.data) || []) if (e.collaborator_id && !tried[e.collaborator_id]) tried[e.collaborator_id] = e;
+  const rows = team.map((p) => ({ ...p, st: teamState(p), tried: tried[p.id] }));
+  const c = (k) => rows.filter((p) => p.st === k).length;
+  const inside = c('in'); const missing = c('absent'); const blocked = c('blocked');
+  const tval = $('#tval'); if (tval) tval.querySelector('span').textContent = s.to_validate ? `Validar a semana · ${s.to_validate} dia(s)` : 'Validar a semana';
+  $('#tkpis').innerHTML = `<div class="enc-counts">
+    <button class="enc-c ok" data-f="in"><b class="tnum">${inside}<small>/${rows.length}</small></b><span>dentro agora</span></button>
+    <button class="enc-c" data-f="all"><b class="tnum">${rows.length}</b><span>esperados hoje</span></button>
+    <button class="enc-c ${missing ? 'warn' : ''}" data-f="absent"><b class="tnum">${missing}</b><span>em falta</span></button>
+    <button class="enc-c ${blocked ? 'bad' : ''}" data-f="blocked"><b class="tnum">${blocked}</b><span>bloqueados</span></button></div>`;
+  const alerts = [];
+  if (s.to_validate) alerts.push(`<button class="enc-al info" data-go="horas">${ic('clock')}<span><b>${s.to_validate} dia(s) por validar</b>Valida em Horas: depois seguem para o Secretariado.</span>${ic('go')}</button>`);
+  if (s.missing_out) alerts.push(`<button class="enc-al warn" data-go="horas">${ic('warn')}<span><b>${s.missing_out} saída(s) em falta nos últimos 7 dias</b>Marca-as em Horas, com o motivo.</span>${ic('go')}</button>`);
+  $('#talert').innerHTML = alerts.join('');
+  $('#talert').querySelectorAll('[data-go]').forEach((b) => b.onclick = () => go(b.dataset.go));
+  const f = state.teamFilter;
+  const n = { all: rows.length, in: inside, absent: missing, blocked, left: c('left') + c('pause') };
+  $('#tfilter').innerHTML = TEAM_FILTERS.map(([k, t]) => `<button class="enc-chip ${f === k ? 'on' : ''}" data-f="${k}" aria-pressed="${f === k}">${esc(t)} <b>${n[k]}</b></button>`).join('');
+  app.querySelectorAll('#tfilter [data-f], #tkpis [data-f]').forEach((b) => b.onclick = () => { state.teamFilter = b.dataset.f; loadTeam(); });
+  if (!rows.length) { el.innerHTML = `<div class="card">${empty('box', 'Ninguém atribuído a esta obra', 'O escritório atribui as pessoas à obra em Pessoas.')}</div>`; loadPending('#treq', site.id); return; }
+  const ORDER = { blocked: 0, absent: 1, in: 2, pause: 3, left: 4 };
+  const shown = rows.filter((p) => f === 'all' || p.st === f || (f === 'left' && p.st === 'pause')).sort((a, b) => ORDER[a.st] - ORDER[b.st] || a.name.localeCompare(b.name, 'pt'));
+  const me = state.me && state.me.collaborator_id;
+  const ST = {
+    blocked: (p) => [chip('anom', 'bloqueado', 'x'), p.tried ? `tentou às ${fmtHour(p.tried.event_time, tz)}` : 'faltam documentos'],
+    absent: () => [chip('warn', 'em falta', 'clock'), 'ainda não picou'],
+    in: (p) => [chip('ok', 'dentro', 'ok'), p.blocked ? 'atenção: documentos em falta' : ''],
+    pause: (p) => [chip('info', 'em pausa'), `saiu às ${fmtHour(p.last_at, tz)}`],
+    left: (p) => [chip('', 'saiu'), `entrou às ${fmtHour(p.first_in, tz)}`],
+  };
+  const time = (p) => p.st === 'in' ? [fmtHour(p.first_in, tz), 'entrou'] : p.st === 'pause' || p.st === 'left' ? [fmtHour(p.last_at, tz), 'saiu'] : p.tried ? [fmtHour(p.tried.event_time, tz), 'recusado'] : ['–', ''];
+  el.innerHTML = shown.length ? `<div class="enc-list">${shown.map((p) => { const [ch, sub] = ST[p.st](p); const [t, tl] = time(p);
+    return `<div class="enc-p ${p.st}">
+      <button class="enc-p-main" data-id="${esc(p.id)}" aria-label="Abrir a ficha de ${esc(p.name)}"><span class="tm-av">${avatar(p.name)}<i></i></span>
+        <span class="grow"><b>${esc(p.name)}</b><small>${ch}${sub ? ` <span>${esc(sub)}</span>` : ''}</small></span></button>
+      <span class="enc-p-t">${tl ? `<b class="tnum">${esc(t)}</b><small>${esc(tl)}</small>` : ''}</span>
+      <span class="enc-p-a">${p.blocked || p.tried ? `<button class="btn small ${p.st === 'blocked' ? 'danger' : 'ghost'}" data-why="${esc(p.id)}">${ic('warn')}Porquê?</button>` : ''}
+        ${p.id !== me && (p.st === 'absent' || p.st === 'pause') ? `<button class="btn small ghost" data-miss="${esc(p.id)}">${ic('clock')}Picagem esquecida</button>` : ''}</span></div>`; }).join('')}</div>`
+    : `<div class="card">${empty('check', 'Ninguém nesta lista', 'Escolhe «Todos» para ver a equipa toda.')}</div>`;
   el.querySelectorAll('[data-id]').forEach((b) => b.onclick = () => { state.worker = b.dataset.id; go('ficha'); });
+  el.querySelectorAll('[data-why]').forEach((b) => b.onclick = () => whyBlocked(rows.find((p) => p.id === b.dataset.why), tz));
+  el.querySelectorAll('[data-miss]').forEach((b) => b.onclick = async () => { if (await teamMissedTap(rows.find((p) => p.id === b.dataset.miss), site.id)) loadTeam(); });
   loadPending('#treq', site.id);
+}
+// «Porquê?»: the documents that block this person, today's refused taps with the reason, and what to do, in plain words.
+async function whyBlocked(p, tz) {
+  if (!p) return;
+  const { data, error } = await sb.rpc('mini_worker_documents', { p_collab: p.id });
+  const bad = (data || []).filter((d) => d.is_blocking && ['caducado', 'em_falta'].includes(d.state));
+  const reasons = p.tried ? (p.tried.reasons || []).map(reasonText) : [];
+  const todo = [...new Set([...bad.map(() => 'O escritório (RH) regista o documento na ficha, com a foto. Até lá não pode trabalhar.'), ...reasons.map(encAdvice)])];
+  const fd = await askSheet(`${p.name}: ${p.st === 'blocked' ? 'não pode entrar' : 'atenção'}`, `
+    ${error ? `<p class="small muted">${esc(friendly(error))}</p>` : ''}
+    ${bad.length ? `<h3 class="enc-sh3">Documentos que bloqueiam</h3><ul class="enc-why">${bad.map((d) => `<li>${ic('x')}<span><b>${esc(d.name)}</b>${d.state === 'caducado' && d.expiration_date ? `caducou a ${esc(fmtDate(d.expiration_date))}` : 'em falta'}</span></li>`).join('')}</ul>` : ''}
+    ${p.tried ? `<h3 class="enc-sh3">Tentou entrar hoje às ${esc(fmtHour(p.tried.event_time, tz))}</h3><ul class="enc-why">${reasons.map((r) => `<li>${ic('x')}<span>${esc(r)}</span></li>`).join('')}</ul>` : ''}
+    ${!bad.length && !p.tried ? '<p>Sem documentos bloqueados neste momento.</p>' : ''}
+    ${todo.length ? `<h3 class="enc-sh3">O que fazer</h3><ul class="enc-todo">${todo.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}`, 'Abrir a ficha');
+  if (fd) { state.worker = p.id; go('ficha'); }
+}
+// A missed tap straight from the board: entry or exit, the time on the site's clock, and why (the same rule as in Horas).
+const MISS_REASONS = ['Esqueceu-se de picar', 'O cartão não leu', 'Estava na obra, confirmado por mim'];
+async function teamMissedTap(p, project) {
+  if (!p) return false;
+  const tz = siteTz(project); const now = localInput(new Date().toISOString(), tz);
+  const dir = p.st === 'in' ? 'out' : 'in';
+  const fd = await askSheet(`Picagem esquecida: ${p.name}`, `
+    <p class="small muted">${p.first_in ? `Entrou às ${esc(fmtHour(p.first_in, tz))}. ` : ''}Hora da obra (${esc(tzName(tz))}). Fica marcada como posta à mão, com o teu nome.</p>
+    <div class="enc-seg" role="radiogroup" aria-label="Entrada ou saída">
+      <label><input type="radio" name="dir" value="in" ${dir === 'in' ? 'checked' : ''}><span>${ic('in')}ENTRADA</span></label>
+      <label><input type="radio" name="dir" value="out" ${dir === 'out' ? 'checked' : ''}><span>${ic('out')}SAÍDA</span></label></div>
+    <div class="row"><div><label for="md">Dia</label><input id="md" name="d" type="date" required value="${esc(now.slice(0, 10))}" max="${esc(now.slice(0, 10))}"></div>
+      <div><label for="mt">Hora *</label><input id="mt" name="t" type="time" required value="${esc(now.slice(11))}"></div></div>
+    <label>Porquê? *</label><div class="chips reasons" role="radiogroup">${MISS_REASONS.map((r, i) => `<label class="chip"><input type="radio" name="r" value="${esc(r)}" ${i ? '' : 'required'}>${esc(r)}</label>`).join('')}
+      <label class="chip"><input type="radio" name="r" value="">Outro motivo</label></div>
+    <input name="x" id="mx" placeholder="Escreve o motivo" hidden maxlength="200">`, 'Acrescentar picagem', (d) => {
+    const x = d.querySelector('#mx');
+    d.querySelectorAll('input[name=r]').forEach((r) => r.onchange = () => { x.hidden = r.value !== ''; x.required = r.value === ''; if (!x.hidden) x.focus(); });
+  });
+  if (!fd) return false;
+  const at = zonedToUtc(`${fd.get('d')}T${fd.get('t')}`, tz);
+  const why = String(fd.get('r') || fd.get('x') || '').trim();
+  if (!at) { toast('Escreve a hora.'); return false; }
+  if (new Date(at) > new Date(Date.now() + 60000)) { toast('A hora não pode ser depois de agora.'); return false; }
+  if (why.length < 10) { toast('Escreve o motivo (pelo menos 10 letras).'); return false; }
+  const { error } = await sb.rpc('mini_add_missed_tap', { p_collab: p.id, p_project: project, p_direction: fd.get('dir'), p_time: at, p_reason: why });
+  if (error) { toast(friendly(error)); return false; }
+  toast(`${fd.get('dir') === 'in' ? 'Entrada' : 'Saída'} acrescentada: ${p.name}, ${fmtTime(at, tz)}.`);
+  return true;
 }
 // What waits for an answer: workers' disagreements with a day and their requests for holidays or absences.
 // Team leader: one site, gives the first word on requests. Office: every site, decides.
@@ -1519,10 +1653,11 @@ async function loadPending(sel, project) {
 function viewClock() {
   if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   const nfcOk = 'NDEFReader' in window;
+  state.lunch = false;   // the lunch mode lasts while this screen is open
   // One dark "terminal" panel: clock, site, the card reader and the direction. Everything else sits beside it (computer) or under it (phone).
-  app.innerHTML = `<div class="pic-grid"><div>
+  app.innerHTML = `<div class="pic-grid enc-pic"><div>
     <section class="pic-hero">
-      <div class="pic-top"><h1>Picar</h1><span class="live" id="live" hidden></span></div>
+      <div class="pic-top"><h1>Picar</h1><span class="enc-q" id="encq" hidden></span><span class="live" id="live" hidden></span></div>
       <div class="clock" id="clk"></div><div class="clkday" id="clkday"></div>
       ${state.offline ? `<div class="result warn">${ic('cloud')}<div><b>Sem rede</b>Só podes picar. As picagens ficam guardadas neste telemóvel e são enviadas quando a rede voltar.</div></div>` : ''}
       <div id="clockwarn"></div>
@@ -1530,23 +1665,28 @@ function viewClock() {
       ${nfcOk ? `<button class="tapzone" id="nfc" aria-pressed="false"><span class="ring">${ic('tap')}</span><b id="nfclbl">Tocar para ligar o leitor</b>
           <span class="small" id="nfchelp">Depois é só encostar o cartão às costas do telemóvel.</span></button>`
         : `<div class="nonfc">${ic('key')}<span>Este aparelho não lê cartões pelo browser (só o Chrome em Android). Usa o leitor USB ou escreve o número.</span></div>`}
-      <div class="dir" role="group" aria-label="Direção da próxima picagem"><button class="auto" data-d="auto">${ic('auto')}AUTOMÁTICO</button>
-      <button class="in" data-d="in">${ic('in')}ENTRADA</button>
-      <button class="out" data-d="out">${ic('out')}SAÍDA</button></div>
+      <div class="dir enc-dir" role="group" aria-label="Direção da próxima picagem">
+      <button class="in" data-d="in">${ic('in')}<span>ENTRADA</span></button>
+      <button class="out" data-d="out">${ic('out')}<span>SAÍDA</span></button>
+      <button class="lunch" data-d="lunch">${ic('clock')}<span>ALMOÇO</span></button>
+      <button class="auto" data-d="auto">${ic('auto')}<span>AUTOMÁTICO</span></button></div>
       <p class="small" id="dirhelp"></p>
     </section>
     ${canEmergency() ? `<button class="btn danger wide pic-emer" id="pemer">${ic('warn')}Emergência: contar pessoas no ponto de encontro</button>` : ''}
-    <div id="result" aria-live="polite"></div><div id="taplog" class="taplog"></div><div id="queue"></div>
+    <div id="result" aria-live="polite"></div><div id="queue"></div>
     <form id="manual" class="manual card"><div><label for="uid">Número do cartão (ou leitor USB)</label>
       <input id="uid" name="uid" autocomplete="off" autocapitalize="characters" placeholder="ex.: 04:A1:B2:C3"></div>
       <button class="btn ghost">Picar</button></form>
+    <div id="taplog" class="taplog"></div>
     <div id="rejected"></div>
     </div><div>
     <div class="sec-h"><h2 class="eyebrow">Últimas picagens nesta obra</h2></div><div id="recent">${skel(3)}</div>
     </div></div>`;
   bindSiteSelect('site', () => { loadRecent(); loadLive(); tickClock(); });
   app.querySelectorAll('.dir button').forEach((b) => b.onclick = () => {
-    state.dirOverride = b.dataset.d === 'auto' ? null : b.dataset.d; renderDir();
+    // ALMOÇO keeps the automatic direction (out for who is in, in for who is out) and names the taps as lunch.
+    state.lunch = b.dataset.d === 'lunch' ? !state.lunch : false;
+    state.dirOverride = b.dataset.d === 'in' || b.dataset.d === 'out' ? b.dataset.d : null; renderDir();
   });
   const wasTyped = typedWatch($('#uid'));
   $('#manual').onsubmit = (e) => {
@@ -1583,10 +1723,11 @@ function tickClock() {
 }
 // Automatic by default: the server knows if the person is inside. A forced ENTRADA or SAÍDA is for the next tap only.
 function renderDir() {
-  const d = state.dirOverride || 'auto';
-  app.querySelectorAll('.dir button').forEach((x) => x.classList.toggle('on', x.dataset.d === d));
+  const d = state.dirOverride || (state.lunch ? 'lunch' : 'auto');
+  app.querySelectorAll('.dir button').forEach((x) => { x.classList.toggle('on', x.dataset.d === d); x.setAttribute('aria-pressed', String(x.dataset.d === d)); });
   const help = $('#dirhelp'); if (!help) return;
   help.textContent = d === 'auto' ? 'Automático: entra quem está fora e sai quem está dentro. Toca em ENTRADA ou SAÍDA só para forçar a próxima picagem.'
+    : d === 'lunch' ? 'Almoço ligado: quem está dentro sai para almoçar, quem está fora volta. Fica ligado até tocares noutro botão.'
     : `A próxima picagem fica como ${d === 'in' ? 'ENTRADA' : 'SAÍDA'}. Depois volta ao automático.`;
 }
 
@@ -1697,7 +1838,7 @@ async function warnExpiring(collabId, who, word, seq) {
   const line = state.tapLog.find((x) => x.seq === seq); if (line) { line.note = note; renderTapLog(); }
   if (seq !== state.tapSeq) return;
   const el = $('#result'); if (!el) return;
-  el.innerHTML = `<div class="result warn">${ic('warn')}<div><b>${esc(who)}</b>${esc(word)} aceite<div class="small" style="margin-top:6px">${esc(note)}</div></div></div>`;
+  el.innerHTML = encBanner('ok', who, lunchText(`${word} aceite`), note);
 }
 
 // ---- a card number typed by hand is not a card tap (C3, audit 2026-10-19): the server records it as typed.
@@ -1814,6 +1955,13 @@ function showQueue() {
     other.length ? `<div class="qline"><span class="chip warn wrap">${other.length} picagem(ns) de outra conta (${esc(accounts)}), ainda não enviadas</span> <span class="small muted">Só são enviadas quando essa pessoa voltar a entrar neste telemóvel.</span></div>` : '']
     .filter(Boolean).join('');
   const b = $('#flushNow'); if (b) b.onclick = () => flushQueue();
+  const hq = $('#encq');   // the count in the Picar header: always in sight, even before scrolling
+  if (hq) {
+    const off = state.offline || navigator.onLine === false;
+    hq.hidden = !mine && !off;
+    hq.className = 'enc-q' + (off ? ' off' : '');
+    hq.innerHTML = `${ic('cloud')}${off ? 'Sem rede' : ''}${off && mine ? ' · ' : ''}${mine ? `<b>${mine}</b> por enviar` : ''}`;
+  }
 }
 // The taps the server refused after the network came back: who, when, why, and what to do (C2, A3).
 function showRejected() {
@@ -1846,28 +1994,77 @@ function showRejected() {
 // The big box shows the newest tap only; every tap also gets a line in the list below it.
 function logTap(kind, title, text, seq) {
   state.tapLog.unshift({ kind, title, text, seq, at: new Date() });
-  state.tapLog = state.tapLog.slice(0, 6); renderTapLog();
+  state.tapLog = state.tapLog.slice(0, 10); renderTapLog();
 }
 function renderTapLog() {
   const el = $('#taplog'); if (!el) return;
-  el.innerHTML = state.tapLog.map((x) => `<div class="tl ${x.kind}"><span class="small muted">${esc(x.at.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))}</span>
-    <b>${esc(x.title)}</b> ${esc(x.text || '')}${x.note ? ` <span class="small">${esc(x.note)}</span>` : ''}</div>`).join('');
+  el.innerHTML = state.tapLog.length ? `<div class="sec-h"><h2 class="eyebrow">Neste telemóvel · últimas ${state.tapLog.length}</h2></div>` + state.tapLog.map((x) => `<div class="tl ${x.kind}">${ic(RESULT_ICON[x.kind] || 'warn')}<span class="tnum enc-tl-t">${esc(x.at.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }))}</span>
+    <span class="enc-tl-x"><b>${esc(x.title)}</b> ${esc(x.text || '')}${x.note ? ` <span class="small">${esc(x.note)}</span>` : ''}</span></div>`).join('') : '';
 }
 // The big box still shows a tap that was waiting for the network: replace "NÃO VERIFICADA" with the server's verdict.
 function verdictBox(ev, kind, title, text) { if (state.resultId === ev.p_client_event_id) showResult(kind, title, text, undefined, false); }
 function showResult(kind, title, text, seq, flash) {
+  if (seq !== undefined && kind === 'ok') text = lunchText(text);
   if (seq !== undefined) logTap(kind, title, text, seq);
   if (seq !== undefined && seq !== state.tapSeq) return;   // an older tap answering late: only its line in the list
   const el = $('#result'); if (!el) return toast(title + ': ' + text);
-  el.innerHTML = `<div class="result ${kind}">${ic(RESULT_ICON[kind])}<div><b>${esc(title)}</b>${esc(text)}</div></div>`;
+  el.innerHTML = encBanner(kind, title, text);
   if (flash !== false) showFlash(kind, title, text);
+}
+// v48: the answer of a tap in plain words, big enough to read in the sun: ENTRA / SAI / NÃO ENTRA, the name, why, and what to do.
+const ENC_ADVICE = {
+  unknown_credential: 'Confirma o número. Se o cartão é novo, o escritório liga-o à pessoa em Pessoas.',
+  debounce: 'Não precisa de picar outra vez.',
+  collaborator_inactive: 'A ficha está desligada. Fala com o escritório.',
+  onboarding_incomplete: 'Tem de acabar o acolhimento na app antes de entrar.',
+  project_not_in_execution: 'A obra não está aberta para trabalho. Fala com o escritório.',
+  suspended_safety: 'Está suspenso pela Segurança. Fala com o técnico de segurança.',
+  on_leave: 'Está de baixa ou de licença: hoje não trabalha.',
+  ss_admission_missing: 'O escritório tem de fazer a admissão na Segurança Social primeiro.',
+  corrective_training_pending: 'Tem de fazer a formação corretiva antes de entrar.',
+  not_assigned_to_project: 'Confirma a obra lá em cima. Se é esta, pede ao escritório para o pôr nela.',
+  insufficient_rest: 'Ainda não descansou as horas mínimas. Só entra mais tarde.',
+  daily_limit_reached: 'Já fez as horas máximas de hoje. Não continua.',
+  weekly_limit_reached: 'Já fez as horas máximas da semana. Fala com o escritório.',
+  handover_not_acknowledged: 'Tem de confirmar a passagem de turno primeiro.',
+};
+function encAdvice(reason) {
+  const code = Object.keys(REASONS).find((k) => REASONS[k] === reason);
+  if (code) return ENC_ADVICE[code];
+  if (/em falta ou caducado|^Documento em falta/.test(reason)) return 'Não pode trabalhar hoje. O escritório (RH) regista o documento na ficha; depois pica outra vez.';
+  if (/^Documento da empresa/.test(reason)) return 'Documento da empresa em falta: fala com o escritório.';
+  if (/^Requisito da obra|^Falta a competência/.test(reason)) return 'Falta um requisito desta obra. Fala com a Segurança ou o escritório.';
+  return 'Não o deixes entrar. Fala com o escritório.';
+}
+const lunchText = (t) => !state.lunch || /almoço/.test(t) ? t : t.replace(/^SAÍDA aceite/, 'SAÍDA aceite · saída para almoço').replace(/^ENTRADA aceite/, 'ENTRADA aceite · volta do almoço');
+function encParse(kind, title, text) {
+  const no = /^(.*): NÃO ENTRA$/.exec(title);
+  if (no) { const why = String(text || '').split(' · ').filter(Boolean); return { head: 'NÃO ENTRA', icon: 'x', who: no[1], lines: why, todo: [...new Set(why.map(encAdvice))] }; }
+  if (kind === 'ok' && /^(ENTRADA|SAÍDA)/.test(text)) {
+    const lunch = /almoço/.test(text); const inn = /^ENTRADA/.test(text);
+    return { head: lunch ? (inn ? 'VOLTA DO ALMOÇO' : 'ALMOÇO') : inn ? 'ENTRA' : 'SAI', icon: 'ok', who: title, lines: [text], todo: [] };
+  }
+  if (/NÃO VERIFICADA/.test(title)) return { head: 'GUARDADA', icon: 'cloud', who: '', lines: [title, text], todo: ['Sem rede: a resposta chega quando a rede voltar. Não pique outra vez.'] };
+  if (kind === 'warn' && /^Já picou/.test(text)) return { head: 'JÁ PICOU', icon: 'ok', who: title, lines: [text], todo: ['Não precisa de picar outra vez.'] };
+  return { head: title, icon: RESULT_ICON[kind] || 'warn', who: '', lines: [text].filter(Boolean), todo: [] };
+}
+function encBanner(kind, title, text, note) {
+  const x = encParse(kind, title, text);
+  const face = x.who && !/^Cartão/.test(x.who) ? avatar(x.who) : '';
+  return `<div class="enc-res ${kind}" role="status"><div class="enc-res-h">${ic(x.icon)}<b>${esc(x.head)}</b></div>
+    ${x.who ? `<div class="enc-res-who">${face}<span>${esc(x.who)}</span></div>` : ''}
+    ${x.lines.length ? `<ul class="enc-res-why">${x.lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : ''}
+    ${note ? `<p class="enc-res-note">${ic('warn')}<span>${esc(note)}</span></p>` : ''}
+    ${x.todo.length ? `<div class="enc-res-do"><b>O que fazer</b><ul>${x.todo.map((t) => `<li>${esc(t)}</li>`).join('')}</ul></div>` : ''}</div>`;
 }
 // The whole screen in green, red or amber for ~1.6 s: readable from a metre away, with gloves and noise. Tap to close earlier.
 const RESULT_ICON = { ok: 'ok', bad: 'x', warn: 'cloud' };
 function showFlash(kind, title, text) {
   const f = document.getElementById('flash'); if (!f || !state.ready) return;
   f.className = kind;
-  f.innerHTML = `<div class="ficon">${ic(RESULT_ICON[kind] || 'warn')}</div><b>${esc(title)}</b><div class="ftext">${esc(text)}</div><div class="fhint">Toque para fechar</div>`;
+  const x = encParse(kind, title, text);
+  f.innerHTML = `<div class="ficon">${ic(x.icon)}</div><b class="enc-fhead">${esc(x.head)}</b>${x.who ? `<div class="enc-fwho">${esc(x.who)}</div>` : ''}
+    <div class="ftext">${esc(x.head === title ? text : x.lines.join(' · '))}</div><div class="fhint">Toque para fechar</div>`;
   f.hidden = false; clearTimeout(f._h); f._h = setTimeout(hideFlash, 1600);
 }
 function hideFlash() { const f = document.getElementById('flash'); if (f) { clearTimeout(f._h); f.hidden = true; } }
@@ -1883,7 +2080,7 @@ async function loadRecent() {
   if (!data.length) { el.innerHTML = `<div class="card">${empty('card', 'Ainda ninguém picou nesta obra', 'Escolhe ENTRADA ou AUTOMÁTICO e encosta o primeiro cartão.')}</div>`; return; }
   const name = (id) => (state.people.find((p) => p.id === id) || {}).full_name;
   const today = localDay(new Date().toISOString(), site.timezone);
-  el.innerHTML = `<div class="list feed">${data.slice(0, 8).map((e) => { const who = name(e.collaborator_id) || 'Cartão ' + (e.raw_uid || '?');
+  el.innerHTML = `<div class="list feed">${data.slice(0, 10).map((e) => { const who = name(e.collaborator_id) || 'Cartão ' + (e.raw_uid || '?');
     const when = localDay(e.event_time, site.timezone) === today ? fmtHour(e.event_time, site.timezone) : fmtTime(e.event_time, site.timezone);
     const dir = e.direction === 'in' ? 'Entrada' : e.direction === 'out' ? 'Saída' : e.direction;
     return `<div class="card ${e.direction === 'in' ? 'd-in' : 'd-out'}"><div class="wk">${avatar(who)}<div class="grow"><div class="nm">${esc(who)}</div><div class="sub">${ic(e.direction === 'in' ? 'in' : 'out')}${esc(dir)} · ${esc(when)}</div></div>
@@ -3770,7 +3967,7 @@ async function loadHours(from, to) {
     <div class="ptotal"><span>Total da semana</span><span class="hrs">${esc(fmtMin(tot.w))}${tot.o ? ` <span class="small">(${esc(fmtMin(tot.o))} extra)</span>` : ''}</span></div></div>`;
   }).join('') + '<p class="small muted print-only">Assinatura do encarregado: ______________________</p>';
   const sum = $('#hsum');
-  if (sum) sum.innerHTML = `<div class="kpis noprint"><div class="kpi ${n.todo ? 'hot' : ''}"><b>${n.todo}</b><span>dias a validar</span></div>
+  if (sum) sum.innerHTML = encFlow(data.filter((r) => !onlyOpenToday(r, tz)), 'site') + `<div class="kpis noprint"><div class="kpi ${n.todo ? 'hot' : ''}"><b>${n.todo}</b><span>dias a validar</span></div>
     <div class="kpi ${n.anom ? 'warn' : ''}"><b>${n.anom}</b><span>com problemas</span></div><div class="kpi ok"><b>${n.ok}</b><span>validados</span></div></div>`;
   // Bulk validation only for plain days: no problem, no overtime, not one's own, and never a day the office sent back (M4).
   const easy = data.filter((r) => r.status === 'registered' && !r.anomalies.length && !r.overtime_minutes && !r.special_day_minutes && r.collaborator_id !== me && !returned[r.work_day_id]);
@@ -3793,7 +3990,7 @@ async function loadHours(from, to) {
 async function validate(ids, overtime) {
   const { data, error } = await sb.rpc('advance_work_days', { p_ids: ids, p_to: 'supervisor_validated', p_overtime_approved: overtime });
   if (error) return toast(friendly(error));
-  toast(`${data} dia(s) validado(s).`); viewHours();
+  toast(`${data} dia(s) validado(s). Seguiram para o Secretariado.`); viewHours(); encBadges(true);
 }
 // The taps of the day (and the days around it), each one with "Anular"; and the form pointed at the missing one (M8, A2).
 async function fixDay(collabId, day, name) {
@@ -4546,7 +4743,7 @@ function viewOffice() {
     <div class="noprint">
       ${can('horas.aprovar') ? `<p class="small muted">A obra valida, tu aprovas, no fim do mês fechas.</p>
       ${more('Em que reparar', '<p>Olha com atenção para as picagens marcadas «à mão», «sem rede, chegou tarde» e «próprio cartão»: aparecem a amarelo no dia.</p>')}
-      <div id="sum">${skel(1)}</div>` : ''}</div>
+      <div id="encflow"></div><div id="sum">${skel(1)}</div>` : ''}</div>
     ${can('horas.aprovar') ? `<div id="list">${skel(3)}</div>` : ''}`;
   const side = `${can('horas.aprovar') ? '<div id="offreq" class="noprint"></div>' : ''}${can('salarios.exportar') ? `<div class="card noprint"><h2 style="margin-top:0">Salários</h2>
       <p class="small muted">Folha Excel do mês e ficheiro para o Primavera.</p>
@@ -4672,6 +4869,7 @@ async function loadOffice(from, to) {
   // Approve by exception: the office looks only at the days with a reason to look; the rest go in one tap.
   const look = data.filter((r) => (r.status === 'supervisor_validated' && r.flags.length) || noExit(r));
   const clean = data.filter((r) => r.status === 'supervisor_validated' && !r.flags.length && !noExit(r) && r.collaborator_id !== me);
+  encOfficeFlow(data);
   $('#sum').innerHTML = `<div class="kpis k4">
       <div class="kpi" data-f="obra"><b>${n('registered')}</b> <span>por validar na obra</span></div>
       <div class="kpi ${look.length ? 'warn' : ''}" data-f="ti"><b>${look.length}</b> <span>precisam de ti</span></div>
@@ -4942,7 +5140,7 @@ async function approveDays(ids) {
   if (!ids.length) return;
   const { data, error } = await sb.rpc('advance_work_days', { p_ids: ids, p_to: 'hr_validated' });
   if (error) return toast(friendly(error));
-  toast(`${data} dia(s) aprovado(s).`); viewOffice();
+  toast(`${data} dia(s) aprovado(s).`); viewOffice(); encBadges(true);
 }
 async function returnDay(id) {
   const why = prompt('Porque é que devolves este dia ao encarregado? (ele vai ver o motivo)');
@@ -4950,6 +5148,79 @@ async function returnDay(id) {
   const { error } = await sb.rpc('mini_return_days', { p_ids: [id], p_reason: why });
   if (error) return toast(friendly(error));
   toast('Dia devolvido ao encarregado.'); viewOffice();
+}
+// ---- v48: what waits for whom, on the menu. The office sees how many days the sites validated and wait for its approval;
+// the team leader sees how many past days still wait for his validation. A number on the button, never in its text.
+let encBadgeAt = 0;
+async function encBadges(force) {
+  if (!state.ready || state.offline || !state.me || state.me.role === 'worker') return;
+  if (!force && Date.now() - encBadgeAt < 60000) return;
+  encBadgeAt = Date.now();
+  const set = (v, n, title) => {
+    const b = nav.querySelector(`button[data-view="${v}"]`); if (!b) return;
+    if (n > 0) { b.dataset.badge = n > 99 ? '99+' : String(n); b.title = title; } else { delete b.dataset.badge; b.removeAttribute('title'); }
+  };
+  const jobs = [];
+  if (canOffice() && can('horas.aprovar')) {
+    const d = new Date(); const from = isoDay(new Date(d.getFullYear(), d.getMonth() - 1, 1, 12)); const me = state.me.collaborator_id;
+    jobs.push(sb.rpc('mini_hours_office', { p_from: from, p_to: isoDay(d) }).then(({ data, error }) => {
+      if (error || !Array.isArray(data)) return;
+      const n = data.filter((r) => r.status === 'supervisor_validated' && r.collaborator_id !== me).length;
+      state.encOfficeWait = data.filter((r) => r.status === 'supervisor_validated' && r.collaborator_id !== me).map((r) => r.shift_date.slice(0, 7));
+      set('secretariado', n, `${n} dia(s) validados na obra à espera de aprovação`);
+    }));
+  }
+  if (can('horas.validar_obra') && canSiteDetails()) {
+    jobs.push(sb.rpc('mini_control_room').then(({ data, error }) => {
+      if (error || !data || !Array.isArray(data.sites)) return;
+      const n = data.sites.reduce((a, x) => a + (x.to_validate || 0), 0);
+      set('horas', n, `${n} dia(s) por validar na obra`);
+    }));
+  }
+  await Promise.all(jobs.map((j) => j.catch(() => {})));
+  if (state.view === 'secretariado' && state.encOfficeData && $('#encflow')) encOfficeFlow(state.encOfficeData);
+  // The «Mais» button carries the sum of what is inside it, so nothing waits out of sight.
+  const more = nav.querySelector('button[data-more]'); if (!more) return;
+  const inside = [...document.querySelectorAll('#more button[data-badge]')].filter((b) => !b.hidden).reduce((a, b) => a + (parseInt(b.dataset.badge, 10) || 0), 0);
+  if (inside) more.dataset.badge = String(inside); else delete more.dataset.badge;
+}
+// The four states of a day, in order: the site validates, the office approves, the month closes. One bar, the same on every screen.
+const ENC_FLOW = [['registered', 'Por validar', 'na obra'], ['supervisor_validated', 'Validado', 'pelo encarregado'],
+  ['hr_validated', 'Aprovado', 'pelo RH'], ['sent_to_payroll', 'Fechado', 'para salários']];
+function encFlow(rows, who) {
+  const n = Object.fromEntries(ENC_FLOW.map(([k]) => [k, rows.filter((r) => r.status === k).length]));
+  const at = ENC_FLOW.findIndex(([k]) => n[k] > 0);
+  const total = rows.length;
+  let line;
+  if (!total) line = 'Sem dias neste período.';
+  else if (n.registered) line = who === 'office' ? `${n.registered} dia(s) ainda na obra: o encarregado tem de validar primeiro.` : `Faltam validar ${n.registered} dia(s). Depois seguem para o Secretariado.`;
+  else if (n.supervisor_validated) line = who === 'office' ? `${n.supervisor_validated} dia(s) validados na obra à tua espera.` : `Validaste tudo. ${n.supervisor_validated} dia(s) à espera do Secretariado (RH).`;
+  else if (n.hr_validated) line = who === 'office' ? `Tudo aprovado. Falta fechar o mês.` : 'Aprovado pelo RH. Falta o fecho do mês.';
+  else line = 'Fechado para salários. Ninguém pode mudar estas horas.';
+  return `<div class="enc-flow" role="group" aria-label="Estado dos dias">
+    <p class="enc-flow-l">${ic(n.registered && who !== 'office' ? 'clock' : n.registered || n.supervisor_validated ? 'clock' : 'ok')}<b>${esc(line)}</b></p>
+    <ol>${ENC_FLOW.map(([k, t, s], i) => `<li class="${n[k] ? 'has' : ''} ${i === at ? 'now' : ''} ${at >= 0 && i < at && !n[k] ? 'done' : ''}">
+      <b class="tnum">${n[k]}</b><span>${esc(t)}</span><small>${esc(s)}</small></li>`).join('')}</ol></div>`;
+}
+// Office: the same four states per site, so the Secretariado sees which site has sent its days and which is late.
+function encOfficeFlow(data) {
+  const box = $('#encflow'); if (!box) return;
+  state.encOfficeData = data;
+  const sites = {};
+  for (const r of data) { const k = r.project_id; (sites[k] = sites[k] || { code: r.project_code, title: r.project_title, rows: [] }).rows.push(r); }
+  const cnt = (rows, st) => rows.filter((r) => r.status === st).length;
+  // The menu count covers last month too: say where those days are when this month does not show them.
+  const other = (state.encOfficeWait || []).filter((m) => m !== state.officeMonth);
+  const otherMonth = other.length ? other.sort()[0] : null;
+  if (!data.length && !otherMonth) { box.innerHTML = ''; return; }
+  box.innerHTML = `${otherMonth ? `<button class="enc-al info" id="encother">${ic('clock')}<span><b>${other.length} dia(s) de ${esc(new Date(otherMonth + '-15T12:00:00').toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' }))} à tua espera</b>Validados na obra, ainda por aprovar.</span>${ic('go')}</button>` : ''}${data.length ? `${encFlow(data, 'office')}
+    <details class="fold enc-sites"><summary><span>Por obra<span class="sub">${Object.keys(sites).length} obra(s): quem já enviou, quem falta</span></span></summary>
+    <div class="enc-sitetab" role="table">
+      <div class="enc-sr enc-sh" role="row"><span role="columnheader">Obra</span><span role="columnheader">Na obra</span><span role="columnheader">À tua espera</span><span role="columnheader">Aprovados</span><span role="columnheader">Fechados</span></div>
+      ${Object.values(sites).map((x) => `<div class="enc-sr" role="row"><span role="cell"><b>${esc(x.code)}</b> ${esc(x.title)}</span>
+        ${ENC_FLOW.map(([k]) => { const v = cnt(x.rows, k); return `<span role="cell" class="tnum ${v && k === 'registered' ? 'enc-late' : v && k === 'supervisor_validated' ? 'enc-wait' : ''}">${v || '–'}</span>`; }).join('')}</div>`).join('')}
+    </div></details>` : ''}`;
+  const ob = $('#encother'); if (ob) ob.onclick = () => { state.officeMonth = otherMonth; viewOffice(); };
 }
 // ------------------------------------------------------------------ Primavera: Relógio de Ponto (fixed-width text)
 // Each company sets the codes and positions in its Primavera; GestNow copies the same values here.
@@ -5649,6 +5920,13 @@ function loadUI() {
   });
   return uiLoading;
 }
+// v48: Produção left the menu for whoever opens the Dashboard; it is one tap from here.
+function dashLinks() {
+  if (!canProd() || $('#encdl')) return;
+  const bar = Object.assign(document.createElement('div'), { id: 'encdl', className: 'enc-dashlinks noprint' });
+  bar.innerHTML = `<button class="btn ghost small" id="toprod">${ic('chart')}Abrir a Produção${ic('go')}</button>`;
+  app.prepend(bar); bar.querySelector('#toprod').onclick = () => go('producao');
+}
 async function viewSitePanel() {
   if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   // The tab opens the control room (all sites); a site's button in Obras opens that site directly.
@@ -5666,9 +5944,11 @@ async function viewSitePanel() {
       sites: activeSites().map((x) => ({ id: x.id, title: x.title, code: x.cost_center_code })),
       onSite: (sid) => { store(SITE_KEY, sid); } };
     ui.mountPainel(host, api, chosen || undefined);
+    dashLinks();
     return;
   }
   app.innerHTML = `<div class="noprint">${siteSelect('psite')}</div><div id="pnl" style="margin-top:14px">${skel(4)}</div>`;
+  dashLinks();
   bindSiteSelect('psite', () => { $('#pnl').innerHTML = skel(4); loadSitePanel($('#psite').value); });
   loadSitePanel(id);
 }
