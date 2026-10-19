@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#4f46e5">
+  <meta name="theme-color" content="#082731">
   <meta name="color-scheme" content="light dark">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://hnowcydpmrwlqwsggcqx.supabase.co wss://hnowcydpmrwlqwsggcqx.supabase.co; frame-src https://www.youtube-nocookie.com; object-src 'none'; base-uri 'none'; form-action 'self'">
   <title>GestNow</title>
@@ -57,10 +57,15 @@
     <symbol id="i-calc" viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M8.5 7h7M8.5 11h.01M12 11h.01M15.5 11h.01M8.5 14.5h.01M12 14.5h.01M15.5 14.5v3M8.5 17.5h.01M12 17.5h.01"/></symbol>
     <symbol id="i-map" viewBox="0 0 24 24"><circle cx="5" cy="6" r="2.2"/><circle cx="19" cy="18" r="2.2"/><path d="M7.2 6H15a3 3 0 0 1 0 6H9a3 3 0 0 0 0 6h7.8"/></symbol>
     <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5h.01"/></symbol>
+    <symbol id="i-clip" viewBox="0 0 24 24"><path d="M9 4h6v3H9zM9 5.5H6.5v15h11v-15H15M9 13.5l2 2 4-4"/></symbol>
+    <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M4 17a8 8 0 1 1 16 0M12 17l4-5M4 17h2M18 17h2M12 9V7.5M7.5 11 6.4 9.9M16.5 11l1.1-1.1"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20h16M6.5 20v-6M11 20V9M15.5 20v-8M20 20V5"/></symbol>
+    <symbol id="i-medal" viewBox="0 0 24 24"><circle cx="12" cy="9.5" r="5.5"/><path d="M9.5 9.5l1.7 1.7 3.3-3.3M8.5 14l-1.5 7 5-2.5 5 2.5-1.5-7"/></symbol>
     <symbol id="i-mute" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4zM16 10l4.5 4.5M20.5 10 16 14.5"/></symbol>
   </svg>
   <header class="top">
-    <div class="brand"><svg class="logo" viewBox="0 0 44 44" aria-hidden="true"><defs><linearGradient id="lgT" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#818cf8"/><stop offset="1" stop-color="#4338ca"/></linearGradient></defs><rect width="44" height="44" rx="12" fill="url(#lgT)"/><path d="M31.5 15.2A11 11 0 1 0 33 22" fill="none" stroke="#fff" stroke-width="4.6" stroke-linecap="round"/><path d="M22.5 22H27" stroke="#fff" stroke-width="4.6" stroke-linecap="round"/><circle cx="33" cy="22" r="3.3" fill="#fbbf24"/></svg><strong>GestNow</strong></div>
+    <div class="brand"><svg class="logo" viewBox="0 0 44 44" aria-hidden="true"><defs><linearGradient id="lgT" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1a7f95"/><stop offset="1" stop-color="#0a3d4b"/></linearGradient></defs><rect width="44" height="44" rx="12" fill="url(#lgT)"/><path d="M31.5 15.2A11 11 0 1 0 33 22" fill="none" stroke="#fff" stroke-width="4.6" stroke-linecap="round"/><path d="M22.5 22H27" stroke="#fff" stroke-width="4.6" stroke-linecap="round"/><circle cx="33" cy="22" r="3.3" fill="#f6b400"/></svg><strong>GestNow</strong></div>
     <div id="net" class="net" hidden></div>
     <button id="search" class="search" type="button" hidden aria-label="Procurar pessoas, obras e ecrãs"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg><span>Procurar…</span><kbd>Ctrl K</kbd></button>
     <button id="help" class="iconbtn" type="button" hidden aria-label="Onde estou no processo" title="Onde estou no processo"><svg class="i"><use href="#i-help"/></svg></button>
@@ -75,8 +80,8 @@
       <button data-view="equipa" hidden><svg class="i" aria-hidden="true"><use href="#i-team"/></svg><span>Equipa</span></button>
       <button data-view="picar"><svg class="i" aria-hidden="true"><use href="#i-tap"/></svg><span>Picar</span></button>
       <button data-view="emergencia" hidden class="em-tab"><svg class="i" aria-hidden="true"><use href="#i-warn"/></svg><span>Emergência</span></button>
-      <button data-view="lmra" hidden><svg class="i" aria-hidden="true"><use href="#i-shield"/></svg><span>LMRA</span></button>
-      <button data-view="painel" hidden><svg class="i" aria-hidden="true"><use href="#i-crane"/></svg><span>Dashboard</span></button>
+      <button data-view="lmra" hidden><svg class="i" aria-hidden="true"><use href="#i-clip"/></svg><span>LMRA</span></button>
+      <button data-view="painel" hidden><svg class="i" aria-hidden="true"><use href="#i-gauge"/></svg><span>Dashboard</span></button>
       <button data-view="naobra"><svg class="i" aria-hidden="true"><use href="#i-site"/></svg><span>Na obra</span></button>
       <button data-view="horas"><svg class="i" aria-hidden="true"><use href="#i-clock"/></svg><span>Horas</span></button>
       <button data-view="secretariado" hidden><svg class="i" aria-hidden="true"><use href="#i-office"/></svg><span>Secretaria</span></button>
@@ -90,9 +95,9 @@
       <button data-view="trabalhadores"><svg class="i" aria-hidden="true"><use href="#i-users"/></svg><span>Pessoas</span></button>
       <button data-view="minhas" hidden><svg class="i" aria-hidden="true"><use href="#i-user"/></svg><span>Eu</span></button>
       <button data-view="acolhimento" hidden><svg class="i" aria-hidden="true"><use href="#i-play"/></svg><span>Acolhimento</span></button>
-      <button data-view="producao" hidden><svg class="i" aria-hidden="true"><use href="#i-crane"/></svg><span>Produção</span></button>
+      <button data-view="producao" hidden><svg class="i" aria-hidden="true"><use href="#i-chart"/></svg><span>Produção</span></button>
       <button data-view="andaimes" hidden><svg class="i" aria-hidden="true"><use href="#i-scaffold"/></svg><span>Andaimes</span></button>
-      <button data-view="qualidade" hidden><svg class="i" aria-hidden="true"><use href="#i-ok"/></svg><span>Qualidade</span></button>
+      <button data-view="qualidade" hidden><svg class="i" aria-hidden="true"><use href="#i-medal"/></svg><span>Qualidade</span></button>
       <button data-view="obras"><svg class="i" aria-hidden="true"><use href="#i-crane"/></svg><span>Obras</span></button>
       <button data-view="orcamentos" hidden><svg class="i" aria-hidden="true"><use href="#i-calc"/></svg><span>Orçamentos</span></button>
       <button data-view="processo" hidden><svg class="i" aria-hidden="true"><use href="#i-map"/></svg><span>Processo</span></button>
