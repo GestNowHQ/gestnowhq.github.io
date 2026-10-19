@@ -1422,3 +1422,34 @@ table.tbl th { white-space: nowrap; vertical-align: bottom; }
 .fl-cats legend { font-weight: 600; margin-bottom: 6px; }
 .fl-cats label { display: flex; gap: 6px; align-items: center; min-height: 40px; font-weight: 500; }
 #frent h3, .sheet h3 { margin-top: 14px; }
+
+/* ---------------------------------------------------------------- Alojamento (v40) */
+#honew { margin: 0 0 14px; }
+.ho-ic { flex: 0 0 auto; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: var(--surface-2); }
+.ho-room { padding-bottom: 6px; }
+.ho-beds { list-style: none; margin: 8px 0 0; padding: 0; }
+.ho-bed { display: flex; gap: 10px; align-items: center; padding: 8px 0; border-top: var(--bw) solid var(--line); font-size: 14px; }
+.ho-bed > b { flex: 0 0 64px; }
+.ho-bed > span { flex: 1; min-width: 0; }
+.ho-bed small { display: block; color: var(--ink-2); font-size: 12px; }
+.ho-bed.used > b { color: var(--ok); }
+.ho-area.damage { box-shadow: inset 4px 0 0 var(--bad-fill), var(--sh-1); }
+.ho-area.none { opacity: .75; }
+.ho-phs { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; }
+.ho-phs:empty { display: none; }
+.ho-ph { width: 84px; height: 84px; object-fit: cover; border-radius: 8px; background: var(--surface-2); cursor: zoom-in; }
+.ho-before { background: var(--surface-2); border-radius: var(--r-md); padding: 6px 8px; margin-top: 8px; }
+.ho-before small { color: var(--ink-2); }
+.ho-before .ho-ph { width: 64px; height: 64px; }
+.ho-cond { margin: 10px 0 6px; }
+.ho-cond > button[aria-checked="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--sh-1); }
+.ho-area.damage .ho-cond > button[aria-checked="true"] { color: var(--bad); }
+.ho-note { width: 100%; margin: 0 0 8px; }
+.ho-shot { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+.ho-shot.busy { opacity: .6; pointer-events: none; }
+#hofin { margin-top: 14px; }
+.ho-cmp { display: grid; gap: 8px; margin-top: 8px; }
+.ho-cmp .ho-before { margin-top: 0; }
+.ho-now { border-radius: var(--r-md); padding: 6px 8px; border: var(--bw) dashed var(--line); }
+.ho-now small { color: var(--ink-2); }
+@media (min-width: 720px) { .ho-cmp { grid-template-columns: 1fr 1fr; } }

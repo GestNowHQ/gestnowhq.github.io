@@ -37,6 +37,35 @@ const REASON_PREFIX = {
   'skill_missing:': 'Falta a competência: ',
 };
 const ERRORS = [
+  [/do the entry inspection with photos first/i, 'Primeiro faz a vistoria de entrada da casa, com fotos de cada divisão.'],
+  [/choose the site this house serves/i, 'Escolhe a obra que esta casa serve: os custos vão para essa obra.'],
+  [/choose the site this house cost goes to/i, 'Escolhe a obra: cada despesa da casa vai para uma obra.'],
+  [/choose the site this stay goes to/i, 'Escolhe a obra: esta pessoa não está colocada em nenhuma obra, e cada estadia vai para uma obra.'],
+  [/this bed is taken on those dates/i, 'Esta cama já está ocupada nesses dias.'],
+  [/already has a bed or hotel on those dates/i, 'Esta pessoa já tem cama ou hotel nesses dias.'],
+  [/the house contract ends before that/i, 'O contrato da casa acaba antes dessa data.'],
+  [/the leaving day must be after the arrival/i, 'O dia de saída tem de ser depois da entrada.'],
+  [/this person already left/i, 'Esta pessoa já saiu.'],
+  [/a house with this name already exists/i, 'Já existe uma casa com este nome.'],
+  [/a room with this name already exists/i, 'Já existe um quarto com este nome.'],
+  [/write the name of the house/i, 'Escreve o nome da casa.'],
+  [/write the name of the room/i, 'Escreve o nome do quarto.'],
+  [/beds must be between 1 and 20/i, 'Um quarto tem de 1 a 20 camas.'],
+  [/those beds have people/i, 'Essas camas têm pessoas: tira-as primeiro.'],
+  [/a hotel has bookings, not beds/i, 'Num hotel registas reservas, não camas.'],
+  [/a hotel has no inspection/i, 'Um hotel não tem vistoria.'],
+  [/add the rooms of the house first/i, 'Junta primeiro os quartos da casa.'],
+  [/the entry inspection is already done/i, 'A vistoria de entrada já está feita.'],
+  [/there is no entry inspection for this house/i, 'Esta casa não tem vistoria de entrada.'],
+  [/there are still people in this house/i, 'Ainda há pessoas nesta casa: regista a saída delas primeiro.'],
+  [/this inspection is finished and cannot change/i, 'Esta vistoria já está terminada e não muda.'],
+  [/at most 8 photos per area/i, 'No máximo 8 fotos por divisão.'],
+  [/meter reading out of range/i, 'Leitura do contador fora do normal: confirma.'],
+  [/keys out of range/i, 'Número de chaves fora do normal.'],
+  [/write the cost of the booking/i, 'Escreve o custo da reserva.'],
+  [/the kind cannot change once/i, 'Já não dá para mudar o tipo: tem quartos ou reservas.'],
+  [/(house|hotel|bed|stay|booking|inspection|area|room) not found/i, 'Não encontrado: atualiza a página.'],
+  [/file not allowed for this inspection/i, 'Esta foto não pertence a esta vistoria.'],
   [/choose the site this delivery goes to/i, 'Escolhe a obra: esta pessoa não está colocada em nenhuma obra, e cada entrega conta para o custo de uma obra.'],
   [/choose the site this cost goes to/i, 'Escolhe a obra: esta viatura não estava em nenhuma obra nesse dia, e cada despesa vai para uma obra.'],
   [/plate is not valid/i, 'Matrícula inválida (ex.: AA-00-AA).'],
@@ -512,11 +541,11 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '39';
+const APP_VERSION = '40';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
-const MORE_ORDER = ['equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'obras', 'orcamentos', 'armazem', 'compras', 'frota', 'processo', 'clientes'];
+const MORE_ORDER = ['equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'obras', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'processo', 'clientes'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -667,6 +696,7 @@ async function boot() {
   nav.querySelector('[data-view=armazem]').hidden = worker || state.offline || !canWh();
   nav.querySelector('[data-view=compras]').hidden = worker || state.offline || !canBuy();
   nav.querySelector('[data-view=frota]').hidden = worker || state.offline || !canFleet();
+  nav.querySelector('[data-view=alojamento]').hidden = worker || state.offline || !canHousing();
   if (me.role === 'supervisor' && !state.booted && state.view === 'picar' && canSiteDetails()) state.view = 'equipa';
   state.booted = true;
   if (state.view === 'minhas' && !me.collaborator_id) state.view = (TABS[me.role] || TABS.supervisor)[0];
@@ -1019,7 +1049,7 @@ function go(view) {
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
      ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients,
      processo: viewProcess, orcamentos: viewEstimates, lmra: viewLmra, emergencia: viewEmergency,
-     armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet }[view] || viewClock)();
+     armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing }[view] || viewClock)();
   checkEmergencyBar();
 }
 
@@ -2715,6 +2745,7 @@ const TOUR_TEXT = {
   naobra: 'Na obra: quem está lá dentro neste momento.',
   emergencia: 'Emergência: carregas no botão vermelho e cada pessoa pica o cartão no ponto de encontro. Vês logo quem está em falta, com o telefone.',
   lmra: 'LMRA: a análise de risco antes de começar. Um «Não» para o trabalho; com tudo «Sim», a equipa assina com o cartão.',
+  alojamento: 'Alojamento: casas e hotéis, quem dorme onde e as camas livres. Ninguém entra numa casa sem a vistoria de entrada com fotos.',
   frota: 'Frota: cada viatura com semáforo: seguro, inspeção, IUC, revisão e contrato de aluguer. Entregas e devoluções com km.',
   compras: 'Compras: pedes o que falta; acima do limite o Secretariado aprova; depois encomenda-se e regista-se o que chega.',
   armazem: 'Armazém: EPIs, farda e ferramentas. Quem recebe assina com o cartão; os tamanhos vêm da ficha.',
@@ -6433,4 +6464,342 @@ async function flCost(v) {
   const { error } = await sb.rpc('mini_fleet_cost', { p_vehicle: v.id, p_kind: fd.get('k'), p_amount: Number(fd.get('a')), p_on: fd.get('on'), p_ref: String(fd.get('r') || '').trim() || null, p_site: fd.get('site') || null });
   if (error) return toast(friendly(error));
   toast('Custo registado.'); flDetail(v.id);
+}
+
+// ============================================================================ Alojamento (v40)
+// The RH runs the houses and hotels: rooms and beds, who sleeps where, hotel bookings and costs to a site. A house takes
+// nobody until its entry inspection, with a photo of every room, is finished; it is handed back with an exit inspection
+// that shows the entry photos next to the new ones (sql/68). Photos go to a private bucket and are never deleted.
+const canHousing = () => ['alojamento.ver', 'alojamento.vistoria', 'alojamento.gerir'].some(can);
+const HO_KIND = { corporate_house: 'Casa', apartment: 'Apartamento', hotel: 'Hotel', other: 'Outro' };
+const HO_LIGHT = { verde: ['ok', 'Em ordem'], amarelo: ['warn', 'Atenção'], vermelho: ['bad', 'Não pode receber ninguém'], cinzento: ['', 'Entregue'] };
+const HO_COST = { rent: 'Renda', power: 'Luz', water: 'Água', gas: 'Gás', internet: 'Internet', cleaning: 'Limpeza', repair: 'Reparação', other: 'Outro' };
+const HO_COND = { ok: 'Bem', damage: 'Com dano', none: 'Não existe' };
+const HO_PHOTO = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
+// Phone photos are 3 to 8 MB: shrink to 1600 px JPEG before sending, so it goes up on a weak site network.
+async function shrinkPhoto(file) {
+  try {
+    const bmp = await createImageBitmap(file);
+    const k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+    if (k === 1 && file.size < 1500000 && HO_PHOTO[file.type]) return file;
+    const c = Object.assign(document.createElement('canvas'), { width: Math.round(bmp.width * k), height: Math.round(bmp.height * k) });
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+    const blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.82));
+    return blob ? new File([blob], 'foto.jpg', { type: 'image/jpeg' }) : file;
+  } catch { return file; }
+}
+// Thumbnails: each photo is fetched with the login's own token (the bucket's rules decide) and shown as a local blob,
+// so the page's security policy never has to allow outside images. Kept while the app is open.
+async function hoThumbs(root) {
+  const H = state.housing; H.urls = H.urls || {};
+  for (const i of [...root.querySelectorAll('img[data-path]')]) {
+    const p = i.dataset.path;
+    if (!H.urls[p]) {
+      const { data } = await sb.storage.from('alojamento').download(p);
+      if (!data) continue;
+      H.urls[p] = URL.createObjectURL(data);
+    }
+    if (i.isConnected) i.src = H.urls[p];
+  }
+}
+function viewHousing() {
+  if (!canHousing()) return viewClock();   // code guard as well as the database's
+  if (!state.housing) state.housing = { tab: 'casas' };
+  state.housing.sel = null; state.housing.insp = null;
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Casas, quartos, camas e hotéis</p><h1>Alojamento</h1></div></div>
+    <div id="hotop">${skel(1)}</div><div id="hobody"></div>`;
+  loadHousing();
+}
+async function loadHousing() {
+  const top = $('#hotop'); if (!top) return;
+  const { data: h, error } = await sb.rpc('mini_housing_home');
+  if (!top.isConnected) return;
+  if (error) { top.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  const S = state.housing; S.home = h; S.sel = null; S.insp = null;
+  const sum = (k) => h.houses.reduce((n, x) => n + (x.state[k] || 0), 0);
+  const tabs = [['casas', 'Casas e hotéis'], h.can_manage && ['pessoas', 'Quem dorme onde']].filter(Boolean);
+  if (!tabs.find(([k]) => k === S.tab)) S.tab = 'casas';
+  top.innerHTML = `<div class="fl-sum">
+      <div class="fl-n ok"><b>${sum('free')}</b><span>camas livres</span></div>
+      <div class="fl-n"><b>${sum('used') + h.houses.reduce((n, x) => n + (x.guests || 0), 0)}</b><span>pessoas alojadas hoje</span></div>
+      <div class="fl-n bad"><b>${h.houses.filter((x) => x.state.light === 'vermelho').length}</b><span>casas por resolver</span></div></div>
+    ${h.can_manage ? '<button class="btn big wide" id="honew">+ Nova casa ou hotel</button>' : ''}
+    ${tabs.length > 1 ? `<div class="seg" role="tablist">${tabs.map(([k, l]) => `<button role="tab" data-hotab="${k}" aria-selected="${S.tab === k}">${esc(l)}</button>`).join('')}</div>` : ''}`;
+  top.querySelectorAll('[data-hotab]').forEach((b) => b.onclick = () => { S.tab = b.dataset.hotab; loadHousing(); });
+  if ($('#honew')) $('#honew').onclick = () => hoSheet(null);
+  (S.tab === 'pessoas' ? hoPeople : hoList)();
+}
+function hoCard(x) {
+  const s = x.state; const [lk, ll] = HO_LIGHT[s.light] || ['', s.light]; const hotel = x.kind === 'hotel'; const S = state.housing;
+  const lease = hotel ? '' : !x.lease_end ? 'sem data de fim' : s.lease === 'caducado' ? `acabou a ${fmtDate(x.lease_end)}` : s.lease === 'a_caducar' ? `acaba a ${fmtDate(x.lease_end)}` : `até ${fmtDate(x.lease_end)}`;
+  const insp = hotel ? '' : s.entry_done ? `<li class="fl-p ok"><span>Vistoria de entrada</span><b>feita a ${esc(fmtDate(s.entry_done.slice(0, 10)))}</b></li>`
+    : `<li class="fl-p bad"><span>Vistoria de entrada</span><b>${s.entry_open ? 'a meio' : 'por fazer'}</b><small>sem ela, ninguém entra</small></li>`;
+  return `<article class="card fl-car ho-card ${s.light}" data-id="${esc(x.id)}">
+    <div class="wk"><span class="ho-ic">${ic(hotel ? 'office' : 'home')}</span><div class="grow"><div class="nm">${esc(x.name)} <small class="muted">· ${esc(HO_KIND[x.kind])}</small></div>
+      <div class="sub">${x.site ? 'Obra ' + esc(x.site) : 'Sem obra'}${x.address ? ' · ' + esc(x.address) : ''}</div></div>${chip(lk, ll)}</div>
+    <ul class="fl-papers">
+      ${hotel ? `<li class="fl-p ok"><span>Hoje</span><b>${x.guests || 0} pessoa(s)</b></li>${x.nightly ? `<li class="fl-p ok"><span>Preço por noite</span><b>${esc(eur2(x.nightly))}</b></li>` : ''}`
+        : `<li class="fl-p ${s.beds ? s.free ? 'ok' : 'warn' : 'warn'}"><span>Camas</span><b>${s.beds ? `${s.free} livre(s) de ${s.beds}` : 'nenhuma ainda'}</b></li>
+           <li class="fl-p ${s.lease === 'caducado' ? 'bad' : s.lease === 'a_caducar' ? 'warn' : 'ok'}"><span>Contrato da casa</span><b>${esc(lease)}</b></li>${insp}`}
+    </ul>
+    <div class="acts">
+      ${!hotel && !s.entry_done && S.home.can_inspect ? `<button class="btn small" data-insp="${esc(x.id)}">${s.entry_open ? 'Continuar a vistoria de entrada' : 'Fazer a vistoria de entrada'}</button>` : ''}
+      <button class="btn ghost small" data-open="${esc(x.id)}">Ver ${hotel ? 'hotel' : 'casa'}</button></div></article>`;
+}
+function hoList() {
+  const S = state.housing; const body = $('#hobody'); if (!body) return;
+  const hs = S.home.houses;
+  body.innerHTML = hs.length ? `<div class="list">${hs.map(hoCard).join('')}</div>
+    ${S.home.closed ? `<p class="small muted">${S.home.closed} casa(s) já entregue(s) ao senhorio.</p>` : ''}`
+    : `<div class="card">${empty('box', 'Ainda sem casas', S.home.can_manage ? 'Carrega em «+ Nova casa ou hotel». Numa casa, junta os quartos e as camas e faz a vistoria de entrada com fotos.' : 'O RH regista as casas e os hotéis.')}</div>`;
+  body.querySelectorAll('[data-open]').forEach((b) => b.onclick = () => hoDetail(b.dataset.open));
+  body.querySelectorAll('[data-insp]').forEach((b) => b.onclick = () => hoStartInspection(b.dataset.insp, 'entry'));
+}
+function hoPeople() {
+  const S = state.housing; const body = $('#hobody'); if (!body) return;
+  const ps = S.home.people; const none = ps.filter((p) => !p.where && !p.hotel);
+  body.innerHTML = `<p class="small muted">${ps.length - none.length} pessoa(s) com alojamento hoje, ${none.length} sem.</p>
+    <div class="list">${ps.map((p) => `<article class="card fl-drv"><div class="wk"><div class="grow"><div class="nm">${esc(p.name)}</div>
+      <div class="sub">${esc(p.number || '')}${p.where ? ' · ' + esc(p.where) : p.hotel ? ' · Hotel ' + esc(p.hotel) : ''}</div></div>
+      ${p.where || p.hotel ? chip('ok', p.hotel ? 'hotel' : 'tem cama') : chip('', 'sem alojamento')}</div></article>`).join('')}</div>`;
+}
+async function hoSheet(x) {
+  const sites = activeSites(); x = x || { kind: 'corporate_house' };
+  const fd = await askSheet(x.id ? `Editar ${x.name}` : 'Nova casa ou hotel', `
+    <div class="row"><div><label for="hk">É</label><select id="hk" name="kind">${Object.entries(HO_KIND).map(([k, l]) => `<option value="${k}" ${x.kind === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+      <div><label for="hn">Nome *</label><input id="hn" name="name" required minlength="2" maxlength="120" value="${esc(x.name || '')}" placeholder="ex.: Casa Sines 1"></div></div>
+    <label for="ha">Morada</label><input id="ha" name="address" maxlength="300" value="${esc(x.address || '')}" placeholder="Rua, n.º, localidade">
+    <label for="hs">Obra que serve <span id="hsreq">*</span></label><select id="hs" name="site_id"><option value="">— Nenhuma —</option>${sites.map((s) => `<option value="${esc(s.id)}" ${x.site_id === s.id ? 'selected' : ''}>Obra ${esc(s.cost_center_code)} · ${esc(s.title)}</option>`).join('')}</select>
+    <div id="hhouse">
+      <h3>Contrato da casa</h3>
+      <div class="row"><div><label for="hr">Renda mensal (€)</label><input id="hr" name="rent" type="number" min="0" step="0.01" inputmode="decimal" value="${x.rent ?? ''}"></div>
+        <div><label for="hls">Início</label><input id="hls" name="lease_start" type="date" value="${esc(x.lease_start || '')}"></div></div>
+      <div class="row"><div><label for="hle">Fim do contrato</label><input id="hle" name="lease_end" type="date" value="${esc(x.lease_end || '')}"></div>
+        <div><label for="hll">Senhorio</label><input id="hll" name="landlord" maxlength="120" value="${esc(x.landlord || '')}"></div></div>
+      <label for="hlp">Telefone do senhorio</label><input id="hlp" name="landlord_phone" type="tel" maxlength="32" value="${esc(x.landlord_phone || '')}">
+    </div>
+    <div id="hhotel"><label for="hnr">Preço por noite (€)</label><input id="hnr" name="nightly" type="number" min="0" step="0.01" inputmode="decimal" value="${x.nightly ?? ''}"></div>
+    <label for="hno">Notas</label><textarea id="hno" name="notes" rows="2" maxlength="500">${esc(x.notes || '')}</textarea>
+    <p class="small muted" id="hhint"></p>`, 'Guardar', (d) => {
+    const sync = () => { const hotel = d.querySelector('#hk').value === 'hotel';
+      d.querySelector('#hhouse').hidden = hotel; d.querySelector('#hhotel').hidden = !hotel;
+      d.querySelector('#hs').required = !hotel; d.querySelector('#hsreq').hidden = hotel;
+      d.querySelector('#hhint').textContent = hotel ? 'Num hotel registas reservas: quem, noites e custo. O custo vai para a obra.'
+        : 'A seguir juntas os quartos e as camas. Ninguém entra antes da vistoria de entrada com fotos. O contrato avisa 60 dias antes de acabar.'; };
+    d.querySelector('#hk').onchange = sync; sync();
+  });
+  if (!fd) return;
+  const p = {}; for (const [k, v] of fd.entries()) p[k] = String(v).trim();
+  const { data, error } = await sb.rpc('mini_housing_save', { p_property: x.id || null, p });
+  if (error) return toast(friendly(error));
+  toast(x.id ? 'Guardado.' : p.kind === 'hotel' ? 'Hotel criado.' : 'Casa criada. Agora junta os quartos.');
+  hoDetail(data);
+}
+async function hoDetail(id) {
+  const S = state.housing; S.sel = id; S.insp = null;
+  const body = $('#hobody'); const top = $('#hotop'); if (!body || !top) return;
+  top.innerHTML = `<button class="btn ghost small" id="hoback">← Todas as casas</button>`; body.innerHTML = skel(2);
+  $('#hoback').onclick = () => loadHousing();
+  if (!S.home) { const { data } = await sb.rpc('mini_housing_home'); if (data) S.home = data; }
+  const { data: x, error } = await sb.rpc('mini_housing_property', { p_property: id });
+  if (!body.isConnected || S.sel !== id) return;
+  if (error) { body.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  S.cur = x; const M = S.home.can_manage; const hotel = x.kind === 'hotel'; const s = x.state;
+  const bed = (b) => `<li class="ho-bed ${b.stay ? 'used' : ''}"><b>${esc(b.label)}</b>
+      ${b.stay ? `<span>${esc(b.stay.person)}<small>desde ${esc(fmtDate(b.stay.from))}${b.stay.to ? ' até ' + esc(fmtDate(b.stay.to)) : ''}${b.stay.site ? ' · Obra ' + esc(b.stay.site) : ''}</small></span>
+        ${M ? `<button class="btn ghost small" data-out="${esc(b.stay.id)}" data-who="${esc(b.stay.person)}">Sai</button>` : ''}`
+      : `<span class="muted">Livre${b.next ? `<small>${esc(b.next.person)} entra a ${esc(fmtDate(b.next.from))}</small>` : ''}</span>
+        ${M && s.entry_done && x.active ? `<button class="btn small" data-in="${esc(b.id)}" data-bed="${esc(b.label)}">Pôr alguém</button>` : ''}`}</li>`;
+  body.innerHTML = `${hoCard(x)}
+    ${M && x.active ? `<div class="acts-row fl-mng">
+      <button class="btn ghost small" id="hoed">Editar dados</button>
+      ${hotel ? '<button class="btn small" id="hobk">+ Reserva</button>' : '<button class="btn ghost small" id="horm">+ Quarto</button>'}
+      <button class="btn ghost small" id="hoco">Registar custo</button></div>` : ''}
+    ${x.landlord || x.landlord_phone ? `<p class="small">Senhorio: ${esc(x.landlord || '')}${x.landlord_phone ? ` · <a href="tel:${esc(x.landlord_phone)}">${esc(x.landlord_phone)}</a>` : ''}${x.rent ? ' · renda ' + esc(eur2(x.rent)) + '/mês' : ''}</p>` : ''}
+    ${x.notes ? `<p class="small" style="white-space:pre-line">${esc(x.notes)}</p>` : ''}
+    ${M && x.month_cost != null ? `<p class="small">Custos este mês: <b>${esc(eur2(x.month_cost))}</b></p>` : ''}
+    ${hotel ? `<h2 class="sec">Reservas</h2>${x.bookings.length ? `<ul class="fl-hist">${x.bookings.map((k) => `<li class="${k.cancelled ? 'muted' : ''}"><b>${esc(k.person)}</b> · ${esc(fmtDate(k.from))} → ${esc(fmtDate(k.to))}${k.cancelled ? ' · cancelada' : ''}
+        <small>${k.ref ? 'Reserva ' + esc(k.ref) + ' · ' : ''}${k.cost != null ? esc(eur2(k.cost)) + ' · ' : ''}${k.site ? 'Obra ' + esc(k.site) : ''}</small>
+        ${M && !k.cancelled ? `<button class="btn ghost small" data-cx="${esc(k.id)}">Cancelar</button>` : ''}</li>`).join('')}</ul>` : '<p class="small muted">Sem reservas.</p>'}`
+    : `<h2 class="sec">Quartos e camas</h2>
+      ${!s.entry_done && x.rooms.length ? `<p class="by-hint small">${ic('warn')} Faz a vistoria de entrada com fotos de cada divisão antes de pôr alguém nesta casa.</p>` : ''}
+      ${x.rooms.length ? x.rooms.map((r) => `<div class="card ho-room"><div class="wk"><div class="grow"><div class="nm">${esc(r.name)}</div>
+          <div class="sub">${r.beds.filter((b) => b.stay).length} de ${r.beds.length} ocupada(s)${M && r.beds[0] && r.beds[0].cost ? ' · ' + esc(eur2(r.beds[0].cost)) + '/noite por cama' : ''}</div></div>
+          ${M && x.active ? `<button class="btn ghost small" data-room="${esc(r.id)}">Editar</button>` : ''}</div>
+          <ul class="ho-beds">${r.beds.map(bed).join('')}</ul></div>`).join('')
+      : `<div class="card">${empty('box', 'Ainda sem quartos', M ? 'Carrega em «+ Quarto»: o nome e quantas camas tem.' : 'O RH junta os quartos e as camas.')}</div>`}
+      <h2 class="sec">Vistorias</h2>
+      ${x.inspections.length ? `<ul class="fl-hist">${x.inspections.map((i) => `<li><b>${i.kind === 'entry' ? 'Entrada' : 'Saída'}</b> · ${i.finished ? 'feita a ' + esc(fmtTime(i.finished)) : 'a meio'} · ${esc(i.by || '')}
+        <small>${i.photos} foto(s)${i.damage ? ' · <span class="by-no">com danos</span>' : ''}</small>
+        <button class="btn ghost small" data-vi="${esc(i.id)}">${i.finished ? 'Ver fotos' : 'Continuar'}</button></li>`).join('')}</ul>` : '<p class="small muted">Ainda nenhuma.</p>'}
+      ${S.home.can_inspect && x.active && s.entry_done && !s.exit_open ? `<button class="btn ghost wide" id="hoexit">Entregar a casa ao senhorio (vistoria de saída)</button>` : ''}
+      ${s.exit_open ? `<button class="btn wide" id="hoexit">Continuar a vistoria de saída</button>` : ''}
+      <h2 class="sec">Quem passou por aqui</h2>
+      ${x.history.length ? `<ul class="fl-hist">${x.history.map((h) => `<li><b>${esc(h.person)}</b> · ${esc(h.bed)}<small>${esc(fmtDate(h.from))}${h.to ? ' → ' + esc(fmtDate(h.to)) : ' · ainda lá'}</small></li>`).join('')}</ul>` : '<p class="small muted">Ainda ninguém.</p>'}`}
+    ${M ? `<h2 class="sec">Custos</h2>${x.costs.length ? `<ul class="fl-hist">${x.costs.map((k) => `<li><b>${esc(HO_COST[k.kind] || k.kind)}</b> · ${esc(eur2(k.amount))}
+      <small>${esc(fmtDate(k.on))}${k.ref ? ' · ' + esc(k.ref) : ''}${k.site ? ' · Obra ' + esc(k.site) : ''}</small></li>`).join('')}</ul>` : '<p class="small muted">Sem custos.</p>'}` : ''}`;
+  body.querySelectorAll('[data-open]').forEach((b) => b.hidden = true);
+  body.querySelectorAll('[data-insp]').forEach((b) => b.onclick = () => hoStartInspection(id, 'entry'));
+  body.querySelectorAll('[data-vi]').forEach((b) => b.onclick = () => hoInspection(b.dataset.vi));
+  body.querySelectorAll('[data-in]').forEach((b) => b.onclick = () => hoCheckin(x, b.dataset.in, b.dataset.bed));
+  body.querySelectorAll('[data-out]').forEach((b) => b.onclick = () => hoCheckout(b.dataset.out, b.dataset.who));
+  body.querySelectorAll('[data-room]').forEach((b) => b.onclick = () => hoRoom(x, x.rooms.find((r) => r.id === b.dataset.room)));
+  body.querySelectorAll('[data-cx]').forEach((b) => b.onclick = () => hoCancel(b.dataset.cx));
+  const on = (sel, f) => { const b = $(sel); if (b) b.onclick = f; };
+  on('#hoed', () => hoSheet(x)); on('#horm', () => hoRoom(x, null)); on('#hoco', () => hoCost(x)); on('#hobk', () => hoBooking(x));
+  on('#hoexit', () => hoStartInspection(id, 'exit'));
+}
+async function hoRoom(x, r) {
+  const fd = await askSheet(r ? `Editar ${r.name}` : 'Novo quarto', `<p><b>${esc(x.name)}</b></p>
+    <div class="row"><div><label for="rn">Nome *</label><input id="rn" name="n" required maxlength="64" value="${esc(r ? r.name : `Quarto ${x.rooms.length + 1}`)}"></div>
+      <div><label for="rb">Camas *</label><input id="rb" name="b" type="number" required min="1" max="20" step="1" inputmode="numeric" value="${r ? r.beds.length : 2}"></div></div>
+    <label for="rc">Custo por noite de cada cama (€)</label><input id="rc" name="c" type="number" min="0" step="0.01" inputmode="decimal" value="${r && r.beds[0] && r.beds[0].cost ? r.beds[0].cost : ''}" placeholder="vazio se a renda já paga tudo">
+    <p class="small muted">Com menos camas, só saem camas livres. O histórico fica.</p>`, 'Guardar');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_housing_room_save', { p_property: x.id, p_room: r ? r.id : null, p_name: String(fd.get('n')).trim(), p_beds: Number(fd.get('b')), p_nightly: fd.get('c') ? Number(fd.get('c')) : 0 });
+  if (error) return toast(friendly(error));
+  toast('Quarto guardado.'); hoDetail(x.id);
+}
+const hoPeopleOptions = () => (state.housing.home.people || []).map((p) => `<option value="${esc(p.id)}">${esc(p.name)}${p.where ? ' · já tem cama' : p.hotel ? ' · está em hotel' : ''}</option>`).join('');
+const hoSiteOptions = (first) => `<option value="">${esc(first)}</option>${activeSites().map((s) => `<option value="${esc(s.id)}">Obra ${esc(s.cost_center_code)} · ${esc(s.title)}</option>`).join('')}`;
+async function hoCheckin(x, bed, label) {
+  const today = isoDay(new Date());
+  const fd = await askSheet(`Pôr alguém na ${label}`, `<p><b>${esc(x.name)}</b></p>
+    <label for="cp">Quem *</label><select id="cp" name="p" required><option value="">—</option>${hoPeopleOptions()}</select>
+    <div class="row"><div><label for="cf">Entra a *</label><input id="cf" name="f" type="date" required value="${esc(today)}"></div>
+      <div><label for="ct">Sai a</label><input id="ct" name="t" type="date"></div></div>
+    <label for="cs">Obra do custo</label><select id="cs" name="s">${hoSiteOptions(x.site ? `Obra da casa (${x.site})` : '— Escolhe a obra —')}</select>`, 'Pôr na cama');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_housing_checkin', { p_bed: bed, p_collab: fd.get('p'), p_from: fd.get('f'), p_to: fd.get('t') || null, p_site: fd.get('s') || null });
+  if (error) return toast(friendly(error));
+  toast('Feito.'); await hoRefreshHome(); hoDetail(x.id);
+}
+async function hoCheckout(stay, who) {
+  const fd = await askSheet(`${who} sai da casa`, `<label for="od2">Dia da saída *</label><input id="od2" name="d" type="date" required value="${esc(isoDay(new Date()))}">
+    <p class="small muted">A cama fica livre a partir desse dia.</p>`, 'Confirmar saída');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_housing_checkout', { p_stay: stay, p_on: fd.get('d') });
+  if (error) return toast(friendly(error));
+  toast('Saída registada.'); await hoRefreshHome(); hoDetail(state.housing.sel);
+}
+async function hoRefreshHome() { const { data } = await sb.rpc('mini_housing_home'); if (data) state.housing.home = data; }
+async function hoBooking(x) {
+  const today = isoDay(new Date());
+  const fd = await askSheet(`Reserva no ${x.name}`, `
+    <label for="bp">Quem *</label><select id="bp" name="p" required><option value="">—</option>${hoPeopleOptions()}</select>
+    <div class="row"><div><label for="bf">Entrada *</label><input id="bf" name="f" type="date" required value="${esc(today)}"></div>
+      <div><label for="bt">Saída *</label><input id="bt" name="t" type="date" required></div></div>
+    <div class="row"><div><label for="br">N.º da reserva</label><input id="br" name="r" maxlength="64"></div>
+      <div><label for="bc">Custo total (€)</label><input id="bc" name="c" type="number" min="0" step="0.01" inputmode="decimal" placeholder="${x.nightly ? 'vazio: ' + esc(eur2(x.nightly)) + ' × noites' : ''}"></div></div>
+    <label for="bs">Obra do custo</label><select id="bs" name="s">${hoSiteOptions('A obra onde a pessoa está')}</select>`, 'Reservar');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_housing_booking', { p_hotel: x.id, p_collab: fd.get('p'), p_from: fd.get('f'), p_to: fd.get('t'), p_ref: String(fd.get('r') || '').trim() || null,
+    p_cost: fd.get('c') ? Number(fd.get('c')) : null, p_site: fd.get('s') || null });
+  if (error) return toast(friendly(error));
+  toast('Reserva registada. O custo foi para a obra.'); await hoRefreshHome(); hoDetail(x.id);
+}
+async function hoCancel(id) {
+  const fd = await askSheet('Cancelar reserva', `<label for="cx">Motivo *</label><input id="cx" name="x" required minlength="3" maxlength="300" placeholder="ex.: obra adiada">
+    <p class="small muted">A reserva fica no histórico e o custo sai da obra.</p>`, 'Cancelar reserva');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_housing_booking_cancel', { p_booking: id, p_reason: String(fd.get('x')).trim() });
+  if (error) return toast(friendly(error));
+  toast('Reserva cancelada.'); hoDetail(state.housing.sel);
+}
+async function hoCost(x) {
+  const fd = await askSheet('Registar custo', `<p><b>${esc(x.name)}</b></p>
+    <div class="row"><div><label for="hck">Tipo *</label><select id="hck" name="k" required>${Object.entries(HO_COST).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></div>
+      <div><label for="hca">Valor (€) *</label><input id="hca" name="a" type="number" required min="0.01" step="0.01" inputmode="decimal"></div></div>
+    <div class="row"><div><label for="hcd">Data *</label><input id="hcd" name="on" type="date" required max="${esc(isoDay(new Date()))}" value="${esc(isoDay(new Date()))}"></div>
+      <div><label for="hcr">Referência</label><input id="hcr" name="r" maxlength="64" placeholder="ex.: fatura n.º"></div></div>
+    <label for="hcs">Obra do custo</label><select id="hcs" name="site">${hoSiteOptions(x.site ? `Obra da casa (${x.site})` : '— Escolhe a obra —')}</select>`, 'Guardar');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_housing_cost', { p_property: x.id, p_kind: fd.get('k'), p_amount: Number(fd.get('a')), p_on: fd.get('on'), p_ref: String(fd.get('r') || '').trim() || null, p_site: fd.get('site') || null });
+  if (error) return toast(friendly(error));
+  toast('Custo registado.'); hoDetail(x.id);
+}
+async function hoStartInspection(property, kind) {
+  const { data, error } = await sb.rpc('mini_housing_inspection_start', { p_property: property, p_kind: kind });
+  if (error) return toast(friendly(error));
+  state.housing.sel = property; hoInspection(data);
+}
+// The inspection: every room and common area, each with its photos and its state. On the way out, the entry photos
+// of the same area show next to the new ones.
+async function hoInspection(id) {
+  const S = state.housing; S.insp = id;
+  const body = $('#hobody'); const top = $('#hotop'); if (!body || !top) return;
+  const { data: v, error } = await sb.rpc('mini_housing_inspection', { p_inspection: id });
+  if (!body.isConnected || S.insp !== id) return;
+  if (error) return toast(friendly(error));
+  S.iv = v; const E = v.can_edit; const exit = v.kind === 'exit';
+  const done = v.areas.filter((a) => a.condition === 'none' || a.photos.length).length;
+  top.innerHTML = `<button class="btn ghost small" id="hoback">← ${esc(v.house)}</button>`;
+  $('#hoback').onclick = () => hoDetail(v.property_id);
+  const thumbs = (ps) => ps.map((p) => `<img class="ho-ph" data-path="${esc(p)}" alt="Foto">`).join('');
+  body.innerHTML = `<div class="card ho-ins-head"><div class="wk"><div class="grow"><div class="nm">Vistoria de ${exit ? 'saída' : 'entrada'} · ${esc(v.house)}</div>
+      <div class="sub">${v.finished ? `Feita a ${esc(fmtTime(v.finished))} por ${esc(v.by || '')}` : `Começada a ${esc(fmtTime(v.started))}`}</div></div>
+      ${v.finished ? chip(v.damage ? 'bad' : 'ok', v.damage ? 'com danos' : 'sem danos') : chip('warn', `${done} de ${v.areas.length} divisões`)}</div>
+    ${E ? `<p class="small muted">Tira pelo menos uma foto de cada divisão. Se a divisão não existe, marca «Não existe». ${exit ? 'Em cima de cada divisão vês como estava à entrada.' : ''}</p>` : ''}
+    ${v.finished ? `<p class="small">${[v.power != null && 'Luz: ' + v.power, v.water != null && 'Água: ' + v.water, v.gas != null && 'Gás: ' + v.gas, v.keys != null && v.keys + ' chave(s)'].filter(Boolean).map(esc).join(' · ')}${v.note ? '<br>' + esc(v.note) : ''}</p>` : ''}</div>
+    <div class="list">${v.areas.map((a) => `<article class="card ho-area ${a.condition}" data-area="${esc(a.id)}">
+      <div class="wk"><div class="grow"><div class="nm">${esc(a.area)}</div></div>${a.condition === 'none' ? chip('', 'não existe') : a.photos.length ? chip(a.condition === 'damage' ? 'bad' : 'ok', a.condition === 'damage' ? 'com dano' : `${a.photos.length} foto(s)`) : chip('warn', 'falta foto')}</div>
+      ${exit && a.before ? `<div class="ho-cmp"><div class="ho-before"><small>À entrada: ${esc(HO_COND[a.before.condition])}${a.before.note ? ' · ' + esc(a.before.note) : ''}</small><div class="ho-phs">${thumbs(a.before.photos)}</div></div>
+        <div class="ho-now"><small>Agora</small><div class="ho-phs">${thumbs(a.photos)}</div></div></div>` : `<div class="ho-phs">${thumbs(a.photos)}</div>`}
+      ${!E && a.note ? `<p class="small">${esc(a.note)}</p>` : ''}
+      ${E ? `<div class="seg ho-cond" role="radiogroup">${Object.entries(HO_COND).map(([k, l]) => `<button type="button" role="radio" data-c="${k}" aria-checked="${a.condition === k}">${esc(l)}</button>`).join('')}</div>
+        <input class="ho-note" maxlength="500" placeholder="${a.condition === 'damage' ? 'Descreve o dano *' : 'Nota (opcional)'}" value="${esc(a.note || '')}">
+        ${a.condition !== 'none' ? `<label class="btn small ho-shot">${ic('camera')} Tirar foto<input type="file" accept="image/*" capture="environment" multiple hidden></label>` : ''}` : ''}
+    </article>`).join('')}</div>
+    ${E ? `<button class="btn big wide" id="hofin">Terminar a vistoria</button>` : ''}`;
+  hoThumbs(body);
+  body.querySelectorAll('img.ho-ph').forEach((i) => i.onclick = () => { if (i.src) window.open(i.src, '_blank', 'noopener'); });
+  if (!E) return;
+  body.querySelectorAll('.ho-area').forEach((card) => {
+    const area = card.dataset.area; const note = card.querySelector('.ho-note');
+    const save = async (c) => {
+      if (c === 'damage' && note.value.trim().length < 5) { note.placeholder = 'Descreve o dano *'; note.focus(); card.dataset.want = 'damage'; return toast('Descreve o dano (5 letras ou mais).'); }
+      const { error: e } = await sb.rpc('mini_housing_area_set', { p_area: area, p_condition: c, p_note: note.value.trim() || null });
+      if (e) return toast(friendly(e));
+      hoInspection(id);
+    };
+    card.querySelectorAll('[data-c]').forEach((b) => b.onclick = () => save(b.dataset.c));
+    note.onchange = () => { const cur = card.dataset.want || card.querySelector('[aria-checked=true]').dataset.c; delete card.dataset.want; save(cur); };
+    const inp = card.querySelector('input[type=file]');
+    if (inp) inp.onchange = async () => {
+      const files = [...inp.files]; if (!files.length) return;
+      const lbl = card.querySelector('.ho-shot'); lbl.classList.add('busy');
+      for (const f0 of files) {
+        const f = await shrinkPhoto(f0);
+        if (!HO_PHOTO[f.type]) { toast('Só aceito fotos (JPG, PNG).'); continue; }
+        if (f.size > FILE_MAX) { toast('A foto é grande demais (máximo 10 MB).'); continue; }
+        const path = `${state.me.tenant_id}/${id}/${crypto.randomUUID()}.${HO_PHOTO[f.type]}`;
+        const up = await sb.storage.from('alojamento').upload(path, f, { contentType: f.type, upsert: false });
+        if (up.error) { toast(friendly(up.error)); break; }
+        const { error: e } = await sb.rpc('mini_housing_photo_add', { p_area: area, p_file: path, p_sha256: await sha256Hex(f) });
+        if (e) { toast(friendly(e)); break; }
+      }
+      hoInspection(id);
+    };
+  });
+  $('#hofin').onclick = async () => {
+    const en = v.entry || {};
+    const hint = (k) => exit && en[k] != null ? ` placeholder="à entrada: ${esc(en[k])}"` : '';
+    const fd = await askSheet(`Terminar a vistoria de ${exit ? 'saída' : 'entrada'}`, `
+      <h3>Contadores</h3>
+      <div class="row"><div><label for="mp">Luz (kWh)</label><input id="mp" name="power" type="number" min="0" step="0.1" inputmode="decimal"${hint('power')}></div>
+        <div><label for="mw">Água (m³)</label><input id="mw" name="water" type="number" min="0" step="0.1" inputmode="decimal"${hint('water')}></div></div>
+      <div class="row"><div><label for="mg">Gás (m³)</label><input id="mg" name="gas" type="number" min="0" step="0.1" inputmode="decimal"${hint('gas')}></div>
+        <div><label for="mk2">Chaves ${exit ? 'devolvidas' : 'recebidas'}</label><input id="mk2" name="keys" type="number" min="0" max="99" step="1" inputmode="numeric"${hint('keys')}></div></div>
+      <label for="mn">Nota geral</label><textarea id="mn" name="note" rows="2" maxlength="1000"></textarea>
+      <p class="small muted">Depois de terminada, a vistoria não muda: é a prova. ${exit ? 'A casa fica entregue e sai da lista.' : 'A casa fica pronta a receber pessoas.'}</p>`, 'Terminar');
+    if (!fd) return;
+    const p = {}; for (const [k, x] of fd.entries()) p[k] = String(x).trim();
+    const { data: r, error: e } = await sb.rpc('mini_housing_inspection_finish', { p_inspection: id, p });
+    if (e) return toast(friendly(e));
+    if (!r.ok) return askSheet('Faltam fotos', `<ul class="fl-why">${r.missing.map((m) => `<li>${ic('warn')} ${esc(m)}</li>`).join('')}</ul>
+      <p class="small muted">Tira pelo menos uma foto destas divisões, ou marca «Não existe».</p>`, 'Fechar');
+    toast(r.closed ? 'Casa entregue. A vistoria de saída ficou guardada.' : 'Vistoria terminada. A casa já pode receber pessoas.');
+    await hoRefreshHome();
+    if (r.closed) loadHousing(); else hoDetail(v.property_id);
+  };
 }
