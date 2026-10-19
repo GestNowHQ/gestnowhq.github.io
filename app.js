@@ -2,6 +2,13 @@
 // Sem passo de compilação: ficheiros estáticos, publicáveis em qualquer alojamento com HTTPS.
 'use strict';
 
+// M3 (audit 2026-10-19): never inside another site's frame (clickjacking). index.html starts hidden; shown only at the top.
+if (window.top !== window.self) {
+  try { window.top.location = window.self.location.href; } catch (_) { /* a sandboxed frame: stays hidden */ }
+  throw new Error('GestNow does not run inside a frame');
+}
+document.getElementById('nofr')?.remove();
+
 const cfg = window.GESTNOW_CONFIG || {};
 const app = document.getElementById('app');
 const nav = document.getElementById('nav');
@@ -37,6 +44,40 @@ const REASON_PREFIX = {
   'skill_missing:': 'Falta a competência: ',
 };
 const ERRORS = [
+  // Passaporte de entrada (sql/80)
+  [/social security number \(NISS\) is not valid/i, 'O NISS não está certo: confirma os 11 algarismos no cartão da Segurança Social.'],
+  [/IBAN is not valid/i, 'O IBAN não está certo: confirma na app do teu banco.'],
+  [/your data is already validated/i, 'Os teus dados já foram confirmados pelo RH. Para mudar alguma coisa, fala com o RH.'],
+  [/your ID document has expired/i, 'O teu documento de identificação está caducado: renova-o antes de começar.'],
+  [/birth date: the person must be 16 to 90/i, 'Confirma a data de nascimento.'],
+  [/postal code: 0000-000/i, 'O código postal escreve-se assim: 0000-000.'],
+  [/^.*missing: (.*)$/i, 'Ainda falta: $1.'],
+  [/documents are now handled by HR/i, 'Os documentos agora são tratados pelo RH.'],
+  [/the safety induction is recorded by the app itself/i, 'O acolhimento fica registado sozinho quando o terminas na app.'],
+  [/add the photo or PDF of the document/i, 'Junta a foto ou o PDF do documento.'],
+  [/the issue date cannot be in the future/i, 'A data de emissão não pode ser no futuro.'],
+  [/the expiry date is before the issue date/i, 'A validade é antes da data de emissão: confirma as datas.'],
+  [/the contract changed: open it again/i, 'O contrato foi mudado pelo RH entretanto: abre-o outra vez e lê a versão nova.'],
+  [/the internal rules changed: open them again/i, 'O regulamento foi mudado entretanto: abre-o outra vez.'],
+  [/write your full name exactly as in the contract: (.*)$/i, 'Escreve o teu nome completo como está no contrato: $1.'],
+  [/sign with your finger in the box/i, 'Assina com o dedo no quadro.'],
+  [/there is no contract waiting for your signature/i, 'Não há nenhum contrato à espera da tua assinatura.'],
+  [/HR has not set the pay terms yet/i, 'O RH ainda não pôs o valor hora. Avisamos-te quando estiver.'],
+  [/not waiting for HR/i, 'Esta pessoa ainda não enviou os dados (ou já foram confirmados).'],
+  [/check these documents first[^:]*: (.*)$/i, 'Confirma primeiro estes documentos (abre cada um): $1.'],
+  [/a fixed-term contract needs an end date/i, 'Um contrato a termo certo precisa da data de fim, depois do início.'],
+  [/overtime cannot be paid below the normal rate/i, 'A hora extra não pode ser mais baixa do que a hora normal.'],
+  [/place of work and job title are required/i, 'Falta o local de trabalho ou a função.'],
+  [/hourly rate missing or not valid/i, 'Falta o valor hora (ou não está certo).'],
+  [/weekly hours between 1 and 60/i, 'As horas por semana são entre 1 e 60.'],
+  [/the start date is required/i, 'Falta a data de início.'],
+  [/choose the type of contract/i, 'Escolhe o tipo de contrato.'],
+  [/IRS holders: 1 or 2/i, 'Titulares do IRS: um ou dois.'],
+  [/gloves size: 6 to 12/i, 'Luvas: tamanho 6 a 12.'],
+  [/write what is missing/i, 'Escreve o que falta.'],
+  [/the contract comes after HR validates the data/i, 'O contrato só se prepara depois de confirmares os dados da pessoa.'],
+  [/the contract model must keep at least/i, 'O modelo do contrato tem de manter pelo menos {{nome}} e {{preco_hora}}.'],
+  [/the text is too short/i, 'O texto é curto demais.'],
   [/this person may not take tool (\S+) \((.*)\)/i, 'Esta pessoa não pode levar a $1: falta formação ou documento válido ($2).'],
   [/tool (\S+) carries a tracker that is not Ex-certified/i, 'A $1 tem um localizador sem certificação Ex: tira-o antes de entrar em zona ATEX.'],
   [/tool (\S+) is in an ATEX zone: only an Ex-certified tracker/i, 'A $1 está em zona ATEX: só pode levar um localizador com certificação Ex.'],
@@ -278,6 +319,15 @@ const ERRORS = [
   [/tap the card/i, 'Encosta o cartão ou escreve o número.'],
   [/you already disagreed with this day/i, 'Já reclamaste deste dia. Espera pela resposta.'],
   [/there is no day to disagree/i, 'Não há horas nesse dia para reclamar.'],
+  [/this day is not over yet/i, 'Este dia ainda não acabou: fala com o teu encarregado.'],
+  [/on a day without taps choose/i, 'Num dia sem picagens escolhe «Estive lá e diz que faltei» ou «Outro motivo».'],
+  [/you were not on a site that day/i, 'Nesse dia não estavas em nenhuma obra: fala com o escritório.'],
+  [/a week is confirmed from its Friday/i, 'A semana só se confirma a partir de sexta-feira.'],
+  [/choose the Monday of the week/i, 'Escolhe a semana.'],
+  [/there are no hours in this week/i, 'Esta semana não tem horas.'],
+  [/you disagreed with a day of this week/i, 'Reclamaste de um dia desta semana: espera pela resposta antes de confirmar.'],
+  [/this request already has a file/i, 'Este pedido já tem um ficheiro.'],
+  [/send the file first/i, 'O ficheiro não chegou. Tenta outra vez.'],
   [/write what is wrong/i, 'Em «Outro motivo», escreve o que está errado (pelo menos 10 letras).'],
   [/write the answer/i, 'Escreve a resposta (pelo menos 10 letras).'],
   [/write why you refuse/i, 'Escreve porque recusas (pelo menos 10 letras).'],
@@ -329,6 +379,8 @@ const ERRORS = [
   [/an issued diária cannot change|issued diária is never deleted/i, 'Uma diária emitida já não muda.'],
   [/country must be PT, ES or FR/i, 'Escolhe Portugal, Espanha ou França.'],
   [/this profile is not yours/i, 'Esse perfil não é teu. Pede ao administrador.'],
+  [/confirm the phone code before changing profile/i, 'Para mudar de perfil, confirma primeiro o código do telemóvel.'],
+  [/a typed number is only for a card/i, 'Só se escreve o número de um cartão.'],
   [/admin is given only/i, 'O perfil de administrador só se dá com aprovação de uma segunda pessoa.'],
   [/an admin keeps the admin profile/i, 'Um administrador mantém sempre o perfil de administrador.'],
   [/in your own company you change profile/i, 'Na tua empresa já mudas de perfil com a tua própria pessoa.'],
@@ -487,12 +539,19 @@ const skel = (n = 3) => `<div class="skel" aria-busy="true" aria-label="A carreg
   `<div class="card"><span class="av"></span><div class="grow"><div class="sk" style="width:${62 - i * 9}%"></div><div class="sk" style="width:${38 + i * 6}%;margin-top:10px"></div></div></div>`).join('')}</div>`;
 const ART = {
   helmet: '<path d="M30 58a30 30 0 0 1 60 0v6H30z" fill="var(--brand)"/><rect x="22" y="62" width="76" height="9" rx="4.5" fill="var(--brand)"/><path d="M54 28h12v20H54z" fill="var(--accent)"/><ellipse cx="60" cy="78" rx="34" ry="4" fill="var(--line)"/>',
-  calendar: '<rect x="18" y="18" width="84" height="58" rx="8" fill="var(--surface-2)" stroke="var(--line)" stroke-width="2"/><path d="M18 32h84" stroke="var(--line)" stroke-width="2"/><rect x="34" y="10" width="6" height="16" rx="3" fill="var(--brand)"/><rect x="80" y="10" width="6" height="16" rx="3" fill="var(--brand)"/><circle cx="60" cy="54" r="13" fill="var(--accent)"/><path d="M60 47v7l5 3" stroke="#0f1d1c" stroke-width="3" fill="none" stroke-linecap="round"/>',
+  calendar: '<rect x="18" y="18" width="84" height="58" rx="8" fill="var(--surface-2)" stroke="var(--line)" stroke-width="2"/><path d="M18 32h84" stroke="var(--line)" stroke-width="2"/><rect x="34" y="10" width="6" height="16" rx="3" fill="var(--brand)"/><rect x="80" y="10" width="6" height="16" rx="3" fill="var(--brand)"/><circle cx="60" cy="54" r="13" fill="var(--accent)"/><path d="M60 47v7l5 3" stroke="var(--on-accent)" stroke-width="3" fill="none" stroke-linecap="round"/>',
   box: '<path d="M22 34l38-16 38 16v34l-38 14-38-14z" fill="var(--surface-2)" stroke="var(--line)" stroke-width="2"/><path d="M22 34l38 14 38-14M60 48v34" stroke="var(--line)" stroke-width="2" fill="none"/><path d="M41 26l38 16" stroke="var(--accent)" stroke-width="5"/>',
   card: '<rect x="20" y="20" width="80" height="50" rx="8" fill="var(--surface-2)" stroke="var(--line)" stroke-width="2"/><rect x="30" y="50" width="28" height="6" rx="3" fill="var(--brand)"/><path d="M76 34a10 10 0 0 1 14 0M80 39a4 4 0 0 1 6 0" stroke="var(--accent)" stroke-width="3" fill="none" stroke-linecap="round"/>',
   check: '<circle cx="60" cy="44" r="30" fill="var(--ok-bg)"/><path d="M46 45l10 10 18-20" stroke="var(--ok)" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
 };
 const empty = (art, title, text) => `<div class="empty"><svg viewBox="0 0 120 84" aria-hidden="true">${ART[art] || ART.box}</svg><b>${esc(title)}</b>${text ? `<p>${esc(text)}</p>` : ''}</div>`;
+// Big zeros are noise: a KPI tile whose number is 0 gets .zero (shown muted). One observer for every screen.
+let zeroTick = 0;
+new MutationObserver(() => { if (zeroTick) return; zeroTick = requestAnimationFrame(() => { zeroTick = 0;
+  for (const b of app.querySelectorAll('.kpi > b, .fl-n > b')) b.parentElement.classList.toggle('zero', /^0([.,]0+)?\s*(€|h|%)?$/.test(b.textContent.trim())); }); })
+  .observe(app, { childList: true, subtree: true });
+// The same shape for a load that failed: red icon, plain words, optional "Tentar outra vez" button (id given by the screen).
+const errorState = (text, retryId) => `<div class="empty error" role="alert"><span class="e-ic">${ic('warn')}</span><b>Não foi possível carregar</b><p>${esc(text)}</p>${retryId ? `<button class="btn ghost" id="${esc(retryId)}">Tentar outra vez</button>` : ''}</div>`;
 // One line of help, the rest behind an "i".
 const more = (label, html) => `<details class="more"><summary>${esc(label)}</summary><div>${html}</div></details>`;
 // Day bar: periods "08:00–12:00 · 13:00–?" over 06:00–20:00 (wider if needed). Open period: to now (today) or dashed (missing).
@@ -539,12 +598,24 @@ document.getElementById('sol').addEventListener('click', () => {
   applyTheme(); toast(on ? 'Modo sol: mais contraste.' : 'Modo normal.');
 });
 
-function toast(msg) {
+// Toast at the bottom with an icon and a colour per kind. toast(msg) guesses: an error from friendly() or a "não…/falta…" line is
+// 'bad' (red, stays 8 s, closes with a tap), a "guardado/criada/…" line is 'ok', the rest 'info'. toast(msg, kind) to say it.
+const TOAST_BAD = /^(erro|não |sem |falta|escolhe|escreve|só |junta |tenta |as duas|esta pessoa|este |já )|não (foi|consegu|pode|tem|há|está)|falh|inválid|caducad|bloquead|recusad|expir/i;
+const TOAST_OK = /(guardad|criad|registad|enviad|aprovad|apagad|feito|concluíd|atualizad|adicionad|removid|marcad|fechad|validad|assinad|copiad|entregue|recebid|ligad|desativad|reativad|cancelad|reservad|obrigad)[oa]?s?\b/i;
+let lastFriendly = '';
+function toast(msg, kind) {
   const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 3500);
+  msg = String(msg ?? '');
+  kind = kind || (msg === lastFriendly || TOAST_BAD.test(msg) ? 'bad' : TOAST_OK.test(msg) ? 'ok' : 'info');
+  t.className = kind;
+  t.setAttribute('role', kind === 'bad' ? 'alert' : 'status');
+  t.innerHTML = `<span class="t-ic">${ic({ ok: 'ok', bad: 'warn' }[kind] || 'info')}</span><span class="grow">${esc(msg)}</span>${kind === 'bad' ? `<button class="t-x" type="button" aria-label="Fechar">${ic('x')}</button>` : ''}`;
+  t.onclick = kind === 'bad' ? () => t.classList.remove('show') : null;
+  requestAnimationFrame(() => t.classList.add('show'));
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), kind === 'bad' ? 8000 : 3500);
 }
-function friendly(err) {
+function friendly(err) { return (lastFriendly = friendlyText(err)); }
+function friendlyText(err) {
   const msg = (err && (err.message || err.error_description || err.hint)) || String(err);
   if (AUTH_LOST.test(msg)) checkSession();
   // A missed entry for a person who was blocked at that time (inactive, documents): say why, in plain words.
@@ -648,6 +719,8 @@ async function openDocFile(path, bucket = 'documentos') {
   if (win) win.location = data.signedUrl; else location.href = data.signedUrl;
 }
 const normUid = (v) => String(v || '').replace(/[\s:\-]/g, '').toUpperCase();
+// Lists show only the end of a card number (C3): the whole number is a key to the gate. Full only where the card is changed.
+const maskUid = (v) => { const u = String(v || ''); return u.length > 4 ? '…' + u.slice(-4) : u; };
 function uuid() {
   if (crypto.randomUUID) return crypto.randomUUID();
   const b = crypto.getRandomValues(new Uint8Array(16)); b[6] = (b[6] & 15) | 64; b[8] = (b[8] & 63) | 128;
@@ -691,12 +764,13 @@ nav.addEventListener('click', (e) => {
   if (b.dataset.action === 'sair') return signOut();
   if (b.dataset.action === 'tour') return startTour();
   if (b.dataset.view === 'orcamentos' && state.orc) { state.orc.id = null; state.orc.mode = 'list'; }   // the menu always opens the list
+  if (b.dataset.view === 'minhas') state.mineTab = 'home';   // «Eu» always opens the home
   go(b.dataset.view);
 });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '47';
+const APP_VERSION = '48';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -710,22 +784,65 @@ WIDE.addEventListener('change', () => {
   layoutNav(state.me.role);
   if (state.view === 'secretariado') viewOffice();
 });
+// «Mais» grouped under headings (founder-approved v48): each screen once, each icon with one meaning. «Processo» left the
+// menu (the «?» button and the search still open it); «Produção» is reached from the Dashboard when this login sees it.
+const MENU_GROUPS = [
+  ['Obra', ['picar', 'naobra', 'painel', 'obras', 'equipa', 'lmra', 'emergencia', 'seguranca', 'andaimes']],
+  ['Pessoas', ['trabalhadores', 'acolhimento', 'horas', 'minhas']],
+  ['Logística', ['armazem', 'compras', 'frota', 'alojamento', 'viagens']],
+  ['Gestão', ['orcamentos', 'qualidade', 'despesas', 'producao']],
+  ['Empresa', ['secretariado', 'clientes', 'processo']],
+];
+// Icons drawn for the menu so no two screens share one (M-3): added to the page's sprite once.
+const ENC_ICONS = {
+  gauge: '<path d="M4 17a8 8 0 1 1 16 0M12 17l4-5M7 17h.01M17 17h.01M12 9h.01"/>',
+  chart: '<path d="M4 20h16M7 16v-4M11 16V8M15 16v-6M19 16V5"/>',
+  hhat: '<path d="M4 16a8 8 0 0 1 16 0M3 16h18v2.5H3zM10 8.5V5.5h4v3"/>',
+  crew: '<path d="M7.5 9a4.5 4.5 0 0 1 9 0M6 9h12M9 12.5a3 3 0 0 0 6 0M5 21a7 7 0 0 1 14 0"/>',
+  myclock: '<path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2.5 21a6.5 6.5 0 0 1 9-6M17 13a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM17 15.5V17l1 1"/>',
+  gate: '<path d="M3 21V7M21 21V7M3 10h18M3 15h18M8 10v5M13 10v5M18 10v5M3 7l4-3h10l4 3"/>',
+  medal: '<path d="M12 14a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM9.5 13.3 8 21l4-2 4 2-1.5-7.7M10 9l1.5 1.5L14.5 7.5"/>',
+};
+const MENU_ICON = { painel: 'gauge', producao: 'chart', seguranca: 'hhat', equipa: 'crew', minhas: 'myclock', naobra: 'gate', qualidade: 'medal' };
+(function encIcons() {
+  const ns = 'http://www.w3.org/2000/svg'; const sp = document.createElementNS(ns, 'svg');
+  sp.setAttribute('width', '0'); sp.setAttribute('height', '0'); sp.setAttribute('aria-hidden', 'true'); sp.style.position = 'absolute';
+  sp.innerHTML = Object.entries(ENC_ICONS).map(([k, d]) => `<symbol id="i-${k}" viewBox="0 0 24 24">${d}</symbol>`).join('');
+  document.body.prepend(sp);
+  for (const [v, k] of Object.entries(MENU_ICON)) { const u = document.querySelector(`#nav button[data-view="${v}"] use`); if (u) u.setAttribute('href', '#i-' + k); }
+})();
 function layoutNav(role) {
   const tabs = document.getElementById('tabs'); const sheet = document.getElementById('more');
   const btn = (v) => nav.querySelector(`button[data-view="${v}"]`);
+  const all = [...nav.querySelectorAll('button[data-view]')].map((b) => b.dataset.view);
+  // Out of the menu, still reachable: Processo by «?» and the search; Produção by the Dashboard (only when this login opens it).
+  const off = (v) => v === 'processo' || (v === 'producao' && !btn('painel').hidden);
+  for (const v of all) btn(v).classList.toggle('enc-off', off(v));
+  const shown = (v) => !btn(v).hidden && !off(v);
+  const grouped = MENU_GROUPS.flatMap((g) => g[1]);
+  const groups = [...MENU_GROUPS, ['Outros', all.filter((v) => !grouped.includes(v))]];
   const first = (TABS[role] || TABS.supervisor).filter((v) => !btn(v).hidden);
-  const main = isWide() ? [...first, ...MORE_ORDER.filter((v) => !first.includes(v) && !btn(v).hidden)] : first;
   const moreBtn = nav.querySelector('button[data-more]');
-  for (const v of main) tabs.insertBefore(btn(v), moreBtn);
-  for (const v of MORE_ORDER) if (!main.includes(v) && !btn(v).hidden) sheet.appendChild(btn(v));
-  for (const v of MORE_ORDER) if (btn(v).hidden && btn(v).parentElement !== sheet) sheet.appendChild(btn(v));
+  nav.querySelectorAll('.enc-mh').forEach((h) => h.remove());
+  sheet.querySelectorAll('hr').forEach((h) => h.remove());
+  const head = (t) => Object.assign(document.createElement('h3'), { className: 'enc-mh', textContent: t });
+  for (const v of first) tabs.insertBefore(btn(v), moreBtn);
+  // Phone: the role's tabs at the bottom, the rest in the sheet by group. Computer: everything in the left column, by group.
+  const place = isWide() ? (el) => tabs.insertBefore(el, moreBtn) : (el) => sheet.appendChild(el);
+  for (const [title, views] of groups) {
+    const rest = views.filter((v) => all.includes(v) && !first.includes(v) && shown(v));
+    if (!rest.length) continue;
+    place(head(title)); for (const v of rest) place(btn(v));
+  }
+  for (const v of all) if (!first.includes(v) && !shown(v)) sheet.appendChild(btn(v));   // hidden ones wait in the sheet
   sheet.appendChild(nav.querySelector('button[data-action=tour]'));
   sheet.appendChild(Object.assign(document.createElement('hr'), {}));
   sheet.appendChild(nav.querySelector('button[data-action=sair]'));
-  sheet.querySelectorAll('hr').forEach((h, i, all) => { if (i < all.length - 1) h.remove(); });
   // Which version this phone is running, so anyone can check that an update arrived.
-  if (!sheet.querySelector('.ver')) sheet.appendChild(Object.assign(document.createElement('p'), { className: 'ver', textContent: 'Versão ' + APP_VERSION }));
+  const ver = sheet.querySelector('.ver') || Object.assign(document.createElement('p'), { className: 'ver', textContent: 'Versão ' + APP_VERSION });
+  sheet.appendChild(ver);
   if (isWide()) { tabs.insertBefore(nav.querySelector('button[data-action=tour]'), moreBtn); tabs.insertBefore(nav.querySelector('button[data-action=sair]'), moreBtn); }
+  encBadges(true);
 }
 function openMore(open) {
   const sheet = document.getElementById('more'); if (!sheet) return;
@@ -758,7 +875,20 @@ function idleTooLong(role) {
   let t = 0; try { t = Number(localStorage.getItem(ACTIVE_KEY)) || 0; } catch (_) {}
   return Date.now() - t > IDLE_MIN(role) * 60000;
 }
-async function idleOut() { state.idleOut = true; stopNfc(); state.ready = false; nav.hidden = true; closePalette(); await sb.auth.signOut({ scope: 'local' }); }
+// M1: the session ends on the server too. 'local' revokes this phone's session there (supabase-js refreshes an expired
+// token first, so the logout call is accepted); the person's other devices stay signed in. Personal copies go with it.
+async function idleOut() {
+  state.idleOut = true; stopNfc(); state.ready = false; nav.hidden = true; closePalette(); forgetPersonal();
+  try { await sb.auth.signOut({ scope: 'local' }); } catch (_) { /* no network: the local copy is gone anyway */ }
+}
+// What this phone keeps about people goes when the session ends: the login (ME), the emergency lists, names in the
+// refused list. The offline queues (taps and muster taps) are never touched: a tap is never lost (C2).
+function forgetPersonal() {
+  store(ME_KEY, undefined);
+  try { Object.keys(localStorage).filter((k) => k.startsWith('gn.emer.')).forEach((k) => localStorage.removeItem(k)); } catch (_) { /* storage blocked */ }
+  const rej = load(REJECTED_KEY, []);
+  if (rej.some((x) => x.name)) store(REJECTED_KEY, rej.map((x) => ({ ...x, name: null })));   // kept to be dealt with: «Cartão …1234»
+}
 let lastTouch = 0;
 ['pointerdown', 'keydown'].forEach((ev) => document.addEventListener(ev, () => {
   if (state.ready && Date.now() - lastTouch > 15000) { lastTouch = Date.now(); touch(); }
@@ -860,6 +990,8 @@ async function boot() {
   nav.querySelector('[data-view=despesas]').hidden = worker || state.offline || !canExpenses();
   nav.querySelector('[data-view=andaimes]').hidden = worker || state.offline || !canScaffolds();
   if (me.role === 'supervisor' && !state.booted && state.view === 'picar' && canSiteDetails()) state.view = 'equipa';
+  // v48: the office opens on its own first tab (Secretariado for HR), not on Picar, which it rarely uses.
+  if (!state.booted && state.view === 'picar' && TABS[me.role] && !TABS[me.role].includes('picar')) state.view = TABS[me.role][0];
   state.booted = true;
   if (state.view === 'minhas' && !me.collaborator_id) state.view = (TABS[me.role] || TABS.supervisor)[0];
   layoutNav(me.role);
@@ -914,7 +1046,7 @@ function showNetworkError() {
 }
 // Before login: brand background, logo, one white card. No menu, no data.
 function signedOut(on) { document.body.classList.toggle('signed-out', !!on); }
-const LOGO = (id) => `<svg viewBox="0 0 44 44" aria-hidden="true"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#818cf8"/><stop offset="1" stop-color="#4338ca"/></linearGradient></defs><rect width="44" height="44" rx="12" fill="url(#${id})"/><path d="M31.5 15.2A11 11 0 1 0 33 22" fill="none" stroke="#fff" stroke-width="4.6" stroke-linecap="round"/><path d="M22.5 22H27" stroke="#fff" stroke-width="4.6" stroke-linecap="round"/><circle cx="33" cy="22" r="3.3" fill="#fbbf24"/></svg>`;
+const LOGO = (id) => `<svg viewBox="0 0 44 44" aria-hidden="true"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1a7f95"/><stop offset="1" stop-color="#0a3d4b"/></linearGradient></defs><rect width="44" height="44" rx="12" fill="url(#${id})"/><path d="M31.5 15.2A11 11 0 1 0 33 22" fill="none" stroke="#fff" stroke-width="4.6" stroke-linecap="round"/><path d="M22.5 22H27" stroke="#fff" stroke-width="4.6" stroke-linecap="round"/><circle cx="33" cy="22" r="3.3" fill="#f6b400"/></svg>`;
 // Before login: the shop window. Left (computer) or top (phone) sells the app; the card only asks for what is needed.
 // Marketing only: no menu, no data, nothing that needs a session.
 function authScreen(inner) {
@@ -923,7 +1055,7 @@ function authScreen(inner) {
   const feat = (i, b, t) => `<li><span class="fi">${ic(i)}</span><div><b>${b}</b><small>${t}</small></div></li>`;
   app.innerHTML = `<div class="auth">
     <aside class="auth-hero">
-      <div class="logo-big">${LOGO('lgA')}<div><b>GestNow</b><span>Operações de obra industrial</span></div></div>
+      <div class="logo-big">${LOGO('lgA')}<div><b>GestNow</b><span>Gestão de obra industrial</span></div></div>
       <div class="auth-pitch">
         <h2>A obra inteira,<br><em>num toque.</em></h2>
         <p>Picagem por cartão, horas validadas e documentos em dia. Feito para equipas que não podem parar.</p>
@@ -959,7 +1091,11 @@ async function checkSession() {
   return true;
 }
 
-async function signOut() { stopNfc(); state.ready = false; nav.hidden = true; store(ME_KEY, undefined); await sb.auth.signOut(); }
+// «Sair»: every session of this login ends on the server (scope global, the default), and the personal copies go.
+async function signOut() {
+  stopNfc(); state.ready = false; nav.hidden = true; forgetPersonal();
+  try { await sb.auth.signOut({ scope: 'global' }); } catch (_) { /* no network: the local copy is gone anyway */ }
+}
 
 function showMessage(title, text, withLogout) {
   nav.hidden = true;
@@ -1061,6 +1197,21 @@ function showNewPassword() {
   };
 }
 
+// The phone code asked in a sheet, without leaving the screen (A4: changing profile). True when this session is aal2.
+async function stepUpMfa() {
+  const { data: aal } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (aal && aal.currentLevel === 'aal2') return true;
+  const { data: list } = await sb.auth.mfa.listFactors();
+  const factor = list && list.totp && list.totp[0];
+  if (!factor) { toast('Esta conta ainda não tem o código do telemóvel. Entra no perfil de escritório para o ativar.'); return false; }
+  const fd = await askSheet('Código do telemóvel', `<p class="small muted">Esta conta tem um perfil de escritório: para mudar de perfil, confirma que és tu.</p>
+    <label for="mfac">Abre a app de códigos e escreve os 6 números</label>
+    <input id="mfac" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" required style="font-size:26px;letter-spacing:6px;text-align:center">`, 'Confirmar');
+  if (!fd) return false;
+  const { error } = await sb.auth.mfa.challengeAndVerify({ factorId: factor.id, code: String(fd.get('code') || '').trim() });
+  if (error) { toast('Código errado ou expirado. Tenta o próximo.'); return false; }
+  return true;
+}
 async function verifyCode(factorId, code) {
   const { error } = await sb.auth.mfa.challengeAndVerify({ factorId, code: String(code).trim() });
   if (error) return toast('Código errado ou expirado. Tenta o próximo.');
@@ -1108,6 +1259,8 @@ async function switchProfile() {
     <div class="profiles" role="radiogroup">${opts.map((r) => `<label class="check prof"><input type="radio" name="p" value="${esc(r)}" ${r === me.role ? 'checked' : ''} required>
       <span><b>${esc(roleLabel(r))}</b>${r === me.role ? ' <span class="small muted">(agora)</span>' : ''}<br><span class="small muted">${esc(PROFILE_HELP[r] || '')}</span></span></label>`).join('')}</div>`, 'Mudar');
   if (!fd || fd.get('p') === me.role) return;
+  // A4: an account with an office profile changes hat only after the phone code (the database checks the same).
+  if (me.profiles.some((r) => PRIVILEGED.includes(r)) && !(await stepUpMfa())) return;
   const { error } = await sb.rpc('mini_switch_role', { p_role: fd.get('p') });
   if (error) return toast(friendly(error));
   state.view = (TABS[fd.get('p')] || TABS.supervisor)[0];
@@ -1235,10 +1388,10 @@ function go(view) {
   nav.querySelector('button[data-more]').classList.toggle('on', !!cur && cur.parentElement.id === 'more');
   window.scrollTo(0, 0);
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
-     ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients,
+     ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients,
      processo: viewProcess, orcamentos: viewEstimates, lmra: viewLmra, emergencia: viewEmergency,
      armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, producao: viewProd, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
-  checkEmergencyBar();
+  checkEmergencyBar(); encBadges();
 }
 
 // ------------------------------------------------------------------ Clientes (the GestNow owner's console, sql/59)
@@ -1246,6 +1399,7 @@ function go(view) {
 // is kept. Only the platform owner, with the phone code, sees this screen; the database checks the same.
 const isOwner = () => !!(state.platform && state.platform.platform);
 async function viewClients() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!isOwner()) return viewClock();   // code guard as well as the database's
   app.innerHTML = `<div class="ph"><div><p class="ph-k">GestNow · só o dono vê</p><h1>Clientes</h1></div><button class="btn" id="newc">+ Novo cliente</button></div>
     <p class="muted lead">As empresas que usam a GestNow. Aqui só vês números, nunca nomes de pessoas. Para trabalhar numa, carrega em «Entrar»; voltas por esta lista, e o que tinhas em cada uma fica guardado.</p>
@@ -1306,18 +1460,27 @@ async function newClient() {
 
 // ------------------------------------------------------------------ A minha equipa (the team leader's start screen)
 // One site at a time: who is in, who has not arrived, who may not enter, and what is waiting for the team leader.
+// The team leader's home (v48): today on one board. Big counts, one row per person with the time in, and the two
+// things he does from here in one tap: a missed tap, and why someone cannot enter. Picar is the first button.
+const TEAM_FILTERS = [['all', 'Todos'], ['in', 'Dentro'], ['absent', 'Em falta'], ['blocked', 'Bloqueados'], ['left', 'Saíram']];
 function viewTeam() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canSiteDetails()) return viewClock();   // code guard as well as the database's
   const today = new Date().toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long' });
-  app.innerHTML = `<div class="ph"><div><p class="ph-k">${esc(today)}</p><h1>A minha equipa</h1></div></div>
+  state.teamFilter = state.teamFilter || 'all';
+  app.innerHTML = `<div class="enc-board"><div class="enc-main">
+    <div class="ph"><div><p class="ph-k">${esc(today)}</p><h1>A minha equipa</h1></div></div>
     <div class="team-site">${siteSelect('tsite')}</div>
+    <button class="enc-picar" id="tpic">${ic('tap')}<span><b>PICAR</b><small>Entrada, saída e almoço · cartão ou número</small></span>${ic('go', 'enc-go')}</button>
     <div id="tkpis">${skel(1)}</div>
-    <div class="team-acts"><button class="btn big" id="tpic">${ic('tap')}Picar a equipa</button><button class="btn big ghost" id="tval">${ic('ok')}Validar a semana</button>
+    <div id="talert"></div>
+    <div class="enc-filter" id="tfilter" role="group" aria-label="Mostrar"></div>
+    <div id="tlist">${skel(4)}</div>
+    </div><aside class="enc-side">
+    <div class="team-acts"><button class="btn big ghost" id="tval">${ic('ok')}<span>Validar a semana</span></button>
       ${canLmra() ? `<button class="btn big ghost" id="tlmra">${ic('shield')}LMRA</button>` : ''}${canEmergency() ? `<button class="btn big danger" id="temer">${ic('warn')}Emergência</button>` : ''}
       <button class="btn ghost wide look" id="tlook">${ic('card')}<span><b>O colaborador quer ver as horas</b><small>Ele encosta o cartão dele ao teu telemóvel</small></span></button></div>
-    <div id="talert"></div>
-    <div id="treq"></div>
-    <div class="sec-h"><h2 class="eyebrow">Hoje na obra</h2></div><div id="tlist">${skel(4)}</div>`;
+    <div id="treq"></div></aside></div>`;
   bindSiteSelect('tsite', loadTeam);
   $('#tpic').onclick = () => go('picar');
   $('#tval').onclick = () => go('horas');
@@ -1327,32 +1490,113 @@ function viewTeam() {
   loadTeam();
   state.timer = setInterval(() => { if (state.view === 'equipa' && document.visibilityState === 'visible') loadTeam(); }, 60000);
 }
+// What a person's day looks like right now: blocked (cannot enter), in, at lunch (out less than 2 h ago), left, or not here yet.
+function teamState(p) {
+  if (p.blocked && p.state !== 'in') return 'blocked';
+  if (p.state === 'left' && p.last_at && Date.now() - new Date(p.last_at).getTime() < 2 * 3600000) return 'pause';
+  return p.state;
+}
 let teamSeq = 0;
 async function loadTeam() {
   const site = currentSite(); const el = $('#tlist'); if (!el) return;
   if (!site) { el.innerHTML = `<div class="card">${empty('box', 'Sem obras abertas', 'Quando tiveres uma obra, a tua equipa aparece aqui.')}</div>`; $('#tkpis').innerHTML = ''; return; }
   const seq = ++teamSeq; const tz = siteTz(site.id);
-  const [{ data: team, error }, room] = await Promise.all([sb.rpc('mini_team_today', { p_project: site.id }), sb.rpc('mini_control_room')]);
+  const dayStart = zonedToUtc(localDay(new Date().toISOString(), tz) + 'T00:00', tz);
+  const [{ data: team, error }, room, refused] = await Promise.all([sb.rpc('mini_team_today', { p_project: site.id }), sb.rpc('mini_control_room'),
+    core().from('time_events').select('collaborator_id, event_time, reasons').eq('project_id', site.id).eq('status', 'rejected')
+      .gte('event_time', dayStart || new Date(Date.now() - 86400000).toISOString()).order('event_time', { ascending: false }).limit(50)]);
   if (seq !== teamSeq || !el.isConnected) return;
   if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
   const s = ((room.data && room.data.sites) || []).find((x) => x.id === site.id) || {};
-  const n = (k) => team.filter((p) => p.state === k).length;
-  const blocked = team.filter((p) => p.blocked).length;
-  $('#tkpis').innerHTML = `<div class="kpis k4 team-kpis">
-    <div class="kpi ok"><b>${n('in')}<small>/${team.length}</small></b><span>na obra agora</span></div>
-    <div class="kpi ${n('absent') ? 'warn' : ''}"><b>${n('absent')}</b><span>ainda não chegaram</span></div>
-    <div class="kpi ${blocked ? 'bad' : ''}"><b>${blocked}</b><span>não podem entrar</span></div>
-    <button class="kpi ${s.to_validate ? 'info' : ''}" data-go="horas"><b>${s.to_validate || 0}</b><span>dias por validar</span></button></div>`;
-  $('#tkpis').querySelector('[data-go]').onclick = () => go('horas');
-  $('#talert').innerHTML = s.missing_out ? `<div class="result warn">${ic('warn')}<div><b>${s.missing_out} saída(s) em falta nos últimos 7 dias</b>Marca-as em Horas, com o motivo.</div></div>` : '';
-  if (!team.length) { el.innerHTML = `<div class="card">${empty('box', 'Ninguém atribuído a esta obra', 'O escritório atribui as pessoas à obra em Pessoas.')}</div>`; return; }
-  const ST = { in: (p) => chip('val', 'na obra desde ' + fmtHour(p.first_in, tz), 'ok'), left: (p) => chip('', 'saiu às ' + fmtHour(p.last_at, tz)),
-    absent: () => chip('reg', 'ainda não picou') };
-  el.innerHTML = `<div class="card team-list">${team.map((p) => `<button class="tm ${p.state}" data-id="${esc(p.id)}">
-      <span class="tm-av">${avatar(p.name)}<i></i></span><span class="grow"><b>${esc(p.name)}</b><small>${esc(p.number || '')}</small></span>
-      <span class="tags">${p.blocked ? chip('anom', 'não pode entrar: faltam documentos', 'warn') : ST[p.state](p)}</span></button>`).join('')}</div>`;
+  const tried = {};   // today's refused taps per person: the newest one says why
+  for (const e of (refused && refused.data) || []) if (e.collaborator_id && !tried[e.collaborator_id]) tried[e.collaborator_id] = e;
+  const rows = team.map((p) => ({ ...p, st: teamState(p), tried: tried[p.id] }));
+  const c = (k) => rows.filter((p) => p.st === k).length;
+  const inside = c('in'); const missing = c('absent'); const blocked = c('blocked');
+  const tval = $('#tval'); if (tval) tval.querySelector('span').textContent = s.to_validate ? `Validar a semana · ${s.to_validate} dia(s)` : 'Validar a semana';
+  $('#tkpis').innerHTML = `<div class="enc-counts">
+    <button class="enc-c ok" data-f="in"><b class="tnum">${inside}<small>/${rows.length}</small></b><span>dentro agora</span></button>
+    <button class="enc-c" data-f="all"><b class="tnum">${rows.length}</b><span>esperados hoje</span></button>
+    <button class="enc-c ${missing ? 'warn' : ''}" data-f="absent"><b class="tnum">${missing}</b><span>em falta</span></button>
+    <button class="enc-c ${blocked ? 'bad' : ''}" data-f="blocked"><b class="tnum">${blocked}</b><span>bloqueados</span></button></div>`;
+  const alerts = [];
+  if (s.to_validate) alerts.push(`<button class="enc-al info" data-go="horas">${ic('clock')}<span><b>${s.to_validate} dia(s) por validar</b>Valida em Horas: depois seguem para o Secretariado.</span>${ic('go')}</button>`);
+  if (s.missing_out) alerts.push(`<button class="enc-al warn" data-go="horas">${ic('warn')}<span><b>${s.missing_out} saída(s) em falta nos últimos 7 dias</b>Marca-as em Horas, com o motivo.</span>${ic('go')}</button>`);
+  $('#talert').innerHTML = alerts.join('');
+  $('#talert').querySelectorAll('[data-go]').forEach((b) => b.onclick = () => go(b.dataset.go));
+  const f = state.teamFilter;
+  const n = { all: rows.length, in: inside, absent: missing, blocked, left: c('left') + c('pause') };
+  $('#tfilter').innerHTML = TEAM_FILTERS.map(([k, t]) => `<button class="enc-chip ${f === k ? 'on' : ''}" data-f="${k}" aria-pressed="${f === k}">${esc(t)} <b>${n[k]}</b></button>`).join('');
+  app.querySelectorAll('#tfilter [data-f], #tkpis [data-f]').forEach((b) => b.onclick = () => { state.teamFilter = b.dataset.f; loadTeam(); });
+  if (!rows.length) { el.innerHTML = `<div class="card">${empty('box', 'Ninguém atribuído a esta obra', 'O escritório atribui as pessoas à obra em Pessoas.')}</div>`; loadPending('#treq', site.id); return; }
+  const ORDER = { blocked: 0, absent: 1, in: 2, pause: 3, left: 4 };
+  const shown = rows.filter((p) => f === 'all' || p.st === f || (f === 'left' && p.st === 'pause')).sort((a, b) => ORDER[a.st] - ORDER[b.st] || a.name.localeCompare(b.name, 'pt'));
+  const me = state.me && state.me.collaborator_id;
+  const ST = {
+    blocked: (p) => [chip('anom', 'bloqueado', 'x'), p.tried ? `tentou às ${fmtHour(p.tried.event_time, tz)}` : 'faltam documentos'],
+    absent: () => [chip('warn', 'em falta', 'clock'), 'ainda não picou'],
+    in: (p) => [chip('ok', 'dentro', 'ok'), p.blocked ? 'atenção: documentos em falta' : ''],
+    pause: (p) => [chip('info', 'em pausa'), `saiu às ${fmtHour(p.last_at, tz)}`],
+    left: (p) => [chip('', 'saiu'), `entrou às ${fmtHour(p.first_in, tz)}`],
+  };
+  const time = (p) => p.st === 'in' ? [fmtHour(p.first_in, tz), 'entrou'] : p.st === 'pause' || p.st === 'left' ? [fmtHour(p.last_at, tz), 'saiu'] : p.tried ? [fmtHour(p.tried.event_time, tz), 'recusado'] : ['–', ''];
+  el.innerHTML = shown.length ? `<div class="enc-list">${shown.map((p) => { const [ch, sub] = ST[p.st](p); const [t, tl] = time(p);
+    return `<div class="enc-p ${p.st}">
+      <button class="enc-p-main" data-id="${esc(p.id)}" aria-label="Abrir a ficha de ${esc(p.name)}"><span class="tm-av">${avatar(p.name)}<i></i></span>
+        <span class="grow"><b>${esc(p.name)}</b><small>${ch}${sub ? ` <span>${esc(sub)}</span>` : ''}</small></span></button>
+      <span class="enc-p-t">${tl ? `<b class="tnum">${esc(t)}</b><small>${esc(tl)}</small>` : ''}</span>
+      <span class="enc-p-a">${p.blocked || p.tried ? `<button class="btn small ${p.st === 'blocked' ? 'danger' : 'ghost'}" data-why="${esc(p.id)}">${ic('warn')}Porquê?</button>` : ''}
+        ${p.id !== me && (p.st === 'absent' || p.st === 'pause') ? `<button class="btn small ghost" data-miss="${esc(p.id)}">${ic('clock')}Picagem esquecida</button>` : ''}</span></div>`; }).join('')}</div>`
+    : `<div class="card">${empty('check', 'Ninguém nesta lista', 'Escolhe «Todos» para ver a equipa toda.')}</div>`;
   el.querySelectorAll('[data-id]').forEach((b) => b.onclick = () => { state.worker = b.dataset.id; go('ficha'); });
+  el.querySelectorAll('[data-why]').forEach((b) => b.onclick = () => whyBlocked(rows.find((p) => p.id === b.dataset.why), tz));
+  el.querySelectorAll('[data-miss]').forEach((b) => b.onclick = async () => { if (await teamMissedTap(rows.find((p) => p.id === b.dataset.miss), site.id)) loadTeam(); });
   loadPending('#treq', site.id);
+}
+// «Porquê?»: the documents that block this person, today's refused taps with the reason, and what to do, in plain words.
+async function whyBlocked(p, tz) {
+  if (!p) return;
+  const { data, error } = await sb.rpc('mini_worker_documents', { p_collab: p.id });
+  const bad = (data || []).filter((d) => d.is_blocking && ['caducado', 'em_falta'].includes(d.state));
+  const reasons = p.tried ? (p.tried.reasons || []).map(reasonText) : [];
+  const todo = [...new Set([...bad.map(() => 'O escritório (RH) regista o documento na ficha, com a foto. Até lá não pode trabalhar.'), ...reasons.map(encAdvice)])];
+  const fd = await askSheet(`${p.name}: ${p.st === 'blocked' ? 'não pode entrar' : 'atenção'}`, `
+    ${error ? `<p class="small muted">${esc(friendly(error))}</p>` : ''}
+    ${bad.length ? `<h3 class="enc-sh3">Documentos que bloqueiam</h3><ul class="enc-why">${bad.map((d) => `<li>${ic('x')}<span><b>${esc(d.name)}</b>${d.state === 'caducado' && d.expiration_date ? `caducou a ${esc(fmtDate(d.expiration_date))}` : 'em falta'}</span></li>`).join('')}</ul>` : ''}
+    ${p.tried ? `<h3 class="enc-sh3">Tentou entrar hoje às ${esc(fmtHour(p.tried.event_time, tz))}</h3><ul class="enc-why">${reasons.map((r) => `<li>${ic('x')}<span>${esc(r)}</span></li>`).join('')}</ul>` : ''}
+    ${!bad.length && !p.tried ? '<p>Sem documentos bloqueados neste momento.</p>' : ''}
+    ${todo.length ? `<h3 class="enc-sh3">O que fazer</h3><ul class="enc-todo">${todo.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}`, 'Abrir a ficha');
+  if (fd) { state.worker = p.id; go('ficha'); }
+}
+// A missed tap straight from the board: entry or exit, the time on the site's clock, and why (the same rule as in Horas).
+const MISS_REASONS = ['Esqueceu-se de picar', 'O cartão não leu', 'Estava na obra, confirmado por mim'];
+async function teamMissedTap(p, project) {
+  if (!p) return false;
+  const tz = siteTz(project); const now = localInput(new Date().toISOString(), tz);
+  const dir = p.st === 'in' ? 'out' : 'in';
+  const fd = await askSheet(`Picagem esquecida: ${p.name}`, `
+    <p class="small muted">${p.first_in ? `Entrou às ${esc(fmtHour(p.first_in, tz))}. ` : ''}Hora da obra (${esc(tzName(tz))}). Fica marcada como posta à mão, com o teu nome.</p>
+    <div class="enc-seg" role="radiogroup" aria-label="Entrada ou saída">
+      <label><input type="radio" name="dir" value="in" ${dir === 'in' ? 'checked' : ''}><span>${ic('in')}ENTRADA</span></label>
+      <label><input type="radio" name="dir" value="out" ${dir === 'out' ? 'checked' : ''}><span>${ic('out')}SAÍDA</span></label></div>
+    <div class="row"><div><label for="md">Dia</label><input id="md" name="d" type="date" required value="${esc(now.slice(0, 10))}" max="${esc(now.slice(0, 10))}"></div>
+      <div><label for="mt">Hora *</label><input id="mt" name="t" type="time" required value="${esc(now.slice(11))}"></div></div>
+    <label>Porquê? *</label><div class="chips reasons" role="radiogroup">${MISS_REASONS.map((r, i) => `<label class="chip"><input type="radio" name="r" value="${esc(r)}" ${i ? '' : 'required'}>${esc(r)}</label>`).join('')}
+      <label class="chip"><input type="radio" name="r" value="">Outro motivo</label></div>
+    <input name="x" id="mx" placeholder="Escreve o motivo" hidden maxlength="200">`, 'Acrescentar picagem', (d) => {
+    const x = d.querySelector('#mx');
+    d.querySelectorAll('input[name=r]').forEach((r) => r.onchange = () => { x.hidden = r.value !== ''; x.required = r.value === ''; if (!x.hidden) x.focus(); });
+  });
+  if (!fd) return false;
+  const at = zonedToUtc(`${fd.get('d')}T${fd.get('t')}`, tz);
+  const why = String(fd.get('r') || fd.get('x') || '').trim();
+  if (!at) { toast('Escreve a hora.'); return false; }
+  if (new Date(at) > new Date(Date.now() + 60000)) { toast('A hora não pode ser depois de agora.'); return false; }
+  if (why.length < 10) { toast('Escreve o motivo (pelo menos 10 letras).'); return false; }
+  const { error } = await sb.rpc('mini_add_missed_tap', { p_collab: p.id, p_project: project, p_direction: fd.get('dir'), p_time: at, p_reason: why });
+  if (error) { toast(friendly(error)); return false; }
+  toast(`${fd.get('dir') === 'in' ? 'Entrada' : 'Saída'} acrescentada: ${p.name}, ${fmtTime(at, tz)}.`);
+  return true;
 }
 // What waits for an answer: workers' disagreements with a day and their requests for holidays or absences.
 // Team leader: one site, gives the first word on requests. Office: every site, decides.
@@ -1396,15 +1640,24 @@ async function loadPending(sel, project) {
   box.querySelectorAll('[data-dgo]').forEach((b) => b.onclick = () => go('horas'));
   box.querySelectorAll('[data-aok]').forEach((b) => b.onclick = () => decide(b.dataset.aok, true));
   box.querySelectorAll('[data-ano]').forEach((b) => b.onclick = () => decide(b.dataset.ano, false));
+  // The photo or PDF a worker joined to an absence (sql/82): the office only, never the team leader (it may be health data).
+  if (office && d.absences.length) sb.rpc('mini_absence_files', { p_ids: d.absences.map((a) => a.id) }).then(({ data: files }) => {
+    if (!files || !box.isConnected) return;
+    box.querySelectorAll('[data-aok]').forEach((b) => { const f = files[b.dataset.aok]; if (!f) return;
+      const v = document.createElement('button'); v.className = 'btn ghost small'; v.innerHTML = ic('doc') + 'Ver o ficheiro';
+      v.onclick = () => openDocFile(f.path, 'pedidos'); b.parentElement.appendChild(v); });
+  });
 }
 
 // ------------------------------------------------------------------ Picar
 function viewClock() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   const nfcOk = 'NDEFReader' in window;
+  state.lunch = false;   // the lunch mode lasts while this screen is open
   // One dark "terminal" panel: clock, site, the card reader and the direction. Everything else sits beside it (computer) or under it (phone).
-  app.innerHTML = `<div class="pic-grid"><div>
+  app.innerHTML = `<div class="pic-grid enc-pic"><div>
     <section class="pic-hero">
-      <div class="pic-top"><h1>Picar</h1><span class="live" id="live" hidden></span></div>
+      <div class="pic-top"><h1>Picar</h1><span class="enc-q" id="encq" hidden></span><span class="live" id="live" hidden></span></div>
       <div class="clock" id="clk"></div><div class="clkday" id="clkday"></div>
       ${state.offline ? `<div class="result warn">${ic('cloud')}<div><b>Sem rede</b>Só podes picar. As picagens ficam guardadas neste telemóvel e são enviadas quando a rede voltar.</div></div>` : ''}
       <div id="clockwarn"></div>
@@ -1412,27 +1665,33 @@ function viewClock() {
       ${nfcOk ? `<button class="tapzone" id="nfc" aria-pressed="false"><span class="ring">${ic('tap')}</span><b id="nfclbl">Tocar para ligar o leitor</b>
           <span class="small" id="nfchelp">Depois é só encostar o cartão às costas do telemóvel.</span></button>`
         : `<div class="nonfc">${ic('key')}<span>Este aparelho não lê cartões pelo browser (só o Chrome em Android). Usa o leitor USB ou escreve o número.</span></div>`}
-      <div class="dir" role="group" aria-label="Direção da próxima picagem"><button class="auto" data-d="auto">${ic('auto')}AUTOMÁTICO</button>
-      <button class="in" data-d="in">${ic('in')}ENTRADA</button>
-      <button class="out" data-d="out">${ic('out')}SAÍDA</button></div>
+      <div class="dir enc-dir" role="group" aria-label="Direção da próxima picagem">
+      <button class="in" data-d="in">${ic('in')}<span>ENTRADA</span></button>
+      <button class="out" data-d="out">${ic('out')}<span>SAÍDA</span></button>
+      <button class="lunch" data-d="lunch">${ic('clock')}<span>ALMOÇO</span></button>
+      <button class="auto" data-d="auto">${ic('auto')}<span>AUTOMÁTICO</span></button></div>
       <p class="small" id="dirhelp"></p>
     </section>
     ${canEmergency() ? `<button class="btn danger wide pic-emer" id="pemer">${ic('warn')}Emergência: contar pessoas no ponto de encontro</button>` : ''}
-    <div id="result" aria-live="polite"></div><div id="taplog" class="taplog"></div><div id="queue"></div>
+    <div id="result" aria-live="polite"></div><div id="queue"></div>
     <form id="manual" class="manual card"><div><label for="uid">Número do cartão (ou leitor USB)</label>
       <input id="uid" name="uid" autocomplete="off" autocapitalize="characters" placeholder="ex.: 04:A1:B2:C3"></div>
       <button class="btn ghost">Picar</button></form>
+    <div id="taplog" class="taplog"></div>
     <div id="rejected"></div>
     </div><div>
     <div class="sec-h"><h2 class="eyebrow">Últimas picagens nesta obra</h2></div><div id="recent">${skel(3)}</div>
     </div></div>`;
   bindSiteSelect('site', () => { loadRecent(); loadLive(); tickClock(); });
   app.querySelectorAll('.dir button').forEach((b) => b.onclick = () => {
-    state.dirOverride = b.dataset.d === 'auto' ? null : b.dataset.d; renderDir();
+    // ALMOÇO keeps the automatic direction (out for who is in, in for who is out) and names the taps as lunch.
+    state.lunch = b.dataset.d === 'lunch' ? !state.lunch : false;
+    state.dirOverride = b.dataset.d === 'in' || b.dataset.d === 'out' ? b.dataset.d : null; renderDir();
   });
+  const wasTyped = typedWatch($('#uid'));
   $('#manual').onsubmit = (e) => {
-    e.preventDefault(); const input = e.target.uid;
-    if (normUid(input.value)) clock(input.value); input.value = ''; input.focus();
+    e.preventDefault(); const input = e.target.uid; const typed = wasTyped();
+    if (normUid(input.value)) clock(input.value, typed); input.value = ''; input.focus();
   };
   if (nfcOk) $('#nfc').onclick = toggleNfc;
   if ($('#pemer')) $('#pemer').onclick = () => go('emergencia');
@@ -1464,10 +1723,11 @@ function tickClock() {
 }
 // Automatic by default: the server knows if the person is inside. A forced ENTRADA or SAÍDA is for the next tap only.
 function renderDir() {
-  const d = state.dirOverride || 'auto';
-  app.querySelectorAll('.dir button').forEach((x) => x.classList.toggle('on', x.dataset.d === d));
+  const d = state.dirOverride || (state.lunch ? 'lunch' : 'auto');
+  app.querySelectorAll('.dir button').forEach((x) => { x.classList.toggle('on', x.dataset.d === d); x.setAttribute('aria-pressed', String(x.dataset.d === d)); });
   const help = $('#dirhelp'); if (!help) return;
   help.textContent = d === 'auto' ? 'Automático: entra quem está fora e sai quem está dentro. Toca em ENTRADA ou SAÍDA só para forçar a próxima picagem.'
+    : d === 'lunch' ? 'Almoço ligado: quem está dentro sai para almoçar, quem está fora volta. Fica ligado até tocares noutro botão.'
     : `A próxima picagem fica como ${d === 'in' ? 'ENTRADA' : 'SAÍDA'}. Depois volta ao automático.`;
 }
 
@@ -1537,7 +1797,7 @@ async function nextDirection(project, raw, at) {
   return { dir: lastDirLocal(raw, at.getTime()), guessed: true };
 }
 
-async function clock(rawUid) {
+async function clock(rawUid, typed) {
   const site = currentSite(); if (!site) return toast('Escolhe uma obra.');
   const seq = ++state.tapSeq;
   const raw = normUid(rawUid); const at = serverNow();
@@ -1547,7 +1807,7 @@ async function clock(rawUid) {
   const ev = { p_project: site.id, p_capture: 'card_on_supervisor_phone', p_raw: raw, p_direction: dir,
     p_event_time: at.toISOString(), p_client_event_id: uuid(), p_device_time: new Date().toISOString() };
   const word = dir === 'in' ? 'ENTRADA' : 'SAÍDA';   // always the direction that was sent (B1)
-  const r = await sendEvent(ev);
+  const r = await sendEvent(ev, typed);
   if (seq === state.tapSeq) state.resultId = ev.p_client_event_id;   // the box below now belongs to this tap
   if (r.notSaved) { showResult('bad', 'PICAGEM NÃO GUARDADA', `${word} do cartão …${raw.slice(-4)}: sem rede e o telemóvel não deixou guardar. Anota a hora e acrescenta-a depois como picagem esquecida.`, seq); beep(false); return; }
   if (r.authLost) { showResult('warn', 'Picagem guardada', `${word} guardada. A sessão terminou: entra outra vez e ela é enviada.`, seq); beep('neutral'); checkSession(); return; }
@@ -1561,7 +1821,7 @@ async function clock(rawUid) {
   const d = r.data; const who = d.name || 'Cartão ' + ev.p_raw;
   if (d.status === 'accepted') {
     rememberDir(raw, dir, at.getTime());
-    showResult('ok', who, `${word} aceite`, seq); beep(true);
+    showResult('ok', who, `${word} aceite${typed ? ' · número escrito à mão: o escritório confirma' : ''}`, seq); beep(true);
     if (dir === 'in' && d.collaborator_id) warnExpiring(d.collaborator_id, who, word, seq);
   } else if (d.status === 'duplicate') { showResult('warn', who, `Já picou há instantes (${word})`, seq); beep(true); }
   else { showResult('bad', `${who}: NÃO ENTRA`, (d.reasons || []).map(reasonText).join(' · '), seq); beep(false); }
@@ -1578,7 +1838,29 @@ async function warnExpiring(collabId, who, word, seq) {
   const line = state.tapLog.find((x) => x.seq === seq); if (line) { line.note = note; renderTapLog(); }
   if (seq !== state.tapSeq) return;
   const el = $('#result'); if (!el) return;
-  el.innerHTML = `<div class="result warn">${ic('warn')}<div><b>${esc(who)}</b>${esc(word)} aceite<div class="small" style="margin-top:6px">${esc(note)}</div></div></div>`;
+  el.innerHTML = encBanner('ok', who, lunchText(`${word} aceite`), note);
+}
+
+// ---- a card number typed by hand is not a card tap (C3, audit 2026-10-19): the server records it as typed.
+// A USB card reader also "types", but all its characters arrive within a few milliseconds; a person is much slower,
+// and a pasted number counts as typed. When in doubt it counts as typed (the office looks at it, nothing is lost).
+function typedWatch(input) {
+  let first = 0; let last = 0; let n = 0; let pasted = false;
+  input.addEventListener('input', (e) => {
+    const t = performance.now();
+    if (!input.value) { n = 0; pasted = false; return; }
+    if (e.inputType === 'insertFromPaste' || e.inputType === 'insertReplacementText') pasted = true;
+    if (!n) first = t; last = t; n++;
+  });
+  return () => { const reader = !pasted && n >= 6 && (last - first) / (n - 1) < 40; n = 0; pasted = false; return !reader; };
+}
+const TYPED_RPC = { clock_event: 'mini_clock_typed', mini_lmra_sign: 'mini_lmra_sign_typed', mini_muster_scan: 'mini_muster_scan_typed', mini_wh_issue: 'mini_wh_issue_typed' };
+async function rpcCard(fn, args, typed) {
+  if (!typed) return sb.rpc(fn, args);
+  const r = await sb.rpc(TYPED_RPC[fn], args);
+  // a database without sql/81 yet: the tap still counts (as before), never lost
+  if (r.error && (r.error.code === 'PGRST202' || /could not find the function/i.test(r.error.message || ''))) return sb.rpc(fn, args);
+  return r;
 }
 
 // ---- the offline queue (C2): each tap has its own id; items leave the queue one by one, by id, only when the server answered.
@@ -1605,15 +1887,15 @@ async function verdict(r) {
   if (AUTH_LOST.test(msg) && await sessionGone()) return 'retry';
   return 'refused';
 }
-async function sendEvent(ev) {
+async function sendEvent(ev, typed) {
   let r;
-  try { r = await sb.rpc('clock_event', ev); } catch (e) { r = { error: e, status: 0 }; }
+  try { r = await rpcCard('clock_event', ev, typed); } catch (e) { r = { error: e, status: 0 }; }
   const v = await verdict(r);
   if (v === 'ok') return { data: r.data };
   if (v === 'refused') return { error: r.error };
   // Never lose a tap because of the network or the login: keep it and send it later (after the next login if needed).
   const lost = AUTH_LOST.test((r.error && r.error.message) || '') && await sessionGone();
-  const ok = enqueue({ ...ev, p_was_offline: true, _u: state.me && state.me.user_id, _e: state.me && state.me.email });
+  const ok = enqueue({ ...ev, p_was_offline: true, _u: state.me && state.me.user_id, _e: state.me && state.me.email, ...(typed ? { _typed: true } : {}) });
   showQueue();
   if (!ok) return { notSaved: true };
   return lost ? { authLost: true } : { queued: true };
@@ -1630,9 +1912,9 @@ async function doFlush() {
   if (!mine.length) { showQueue(); return; }
   let accepted = 0; let refused = 0; let kept = 0;
   for (const item of mine) {
-    const { _u, _e, _collab, ...ev } = item; void _u; void _e; void _collab;
+    const { _u, _e, _collab, _typed, ...ev } = item; void _u; void _e; void _collab;
     let r;
-    try { r = await sb.rpc('clock_event', ev); } catch (e) { r = { error: e, status: 0 }; }
+    try { r = await rpcCard('clock_event', ev, !!_typed); } catch (e) { r = { error: e, status: 0 }; }
     const v = await verdict(r);
     if (v === 'retry') { kept = queue().filter((x) => !x._u || x._u === state.me.user_id).length; break; }   // still no network: try later
     const word = ev.p_direction === 'in' ? 'ENTRADA' : 'SAÍDA';
@@ -1673,6 +1955,13 @@ function showQueue() {
     other.length ? `<div class="qline"><span class="chip warn wrap">${other.length} picagem(ns) de outra conta (${esc(accounts)}), ainda não enviadas</span> <span class="small muted">Só são enviadas quando essa pessoa voltar a entrar neste telemóvel.</span></div>` : '']
     .filter(Boolean).join('');
   const b = $('#flushNow'); if (b) b.onclick = () => flushQueue();
+  const hq = $('#encq');   // the count in the Picar header: always in sight, even before scrolling
+  if (hq) {
+    const off = state.offline || navigator.onLine === false;
+    hq.hidden = !mine && !off;
+    hq.className = 'enc-q' + (off ? ' off' : '');
+    hq.innerHTML = `${ic('cloud')}${off ? 'Sem rede' : ''}${off && mine ? ' · ' : ''}${mine ? `<b>${mine}</b> por enviar` : ''}`;
+  }
 }
 // The taps the server refused after the network came back: who, when, why, and what to do (C2, A3).
 function showRejected() {
@@ -1705,28 +1994,77 @@ function showRejected() {
 // The big box shows the newest tap only; every tap also gets a line in the list below it.
 function logTap(kind, title, text, seq) {
   state.tapLog.unshift({ kind, title, text, seq, at: new Date() });
-  state.tapLog = state.tapLog.slice(0, 6); renderTapLog();
+  state.tapLog = state.tapLog.slice(0, 10); renderTapLog();
 }
 function renderTapLog() {
   const el = $('#taplog'); if (!el) return;
-  el.innerHTML = state.tapLog.map((x) => `<div class="tl ${x.kind}"><span class="small muted">${esc(x.at.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))}</span>
-    <b>${esc(x.title)}</b> ${esc(x.text || '')}${x.note ? ` <span class="small">${esc(x.note)}</span>` : ''}</div>`).join('');
+  el.innerHTML = state.tapLog.length ? `<div class="sec-h"><h2 class="eyebrow">Neste telemóvel · últimas ${state.tapLog.length}</h2></div>` + state.tapLog.map((x) => `<div class="tl ${x.kind}">${ic(RESULT_ICON[x.kind] || 'warn')}<span class="tnum enc-tl-t">${esc(x.at.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }))}</span>
+    <span class="enc-tl-x"><b>${esc(x.title)}</b> ${esc(x.text || '')}${x.note ? ` <span class="small">${esc(x.note)}</span>` : ''}</span></div>`).join('') : '';
 }
 // The big box still shows a tap that was waiting for the network: replace "NÃO VERIFICADA" with the server's verdict.
 function verdictBox(ev, kind, title, text) { if (state.resultId === ev.p_client_event_id) showResult(kind, title, text, undefined, false); }
 function showResult(kind, title, text, seq, flash) {
+  if (seq !== undefined && kind === 'ok') text = lunchText(text);
   if (seq !== undefined) logTap(kind, title, text, seq);
   if (seq !== undefined && seq !== state.tapSeq) return;   // an older tap answering late: only its line in the list
   const el = $('#result'); if (!el) return toast(title + ': ' + text);
-  el.innerHTML = `<div class="result ${kind}">${ic(RESULT_ICON[kind])}<div><b>${esc(title)}</b>${esc(text)}</div></div>`;
+  el.innerHTML = encBanner(kind, title, text);
   if (flash !== false) showFlash(kind, title, text);
+}
+// v48: the answer of a tap in plain words, big enough to read in the sun: ENTRA / SAI / NÃO ENTRA, the name, why, and what to do.
+const ENC_ADVICE = {
+  unknown_credential: 'Confirma o número. Se o cartão é novo, o escritório liga-o à pessoa em Pessoas.',
+  debounce: 'Não precisa de picar outra vez.',
+  collaborator_inactive: 'A ficha está desligada. Fala com o escritório.',
+  onboarding_incomplete: 'Tem de acabar o acolhimento na app antes de entrar.',
+  project_not_in_execution: 'A obra não está aberta para trabalho. Fala com o escritório.',
+  suspended_safety: 'Está suspenso pela Segurança. Fala com o técnico de segurança.',
+  on_leave: 'Está de baixa ou de licença: hoje não trabalha.',
+  ss_admission_missing: 'O escritório tem de fazer a admissão na Segurança Social primeiro.',
+  corrective_training_pending: 'Tem de fazer a formação corretiva antes de entrar.',
+  not_assigned_to_project: 'Confirma a obra lá em cima. Se é esta, pede ao escritório para o pôr nela.',
+  insufficient_rest: 'Ainda não descansou as horas mínimas. Só entra mais tarde.',
+  daily_limit_reached: 'Já fez as horas máximas de hoje. Não continua.',
+  weekly_limit_reached: 'Já fez as horas máximas da semana. Fala com o escritório.',
+  handover_not_acknowledged: 'Tem de confirmar a passagem de turno primeiro.',
+};
+function encAdvice(reason) {
+  const code = Object.keys(REASONS).find((k) => REASONS[k] === reason);
+  if (code) return ENC_ADVICE[code];
+  if (/em falta ou caducado|^Documento em falta/.test(reason)) return 'Não pode trabalhar hoje. O escritório (RH) regista o documento na ficha; depois pica outra vez.';
+  if (/^Documento da empresa/.test(reason)) return 'Documento da empresa em falta: fala com o escritório.';
+  if (/^Requisito da obra|^Falta a competência/.test(reason)) return 'Falta um requisito desta obra. Fala com a Segurança ou o escritório.';
+  return 'Não o deixes entrar. Fala com o escritório.';
+}
+const lunchText = (t) => !state.lunch || /almoço/.test(t) ? t : t.replace(/^SAÍDA aceite/, 'SAÍDA aceite · saída para almoço').replace(/^ENTRADA aceite/, 'ENTRADA aceite · volta do almoço');
+function encParse(kind, title, text) {
+  const no = /^(.*): NÃO ENTRA$/.exec(title);
+  if (no) { const why = String(text || '').split(' · ').filter(Boolean); return { head: 'NÃO ENTRA', icon: 'x', who: no[1], lines: why, todo: [...new Set(why.map(encAdvice))] }; }
+  if (kind === 'ok' && /^(ENTRADA|SAÍDA)/.test(text)) {
+    const lunch = /almoço/.test(text); const inn = /^ENTRADA/.test(text);
+    return { head: lunch ? (inn ? 'VOLTA DO ALMOÇO' : 'ALMOÇO') : inn ? 'ENTRA' : 'SAI', icon: 'ok', who: title, lines: [text], todo: [] };
+  }
+  if (/NÃO VERIFICADA/.test(title)) return { head: 'GUARDADA', icon: 'cloud', who: '', lines: [title, text], todo: ['Sem rede: a resposta chega quando a rede voltar. Não pique outra vez.'] };
+  if (kind === 'warn' && /^Já picou/.test(text)) return { head: 'JÁ PICOU', icon: 'ok', who: title, lines: [text], todo: ['Não precisa de picar outra vez.'] };
+  return { head: title, icon: RESULT_ICON[kind] || 'warn', who: '', lines: [text].filter(Boolean), todo: [] };
+}
+function encBanner(kind, title, text, note) {
+  const x = encParse(kind, title, text);
+  const face = x.who && !/^Cartão/.test(x.who) ? avatar(x.who) : '';
+  return `<div class="enc-res ${kind}" role="status"><div class="enc-res-h">${ic(x.icon)}<b>${esc(x.head)}</b></div>
+    ${x.who ? `<div class="enc-res-who">${face}<span>${esc(x.who)}</span></div>` : ''}
+    ${x.lines.length ? `<ul class="enc-res-why">${x.lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : ''}
+    ${note ? `<p class="enc-res-note">${ic('warn')}<span>${esc(note)}</span></p>` : ''}
+    ${x.todo.length ? `<div class="enc-res-do"><b>O que fazer</b><ul>${x.todo.map((t) => `<li>${esc(t)}</li>`).join('')}</ul></div>` : ''}</div>`;
 }
 // The whole screen in green, red or amber for ~1.6 s: readable from a metre away, with gloves and noise. Tap to close earlier.
 const RESULT_ICON = { ok: 'ok', bad: 'x', warn: 'cloud' };
 function showFlash(kind, title, text) {
   const f = document.getElementById('flash'); if (!f || !state.ready) return;
   f.className = kind;
-  f.innerHTML = `<div class="ficon">${ic(RESULT_ICON[kind] || 'warn')}</div><b>${esc(title)}</b><div class="ftext">${esc(text)}</div><div class="fhint">Toque para fechar</div>`;
+  const x = encParse(kind, title, text);
+  f.innerHTML = `<div class="ficon">${ic(x.icon)}</div><b class="enc-fhead">${esc(x.head)}</b>${x.who ? `<div class="enc-fwho">${esc(x.who)}</div>` : ''}
+    <div class="ftext">${esc(x.head === title ? text : x.lines.join(' · '))}</div><div class="fhint">Toque para fechar</div>`;
   f.hidden = false; clearTimeout(f._h); f._h = setTimeout(hideFlash, 1600);
 }
 function hideFlash() { const f = document.getElementById('flash'); if (f) { clearTimeout(f._h); f.hidden = true; } }
@@ -1742,7 +2080,7 @@ async function loadRecent() {
   if (!data.length) { el.innerHTML = `<div class="card">${empty('card', 'Ainda ninguém picou nesta obra', 'Escolhe ENTRADA ou AUTOMÁTICO e encosta o primeiro cartão.')}</div>`; return; }
   const name = (id) => (state.people.find((p) => p.id === id) || {}).full_name;
   const today = localDay(new Date().toISOString(), site.timezone);
-  el.innerHTML = `<div class="list feed">${data.slice(0, 8).map((e) => { const who = name(e.collaborator_id) || 'Cartão ' + (e.raw_uid || '?');
+  el.innerHTML = `<div class="list feed">${data.slice(0, 10).map((e) => { const who = name(e.collaborator_id) || 'Cartão ' + (e.raw_uid || '?');
     const when = localDay(e.event_time, site.timezone) === today ? fmtHour(e.event_time, site.timezone) : fmtTime(e.event_time, site.timezone);
     const dir = e.direction === 'in' ? 'Entrada' : e.direction === 'out' ? 'Saída' : e.direction;
     return `<div class="card ${e.direction === 'in' ? 'd-in' : 'd-out'}"><div class="wk">${avatar(who)}<div class="grow"><div class="nm">${esc(who)}</div><div class="sub">${ic(e.direction === 'in' ? 'in' : 'out')}${esc(dir)} · ${esc(when)}</div></div>
@@ -1753,6 +2091,7 @@ async function loadRecent() {
 
 // ------------------------------------------------------------------ Na obra
 function viewOnSite() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!state.onsiteFilter) state.onsiteFilter = 'all';
   app.innerHTML = `<div class="ph"><div><p class="ph-k">Ao vivo</p><h1>Na obra agora</h1></div></div>
     <div class="toolbar noprint"><div class="tb-site">${siteSelect('site')}</div>
@@ -1842,6 +2181,7 @@ function renderOnSite() {
 
 // ------------------------------------------------------------------ Trabalhadores
 async function viewPeople() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   app.innerHTML = `<div class="ph"><div><p class="ph-k">Equipa</p><h1>Trabalhadores</h1></div>
     ${canPeople() ? `<button class="btn" id="new">+ Novo trabalhador</button>` : ''}</div>
     <div id="pboard"></div><div id="list">${skel(4)}</div>
@@ -1936,7 +2276,7 @@ async function viewPeople() {
     <div class="list people">${data.map((w) => `<div class="card link st-${stOf(w)}" role="button" tabindex="0" data-id="${esc(w.collaborator_id)}" data-st="${stOf(w)}"
       data-q="${esc(fold(`${w.full_name} ${w.employee_number || ''} ${w.card_uid || ''}`))}">
     <div class="wk">${avatar(w.full_name)}<div class="grow"><div class="nm">${esc(w.full_name)}</div>
-      <div class="sub">${w.employee_number ? 'nº ' + esc(w.employee_number) + ' · ' : ''}${w.card_uid ? 'cartão ' + esc(w.card_uid) : 'sem cartão'}</div></div></div>
+      <div class="sub">${w.employee_number ? 'nº ' + esc(w.employee_number) + ' · ' : ''}${w.card_uid ? 'cartão ' + esc(maskUid(w.card_uid)) : 'sem cartão'}</div></div></div>
     <div class="tags">${!w.is_active ? chip('', 'inativo')
       : w.blocking_problems ? chip('bad', `não entra: ${w.blocking_problems} documento${w.blocking_problems > 1 ? 's' : ''}`, 'x')
       : !w.card_uid ? chip('warn', 'sem cartão', 'card') : chip('ok', 'pode entrar', 'ok')}
@@ -2004,6 +2344,7 @@ async function showInvite(data) {
 
 // One worker: documents, card, sites, active.
 async function viewWorker() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   const id = state.worker; if (!id) return go('trabalhadores');
   app.innerHTML = `<p class="noprint"><button class="btn ghost small" id="back">‹ Trabalhadores</button></p><div id="w">${skel(3)}</div>`;
   $('#back').onclick = () => go('trabalhadores');
@@ -2041,9 +2382,10 @@ async function viewWorker() {
       <div class="wk">${avatar(w.full_name)}<div class="grow"><h1 style="margin:0">${esc(w.full_name)}</h1>
       <div class="sub">${w.employee_number ? 'nº ' + esc(w.employee_number) + ' · ' : ''}${esc(w.organization)}${w.job_title ? ' · ' + esc(w.job_title) : ''}</div></div></div>
       <div class="tags">${!w.is_active ? chip('', 'inativo') : blocked ? chip('bad', `não entra: ${blocked} documento${blocked > 1 ? 's' : ''}`, 'x') : chip('ok', 'ativo', 'ok')}
-        ${w.card_uid ? chip('', 'cartão ' + w.card_uid, 'card') : chip('warn', 'sem cartão', 'card')}</div>
+        ${w.card_uid ? chip('', 'cartão ' + maskUid(w.card_uid), 'card') : chip('warn', 'sem cartão', 'card')}</div>
       ${need.length ? `<div class="ready ${pct === 100 ? 'ok' : 'bad'}"><div class="ready-t"><span>Pronto para entrar na obra</span><b>${fine} de ${need.length} documentos</b></div>
         <div class="prog"><i style="width:${pct}%"></i></div></div>` : ''}</div></div>
+    <div id="wonb"></div>
     <div class="card" id="ficha">${skel(2)}</div>
     <div class="card"><h2 style="margin-top:0">Documentos e formação</h2>
       <table class="rt"><tr><th>Documento</th><th>Validade</th><th>Estado</th></tr>${ds.data.map((d) => `<tr>
@@ -2164,7 +2506,7 @@ async function viewWorker() {
     if (error) return toast(friendly(error));
     toast(w.is_active ? 'Desativado.' : 'Reativado. Dá-lhe um cartão.'); await loadBasics(); viewWorker();
   };
-  loadWorkerProfile(id);
+  loadWorkerProfile(id); loadOnbCard(id);
 }
 
 // ------------------------------------------------------------------ Ficha do colaborador (a ficha de papel da empresa)
@@ -2180,6 +2522,20 @@ const SEXES = { M: 'Masculino', F: 'Feminino' };
 const MARITAL = { single: 'Solteiro(a)', married: 'Casado(a)', civil_union: 'União de facto', divorced: 'Divorciado(a)', widowed: 'Viúvo(a)' };
 const EDUCATION = { basic: 'Ensino básico', secondary: 'Secundário (12.º ano)', vocational: 'Curso profissional', higher: 'Superior', other: 'Outra' };
 const ID_TYPES = { citizen_card: 'Cartão de Cidadão', passport: 'Passaporte', residence_permit: 'Autorização de residência', other: 'Outro' };
+// How the person joined (C2): each step done in the app, or seen on paper by someone of the company (never «assinou»).
+const ONB_STEP_TX = { safety_videos: 'Acolhimento de segurança', personal_data: 'Dados pessoais', hr_validation: 'Validação do RH',
+  contract_signed: 'Contrato', rate_accepted: 'Condições (valor hora)' };
+function onbFacts(steps) {
+  if (!steps || !steps.length) return '';
+  const day = (t) => (t ? new Date(t).toLocaleDateString('pt-PT') : '');
+  const paper = steps.filter((x) => x.method === 'paper');
+  if (!paper.length) return '';   // done in the app: the «Entrada na empresa» card above (loadOnbCard) shows it
+  const note = (paper.find((x) => x.statement) || {}).statement;
+  return `<h3>Entrada na empresa</h3><ul class="onb-hist">${steps.map((x) => `<li><b>${esc(ONB_STEP_TX[x.step] || x.step)}</b>
+      ${x.method === 'paper' ? `${chip('warn', 'verificado em papel', 'doc')} <span class="small muted">por ${esc(x.by || '—')} · ${esc(day(x.at))}</span>`
+        : `${chip('ok', 'feito na app', 'ok')} <span class="small muted">${esc(day(x.at))}</span>`}</li>`).join('')}</ul>
+    ${paper.length ? `<p class="small muted">Verificado em papel: alguém da empresa viu os documentos em papel. A pessoa não assinou nada na app.${note ? ' Nota: ' + esc(note) : ''}</p>` : ''}`;
+}
 
 async function loadWorkerProfile(id, editing) {
   const box = $('#ficha'); if (!box) return;
@@ -2201,6 +2557,7 @@ async function loadWorkerProfile(id, editing) {
       ${farda.some(([, x]) => !x) ? '<p class="small muted">Faltam tamanhos da farda: vão ser precisos para entregar EPIs.</p>' : ''}
       <dl class="kv">${item('Telefone', wk.phone ? `<a href="tel:${esc(wk.phone.replace(/ /g, ''))}">${esc(wk.phone)}</a>` : v(null))}
         ${item('Email', v(wk.email))}${item('Profissão', v(wk.job_title))}${item('Categoria profissional', v(wk.category))}</dl>
+      ${onbFacts(data.onboarding)}
       ${can('salarios.exportar') || can('salarios.configurar') ? '<div id="frate"></div>' : ''}
       ${canWh() ? '<div id="fwh"></div>' : ''}
       ${p ? `<h3>Dados pessoais</h3><dl class="kv">
@@ -2360,8 +2717,8 @@ async function readOneCard(sel) {
 // ------------------------------------------------------------------ Acolhimento (the new worker's mandatory steps)
 // A person whose account is not active yet sees only this: the steps in order, nothing of the app behind them.
 // The database is the lock (is_fully_active); this screen only shows the way through it.
-const ONB_STEPS = ['Acolhimento', 'Os meus dados', 'Contrato', 'Assinar', 'Pronto'];
-const ONB_AT = { pending_video: 0, pending_data: 1, pending_hr_validation: 1, pending_contract: 2, pending_rate_approval: 3, active: 4 };
+const ONB_STEPS = ['Acolhimento', 'Os meus dados', 'RH confirma', 'Contrato', 'Valor hora'];
+const ONB_AT = { pending_video: 0, pending_data: 1, pending_hr_validation: 2, pending_contract: 3, pending_rate_approval: 4, active: 5 };
 const ytId = (s) => { const m = /(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/))([A-Za-z0-9_-]{11})/.exec(String(s || '')) || /^([A-Za-z0-9_-]{11})$/.exec(String(s || '').trim());
   return m ? m[1] : null; };
 const paras = (t) => String(t || '').split(/\n\s*\n/).map((x) => `<p>${esc(x.trim()).replace(/\n/g, '<br>')}</p>`).join('');
@@ -2375,7 +2732,7 @@ function onbShell(ob, inner) {
   app.innerHTML = `<div class="onb">
     <div class="onb-top"><span class="onb-logo">${LOGO('lgO')}<b>GestNow</b></span><span class="grow"></span><button class="btn ghost small" id="onbout">${ic('out')}Sair</button></div>
     <div class="onb-hello"><p class="ph-k">${esc(ob.company || '')}</p><h1>Bem-vindo, ${esc(String(ob.name || '').split(' ')[0])}</h1>
-      <p class="muted">Antes de começares a trabalhar connosco, há ${ONB_STEPS.length - 1} passos. Cada um abre quando o anterior estiver feito.</p></div>
+      <p class="muted">Antes de começares a trabalhar connosco, há ${ONB_STEPS.length} passos. Cada um abre quando o anterior estiver feito.</p></div>
     <ol class="onb-steps">${ONB_STEPS.map((s, i) => `<li class="${i < at ? 'done' : i === at ? 'now' : ''}"><span>${i < at ? ic('ok') : i + 1}</span><b>${esc(s)}</b></li>`).join('')}</ol>
     <div id="onbbody">${inner}</div></div>`;
   $('#onbout').onclick = () => { document.body.classList.remove('onboarding'); signOut(); };
@@ -2385,15 +2742,7 @@ async function showOnboarding(ob) {
   Voice.stop();
   if (!ob || ob.status === 'active' || ob.status === 'none') { if (state.onb && ob && ob.status === 'active') state.tourNext = true; state.onb = null; document.body.classList.remove('onboarding'); return boot(); }
   ob.skew = new Date(ob.server_now).getTime() - Date.now();
-  if (ob.status !== 'pending_video') {
-    const waiting = { pending_data: ['Os teus dados', 'O próximo passo é preencheres a tua ficha: morada, NISS, IBAN e documentos. Este ecrã ainda está a ser preparado; até lá, o RH trata disto contigo.'],
-      pending_hr_validation: ['À espera do RH', 'O RH está a confirmar os teus dados. Avisamos-te aqui quando estiver.'],
-      pending_contract: ['À espera do contrato', 'O RH está a preparar o teu contrato. Quando chegar, aparece aqui para leres e assinares.'],
-      pending_rate_approval: ['Quase pronto', 'Falta confirmares as condições do contrato.'] }[ob.status] || ['Em curso', ''];
-    return onbShell(ob, `<div class="card onb-wait">${ic('clock')}<h2>${esc(waiting[0])}</h2><p>${esc(waiting[1])}</p>
-      <p class="small muted">${ic('ok')} Acolhimento concluído${ob.steps && ob.steps.safety_videos ? ' em ' + esc(new Date(ob.steps.safety_videos).toLocaleDateString('pt-PT')) : ''}.</p>
-      <button class="btn ghost" id="onbre">Atualizar</button></div>`), ($('#onbre').onclick = () => showOnboarding());
-  }
+  if (ob.status !== 'pending_video') return onbPassport(ob);
   const items = ob.items || [];
   const done = items.filter((x) => x.passed_at).length;
   const cur = items.find((x) => !x.passed_at);
@@ -2465,8 +2814,354 @@ function onbQuiz(x, n, total, wrong) {
   };
 }
 
+// ------------------------------------------------------------------ Passaporte de entrada (steps 2 to 5, sql/80)
+// The person fills their own card, sends their documents, reads and signs the contract and the internal rules, and
+// accepts the pay terms. Every check is in the database (mini_onb_*); this only shows the way, one step at a time.
+const onbOpts = (map, cur, empty = 'Escolhe…') => `<option value="">${esc(empty)}</option>` + (Array.isArray(map) ? map.map((k) => [k, k]) : Object.entries(map))
+  .map(([k, t]) => `<option value="${esc(k)}" ${String(k) === String(cur ?? '') ? 'selected' : ''}>${esc(t)}</option>`).join('');
+const CONTRACT_TYPES = { permanent: 'Sem termo (efetivo)', fixed_term: 'A termo certo', unfixed_term: 'A termo incerto', temporary: 'Temporário', other: 'Outro' };
+const eur = (n) => n === null || n === undefined ? '—' : Number(n).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' });
+const nissFmt = (v) => String(v || '').replace(/\D/g, '').slice(0, 11);
+const ibanFmt = (v) => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 34).replace(/(.{4})/g, '$1 ').trim();
+// The same checks as the server (private.niss_ok / iban_ok), so a typo shows at once and not only after sending.
+function nissOk(v) {
+  const d = nissFmt(v); if (d.length !== 11 || !/^[12]/.test(d)) return false;
+  const w = [29, 23, 19, 17, 13, 11, 7, 5, 3, 2]; const s = w.reduce((a, x, i) => a + x * +d[i], 0);
+  return 9 - (s % 10) === +d[10];
+}
+function ibanOk(v) {
+  const s = String(v || '').toUpperCase().replace(/\s/g, ''); if (!/^[A-Z]{2}[0-9]{2}[A-Z0-9]{10,30}$/.test(s)) return false;
+  if (s.startsWith('PT') && s.length !== 25) return false;
+  const r = (s.slice(4) + s.slice(0, 4)).replace(/[A-Z]/g, (c) => String(c.charCodeAt(0) - 55));
+  let m = 0; for (const ch of r) m = (m * 10 + +ch) % 97; return m === 1;
+}
+async function onbPassport(ob) {
+  const { data: me, error } = await sb.rpc('mini_onb_me');
+  if (error) return onbShell(ob, `<div class="card onb-wait bad">${ic('warn')}<h2>Sem ligação</h2><p>${esc(friendly(error))}</p><button class="btn ghost" id="onbre">Tentar outra vez</button></div>`), ($('#onbre').onclick = () => showOnboarding());
+  state.onbMe = me;
+  if (me.status === 'pending_data') return onbData(ob, me);
+  if (me.status === 'pending_hr_validation') return onbWaitHr(ob, me);
+  if (me.status === 'pending_contract') return me.contract && me.contract.status === 'issued' ? onbContract(ob, me) : onbWait(ob, 'O RH está a preparar o teu contrato',
+    'Os teus dados já estão confirmados. Quando o contrato chegar, aparece aqui para leres e assinares com o dedo.', me);
+  if (me.status === 'pending_rate_approval') return onbRates(ob, me);
+  return showOnboarding();
+}
+const onbNote = (me) => me.note ? `<div class="onb-note">${ic('voice')}<div><b>Mensagem do RH</b><p>${esc(me.note.text)}</p><small>${esc(new Date(me.note.at).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' }))}</small></div></div>` : '';
+function onbWait(ob, title, text, me) {
+  onbShell(ob, `${onbNote(me)}<div class="card onb-wait">${ic('clock')}<h2>${esc(title)}</h2><p>${esc(text)}</p>
+    <p class="small muted">${ic('ok')} Já feito: ${Object.keys(me.steps || {}).length} de 5 passos.</p>
+    <button class="btn ghost" id="onbre">Atualizar</button></div>`);
+  $('#onbre').onclick = () => showOnboarding();
+}
+function onbWaitHr(ob, me) {
+  onbShell(ob, `${onbNote(me)}<div class="card onb-wait">${ic('clock')}<h2>O RH está a confirmar os teus dados</h2>
+    <p>Enviaste tudo. Se o RH precisar de alguma coisa, deixa-te uma mensagem aqui. Ainda podes corrigir um dado ou trocar um documento.</p>
+    <div class="onb-go"><button class="btn ghost wide" id="fix">Corrigir os meus dados</button><button class="btn ghost wide" id="onbre">Atualizar</button></div></div>`);
+  $('#onbre').onclick = () => showOnboarding();
+  $('#fix').onclick = () => onbData(ob, me);
+}
+
+// Step 2: the person's card. Saved as they go (nothing typed is lost), sent to HR when complete.
+function onbData(ob, me) {
+  const d = me.data || {}; const sending = me.status === 'pending_data';
+  const f = (name, label, val, extra = '', hint = '') => `<div><label for="o_${name}">${esc(label)}</label><input id="o_${name}" name="${name}" value="${esc(val ?? '')}" ${extra}>${hint ? `<small class="hint">${hint}</small>` : ''}</div>`;
+  const s = (name, label, map, cur, empty) => `<div><label for="o_${name}">${esc(label)}</label><select id="o_${name}" name="${name}">${onbOpts(map, cur, empty)}</select></div>`;
+  const docs = (me.documents || []).filter((x) => !x.automatic);
+  const need = docs.filter((x) => x.required || x.blocking); const opt = docs.filter((x) => !(x.required || x.blocking));
+  const docRow = (x) => `<div class="onb-doc ${x.doc ? 'has' : (x.required || x.blocking) ? 'miss' : ''}"><span class="oi">${x.doc ? ic('ok') : ic('doc')}</span>
+      <span class="grow"><b>${esc(x.name)}</b><small>${x.doc ? (x.doc.verified ? 'confirmado pelo RH' : 'enviado, o RH vai ver') + (x.doc.expiry ? ' · válido até ' + esc(fmtDate(x.doc.expiry)) : '')
+        : (x.required || x.blocking) ? 'obrigatório para entrar em obra' : 'se tiveres'}</small></span>
+      <button type="button" class="btn small ${x.doc ? 'ghost' : ''}" data-doc="${esc(x.type_id)}">${x.doc ? 'Trocar' : ic('camera') + 'Enviar'}</button></div>`;
+  onbShell(ob, `${onbNote(me)}<form class="onb-form" id="of" novalidate>
+    <div class="card"><p class="eyebrow" style="margin-top:0">Passo 2 · os teus dados</p><h2>A tua ficha</h2>
+      <p class="small muted">Só o RH vê estes dados. O NISS e o IBAN ficam fechados à chave na base de dados: nem o RH os vê inteiros no ecrã.</p>
+      <div class="onb-meter"><span id="om-t">…</span><div class="prog"><i id="om" style="width:0"></i></div></div></div>
+    <div class="card"><h3>${ic('user')}Identificação</h3>
+      <div class="row">${f('birth_date', 'Data de nascimento *', d.birth_date, `type="date" required max="${isoDay(new Date(Date.now() - 16 * 31557600000))}"`)}${s('nationality', 'Nacionalidade *', COUNTRIES, d.nationality || 'PT')}</div>
+      <div class="row">${f('birthplace', 'Naturalidade', d.birthplace, 'maxlength="80" placeholder="ex.: Sines"')}${s('sex', 'Sexo', SEXES, d.sex)}</div>
+      <div class="row">${s('id_type', 'Documento *', ID_TYPES, d.id_type || 'citizen_card')}${f('id_number', 'Número *', d.id_number, 'maxlength="30" autocomplete="off" required')}${f('id_expiry', 'Válido até *', d.id_expiry, `type="date" required min="${isoDay(new Date())}"`)}</div></div>
+    <div class="card"><h3>${ic('pin')}Morada e contacto</h3>
+      ${f('address', 'Morada *', d.address, 'maxlength="200" autocomplete="street-address" required placeholder="Rua, número, andar"')}
+      <div class="row">${f('postal_code', 'Código postal *', d.postal_code, 'maxlength="12" inputmode="numeric" autocomplete="postal-code" required placeholder="0000-000"')}${f('locality', 'Localidade *', d.locality, 'maxlength="80" required')}${f('municipality', 'Concelho', d.municipality, 'maxlength="80"')}</div>
+      ${f('phone', 'O teu telemóvel', d.phone, 'type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="912 345 678"')}</div>
+    <div class="card"><h3>${ic('calc')}Para o salário</h3>
+      ${f('niss', 'Número de Segurança Social (NISS) *', '', `inputmode="numeric" autocomplete="off" maxlength="14" placeholder="${d.niss_set ? 'já guardado: termina em ' + esc(d.niss_last3) : '11 algarismos'}"`, d.niss_set ? 'Já está guardado. Só escreves se quiseres trocar.' : 'Está no cartão da Segurança Social ou na Segurança Social Direta.')}
+      ${f('iban', 'IBAN da conta onde recebes *', '', `autocomplete="off" autocapitalize="characters" maxlength="42" placeholder="${d.iban_set ? 'já guardado: termina em ' + esc(d.iban_last4) : 'PT50 0000 0000 0000 0000 0000 0'}"`, d.iban_set ? 'Já está guardado. Só escreves se quiseres trocar.' : 'Vês na app do teu banco. Tem de estar em teu nome.')}
+      <div class="row">${s('marital_status', 'Estado civil *', MARITAL, d.marital_status)}${f('dependents', 'Dependentes *', d.dependents, 'type="number" min="0" max="20" inputmode="numeric" required placeholder="0"')}${s('irs_holders', 'Titulares (IRS)', { 1: 'Um titular', 2: 'Dois titulares' }, d.irs_holders, 'Não sei')}</div>
+      <p class="small muted">O estado civil e os dependentes servem para a taxa de IRS do recibo.</p></div>
+    <div class="card"><h3>${ic('warn')}Em caso de acidente, avisamos</h3>
+      <div class="row">${f('emergency_name', 'Nome *', d.emergency_name, 'maxlength="80" required')}${f('emergency_relation', 'Parentesco', d.emergency_relation, 'maxlength="40" placeholder="ex.: Mulher, Pai"')}${f('emergency_phone', 'Telefone *', d.emergency_phone, 'type="tel" inputmode="tel" maxlength="20" required')}</div></div>
+    <div class="card"><h3>${ic('shield')}Farda e EPI</h3><p class="small muted">Para teres a farda e as botas certas no primeiro dia.</p>
+      <div class="row">${s('size_top', 'Camisola *', SIZES_TOP, d.size_top)}${s('size_bottom', 'Calça', SIZES_BOTTOM, d.size_bottom)}${s('size_shoes', 'Botas (nº) *', SIZES_SHOES, d.size_shoes)}${s('size_gloves', 'Luvas', GLOVES, d.size_gloves)}</div></div>
+    <div class="card"><h3>${ic('doc')}Os teus documentos</h3><p class="small muted">Tira uma foto nítida, com o documento todo à vista, ou envia o PDF.</p>
+      ${need.map(docRow).join('') || '<p class="small muted">A empresa não pede documentos obrigatórios.</p>'}
+      ${opt.length ? `<details class="fold"><summary>Outros (formações, cartas)</summary><div>${opt.map(docRow).join('')}</div></details>` : ''}</div>
+    <div class="onb-go sticky"><button type="button" class="btn ghost" id="osave">Guardar</button>
+      <button class="btn big" id="osend">${sending ? 'Enviar ao RH' : 'Guardar correções'}</button></div></form>`);
+  const form = $('#of');
+  const must = ['birth_date', 'nationality', 'id_type', 'id_number', 'id_expiry', 'address', 'postal_code', 'locality', 'marital_status', 'dependents', 'emergency_name', 'emergency_phone', 'size_top', 'size_shoes'];
+  const meter = () => {
+    const fd = new FormData(form);
+    let done = must.filter((k) => String(fd.get(k) || '').trim() !== '').length;
+    done += (d.niss_set || nissOk(fd.get('niss'))) ? 1 : 0; done += (d.iban_set || ibanOk(fd.get('iban'))) ? 1 : 0;
+    const docsDone = need.filter((x) => x.doc).length; const total = must.length + 2 + need.length; const n = done + docsDone;
+    $('#om').style.width = Math.round(100 * n / total) + '%';
+    $('#om-t').textContent = n === total ? 'Tudo preenchido. Já podes enviar.' : `${n} de ${total} preenchidos`;
+  };
+  // Live checks on the two numbers that are most often mistyped.
+  const live = (name, ok, fmt, msg) => { const i = form.elements[name]; i.addEventListener('input', () => { const p = i.selectionStart === i.value.length; i.value = fmt(i.value); if (p) i.selectionStart = i.selectionEnd = i.value.length;
+    i.setCustomValidity(i.value && !ok(i.value) ? msg : ''); i.classList.toggle('bad', !!i.value && !ok(i.value)); i.classList.toggle('good', !!i.value && ok(i.value)); meter(); }); };
+  live('niss', nissOk, nissFmt, 'O NISS tem 11 algarismos. Confirma no cartão.');
+  live('iban', ibanOk, ibanFmt, 'Este IBAN não está certo. Confirma na app do banco.');
+  form.addEventListener('input', meter); form.addEventListener('change', meter); meter();
+  const body = () => {
+    const fd = new FormData(form); const o = {};
+    for (const [k, v] of fd.entries()) o[k] = String(v).trim();
+    o.niss = nissFmt(o.niss) || ''; o.iban = o.iban ? o.iban.replace(/\s/g, '') : '';
+    return o;
+  };
+  const save = async (btn) => {
+    const o = body();
+    if (o.niss && !nissOk(o.niss)) { toast('O NISS não está certo: confirma os 11 algarismos.'); form.elements.niss.focus(); return null; }
+    if (o.iban && !ibanOk(o.iban)) { toast('O IBAN não está certo: confirma na app do banco.'); form.elements.iban.focus(); return null; }
+    btn.disabled = true; const r = await sb.rpc('mini_onb_save_data', { p: o }); btn.disabled = false;
+    if (r.error) { toast(friendly(r.error)); return null; }
+    return r.data;
+  };
+  $('#osave').onclick = async (e) => { const r = await save(e.currentTarget); if (r) { toast('Guardado. Podes continuar depois.'); state.onbMe = r; onbData(ob, r); } };
+  form.onsubmit = async (e) => {
+    e.preventDefault(); const btn = $('#osend'); const r = await save(btn); if (!r) return;
+    if (!sending) { toast('Correções guardadas.'); return showOnboarding(); }
+    btn.disabled = true; const s2 = await sb.rpc('mini_onb_submit_data'); btn.disabled = false;
+    if (s2.error) { toast(friendly(s2.error)); return onbData(ob, r); }
+    toast('Enviado ao RH. Obrigado!'); showOnboarding();
+  };
+  form.querySelectorAll('[data-doc]').forEach((b) => b.onclick = async () => {
+    const t = docs.find((x) => x.type_id === b.dataset.doc);
+    // keep what was typed before opening the sheet
+    const typed = await save(b); if (!typed) return;
+    const fd = await askSheet(t.name, `<div class="row"><div><label>Data de emissão *</label><input name="issue" type="date" required max="${isoDay(new Date())}"></div>
+        <div><label>Válido até</label><input name="expiry" type="date" min="${isoDay(new Date())}"></div></div>
+      <label>Número (se tiver)</label><input name="num" maxlength="40" autocomplete="off">
+      <label>Foto ou PDF *</label><input name="file" type="file" accept="${FILE_ACCEPT}" capture="environment" required>
+      <p class="small muted">Até 10 MB. Fica guardado em privado e nunca se apaga.</p>`, 'Enviar documento');
+    if (!fd) return onbData(ob, typed);
+    const file = fd.get('file'); const bad = fileProblem(file); if (bad) { toast(bad); return onbData(ob, typed); }
+    toast('A enviar…');
+    const path = `${state.me.tenant_id}/${state.me.collaborator_id}/${uuid()}.${FILE_TYPES[file.type]}`;
+    const up = await sb.storage.from('documentos').upload(path, file, { contentType: file.type, upsert: false });
+    if (up.error) { toast(friendly(up.error)); return onbData(ob, typed); }
+    const r = await sb.rpc('mini_onb_add_document', { p_type: t.type_id, p_number: fd.get('num') || null, p_issue: fd.get('issue'),
+      p_expiry: fd.get('expiry') || null, p_file: path, p_sha256: await sha256Hex(file) });
+    if (r.error) { toast(friendly(r.error)); return onbData(ob, typed); }
+    toast('Documento enviado.');
+    const again = await sb.rpc('mini_onb_me'); onbData(ob, again.data || typed);
+  });
+}
+
+// Step 4: read the contract and the internal rules to the end, write the name, sign with the finger.
+function onbContract(ob, me) {
+  const k = me.contract; const r = me.rules;
+  onbShell(ob, `${onbNote(me)}<div class="card onb-view"><p class="eyebrow" style="margin-top:0">Passo 4 · contrato</p><h2>Lê o teu contrato</h2>
+      <div class="onb-facts"><div><span>Tipo</span><b>${esc(CONTRACT_TYPES[k.type] || k.type || '—')}</b></div><div><span>Começa</span><b>${esc(fmtDate(k.start))}</b></div>
+        ${k.end ? `<div><span>Termina</span><b>${esc(fmtDate(k.end))}</b></div>` : ''}<div><span>Horas/semana</span><b>${esc(String(k.weekly_hours ?? '—'))}</b></div>
+        <div><span>Função</span><b>${esc(k.job_title || '—')}</b></div></div>
+      <div class="onb-manual onb-paper" id="kt">${paras(k.body)}</div>
+      <p class="small muted" id="kth">${ic('go')}Desliza até ao fim do contrato.</p></div>
+    ${r ? `<div class="card onb-view" id="rbox" hidden><h2>${esc(r.title)} <span class="small muted">versão ${r.version}</span></h2>
+      <div class="onb-manual onb-paper" id="rt">${paras(r.body)}</div><p class="small muted" id="rth">${ic('go')}Desliza até ao fim das regras.</p></div>` : ''}
+    <form class="card" id="sg" hidden><h2>Assinar</h2>
+      <label for="sn">Escreve o teu nome completo, como está no contrato</label><input id="sn" name="name" autocomplete="name" required placeholder="${esc(me.name)}">
+      <label>Assina com o dedo</label><div class="sigpad"><canvas id="sc" aria-label="Quadro para assinar com o dedo"></canvas><button type="button" class="btn small ghost" id="sclr">Limpar</button></div>
+      <label class="check"><input type="checkbox" name="ok" required> Li o contrato${r ? ' e o regulamento interno' : ''} até ao fim e aceito-os.</label>
+      ${more('O que fica guardado', '<p>O texto exato que leste (com a sua impressão digital SHA-256), o teu nome escrito, a tua assinatura, a data e hora, e o telemóvel de onde assinaste. Vês tudo depois em «O meu contrato». Se tiveres dúvidas, não assines: fala primeiro com o RH.</p>')}
+      <button class="btn big" id="sgo">Assinar contrato</button></form>`);
+  const sg = $('#sg'); let readK = false; let readR = !r;
+  const endOf = (el) => el.scrollTop + el.clientHeight >= el.scrollHeight - 8 && el.getBoundingClientRect().bottom <= window.innerHeight + 4;
+  const check = () => {
+    if (!readK && endOf($('#kt'))) { readK = true; $('#kth').innerHTML = ic('ok') + ' Contrato lido.'; if ($('#rbox')) $('#rbox').hidden = false; }
+    if (readK && !readR && $('#rt') && endOf($('#rt'))) { readR = true; $('#rth').innerHTML = ic('ok') + ' Regulamento lido.'; }
+    if (readK && readR && sg.hidden) { sg.hidden = false; pad.size(); }
+  };
+  const pad = sigPad($('#sc'));
+  $('#sclr').onclick = () => pad.clear();
+  $('#kt').addEventListener('scroll', check, { passive: true }); if ($('#rt')) $('#rt').addEventListener('scroll', check, { passive: true });
+  window.addEventListener('scroll', check, { passive: true }); setTimeout(check, 300);
+  sg.onsubmit = async (e) => {
+    e.preventDefault(); const fd = new FormData(sg);
+    if (!fd.get('ok')) return toast('Marca que leste e aceitas.');
+    const svg = pad.svg(); if (!svg) return toast('Assina com o dedo no quadro.');
+    const btn = $('#sgo'); btn.disabled = true;
+    const { error: se } = await sb.rpc('mini_onb_sign', { p_contract: k.id, p_sha256: k.sha256, p_rules_sha256: r ? r.sha256 : null,
+      p_name: fd.get('name'), p_signature_svg: svg, p_agent: navigator.userAgent });
+    btn.disabled = false;
+    if (se) return toast(friendly(se));
+    window.removeEventListener('scroll', check); toast('Contrato assinado.'); showOnboarding();
+  };
+}
+// A finger signature as an SVG path (small, sharp at any size, no image file to forge or store).
+function sigPad(cv) {
+  let strokes = []; let cur = null; const ctx = cv.getContext('2d');
+  const size = () => { const r = cv.getBoundingClientRect(); if (!r.width) return; cv.width = Math.round(r.width * devicePixelRatio); cv.height = Math.round(r.height * devicePixelRatio); draw(); };
+  const pt = (e) => { const r = cv.getBoundingClientRect(); return [Math.round(e.clientX - r.left), Math.round(e.clientY - r.top)]; };
+  const draw = () => {
+    ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0); ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.lineWidth = 2.6; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = getComputedStyle(cv).color || '#0b1f2a';
+    for (const s of strokes) { ctx.beginPath(); s.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke(); }
+  };
+  cv.addEventListener('pointerdown', (e) => { e.preventDefault(); cv.setPointerCapture(e.pointerId); cur = [pt(e)]; strokes.push(cur); draw(); });
+  cv.addEventListener('pointermove', (e) => { if (!cur) return; const p = pt(e); const l = cur[cur.length - 1];
+    if (Math.abs(p[0] - l[0]) + Math.abs(p[1] - l[1]) >= 2) { cur.push(p); draw(); } });
+  const end = () => { cur = null; }; cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+  window.addEventListener('resize', size);
+  return {
+    size, clear: () => { strokes = []; draw(); },
+    svg: () => {
+      const pts = strokes.reduce((a, s) => a + s.length, 0); if (pts < 12) return null;
+      const r = cv.getBoundingClientRect(); let step = 1; let d;
+      do { d = strokes.map((s) => 'M' + s.filter((_, i) => i % step === 0 || i === s.length - 1).map(([x, y]) => `${x} ${y}`).join(' L')).join(' '); step++; } while (d.length > 55000);
+      const out = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${Math.round(r.width)} ${Math.round(r.height)}"><path d="${d}" fill="none" stroke="#0b1f2a" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+      return out;
+    },
+  };
+}
+// Step 5: the pay terms, as numbers, before the first day.
+function onbRates(ob, me) {
+  const r = me.rates || {}; const terms = r.terms && (r.terms.text || (typeof r.terms === 'string' ? r.terms : ''));
+  onbShell(ob, `${onbNote(me)}<form class="card onb-view" id="rf"><p class="eyebrow" style="margin-top:0">Passo 5 · condições</p><h2>O teu valor hora</h2>
+      <div class="onb-rate"><div><span>Hora normal</span><b>${esc(eur(r.base))}</b></div><div><span>Hora extra</span><b>${esc(eur(r.overtime))}</b></div></div>
+      ${terms ? `<p><b>Outras condições:</b> ${esc(terms)}</p>` : ''}
+      <p class="small muted">São os valores do contrato que assinaste. As horas que picas com o cartão são as que contam para o recibo; vês todas em «As minhas horas».</p>
+      <label class="check"><input type="checkbox" name="ok" required> Confirmo que estes são os valores combinados comigo.</label>
+      <button class="btn big" id="rgo">Aceitar e começar</button>
+      <p class="small muted">Se os valores não forem os combinados, não aceites: fala com o RH.</p></form>`);
+  $('#rf').onsubmit = async (e) => {
+    e.preventDefault(); const b = $('#rgo'); b.disabled = true;
+    const { error: ae } = await sb.rpc('mini_onb_accept_rates'); b.disabled = false;
+    if (ae) return toast(friendly(ae));
+    onbShell(ob, `<div class="card onb-wait onb-done">${ic('ok')}<h2>Bem-vindo à equipa!</h2>
+      <p>Está tudo feito. Falta só o RH dar-te o cartão pessoal: com ele picas a entrada e a saída na obra.</p>
+      <button class="btn big" id="go">Entrar na app</button></div>`);
+    $('#go').onclick = () => showOnboarding();
+  };
+}
+// «O meu contrato» (a tile in «Eu»): what the person signed and accepted, any time after.
+async function renderMyPapers(el) {
+  const { data, error } = await sb.rpc('mini_my_papers'); if (!el.isConnected) return;
+  if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  const k = data.contract; const r = data.rules; const a = data.rates;
+  if (!k && !a) { el.innerHTML = `<div class="card">${empty('doc', data.paper ? 'O teu contrato está em papel' : 'Ainda sem contrato na app', data.paper ? 'Assinaste em papel no escritório. Pede uma cópia ao RH.' : 'Quando assinares um contrato na app, fica aqui.')}</div>`; return; }
+  el.innerHTML = `${a ? `<div class="card"><h2 style="margin-top:0">Valor hora</h2><div class="onb-rate"><div><span>Hora normal</span><b>${esc(eur(a.base_hourly_rate))}</b></div>
+      <div><span>Hora extra</span><b>${esc(eur(a.overtime_hourly_rate))}</b></div></div><p class="small muted">Aceite em ${esc(new Date(a.accepted_at).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' }))}.</p></div>` : ''}
+    ${k ? `<div class="card"><h2 style="margin-top:0">Contrato</h2><div class="onb-facts"><div><span>Tipo</span><b>${esc(CONTRACT_TYPES[k.type] || k.type || '—')}</b></div>
+        <div><span>Começou</span><b>${esc(fmtDate(k.start))}</b></div>${k.end ? `<div><span>Termina</span><b>${esc(fmtDate(k.end))}</b></div>` : ''}<div><span>Função</span><b>${esc(k.job_title || '—')}</b></div></div>
+      <details class="fold"><summary>Ler o contrato</summary><div class="onb-paper">${paras(k.body)}</div></details>
+      <p class="small muted">Assinado por ${esc(k.signed_name || '')} em ${esc(new Date(k.signed_at).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' }))}. Impressão digital: <code class="sha">${esc(String(k.sha256 || '').slice(0, 16))}…</code></p>
+      ${k.signature_svg ? `<img class="sig-img" alt="A tua assinatura" src="data:image/svg+xml;utf8,${encodeURIComponent(k.signature_svg)}">` : ''}</div>` : ''}
+    ${r ? `<div class="card"><h2 style="margin-top:0">${esc(r.title)} <span class="small muted">versão ${r.version}</span></h2><details class="fold"><summary>Ler</summary><div class="onb-paper">${paras(r.body)}</div></details></div>` : ''}`;
+}
+
+// ---- HR side, on the person's card: check the documents, write a note, confirm, issue the contract.
+async function loadOnbCard(id) {
+  const box = $('#wonb'); if (!box || !canPeople()) return;
+  const { data: p, error } = await sb.rpc('mini_onb_person', { p_collab: id });
+  if (!box.isConnected || error || !p) return;
+  const k = p.contract; const st = p.status;
+  if (st === 'active' && !(k && k.status === 'signed')) return;
+  const ST = ['safety_videos', 'personal_data', 'hr_validation', 'contract_signed', 'rate_accepted'];
+  const STT = ['Acolhimento', 'Dados e documentos', 'RH confirmou', 'Contrato assinado', 'Valor hora aceite'];
+  const docs = (p.documents || []).filter((x) => !x.automatic && x.doc);
+  const toCheck = docs.filter((x) => !x.doc.verified);
+  const missing = (p.documents || []).filter((x) => !x.automatic && (x.required || x.blocking) && !x.doc);
+  const dd = p.data;
+  box.innerHTML = `<div class="card onb-hr"><div class="sec-h" style="margin-top:0"><h2>Entrada na empresa</h2>${st === 'active' ? chip('ok', 'concluída', 'ok') : chip('warn', ONB_LABEL[st] || st, 'clock')}</div>
+    <ol class="onb-tl">${ST.map((s, i) => { const x = p.steps[s]; return `<li class="${x ? 'done' : ''}"><span>${x ? ic('ok') : i + 1}</span><b>${STT[i]}</b>
+      <small>${x ? esc(new Date(x.at).toLocaleDateString('pt-PT')) + (x.paper ? ' · ' + chip('warn', 'verificado em papel') : ' · na app') : ''}</small></li>`; }).join('')}</ol>
+    ${st === 'pending_data' ? `<p class="small muted">${ic('clock')} A pessoa está a preencher a ficha no telemóvel. Quando enviar, aparece aqui para confirmares.</p>` : ''}
+    ${dd && st !== 'pending_video' ? `<details class="fold" ${st === 'pending_hr_validation' ? 'open' : ''}><summary>Dados que a pessoa preencheu</summary><div><dl class="kv">
+      ${[['Nascimento', dd.birth_date && fmtDate(dd.birth_date)], ['Nacionalidade', COUNTRIES[dd.nationality] || dd.nationality], ['Documento', [ID_TYPES[dd.id_type], dd.id_number].filter(Boolean).join(' nº ')],
+        ['Válido até', dd.id_expiry && fmtDate(dd.id_expiry)], ['Morada', [dd.address, [dd.postal_code, dd.locality].filter(Boolean).join(' ')].filter(Boolean).join(', ')],
+        ['NISS', dd.niss_set ? '••••••••' + dd.niss_last3 : null], ['IBAN', dd.iban_set ? '•••• ' + dd.iban_last4 : null], ['Estado civil', MARITAL[dd.marital_status]],
+        ['Dependentes', dd.dependents], ['Emergência', [dd.emergency_name, dd.emergency_phone].filter(Boolean).join(' · ')], ['Farda', [dd.size_top, dd.size_bottom, dd.size_shoes && 'botas ' + dd.size_shoes].filter(Boolean).join(' · ')]]
+        .map(([l, v]) => `<div><dt>${esc(l)}</dt><dd>${v === null || v === undefined || v === '' ? '<span class="muted">—</span>' : esc(String(v))}</dd></div>`).join('')}</dl>
+      <p class="small muted">O NISS e o IBAN completos só saem na exportação para o salário.</p></div></details>` : ''}
+    ${docs.length ? `<h3>Documentos enviados</h3>${docs.map((x) => `<div class="onb-doc ${x.doc.verified ? 'has' : ''}"><span class="oi">${x.doc.verified ? ic('ok') : ic('doc')}</span>
+      <span class="grow"><b>${esc(x.name)}</b><small>${x.doc.number ? 'nº ' + esc(x.doc.number) + ' · ' : ''}${x.doc.expiry ? 'até ' + esc(fmtDate(x.doc.expiry)) : 'sem validade'}${x.doc.verified ? ' · confirmado' : ''}</small></span>
+      ${x.doc.has_file && canDocs() ? `<button class="btn small ghost" data-docfile="${esc(x.doc.id)}">Ver</button>` : ''}
+      ${x.doc.verified ? '' : `<button class="btn small" data-verify="${esc(x.doc.id)}">Confirmar</button>`}</div>`).join('')}` : ''}
+    ${missing.length && st !== 'pending_video' ? `<p class="small">${chip('bad', 'falta', 'x')} ${missing.map((x) => esc(x.name)).join(', ')}</p>` : ''}
+    ${st === 'pending_hr_validation' ? `<div class="onb-go"><button class="btn ghost" id="onote">Pedir uma correção</button>
+      <button class="btn" id="oval" ${toCheck.length ? 'disabled' : ''}>Dados certos: confirmar</button></div>
+      ${toCheck.length ? `<p class="small muted">Confirma primeiro ${pl(toCheck.length, 'documento', 'documentos')}.</p>` : ''}` : ''}
+    ${st === 'pending_contract' && !(k && k.status === 'issued') ? `<div class="onb-go"><button class="btn big" id="oissue">${ic('doc')}Preparar o contrato</button></div>` : ''}
+    ${k ? `<h3>Contrato</h3><p class="small">${esc(CONTRACT_TYPES[k.type] || '')} · início ${esc(fmtDate(k.start))}${k.end ? ' · fim ' + esc(fmtDate(k.end)) : ''} · ${esc(String(k.weekly_hours))} h/semana · ${esc(k.job_title || '')}
+      · ${k.status === 'signed' ? chip('ok', 'assinado em ' + new Date(k.signed_at).toLocaleDateString('pt-PT'), 'ok') : chip('warn', 'à espera da assinatura', 'clock')}</p>
+      ${p.rates && p.rates.base ? `<p class="small">Valor hora ${esc(eur(p.rates.base))} · extra ${esc(eur(p.rates.overtime))}${p.accepted ? ' · ' + chip('ok', 'aceite', 'ok') : ''}</p>` : ''}
+      <details class="fold"><summary>Ler o contrato</summary><div class="onb-paper">${paras(k.body)}</div>
+        ${k.signature_svg ? `<p class="small muted">Assinado por ${esc(k.signed_name)}:</p><img class="sig-img" alt="Assinatura" src="data:image/svg+xml;utf8,${encodeURIComponent(k.signature_svg)}">` : ''}
+        <p class="small muted">Impressão digital do texto: <code class="sha">${esc(k.sha256)}</code></p></div></details>` : ''}
+    ${p.notes && p.notes.length ? `<details class="fold"><summary>Mensagens à pessoa (${p.notes.length})</summary><div>${p.notes.map((n) => `<p class="small"><b>${esc(new Date(n.at).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' }))}</b> ${esc(n.text)}</p>`).join('')}</div></details>` : ''}</div>`;
+  box.querySelectorAll('[data-verify]').forEach((b) => b.onclick = async () => {
+    b.disabled = true; const { error: e } = await sb.rpc('mini_onb_verify_document', { p_doc: b.dataset.verify });
+    if (e) { b.disabled = false; return toast(friendly(e)); } toast('Documento confirmado.'); loadOnbCard(id);
+  });
+  box.querySelectorAll('[data-docfile]').forEach((b) => b.onclick = async () => {
+    const f = ((await sb.rpc('mini_document_files', { p_collab: id })).data || []).find((x) => x.document_id === b.dataset.docfile);
+    if (f && f.file_path) openDocFile(f.file_path); else toast('Ficheiro não encontrado.');
+  });
+  if ($('#onote')) $('#onote').onclick = async () => {
+    const fd = await askSheet('Pedir uma correção', `<label>O que falta ou está errado? *</label><textarea name="n" required minlength="5" maxlength="1000" rows="4" placeholder="ex.: A foto do cartão de cidadão está desfocada, envia outra."></textarea>
+      <p class="small muted">A pessoa vê esta mensagem no telemóvel, no topo da ficha.</p>`, 'Enviar mensagem');
+    if (!fd) return; const { error: e } = await sb.rpc('mini_onb_note', { p_collab: id, p_note: fd.get('n') });
+    if (e) return toast(friendly(e)); toast('Mensagem enviada.'); loadOnbCard(id);
+  };
+  if ($('#oval')) $('#oval').onclick = async () => {
+    const b = $('#oval'); b.disabled = true; const { error: e } = await sb.rpc('mini_onb_validate', { p_collab: id, p_note: null });
+    b.disabled = false; if (e) return toast(friendly(e)); toast('Dados confirmados. Agora prepara o contrato.'); loadOnbCard(id);
+  };
+  if ($('#oissue')) $('#oissue').onclick = () => onbIssue(id, p);
+}
+async function onbIssue(id, p) {
+  const fd = await askSheet('Contrato de ' + p.name, `<label>Tipo de contrato *</label><select name="type" required>${onbOpts(CONTRACT_TYPES, 'fixed_term')}</select>
+    <div class="row"><div><label>Começa *</label><input name="start" type="date" required min="${isoDay(new Date())}"></div><div><label>Termina (a termo)</label><input name="end" type="date"></div></div>
+    <div class="row"><div><label>Função *</label><input name="job" required maxlength="120" value="${esc(p.job_title || '')}" placeholder="ex.: Serralheiro"></div><div><label>Horas por semana *</label><input name="hours" type="number" min="1" max="60" step="0.5" value="40" required></div></div>
+    <label>Local de trabalho *</label><input name="loc" required maxlength="200" placeholder="ex.: Sines e obras da empresa">
+    <div class="row"><div><label>Valor hora (€) *</label><input name="base" type="number" min="0" step="0.01" inputmode="decimal" required></div><div><label>Hora extra (€)</label><input name="ot" type="number" min="0" step="0.01" inputmode="decimal" placeholder="vazio = +50%"></div></div>
+    <label>Outras condições</label><textarea name="terms" rows="2" maxlength="1000" placeholder="ex.: Ajudas de custo segundo a obra; alojamento pago pela empresa."></textarea>
+    <p class="small muted">O texto vem do modelo da empresa (Secretariado › Contrato e regulamento). A pessoa recebe-o no telemóvel, lê, assina com o dedo e confirma o valor hora.</p>`, 'Enviar para assinar');
+  if (!fd) return;
+  const num = (v) => (v === null || v === '' ? null : Number(String(v).replace(',', '.')));
+  const { error: e } = await sb.rpc('mini_onb_issue_contract', { p_collab: id, p_type: fd.get('type'), p_start: fd.get('start'), p_end: fd.get('end') || null,
+    p_weekly_hours: num(fd.get('hours')), p_location: fd.get('loc'), p_job_title: fd.get('job'), p_base: num(fd.get('base')), p_overtime: num(fd.get('ot')), p_terms: fd.get('terms') || null });
+  if (e) { toast(friendly(e)); return onbIssue(id, p); }
+  toast('Contrato enviado. A pessoa já o vê no telemóvel.'); loadOnbCard(id);
+}
+// Secretariado › the company's contract model and internal rules (each change is a new version; signed ones keep theirs).
+async function viewOnbTexts() {
+  if (!canPeople()) return go('secretariado');
+  app.innerHTML = `<p><button class="btn ghost small" id="back">‹ Secretariado</button></p><div class="ph"><div><p class="ph-k">Pessoas</p><h1>Contrato e regulamento</h1></div></div>
+    <p class="muted lead">O texto que cada pessoa nova lê e assina no telemóvel. Mudar cria uma versão nova: quem já assinou fica com a versão que leu.</p><div id="tx">${skel(2)}</div>`;
+  $('#back').onclick = () => go('secretariado');
+  const { data, error } = await sb.rpc('mini_onb_texts'); const el = $('#tx'); if (!el) return;
+  if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  const one = (t, kind, label) => `<form class="card" data-kind="${kind}"><div class="sec-h" style="margin-top:0"><h2>${esc(label)}</h2><span class="count">versão ${t ? t.version : 1}</span></div>
+    ${t && t.model ? `<p class="small">${chip('warn', 'modelo da GestNow', 'warn')} Substitui pelo texto da tua empresa, revisto por um advogado do trabalho.</p>` : ''}
+    <label>Título</label><input name="title" value="${esc(t ? t.title : label)}" maxlength="120">
+    <label>Texto</label><textarea name="body" rows="16" maxlength="60000">${esc(t ? t.body : '')}</textarea>
+    ${kind === 'contract' ? `<p class="small muted">Campos que a app preenche: ${['nome', 'nif', 'empresa', 'nif_empresa', 'funcao', 'local', 'inicio', 'fim', 'horas_semana', 'preco_hora', 'preco_extra', 'condicoes', 'tipo', 'data'].map((x) => `<code>{{${x}}}</code>`).join(' ')}</p>` : ''}
+    <button class="btn wide">Guardar versão nova</button></form>`;
+  const byKind = (x) => (data || []).find((t) => t.kind === x);
+  el.innerHTML = one(byKind('contract'), 'contract', 'Contrato de trabalho') + one(byKind('rules'), 'rules', 'Regulamento interno');
+  el.querySelectorAll('form').forEach((f) => f.onsubmit = async (e) => {
+    e.preventDefault(); const fd = new FormData(f); const b = f.querySelector('button'); b.disabled = true;
+    const { error: se } = await sb.rpc('mini_onb_text_save', { p_kind: f.dataset.kind, p_title: fd.get('title'), p_body: fd.get('body') });
+    b.disabled = false; if (se) return toast(friendly(se)); toast('Versão nova guardada.'); viewOnbTexts();
+  });
+}
+
 // HR / safety: the videos and manuals of the onboarding, in order, each with its questions; and who is in onboarding now.
 async function viewInduction() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!can('acolhimento.gerir')) return go('trabalhadores');
   app.innerHTML = `<div class="ph"><div><p class="ph-k">Pessoas</p><h1>Acolhimento</h1></div><button class="btn" id="addi">+ Nova parte</button></div>
     <p class="muted lead">O que cada pessoa nova ouve, vê e lê no telemóvel antes de começar. Mudar uma conversa, um vídeo, um texto ou as perguntas cria uma versão nova; a prova diz sempre que versão cada pessoa fez.</p>
@@ -2494,15 +3189,16 @@ async function loadInduction() {
   if ($('#tpl')) $('#tpl').onclick = useInductionTemplate;
   el.querySelectorAll('[data-id]').forEach((b) => b.onclick = () => editInduction(data.find((x) => x.id === b.dataset.id)));
 }
-const ONB_LABEL = { pending_video: 'Passo 1 · acolhimento', pending_data: 'Passo 2 · dados', pending_hr_validation: 'Passo 2 · à espera do RH',
-  pending_contract: 'Passo 3 · contrato', pending_rate_approval: 'Passo 4 · assinar' };
+const ONB_LABEL = { pending_video: 'Passo 1 · acolhimento', pending_data: 'Passo 2 · a preencher a ficha', pending_hr_validation: 'Passo 3 · o RH tem de confirmar',
+  pending_contract: 'Passo 4 · contrato', pending_rate_approval: 'Passo 5 · valor hora' };
 async function loadOnbBoard(sel, onlyIfAny) {
   const el = $(sel); if (!el) return;
   const { data, error } = await sb.rpc('mini_onboarding_board');
   if (!el.isConnected || error || (onlyIfAny && !data.length)) return;
   el.innerHTML = `<div class="card"><div class="sec-h" style="margin-top:0"><h2>Novas entradas</h2>${data.length ? `<span class="count">${data.length}</span>` : ''}</div>
     ${data.length ? data.map((p) => `<button class="onb-row" data-id="${esc(p.id)}">${avatar(p.name)}
-      <span class="grow"><b>${esc(p.name)}</b><small>${esc(ONB_LABEL[p.status] || p.status)}${p.status === 'pending_video' && p.items ? ` · ${p.passed}/${p.items} partes` : ''}${p.has_login ? '' : ' · ainda sem conta na app'}</small></span>
+      <span class="grow"><b>${esc(p.name)}</b><small>${esc(ONB_LABEL[p.status] || p.status)}${p.status === 'pending_video' && p.items ? ` · ${p.passed}/${p.items} partes` : ''}${p.docs_to_check ? ` · ${pl(p.docs_to_check, 'documento', 'documentos')} por ver` : ''}${p.status === 'pending_contract' && p.contract === 'issued' ? ' · à espera da assinatura' : ''}${p.has_login ? '' : ' · ainda sem conta na app'}</small></span>
+      ${p.waiting_hr ? chip('warn', 'é contigo', 'warn') : ''}
       ${p.status === 'pending_video' && p.items ? `<span class="mini-bar"><i style="width:${Math.round(100 * p.passed / p.items)}%"></i></span>` : ''}</button>`).join('')
       : `<p class="small muted">${ic('ok')} Ninguém a meio do acolhimento. Ao registar uma pessoa nova em Pessoas, escolhe «Faz o acolhimento na app».</p>`}</div>`;
   el.querySelectorAll('[data-id]').forEach((b) => b.onclick = () => { state.worker = b.dataset.id; go('ficha'); });
@@ -3003,7 +3699,7 @@ const TOUR_TEXT = {
   compras: 'Compras: pedes o que falta; acima do limite o Secretariado aprova; depois encomenda-se e regista-se o que chega.',
   armazem: 'Armazém: EPIs, farda e ferramentas. Quem recebe assina com o cartão; os tamanhos vêm da ficha.',
   horas: 'Horas: as horas da equipa, dia a dia, para corrigir e validar.',
-  minhas: 'As minhas horas: as tuas horas, o teu mês, e os pedidos de férias e faltas. Se um dia estiver mal, dizes aqui.',
+  minhas: 'Eu: o teu dia, a tua semana, as tuas horas, pedidos, diárias, documentos, EPI e onde dormes. Se um dia estiver mal, dizes aqui.',
   secretariado: 'Secretaria: o mês de toda a gente, fechar o mês e tirar o ficheiro para os salários.',
   seguranca: 'Segurança: os documentos de cada pessoa, e o que impede alguém de entrar na obra.',
   trabalhadores: 'Pessoas: as fichas, os cartões e os documentos de cada colaborador.',
@@ -3078,6 +3774,7 @@ async function loadBotCard() {
 
 // ------------------------------------------------------------------ Segurança
 function viewSafety() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   app.innerHTML = `<div class="ph"><div><p class="ph-k">Documentos e acessos</p><h1>Segurança</h1></div></div>
     <div class="toolbar noprint"><div class="tb-site">${siteSelect('site')}</div></div><div id="list" style="margin-top:14px">${skel(3)}</div>
     <p class="noprint"><button class="btn ghost wide" id="print">${ic('print')}Imprimir</button></p>
@@ -3124,6 +3821,7 @@ function showDocTypes() {
 // ------------------------------------------------------------------ Horas
 function monday(d) { const x = new Date(d); x.setHours(12, 0, 0, 0); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; }
 function viewHours() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!state.weekStart) state.weekStart = monday(new Date());
   const from = state.weekStart; const to = new Date(from); to.setDate(to.getDate() + 6);
   const site = currentSite(); const tz = site ? siteTz(site.id) : DEFAULT_TZ;
@@ -3248,7 +3946,7 @@ async function loadHours(from, to) {
   el.innerHTML = Object.values(byWorker).map((rows) => {
     const tot = rows.reduce((a, r) => ({ w: a.w + r.worked_minutes, o: a.o + r.overtime_minutes }), { w: 0, o: 0 });
     return `<div class="card pcard"><div class="wk">${avatar(rows[0].full_name)}<div class="grow"><h2 style="margin:0;font-size:18px">${esc(rows[0].full_name)}</h2>
-      <div class="sub">${rows[0].employee_number ? 'nº ' + esc(rows[0].employee_number) : ''}</div></div>
+      <div class="sub">${rows[0].employee_number ? 'nº ' + esc(rows[0].employee_number) : ''} <span data-visa="${esc(rows[0].collaborator_id)}"></span></div></div>
       <div class="ptop"><b class="tnum">${esc(fmtMin(tot.w))}</b><span>${tot.o ? esc(fmtMin(tot.o)) + ' extra' : 'na semana'}</span></div></div>
     ${weekStrip(rows, from, tz, today)}
     ${rows.map((r) => {
@@ -3269,11 +3967,17 @@ async function loadHours(from, to) {
     <div class="ptotal"><span>Total da semana</span><span class="hrs">${esc(fmtMin(tot.w))}${tot.o ? ` <span class="small">(${esc(fmtMin(tot.o))} extra)</span>` : ''}</span></div></div>`;
   }).join('') + '<p class="small muted print-only">Assinatura do encarregado: ______________________</p>';
   const sum = $('#hsum');
-  if (sum) sum.innerHTML = `<div class="kpis noprint"><div class="kpi ${n.todo ? 'hot' : ''}"><b>${n.todo}</b><span>dias a validar</span></div>
+  if (sum) sum.innerHTML = encFlow(data.filter((r) => !onlyOpenToday(r, tz)), 'site') + `<div class="kpis noprint"><div class="kpi ${n.todo ? 'hot' : ''}"><b>${n.todo}</b><span>dias a validar</span></div>
     <div class="kpi ${n.anom ? 'warn' : ''}"><b>${n.anom}</b><span>com problemas</span></div><div class="kpi ok"><b>${n.ok}</b><span>validados</span></div></div>`;
   // Bulk validation only for plain days: no problem, no overtime, not one's own, and never a day the office sent back (M4).
   const easy = data.filter((r) => r.status === 'registered' && !r.anomalies.length && !r.overtime_minutes && !r.special_day_minutes && r.collaborator_id !== me && !returned[r.work_day_id]);
   const all = $('#all'); if (all) { all.hidden = !easy.length; all.lastChild.textContent = `Validar ${easy.length} dia(s) sem problemas`; all.onclick = () => validate(easy.map((r) => r.work_day_id), null); }
+  // The worker's weekly visa (sql/82): confirmed, changed after confirming, or not yet.
+  sb.rpc('mini_week_confirmations', { p_from: from, p_to: to, p_project: site.id }).then(({ data: vs }) => {
+    if (seq !== hoursSeq || !vs) return;
+    for (const v of vs) { const x = el.querySelector(`[data-visa="${v.collaborator_id}"]`); if (!x) continue;
+      x.innerHTML = v.state === 'confirmed' ? chip('val', 'confirmou a semana', 'ok') : v.state === 'changed' ? chip('warn', 'mudou depois de confirmar') : v.can_confirm ? chip('', 'semana por confirmar') : ''; }
+  }, () => {});
   el.querySelectorAll('button[data-ok]').forEach((b) => b.onclick = () =>
     validate([b.dataset.ok], b.dataset.ot === undefined ? null : b.dataset.ot === '1'));
   el.querySelectorAll('button[data-fix], button[data-taps]').forEach((b) => b.onclick = () => fixDay(b.dataset.fix || b.dataset.taps, b.dataset.day, b.dataset.name));
@@ -3286,7 +3990,7 @@ async function loadHours(from, to) {
 async function validate(ids, overtime) {
   const { data, error } = await sb.rpc('advance_work_days', { p_ids: ids, p_to: 'supervisor_validated', p_overtime_approved: overtime });
   if (error) return toast(friendly(error));
-  toast(`${data} dia(s) validado(s).`); viewHours();
+  toast(`${data} dia(s) validado(s). Seguiram para o Secretariado.`); viewHours(); encBadges(true);
 }
 // The taps of the day (and the days around it), each one with "Anular"; and the form pointed at the missing one (M8, A2).
 async function fixDay(collabId, day, name) {
@@ -3301,7 +4005,8 @@ async function fixDay(collabId, day, name) {
     ${more('Anular uma picagem errada', '<p>Uma picagem errada (por exemplo uma ENTRADA picada em vez de SAÍDA) anula-se aqui, com o motivo: fica no registo como anulada e as horas são recalculadas.</p>')}
     ${taps.length ? taps.map((e) => `<div class="day wk${localDay(e.effective_time, tz) === day ? '' : ' muted'}">
       ${chip(e.direction === 'in' ? 'ok' : 'val', e.direction === 'in' ? 'Entrada' : e.direction === 'out' ? 'Saída' : e.direction)}
-      <div class="grow"><b class="tnum">${esc(fmtTime(e.effective_time, tz))}</b>${e.manual ? `<div class="small muted">à mão: ${esc(e.manual_reason || '')}</div>` : ''}</div>
+      <div class="grow"><b class="tnum">${esc(fmtTime(e.effective_time, tz))}</b>${e.manual ? `<div class="small muted">à mão: ${esc(e.manual_reason || '')}</div>`
+        : e.manual_reason ? ` ${chip('warn', 'escrito à mão', 'key')}` : ''}</div>
       <button class="btn small ghost" data-void="${esc(e.event_id)}">Anular</button></div>`).join('') : '<p class="muted">Sem picagens.</p>'}
     <p><button class="btn ghost wide" id="fixclose">Fechar</button></p>`;
   $('#fixclose').onclick = () => { box.hidden = true; };
@@ -3373,35 +4078,268 @@ async function markOut(p) {
 // The worker's start screen: today, the week, the month in big numbers, a calendar of the month, what they will earn
 // (only if the company switches it on), the site card and the diárias. Every number comes from the official taps.
 const MINE_STATE = { registered: 'por validar', supervisor_validated: 'validado na obra', hr_validated: 'aprovado no escritório', sent_to_payroll: 'fechado para salários' };
+// «Eu» (v48, sql/82): the worker's home. Today in big, the week against the contract, what needs a tap now
+// (confirm the week, a document out of date), then one big tile per thing that is theirs. Each tile opens its screen;
+// the phone's back button comes back here. Built for gloves and sunlight: big targets, few words.
+const ME_TABS = {
+  horas: ['clock', 'As minhas horas'], pedidos: ['calendar', 'Pedidos'], diarias: ['card', 'Diárias'], despesas: ['cart', 'Despesas'],
+  viagens: ['plane', 'Viagens'], dormir: ['home', 'Onde durmo'], andaimes: ['scaffold', 'Posso subir?'], docs: ['doc', 'Os meus documentos'],
+  epi: ['shield', 'EPI e ferramentas'], contrato: ['lock', 'O meu contrato'] };
 function viewMine() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!state.me.collaborator_id) return go((TABS[state.me.role] || TABS.supervisor)[0]);
   if (!state.mineMonth) state.mineMonth = isoDay(new Date()).slice(0, 7);
-  const months = [0, 1, 2].map((k) => { const d = new Date(); d.setDate(15); d.setMonth(d.getMonth() - k); return isoDay(d).slice(0, 7); });
-  const mName = (ym) => new Date(ym + '-15T12:00:00').toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' });
-  const me = state.people.find((x) => x.id === state.me.collaborator_id);
-  app.innerHTML = `<div class="ph"><div><p class="ph-k">${esc((me && me.full_name) || '')}</p><h1>As minhas horas</h1></div></div>
-    <div class="chips" style="margin-bottom:12px">${months.map((m) => `<button class="chip" data-m="${m}" aria-pressed="${m === state.mineMonth}">${esc(mName(m))}</button>`).join('')}</div>
-    <div id="mytrips"></div><div id="myexp"></div><div id="myclimb"></div><div id="mytools"></div><div class="mine-grid"><div><div id="minetop">${skel(1)}</div><div id="minepay"></div><div id="mine">${skel(3)}</div></div>
-    <div><div id="minereq"></div><div id="minesite"></div><div id="pdmine"></div></div></div>`;
-  loadMyPerDiems(); loadMyRequests(); loadMyTravels(); loadMyExpenses(); loadMyClimb(); loadMyTools();
-  app.querySelectorAll('[data-m]').forEach((b) => b.onclick = () => { state.mineMonth = b.dataset.m; viewMine(); });
-  loadMine();
-  state.timer = setInterval(() => { if (state.view === 'minhas' && document.visibilityState === 'visible') loadMine(true); }, 60000);
+  const tab = state.mineTab || 'home';
+  if (tab !== 'home' && ME_TABS[tab]) return meScreen(tab);
+  app.innerHTML = `<div class="me-home"><div id="mehero">${skel(1)}</div><div id="meact"></div><div class="me-tiles" id="metiles"></div></div>`;
+  loadMeHome();
+  state.timer = setInterval(() => { if (state.view === 'minhas' && (state.mineTab || 'home') === 'home' && document.visibilityState === 'visible') loadMeHome(true); }, 60000);
+}
+function meOpen(tab) {
+  state.mineTab = tab;
+  try { history.pushState({ me: tab }, ''); } catch (_) {}
+  clearInterval(state.timer); window.scrollTo(0, 0); viewMine();
+}
+function meBack() {
+  if (history.state && history.state.me) { history.back(); return; }
+  state.mineTab = 'home'; clearInterval(state.timer); window.scrollTo(0, 0); viewMine();
+}
+window.addEventListener('popstate', () => {
+  if (state.view !== 'minhas' || (state.mineTab || 'home') === 'home') return;
+  state.mineTab = 'home'; clearInterval(state.timer); document.querySelectorAll('dialog[open]').forEach((d) => d.close()); viewMine();
+});
+async function loadMeHome(quiet) {
+  const ym = isoDay(new Date()).slice(0, 7);
+  const [home, sum, papers] = await Promise.all([sb.rpc('mini_my_home', { p_month: ym + '-01' }), sb.rpc('mini_my_summary'),
+    state.mePapers === false ? Promise.resolve({ error: true }) : sb.rpc('mini_my_papers').then((r) => r, () => ({ error: true }))]);
+  const hero = $('#mehero'); if (!hero || (state.mineTab || 'home') !== 'home') return;
+  if (home.error) { hero.innerHTML = `<div class="card">${esc(friendly(home.error))}</div>`; return; }
+  if (papers.error) state.mePapers = false;   // the function is not there yet (sql/80): no tile
+  const d = home.data; const s = sum.data || null; state.mineData = d;
+  hero.innerHTML = meHero(d, s);
+  if (quiet && $('#metiles').dataset.on) return;
+  $('#meact').innerHTML = s ? meActions(s) : '';
+  $('#metiles').innerHTML = meTiles(d, s, papers.error ? null : papers.data);
+  $('#metiles').dataset.on = '1';
+  app.querySelectorAll('[data-me]').forEach((b) => b.onclick = () => meOpen(b.dataset.me));
+  app.querySelectorAll('[data-confirm]').forEach((b) => b.onclick = () => meConfirmWeek(b.dataset.confirm, b.dataset.label, () => loadMeHome()));
+}
+// The week as a ring: hours so far against the contract's week.
+function meRing(done, target) {
+  const pct = target ? Math.min(1, done / target) : 0; const r = 46; const c = 2 * Math.PI * r;
+  const over = target && done > target;
+  return `<div class="me-ring" role="img" aria-label="${esc(fmtMin(done))} de ${esc(fmtMin(target))} esta semana">
+    <svg viewBox="0 0 108 108" aria-hidden="true"><circle cx="54" cy="54" r="${r}" class="me-ring-bg"/>
+      <circle cx="54" cy="54" r="${r}" class="me-ring-fg${over ? ' over' : ''}" stroke-dasharray="${(pct * c).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 54 54)"/></svg>
+    <div class="me-ring-t"><b>${esc(fmtMin(done).replace('h00', 'h'))}</b><small>de ${esc(fmtMin(target).replace('h00', 'h'))}</small></div></div>`;
+}
+function meHero(d, s) {
+  const t = d.today || {}; const tz = (d.site && state.sites.find((x) => x.id === d.site.id) || {}).timezone || DEFAULT_TZ;
+  const h = tzParts(Date.now(), tz).hour % 24;
+  const hello = (h >= 6 && h < 13 ? 'Bom dia' : h >= 13 && h < 20 ? 'Boa tarde' : 'Boa noite') + ', ' + String(d.name || '').split(' ')[0];
+  const ev = t.events || []; const inNow = t.last === 'in';
+  let so = 0;
+  for (let i = 0, open = null; i < ev.length; i++) {
+    if (ev[i].dir === 'in') open = new Date(ev[i].at).getTime();
+    else if (open !== null) { so += (new Date(ev[i].at).getTime() - open) / 60000; open = null; }
+    if (i === ev.length - 1 && open !== null) so += (Date.now() - open) / 60000;
+  }
+  so = Math.max(0, Math.round(so));
+  const wk = d.week || []; const wsum = wk.reduce((a, x) => a + (x.date === t.date ? Math.max(x.worked, so) : x.worked), 0);
+  const big = inNow ? 'Na obra' : t.last === 'out' ? 'Dia fechado' : 'Ainda não picaste';
+  const sub = inNow ? `desde as <b>${esc(fmtHour(t.first_in, tz))}</b> · ${esc(fmtMin(so))} hoje`
+    : t.last === 'out' ? `saíste às <b>${esc(fmtHour(t.last_at, tz))}</b> · ${esc(fmtMin(so))} hoje`
+    : 'Pica o cartão no telemóvel do encarregado quando chegares.';
+  const pd = s && s.per_diem;
+  return `<section class="pic-hero me-hero ${inNow ? 'on' : t.last === 'out' ? 'done' : 'off'}">
+    <div class="pic-top"><h1>${esc(hello)}</h1>${inNow ? '<span class="live"><i></i>na obra</span>' : ''}</div>
+    <div class="me-hero-row"><div class="me-now"><div class="me-state">${esc(big)}</div><div class="me-sub">${sub}</div>
+      ${d.site ? `<div class="me-site">${ic('pin')}<span>${esc(d.site.title)}</span><small>${esc(d.site.code || '')}</small></div>` : ''}</div>
+      ${meRing(wsum, (s && s.week_minutes) || 2400)}</div>
+    <div class="me-hero-foot"><span>Esta semana · contrato ${esc(fmtMin((s && s.week_minutes) || 2400).replace('h00', 'h'))}</span>
+      ${pd ? `<span class="me-pd">${ic('card')}Diária ${esc(euro(pd.net))} <small>· semana de ${esc(fmtDate(pd.week_start).slice(0, 5))}</small></span>` : ''}</div>
+  </section>`;
+}
+const weekLabel = (w) => `${fmtDate(w.week_start).slice(0, 5)} a ${fmtDate(w.week_end).slice(0, 5)}`;
+// What needs the worker now, at the top, in big: the week to confirm (art. 202.º CT), documents out of date.
+function meActions(s) {
+  const out = [];
+  for (const w of (s.weeks || []).filter((x) => x.can_confirm).slice(0, 2)) {
+    out.push(`<div class="me-do"><div class="grow"><b>${w.state === 'changed' ? 'As horas mudaram: confirma outra vez' : 'Confirma as horas da semana'}</b>
+      <small>${esc(weekLabel(w))} · ${esc(fmtMin(w.worked))} · até ${esc(fmtDate(w.due_by).slice(0, 5))}</small></div>
+      <button class="btn me-big" data-confirm="${esc(w.week_start)}" data-label="${esc(weekLabel(w))}">${ic('ok')}Confirmo</button></div>`);
+  }
+  const dd = s.docs || {};
+  if (dd.expired || dd.missing) out.push(`<button class="me-do bad" data-me="docs"><span class="me-dot bad"></span><div class="grow"><b>${dd.expired ? (dd.expired === 1 ? '1 documento caducado' : `${dd.expired} documentos caducados`) : dd.missing === 1 ? '1 documento em falta' : `${dd.missing} documentos em falta`}</b>
+      <small>Sem isto podes não entrar na obra. Fala com o escritório.</small></div>${ic('go')}</button>`);
+  return out.length ? `<div class="me-acts">${out.join('')}</div>` : '';
+}
+function meTiles(d, s, papers) {
+  s = s || {}; const t = d.totals || {}; const dd = s.docs || {}; const ppe = s.ppe || {}; const tools = s.tools || {};
+  const tile = (k, sub, light, badge) => `<button class="me-tile ${light || ''}" data-me="${k}">
+    <span class="me-ic">${ic(ME_TABS[k][0])}</span>${badge ? `<span class="me-badge">${esc(badge)}</span>` : ''}
+    <b>${esc(ME_TABS[k][1])}</b><small>${esc(sub)}</small></button>`;
+  const pend = (t.rows || 0) - (t.validated || 0);
+  const docSub = dd.expired ? `${dd.expired} caducado(s)` : dd.missing ? `${dd.missing} em falta` : dd.expiring ? `um vence a ${fmtDate(dd.next_expiry).slice(0, 5)}` : 'Tudo em dia';
+  const c = papers && papers.contract;
+  return [
+    tile('horas', t.worked ? `${fmtMin(t.worked)} este mês${pend ? ` · ${pend} por validar` : ''}` : 'Semana, mês e cada picagem', '', s.weeks_to_confirm ? String(s.weeks_to_confirm) : ''),
+    tile('pedidos', s.requests_pending ? `${s.requests_pending} à espera de resposta` : 'Férias e faltas', '', s.disputes_open ? String(s.disputes_open) : ''),
+    tile('diarias', s.per_diem ? `${euro(s.per_diem.net)} · semana de ${fmtDate(s.per_diem.week_start).slice(0, 5)}` : 'Ainda sem diárias'),
+    tile('despesas', s.expenses_pending ? `${s.expenses_pending} por aprovar` : 'Entregar um talão'),
+    tile('viagens', s.trips_next ? `${s.trips_next} marcada(s)` : 'Sem viagens marcadas'),
+    tile('dormir', s.stay || 'Sem alojamento'),
+    tile('andaimes', 'Vê antes de subir', 'go'),
+    tile('docs', docSub, dd.expired || dd.missing ? 'bad' : dd.expiring ? 'warn' : 'ok'),
+    tile('epi', `${ppe.count || 0} EPI · ${tools.count || 0} ferramenta(s)`, ppe.due || tools.overdue ? 'warn' : ''),
+    papers ? tile('contrato', c && c.signed_at ? `Assinado a ${new Date(c.signed_at).toLocaleDateString('pt-PT')}` : c ? 'Por assinar' : 'Regras e valor à hora', c && !c.signed_at ? 'warn' : '') : '',
+  ].join('');
+}
+async function meConfirmWeek(week, label, after) {
+  const fd = await askSheet('Confirmo as minhas horas', `<p class="me-big-p">Semana de <b>${esc(label)}</b>.</p>
+    <p class="small muted">Confirmas que estas são as horas que fizeste. Se algum dia estiver mal, não confirmes: abre o dia e carrega em «Não concordo».
+    A lei pede este visto quando trabalhas fora das instalações da empresa (Código do Trabalho, art. 202.º).</p>`, 'Confirmo');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_confirm_week', { p_week: week });
+  if (error) return toast(friendly(error));
+  toast('Semana confirmada. Obrigado.'); if (after) after();
+}
+// Each tile's screen: a back button, the title, then the screen's own boxes.
+function meScreen(tab) {
+  const [icon, title] = ME_TABS[tab];
+  const head = `<div class="me-top"><button class="me-back" id="meback" aria-label="Voltar">${ic('go')}</button>
+    <span class="me-ic">${ic(icon)}</span><h1>${esc(title)}</h1></div>`;
+  const body = {
+    horas: () => {
+      const months = [0, 1, 2].map((k) => { const x = new Date(); x.setDate(15); x.setMonth(x.getMonth() - k); return isoDay(x).slice(0, 7); });
+      const mName = (ym) => new Date(ym + '-15T12:00:00').toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' });
+      return `<div class="chips" style="margin-bottom:12px">${months.map((m) => `<button class="chip" data-m="${m}" aria-pressed="${m === state.mineMonth}">${esc(mName(m))}</button>`).join('')}</div>
+        <div id="meweeks"></div><div class="mine-grid"><div><div id="minepay"></div><div id="mine">${skel(3)}</div></div><div><div id="minesite"></div></div></div>`;
+    },
+    pedidos: () => '<div id="minereq"></div>',
+    diarias: () => '<div id="pdmine"></div>',
+    despesas: () => '<div id="myexp"></div>',
+    viagens: () => '<div id="mytrips"></div>',
+    dormir: () => '<div id="mystay"></div>',
+    andaimes: () => '<div id="myclimb"></div>',
+    docs: () => '<div id="mydocs"></div>',
+    epi: () => '<div id="mykit"></div><div id="mytools"></div>',
+    contrato: () => '<div id="mypapers"></div>',
+  }[tab]();
+  app.innerHTML = `<div class="me-screen">${head}${body}</div>`;
+  $('#meback').onclick = meBack;
+  const fallback = (sel, art, t1, t2) => () => { const b = $(sel); if (b && !b.innerHTML.trim()) b.innerHTML = `<div class="card">${empty(art, t1, t2)}</div>`; };
+  if (tab === 'horas') {
+    app.querySelectorAll('[data-m]').forEach((b) => b.onclick = () => { state.mineMonth = b.dataset.m; meScreen('horas'); });
+    loadMine(); loadMeWeeks();
+    state.timer = setInterval(() => { if (state.view === 'minhas' && state.mineTab === 'horas' && document.visibilityState === 'visible') loadMine(true); }, 60000);
+  }
+  if (tab === 'pedidos') loadMyRequests();
+  if (tab === 'diarias') loadMyPerDiems().then(fallback('#pdmine', 'card', 'Ainda sem diárias', 'As diárias aparecem aqui quando o escritório as emitir, à quinta-feira.'));
+  if (tab === 'despesas') loadMyExpenses().then(fallback('#myexp', 'card', 'Sem despesas', 'Quando pagares algo para a obra, entrega aqui o talão.'));
+  if (tab === 'viagens') loadMyTravels().then(fallback('#mytrips', 'box', 'Sem viagens marcadas', 'Quando o RH marcar uma viagem para ti, aparece aqui com o bilhete.'));
+  if (tab === 'dormir') loadMyStay();
+  if (tab === 'andaimes') loadMyClimb();
+  if (tab === 'docs') loadMyDocs();
+  if (tab === 'epi') { loadMyKit(); loadMyTools(); }
+  if (tab === 'contrato') loadMyPapers();
+}
+// The weeks and their visa: confirmed, changed after, to confirm (with the date the law asks for).
+async function loadMeWeeks() {
+  const box = $('#meweeks'); if (!box) return;
+  const { data, error } = await sb.rpc('mini_my_weeks', { p_weeks: 6 });
+  if (!box.isConnected || error || !data) return;
+  const rows = data.filter((w) => w.days > 0);
+  if (!rows.length) { box.innerHTML = ''; return; }
+  const st = (w) => w.state === 'confirmed' ? chip('val', 'confirmada ' + new Date(w.confirmed_at).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' }), 'ok')
+    : w.state === 'changed' ? chip('warn', 'mudou depois de confirmares', 'warn') : w.open_disputes ? chip('reg', 'reclamação aberta', 'clock')
+    : w.can_confirm ? chip('anom', 'por confirmar') : chip('', 'em curso');
+  box.innerHTML = `<div class="card me-weeks"><div class="sec-h" style="margin-top:0"><h2>Confirmar as semanas</h2></div>
+    ${rows.map((w) => `<div class="me-wk"><div class="grow"><b>${esc(weekLabel(w))}</b><small>${esc(fmtMin(w.worked))}${w.can_confirm ? ` · até ${esc(fmtDate(w.due_by).slice(0, 5))}` : ''}</small><div class="tags">${st(w)}</div></div>
+      ${w.can_confirm ? `<button class="btn me-big" data-confirm="${esc(w.week_start)}" data-label="${esc(weekLabel(w))}">${ic('ok')}Confirmo</button>` : ''}</div>`).join('')}
+    ${more('Porquê confirmar', '<p>Quando trabalhas numa obra (fora das instalações da empresa), a lei pede que vejas e confirmes o teu registo de horas (Código do Trabalho, art. 202.º, n.º 3). Fica guardado o que confirmaste, tal como estava. Se as horas mudarem depois, pedimos-te para confirmar outra vez.</p>')}</div>`;
+  box.querySelectorAll('[data-confirm]').forEach((b) => b.onclick = () => meConfirmWeek(b.dataset.confirm, b.dataset.label, loadMeWeeks));
+}
+// Where I sleep: the house or hotel, the room and bed, the house notes, a button to the map.
+async function loadMyStay() {
+  const box = $('#mystay'); if (!box) return;
+  const { data, error } = await sb.rpc('mini_my_stay');
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = `<div class="card">${esc(friendly(error))}</div>`; return; }
+  if (!data.length) { box.innerHTML = `<div class="card">${empty('box', 'Sem alojamento marcado', 'Se a empresa te arranjar casa ou hotel, a morada e o quarto aparecem aqui.')}</div>`; return; }
+  box.innerHTML = data.map((x) => {
+    const q = x.lat && x.lng ? `${x.lat},${x.lng}` : x.address || '';
+    const map = q ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(q)}` : '';
+    return `<div class="card me-stay"><div class="tags">${x.now ? chip('val', 'agora', 'home') : chip('info', 'a partir de ' + fmtDate(x.from).slice(0, 5))}${x.site ? chip('code', x.site) : ''}</div>
+      <h2>${esc(x.name)}</h2>
+      ${x.kind !== 'hotel' ? `<div class="me-bed"><div><small>Quarto</small><b>${esc(x.room || '–')}</b></div><div><small>Cama</small><b>${esc(x.bed || '–')}</b></div></div>`
+        : `<p class="small">${x.ref ? 'Reserva <b>' + esc(x.ref) + '</b> · ' : ''}${esc(fmtDate(x.from))} a ${esc(fmtDate(x.to))}</p>`}
+      ${x.address ? `<p class="addr">${ic('pin')}<span>${esc(x.address)}</span></p>` : ''}
+      ${map ? `<a class="btn wide me-big" href="${esc(map)}" target="_blank" rel="noopener">${ic('go')}Levar-me lá</a>` : ''}
+      ${x.notes ? `<div class="me-note">${ic('help')}<span>${esc(x.notes)}</span></div>` : ''}
+      ${x.to && x.kind !== 'hotel' ? `<p class="small muted">Até ${esc(fmtDate(x.to))}</p>` : ''}</div>`;
+  }).join('');
+}
+// My documents, with a light each: red (out of date or missing), amber (expiring), green. Read-only: the office adds them.
+async function loadMyDocs() {
+  const box = $('#mydocs'); if (!box) return;
+  const { data, error } = await sb.rpc('mini_my_documents');
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = `<div class="card">${esc(friendly(error))}</div>`; return; }
+  const L = { expired: ['bad', 'Caducado'], missing: ['bad', 'Em falta'], expiring: ['warn', 'Vence em breve'], ok: ['ok', 'Em dia'], optional: ['', 'Não tens'] };
+  const line = (x) => { const [k, w] = L[x.state] || ['', x.state];
+    const when = x.expires ? (x.days_left < 0 ? `caducou a ${fmtDate(x.expires)}` : x.days_left === 0 ? 'vence hoje' : `válido até ${fmtDate(x.expires)} · faltam ${x.days_left} dia(s)`) : x.state === 'ok' ? 'sem validade' : '';
+    return `<div class="me-doc ${k}"><span class="me-dot ${k}"></span><div class="grow"><b>${esc(x.name)}</b>
+      <small>${esc(w)}${when ? ' · ' + esc(when) : ''}${x.number ? ' · nº ' + esc(x.number) : ''}</small>
+      ${x.blocking && (x.state === 'expired' || x.state === 'missing') ? `<small class="warn-t">${ic('warn')}Sem isto o cartão não abre a obra</small>` : ''}
+      ${x.state !== 'optional' && x.state !== 'missing' && !x.checked ? '<small class="muted">Ainda por confirmar pelo escritório</small>' : ''}</div></div>`; };
+  const need = data.documents.filter((x) => x.state !== 'optional'); const opt = data.documents.filter((x) => x.state === 'optional');
+  const card = data.card || {};
+  box.innerHTML = `<div class="card me-docs">${need.map(line).join('') || '<p class="small muted">A empresa ainda não pediu documentos.</p>'}</div>
+    ${opt.length ? `<div class="card me-docs"><h3 style="margin-top:0">Outras formações</h3>${opt.map(line).join('')}</div>` : ''}
+    <div class="card me-docs"><div class="me-doc ${card.active ? 'ok' : 'bad'}"><span class="me-dot ${card.active ? 'ok' : 'bad'}"></span><div class="grow"><b>O meu cartão</b>
+      <small>${card.active ? 'Ativo' + (card.until ? ' até ' + esc(new Date(card.until).toLocaleDateString('pt-PT')) : '') : 'Sem cartão ativo: pede ao escritório'}</small></div></div></div>
+    <p class="small muted">Um documento a vencer? Leva o novo ao escritório antes da data: eles juntam-no à tua ficha.</p>`;
+}
+// My PPE and workwear: what, size, since when, when to change it. And my sizes.
+async function loadMyKit() {
+  const box = $('#mykit'); if (!box) return;
+  const { data, error } = await sb.rpc('mini_my_kit');
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = `<div class="card">${esc(friendly(error))}</div>`; return; }
+  const sz = data.sizes || {}; const SZ = { top: 'Casaco', bottom: 'Calças', shoes: 'Botas', gloves: 'Luvas' };
+  const st = (x) => x.state === 'overdue' ? chip('bad', 'trocar já', 'warn') : x.state === 'soon' ? chip('warn', 'trocar até ' + fmtDate(x.replace_by).slice(0, 5)) : chip('val', 'em uso', 'ok');
+  box.innerHTML = `<div class="card"><h2 style="margin-top:0">Os meus EPI</h2>
+    ${data.ppe.length ? data.ppe.map((x) => `<div class="me-kit"><div class="grow"><b>${esc(x.name)}${x.size ? ` <span class="chip code">${esc(x.size)}</span>` : ''}</b>
+      <small>Recebido a ${esc(new Date(x.since).toLocaleDateString('pt-PT'))}${x.replace_by ? ' · trocar até ' + esc(fmtDate(x.replace_by)) : ''}</small></div>${st(x)}</div>`).join('')
+      : '<p class="small muted">Ainda não tens EPI em teu nome.</p>'}
+    ${data.returned.length ? more('Já devolvidos', data.returned.map((x) => `<p class="small">${esc(x.name)} · ${esc(new Date(x.to).toLocaleDateString('pt-PT'))}${x.why ? ' · ' + esc(x.why) : ''}</p>`).join('')) : ''}</div>
+    <div class="card"><h3 style="margin-top:0">Os meus tamanhos</h3><div class="me-sizes">${Object.entries(SZ).map(([k, v]) => `<div><small>${v}</small><b>${esc(sz[k] || '–')}</b></div>`).join('')}</div>
+      <p class="small muted">Tamanho errado? Diz no armazém.</p></div>`;
+}
+// What I signed and accepted: contract, internal rules, hourly rate (sql/80). Read-only.
+async function loadMyPapers() {
+  const box = $('#mypapers'); if (!box) return;
+  box.innerHTML = skel(2); renderMyPapers(box);
 }
 async function loadMine(quiet) {
   const ym = state.mineMonth;
   const { data: d, error } = await sb.rpc('mini_my_home', { p_month: ym + '-01' });
   const el = $('#mine'); if (!el || ym !== state.mineMonth) return;
-  if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; $('#minetop').innerHTML = ''; return; }
+  if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
   state.mineData = d;
-  $('#minetop').innerHTML = mineHero(d);
-  $('#minepay').innerHTML = minePay(d);
-  $('#minesite').innerHTML = mineSite(d.site);
+  const put = (sel, html) => { const b = $(sel); if (b) b.innerHTML = html; };
+  put('#minepay', minePay(d)); put('#minesite', mineSite(d.site));
   if (quiet && el.dataset.ym === ym) return;
   el.dataset.ym = ym;
   const t = d.totals || {};
   const openNow = (r) => r.anomalies.length > 0 && r.anomalies.every((a) => a === 'open_shift') && r.date >= (d.today || {}).date;
-  if (!d.days.length) { el.innerHTML = `<div class="card">${empty('clock', 'Sem horas neste mês', 'Os dias aparecem aqui depois de picares na obra.')}</div>`; return; }
+  if (!d.days.length) {
+    el.innerHTML = `<div class="card">${empty('clock', 'Sem horas neste mês', 'Os dias aparecem aqui depois de picares na obra. Estiveste num dia e não aparece? Toca nesse dia.')}</div>
+      <div class="card cal-card">${mineCalendar(d)}</div>`;
+    el.querySelectorAll('[data-day]').forEach((b) => b.onclick = () => mineDay(b.dataset.day));
+    return;
+  }
   el.innerHTML = `<div class="kpis k4 mine-kpis">
       <div class="kpi big"><b>${esc(fmtMin(t.worked))}</b><span>Total do mês</span></div>
       <div class="kpi info"><b>${esc(fmtMin(t.overtime))}</b><span>horas extra</span></div>
@@ -3414,40 +4352,12 @@ async function loadMine(quiet) {
     <div class="card">${d.days.map((r) => { const tz = r.tz || DEFAULT_TZ; return `<button class="day mday" data-day="${esc(r.date)}">
       <div class="day-h"><span class="d">${esc(dayLabel(r.date))}</span><span class="chip code">${esc(r.code)}</span>
         <span class="hrs">${esc(fmtMin(r.worked))}</span></div>
-      <div class="per">${esc(fmtHour(r.first_in, tz) || '?')}–${esc(fmtHour(r.last_out, tz) || '?')} <span class="small muted">· ${esc(r.title)}</span></div>
+      <div class="per">${!r.first_in && !r.last_out && !r.worked ? 'Sem picagens' : `${esc(fmtHour(r.first_in, tz) || '?')}–${esc(fmtHour(r.last_out, tz) || '?')}`} <span class="small muted">· ${esc(r.title)}</span></div>
       <div class="tags">${openNow(r) ? chip('val', 'a decorrer', 'clock') : r.anomalies.length ? chip('anom', 'falta uma picagem', 'warn') : DAY_STATUS[r.status] || chip('', r.status)}
         ${r.overtime ? chip('info', fmtMin(r.overtime) + ' extra' + (r.ot_ok === null ? ' (por aprovar)' : '')) : ''}${r.holiday ? chip('info', 'feriado') : r.rest ? chip('info', 'dia de descanso') : ''}
         ${r.changed ? chip('', 'corrigido', 'key') : ''}</div></button>`; }).join('')}</div>
-    <p class="small muted">Se faltar um dia ou uma hora estiver errada, fala com o teu encarregado: ele corrige com o motivo, e tu vês aqui quem mudou e porquê.</p>`;
+    <p class="small muted">Uma hora errada, ou um dia em que estiveste e não aparece? Toca no dia e carrega em «Não concordo». Vês aqui quem mudou o quê e porquê, até as picagens canceladas.</p>`;
   el.querySelectorAll('[data-day]').forEach((b) => b.onclick = () => mineDay(b.dataset.day));
-}
-// Today: in since when, hours so far against a normal day, and the week as bars.
-function mineHero(d) {
-  const t = d.today || {}; const tz = (d.site && state.sites.find((s) => s.id === d.site.id) || {}).timezone || DEFAULT_TZ;
-  const h = tzParts(Date.now(), tz).hour % 24;
-  const hello = (h >= 6 && h < 13 ? 'Bom dia' : h >= 13 && h < 20 ? 'Boa tarde' : 'Boa noite') + ', ' + String(d.name || '').split(' ')[0];
-  const inNow = t.last === 'in';
-  let so = 0;
-  for (let i = 0, open = null; i < (t.events || []).length; i++) {
-    const e = t.events[i];
-    if (e.dir === 'in') open = new Date(e.at).getTime();
-    else if (open !== null) { so += (new Date(e.at).getTime() - open) / 60000; open = null; }
-    if (i === t.events.length - 1 && open !== null) so += (Date.now() - open) / 60000;
-  }
-  so = Math.max(0, Math.round(so));
-  const pct = Math.min(100, Math.round((so / (t.normal_day || 480)) * 100));
-  const status = inNow ? `Na obra desde as <b>${esc(fmtHour(t.first_in, tz))}</b>`
-    : t.last === 'out' ? `Saíste às <b>${esc(fmtHour(t.last_at, tz))}</b>` : 'Ainda não picaste hoje';
-  const wk = d.week || []; const wmax = Math.max(600, ...wk.map((x) => x.worked)); const wsum = wk.reduce((a, x) => a + (x.date === t.date ? Math.max(x.worked, so) : x.worked), 0);
-  const today = t.date;
-  return `<section class="pic-hero mine-hero">
-    <div class="pic-top"><h1>${esc(hello)}</h1>${inNow ? '<span class="live"><i></i>na obra</span>' : ''}</div>
-    <div class="mh-now"><div class="mh-big">${esc(fmtMin(so))}</div><div class="mh-sub">${status}${d.site ? ` · ${esc(d.site.title)}` : ''}</div></div>
-    <div class="mh-bar" role="img" aria-label="${pct}% de um dia normal"><i style="width:${pct}%"></i></div>
-    <div class="mh-bl"><span>hoje</span><span>dia normal ${esc(fmtMin(t.normal_day || 480))}</span></div>
-    <div class="mh-week"><div class="mh-wh"><span>Esta semana</span><b>${esc(fmtMin(wsum))}</b></div>
-      <div class="mh-bars">${wk.map((x, i) => `<div class="${x.date === today ? 'today' : ''}"><i style="height:${(x.date === today ? Math.max(x.worked, so) : x.worked) ? Math.max(8, Math.round(((x.date === today ? Math.max(x.worked, so) : x.worked) / wmax) * 100)) : 0}%"></i><span>${['S', 'T', 'Q', 'Q', 'S', 'S', 'D'][i]}</span></div>`).join('')}</div></div>
-  </section>`;
 }
 // What I will earn: only when the company switches it on. Gross, indicative, with the sums shown.
 function minePay(d) {
@@ -3482,33 +4392,44 @@ function mineSite(s) {
       <a class="btn wide" href="${esc(map)}" target="_blank" rel="noopener">${ic('go')}Levar-me lá</a>` : '<p class="small muted">A morada da obra ainda não foi preenchida.</p>'}
     ${who(s.supervisor, 'Encarregado', s.supervisor_phone)}${who(s.contact_name, s.contact_role || 'Contacto do cliente', s.contact_phone)}</div>`;
 }
-// One day in full: every tap (and who added it by hand, and why) and every step of the validation.
+// One day in full: every tap (and who added it by hand, and why), the taps cancelled or moved (struck through, with
+// who and why: nothing is hidden), the taps the reader refused, and every step of the validation. «Não concordo»
+// also works on a day with no taps at all, on the site the person was assigned to (sql/82).
 async function mineDay(day) {
-  const { data: d, error } = await sb.rpc('mini_my_day', { p_day: day });
-  if (error) return toast(friendly(error));
+  const [{ data: d, error }, { data: more, error: e2 }, { data: disp }] = await Promise.all([sb.rpc('mini_my_day', { p_day: day }),
+    sb.rpc('mini_my_day_more', { p_day: day }), sb.rpc('mini_my_day_disputes', { p_day: day })]);
+  if (error || e2) return toast(friendly(error || e2));
   const r = ((state.mineData && state.mineData.days) || []).find((x) => x.date === day);
-  const body = `<div class="mday-sum">${r ? `<b>${esc(fmtMin(r.worked))}</b> trabalhadas${r.overtime ? ` · ${esc(fmtMin(r.overtime))} extra` : ''}` : ''}</div>
+  const who = (x) => `${esc(x.by || 'Escritório')} · ${esc(new Date(x.when).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }))}`;
+  const gone = [...(more.cancelled || []).map((e) => `<li class="me-void"><span class="t"><s>${esc(fmtHour(e.at, e.tz))}</s></span>
+      <span><s>${e.dir === 'in' ? 'Entrada' : 'Saída'} · ${esc(e.code)}</s>${chip('anom', 'cancelada')}<small class="warn-t">${ic('x')}«${esc(e.why || '')}» · ${who(e)}</small></span></li>`),
+    ...(more.moved || []).map((e) => `<li class="me-void"><span class="t"><s>${esc(fmtHour(e.from, e.tz))}</s></span>
+      <span>${e.dir === 'in' ? 'Entrada' : 'Saída'} mudada para <b>${esc(fmtHour(e.to, e.tz))}</b><small class="warn-t">${ic('key')}«${esc(e.why || '')}» · ${who(e)}</small></span></li>`),
+    ...(more.refused || []).map((e) => `<li class="me-void"><span class="t"><s>${esc(fmtHour(e.at, e.tz))}</s></span>
+      <span><s>${e.dir === 'in' ? 'Entrada' : 'Saída'} · ${esc(e.code)}</s>${chip('anom', 'recusada pelo leitor')}<small class="warn-t">${ic('warn')}${esc((e.reasons || []).map(reasonText).join(' · ') || 'sem motivo')}</small></span></li>`)];
+  const body = `<div class="mday-sum">${r ? `<b>${esc(fmtMin(r.worked))}</b> trabalhadas${r.overtime ? ` · ${esc(fmtMin(r.overtime))} extra` : ''}` : '<b>Sem horas</b> neste dia'}</div>
     <h3>Picagens</h3>${d.events.length ? `<ol class="taps">${d.events.map((e) => `<li><span class="t">${esc(fmtHour(e.at, e.tz))}</span>
       <span>${e.dir === 'in' ? 'Entrada' : 'Saída'} · ${esc(e.code)}${e.manual ? `<small class="warn-t">${ic('key')}Adicionada à mão: ${esc(e.reason || '')}</small>` : ''}</span></li>`).join('')}</ol>` : '<p class="small muted">Sem picagens neste dia.</p>'}
-    <h3>Validação</h3><ol class="steps">${(r ? [`<li class="on"><b>Registado</b><small>pelas picagens do cartão</small></li>`] : []).join('')}
+    ${gone.length ? `<h3>Canceladas ou mudadas</h3><ol class="taps me-gone">${gone.join('')}</ol>` : ''}
+    ${r ? `<h3>Validação</h3><ol class="steps"><li class="on"><b>Registado</b><small>pelas picagens do cartão</small></li>
       ${d.log.map((l) => `<li class="on ${l.to === 'registered' ? 'back' : ''}"><b>${esc(l.to === 'registered' ? 'Devolvido para corrigir' : MINE_STATE[l.to] || l.to)}</b>
         <small>${esc(l.by || '')} · ${esc(new Date(l.at).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }))}</small>
         ${l.note ? `<small class="note-t">«${esc(l.note)}»</small>` : ''}</li>`).join('')}
-      ${r && r.status === 'registered' ? '<li><b>À espera do encarregado</b></li>' : ''}</ol>`;
-  const { data: disp } = await sb.rpc('mini_my_day_disputes', { p_day: day });
-  const open = (disp || []).some((x) => x.status === 'open');
-  const canDispute = r && r.status !== 'sent_to_payroll' && !open;
+      ${r.status === 'registered' ? '<li><b>À espera do encarregado</b></li>' : ''}</ol>` : ''}
+    ${more.closed ? '<p class="small muted">Este mês já está fechado. Se achas que está mal, fala com o escritório.</p>' : ''}
+    ${!r && !more.can_dispute && !more.closed && !more.open_dispute ? '<p class="small muted">Nesse dia não estavas atribuído a nenhuma obra. Se estiveste, fala com o escritório.</p>' : ''}`;
   const dispHtml = (disp || []).length ? `<h3>As minhas reclamações</h3>${disp.map(dispLine).join('')}` : '';
-  const fd = await askSheet(dayLabel(day), body + dispHtml + (canDispute ? '<button class="btn ghost wide disagree" value="dispute" formnovalidate>Não concordo com este dia</button>' : ''), 'Fechar');
+  const fd = await askSheet(dayLabel(day), body + dispHtml + (more.can_dispute ? `<button class="btn ghost wide disagree" value="dispute" formnovalidate>${more.blank_day ? 'Estive lá: não concordo' : 'Não concordo com este dia'}</button>` : ''), 'Fechar');
   if (!fd || fd.get('_v') !== 'dispute') return;
-  const f2 = await askSheet('Não concordo: ' + dayLabel(day), `<p class="small muted">O encarregado ou o escritório respondem antes de fechar o mês. Vês a resposta aqui.</p>
-      <div class="chips reasons" role="radiogroup">${Object.entries(DISPUTE_REASON).map(([k, v], i) => `<label class="chip"><input type="radio" name="reason" value="${k}" ${i === 0 ? 'checked' : ''}>${esc(v)}</label>`).join('')}</div>
-      <label for="dnote">Explica (obrigatório em «Outro motivo»)</label><textarea id="dnote" name="note" rows="3" maxlength="500" placeholder="ex.: entrei às 06:45, o cartão não leu"></textarea>`, 'Enviar');
+  const reasons = Object.entries(DISPUTE_REASON).filter(([k]) => !more.blank_day || k === 'was_present' || k === 'other');
+  const f2 = await askSheet('Não concordo: ' + dayLabel(day), `<p class="small muted">${more.blank_day && more.site ? `Obra: <b>${esc(more.site.title)}</b>. ` : ''}O encarregado ou o escritório respondem antes de fechar o mês. Vês a resposta aqui.</p>
+      <div class="chips reasons" role="radiogroup">${reasons.map(([k, v], i) => `<label class="chip"><input type="radio" name="reason" value="${k}" ${i === 0 ? 'checked' : ''}>${esc(v)}</label>`).join('')}</div>
+      <label for="dnote">Explica (obrigatório em «Outro motivo»)</label><textarea id="dnote" name="note" rows="3" maxlength="500" placeholder="${more.blank_day ? 'ex.: estive das 8h às 17h, o cartão não leu' : 'ex.: entrei às 06:45, o cartão não leu'}"></textarea>`, 'Enviar');
   if (!f2) return;
   const { error: e } = await sb.rpc('mini_dispute_day', { p_day: day, p_reason: f2.get('reason'), p_note: String(f2.get('note') || '').trim() || null });
   if (e) return toast(friendly(e));
   toast('Enviado. O encarregado e o escritório vão responder antes de fechar o mês.');
-  loadMyRequests(); loadMine();
+  loadMyRequests(); loadMine(); loadMeWeeks();
 }
 const DISPUTE_REASON = { earlier_in: 'Entrei mais cedo', later_out: 'Saí mais tarde', missing_overtime: 'Faltam horas extra', was_present: 'Estive lá e diz que faltei', other: 'Outro motivo' };
 const ABS_KIND = { vacation: 'Férias', medical_appointment: 'Consulta médica', justified_paid: 'Falta justificada', justified_unpaid: 'Falta sem vencimento',
@@ -3540,12 +4461,21 @@ async function loadMyRequests() {
     <div class="acts"><button class="btn" id="askvac">${ic('calendar')}Pedir férias</button><button class="btn ghost" id="askabs">${ic('clock')}Pedir falta</button></div>
     ${d.absences.length ? `<h3>Os meus pedidos</h3>${d.absences.map((a) => `<details class="req"><summary><span class="req-h"><b>${esc(ABS_KIND[a.kind] || a.kind)}</b>
         <span class="small muted">${esc(absWhen(a))}</span>${ABS_CHIP[a.status] || ''}</span></summary>
-        ${a.note ? `<p class="small">«${esc(a.note)}»</p>` : ''}${absSteps(a)}
+        ${a.note ? `<p class="small">«${esc(a.note)}»</p>` : ''}${absSteps(a)}<div class="me-att" data-att="${esc(a.id)}" data-st="${esc(a.status)}"></div>
         ${a.status === 'requested' ? `<button class="btn ghost small" data-cancel="${esc(a.id)}">Cancelar o pedido</button>` : ''}</details>`).join('')}` : ''}
     ${d.disputes.length ? `<h3>As minhas reclamações</h3>${d.disputes.map(dispLine).join('')}` : ''}<div id="glances"></div></div>`;
   sb.rpc('mini_my_glances').then(({ data: gl }) => { const el = $('#glances'); if (!el || !gl || !gl.length) return;
     el.innerHTML = `<details class="req"><summary><span class="req-h"><b>Quem viu as minhas horas pelo cartão</b><span class="small muted">${gl.length}</span></span></summary>
       ${gl.map((x) => `<p class="small">${esc(x.by || '')} · ${esc(new Date(x.at).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }))}</p>`).join('')}</details>`; });
+  if (d.absences.length) sb.rpc('mini_absence_files', { p_ids: d.absences.map((a) => a.id) }).then(({ data: files }) => {
+    box.querySelectorAll('[data-att]').forEach((el) => {
+      const f = files && files[el.dataset.att];
+      el.innerHTML = f ? `<button class="chip" type="button" data-open="${esc(f.path)}">${ic('doc')}Ver o ficheiro que juntei</button>`
+        : el.dataset.st === 'requested' ? `<label class="btn ghost small me-file">${ic('camera')}Juntar foto ou PDF<input type="file" accept="${FILE_ACCEPT}" hidden></label>` : '';
+      const o = el.querySelector('[data-open]'); if (o) o.onclick = () => openDocFile(o.dataset.open, 'pedidos');
+      const i = el.querySelector('input[type=file]'); if (i) i.onchange = async () => { if (await absenceAttach(el.dataset.att, i.files[0])) loadMyRequests(); };
+    });
+  }, () => {});
   $('#askvac').onclick = () => askAbsence('vacation');
   $('#askabs').onclick = () => askAbsence(null);
   box.querySelectorAll('[data-cancel]').forEach((x) => x.onclick = async () => {
@@ -3563,6 +4493,8 @@ async function askAbsence(kind) {
     ${kind ? '' : `<label class="check inline"><input type="checkbox" name="part" id="apart"> Só umas horas desse dia (ex.: saio à tarde)</label>
       <div id="ahrs" hidden><label for="ah">Quantas horas fora</label><select id="ah" name="hours">${[1, 2, 3, 4, 5, 6].map((h) => `<option value="${h * 60}" ${h === 4 ? 'selected' : ''}>${h} h</option>`).join('')}</select></div>`}
     <label for="an">${kind ? 'Nota (opcional)' : 'Porquê'}</label><textarea id="an" name="note" rows="2" maxlength="500" ${kind ? '' : 'required minlength="5"'}></textarea>
+    ${kind ? '' : `<label for="afile">Comprovativo (opcional)</label><input type="file" id="afile" name="file" accept="${FILE_ACCEPT}">
+      <p class="small muted">Foto ou PDF da declaração. Só o escritório o vê.</p>`}
     <p class="small muted">Vai primeiro ao teu encarregado e depois ao escritório. Vês aqui cada resposta.</p>`, 'Enviar pedido', (dlg) => {
     const f = dlg.querySelector('#af'); const t = dlg.querySelector('#at');
     f.onchange = () => { if (t.value < f.value) t.value = f.value; t.min = f.value; };
@@ -3570,11 +4502,26 @@ async function askAbsence(kind) {
   });
   if (!fd) return;
   const from = fd.get('from'); const part = !!fd.get('part');
-  const { error } = await sb.rpc('mini_request_absence', { p_kind: kind || fd.get('kind'), p_starts: from, p_ends: part ? from : (fd.get('to') || from),
+  const { data: id, error } = await sb.rpc('mini_request_absence', { p_kind: kind || fd.get('kind'), p_starts: from, p_ends: part ? from : (fd.get('to') || from),
     p_minutes: part ? Number(fd.get('hours')) : null, p_note: String(fd.get('note') || '').trim() || null });
   if (error) return toast(friendly(error));
+  const f = fd.get('file');
+  if (f && f.size && id) await absenceAttach(id, f);
   toast('Pedido enviado ao teu encarregado.');
   loadMyRequests();
+}
+// A photo or PDF for one's own request (bucket «pedidos», sql/82): only the person and the office open it.
+async function absenceAttach(id, file) {
+  if (!file || !file.size) return false;
+  let f = file; if (f.type.startsWith('image/')) f = await shrinkPhoto(f);
+  const bad = fileProblem(f); if (bad) { toast(bad); return false; }
+  const path = `${state.me.tenant_id}/${state.me.collaborator_id}/${uuid()}.${FILE_TYPES[f.type]}`;
+  const sha = await sha256Hex(f);
+  const up = await sb.storage.from('pedidos').upload(path, f, { contentType: f.type, upsert: false });
+  if (up.error) { toast(friendly(up.error)); return false; }
+  const { error } = await sb.rpc('mini_absence_attach', { p_id: id, p_file: path, p_sha256: sha });
+  if (error) { toast(friendly(error)); return false; }
+  toast('Ficheiro junto ao pedido.'); return true;
 }
 // The month as a calendar: each day coloured by its state. Monday first.
 function mineCalendar(d) {
@@ -3588,6 +4535,7 @@ function mineCalendar(d) {
     const wd = (lead + n - 1) % 7;
     const k = !x ? (wd >= 5 ? 'off' : '') : x.k.some((r) => r.anomalies.length && !(r.anomalies.every((a) => a === 'open_shift') && iso >= today)) ? 'bad' : x.k.some((r) => r.holiday || r.rest) && x.w ? 'off' : x.k.every((r) => r.status !== 'registered') ? 'ok' : 'todo';
     cells.push(x ? `<button class="cd ${k}${iso === today ? ' today' : ''}" data-day="${iso}"><b>${n}</b><small>${esc(fmtMin(x.w).replace('h00', 'h'))}</small></button>`
+      : iso < today ? `<button class="cd ${k} me-none" data-day="${iso}" aria-label="${esc(dayLabel(iso))}: sem horas"><b>${n}</b></button>`
       : `<span class="cd ${k}${iso === today ? ' today' : ''}"><b>${n}</b></span>`);
   }
   return `<div class="cal-h">${['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((x) => `<span>${x}</span>`).join('')}</div><div class="cal">${cells.join('')}</div>`;
@@ -3785,6 +4733,7 @@ function monthRange(ym) {
   return { from: `${ym}-01`, to: isoDay(new Date(y, m, 0, 12)) };
 }
 function viewOffice() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canOffice()) return viewClock();   // code guard as well as the database's
   if (!state.officeMonth) state.officeMonth = isoDay(new Date()).slice(0, 7);
   const { from, to } = monthRange(state.officeMonth);
@@ -3794,7 +4743,7 @@ function viewOffice() {
     <div class="noprint">
       ${can('horas.aprovar') ? `<p class="small muted">A obra valida, tu aprovas, no fim do mês fechas.</p>
       ${more('Em que reparar', '<p>Olha com atenção para as picagens marcadas «à mão», «sem rede, chegou tarde» e «próprio cartão»: aparecem a amarelo no dia.</p>')}
-      <div id="sum">${skel(1)}</div>` : ''}</div>
+      <div id="encflow"></div><div id="sum">${skel(1)}</div>` : ''}</div>
     ${can('horas.aprovar') ? `<div id="list">${skel(3)}</div>` : ''}`;
   const side = `${can('horas.aprovar') ? '<div id="offreq" class="noprint"></div>' : ''}${can('salarios.exportar') ? `<div class="card noprint"><h2 style="margin-top:0">Salários</h2>
       <p class="small muted">Folha Excel do mês e ficheiro para o Primavera.</p>
@@ -3815,6 +4764,9 @@ function viewOffice() {
       ${more('Porquê', '<p>Código do Trabalho, art. 202. Mostra-o se a inspeção pedir.</p>')}
       <label for="actsite">Obra</label><select id="actsite">${sites.map((s) => `<option value="${esc(s.id)}">${esc(s.title)} (${esc(s.cost_center_code)})</option>`).join('')}</select>
       <div class="acts"><button class="btn ghost wide" id="act">Descarregar o registo do mês (Excel)</button></div></div>` : ''}
+    ${canPeople() ? `<div class="card noprint"><h2 style="margin-top:0">Contrato e regulamento</h2>
+      <p class="small muted">O texto que cada pessoa nova lê e assina no telemóvel, com versões.</p>
+      <div class="acts"><button class="btn ghost wide" id="onbtx">Abrir o contrato e o regulamento</button></div></div>` : ''}
     ${can('contas.gerir') ? `<div class="card noprint"><h2 style="margin-top:0">Departamentos e acessos</h2>
       <p class="small muted">Quem faz o quê na empresa. Cada conta pertence a um ou mais departamentos e só faz o que eles permitem.</p>
       <div id="depts">${skel(2)}</div></div>` : ''}`;
@@ -3826,6 +4778,7 @@ function viewOffice() {
   const step = (n) => { const [y, m] = state.officeMonth.split('-').map(Number); const d = new Date(Date.UTC(y, m - 1 + n, 1)); state.officeMonth = d.toISOString().slice(0, 7); viewOffice(); };
   on('#mprev', 'onclick', () => step(-1)); on('#mnext', 'onclick', () => step(1));
   on('#sheet', 'onclick', () => downloadPayroll(from, to));
+  on('#onbtx', 'onclick', () => go('onbtextos'));
   on('#prim', 'onclick', () => downloadPrimavera(from, to));
   on('#primcfg', 'ontoggle', () => { if ($('#primcfg').open) showPrimaveraSettings(); });
   if ($('#payest')) sb.rpc('mini_pay_estimate_setting').then(({ data, error }) => {
@@ -3898,7 +4851,8 @@ async function editDepartment(x, perms) {
 }
 // What the office must look at: taps added by hand, taps that arrived late from a phone without network, and
 // supervisors' own taps (mini_manual_taps gives the reason; these two texts come from the server as written).
-const tapKind = (reason) => (/^sem rede/.test(reason || '') ? 'sem rede, chegou tarde' : reason === 'picou o próprio cartão' ? 'próprio cartão' : 'à mão');
+const tapKind = (reason) => (/^sem rede/.test(reason || '') ? 'sem rede, chegou tarde' : reason === 'picou o próprio cartão' ? 'próprio cartão'
+  : reason === 'número do cartão escrito à mão' ? 'cartão escrito à mão' : 'à mão');
 async function loadOffice(from, to) {
   const el = $('#list'); if (!el) return;
   const [{ data, error }, man, per] = await Promise.all([sb.rpc('mini_hours_office', { p_from: from, p_to: to }),
@@ -3915,6 +4869,7 @@ async function loadOffice(from, to) {
   // Approve by exception: the office looks only at the days with a reason to look; the rest go in one tap.
   const look = data.filter((r) => (r.status === 'supervisor_validated' && r.flags.length) || noExit(r));
   const clean = data.filter((r) => r.status === 'supervisor_validated' && !r.flags.length && !noExit(r) && r.collaborator_id !== me);
+  encOfficeFlow(data);
   $('#sum').innerHTML = `<div class="kpis k4">
       <div class="kpi" data-f="obra"><b>${n('registered')}</b> <span>por validar na obra</span></div>
       <div class="kpi ${look.length ? 'warn' : ''}" data-f="ti"><b>${look.length}</b> <span>precisam de ti</span></div>
@@ -4185,7 +5140,7 @@ async function approveDays(ids) {
   if (!ids.length) return;
   const { data, error } = await sb.rpc('advance_work_days', { p_ids: ids, p_to: 'hr_validated' });
   if (error) return toast(friendly(error));
-  toast(`${data} dia(s) aprovado(s).`); viewOffice();
+  toast(`${data} dia(s) aprovado(s).`); viewOffice(); encBadges(true);
 }
 async function returnDay(id) {
   const why = prompt('Porque é que devolves este dia ao encarregado? (ele vai ver o motivo)');
@@ -4193,6 +5148,79 @@ async function returnDay(id) {
   const { error } = await sb.rpc('mini_return_days', { p_ids: [id], p_reason: why });
   if (error) return toast(friendly(error));
   toast('Dia devolvido ao encarregado.'); viewOffice();
+}
+// ---- v48: what waits for whom, on the menu. The office sees how many days the sites validated and wait for its approval;
+// the team leader sees how many past days still wait for his validation. A number on the button, never in its text.
+let encBadgeAt = 0;
+async function encBadges(force) {
+  if (!state.ready || state.offline || !state.me || state.me.role === 'worker') return;
+  if (!force && Date.now() - encBadgeAt < 60000) return;
+  encBadgeAt = Date.now();
+  const set = (v, n, title) => {
+    const b = nav.querySelector(`button[data-view="${v}"]`); if (!b) return;
+    if (n > 0) { b.dataset.badge = n > 99 ? '99+' : String(n); b.title = title; } else { delete b.dataset.badge; b.removeAttribute('title'); }
+  };
+  const jobs = [];
+  if (canOffice() && can('horas.aprovar')) {
+    const d = new Date(); const from = isoDay(new Date(d.getFullYear(), d.getMonth() - 1, 1, 12)); const me = state.me.collaborator_id;
+    jobs.push(sb.rpc('mini_hours_office', { p_from: from, p_to: isoDay(d) }).then(({ data, error }) => {
+      if (error || !Array.isArray(data)) return;
+      const n = data.filter((r) => r.status === 'supervisor_validated' && r.collaborator_id !== me).length;
+      state.encOfficeWait = data.filter((r) => r.status === 'supervisor_validated' && r.collaborator_id !== me).map((r) => r.shift_date.slice(0, 7));
+      set('secretariado', n, `${n} dia(s) validados na obra à espera de aprovação`);
+    }));
+  }
+  if (can('horas.validar_obra') && canSiteDetails()) {
+    jobs.push(sb.rpc('mini_control_room').then(({ data, error }) => {
+      if (error || !data || !Array.isArray(data.sites)) return;
+      const n = data.sites.reduce((a, x) => a + (x.to_validate || 0), 0);
+      set('horas', n, `${n} dia(s) por validar na obra`);
+    }));
+  }
+  await Promise.all(jobs.map((j) => j.catch(() => {})));
+  if (state.view === 'secretariado' && state.encOfficeData && $('#encflow')) encOfficeFlow(state.encOfficeData);
+  // The «Mais» button carries the sum of what is inside it, so nothing waits out of sight.
+  const more = nav.querySelector('button[data-more]'); if (!more) return;
+  const inside = [...document.querySelectorAll('#more button[data-badge]')].filter((b) => !b.hidden).reduce((a, b) => a + (parseInt(b.dataset.badge, 10) || 0), 0);
+  if (inside) more.dataset.badge = String(inside); else delete more.dataset.badge;
+}
+// The four states of a day, in order: the site validates, the office approves, the month closes. One bar, the same on every screen.
+const ENC_FLOW = [['registered', 'Por validar', 'na obra'], ['supervisor_validated', 'Validado', 'pelo encarregado'],
+  ['hr_validated', 'Aprovado', 'pelo RH'], ['sent_to_payroll', 'Fechado', 'para salários']];
+function encFlow(rows, who) {
+  const n = Object.fromEntries(ENC_FLOW.map(([k]) => [k, rows.filter((r) => r.status === k).length]));
+  const at = ENC_FLOW.findIndex(([k]) => n[k] > 0);
+  const total = rows.length;
+  let line;
+  if (!total) line = 'Sem dias neste período.';
+  else if (n.registered) line = who === 'office' ? `${n.registered} dia(s) ainda na obra: o encarregado tem de validar primeiro.` : `Faltam validar ${n.registered} dia(s). Depois seguem para o Secretariado.`;
+  else if (n.supervisor_validated) line = who === 'office' ? `${n.supervisor_validated} dia(s) validados na obra à tua espera.` : `Validaste tudo. ${n.supervisor_validated} dia(s) à espera do Secretariado (RH).`;
+  else if (n.hr_validated) line = who === 'office' ? `Tudo aprovado. Falta fechar o mês.` : 'Aprovado pelo RH. Falta o fecho do mês.';
+  else line = 'Fechado para salários. Ninguém pode mudar estas horas.';
+  return `<div class="enc-flow" role="group" aria-label="Estado dos dias">
+    <p class="enc-flow-l">${ic(n.registered && who !== 'office' ? 'clock' : n.registered || n.supervisor_validated ? 'clock' : 'ok')}<b>${esc(line)}</b></p>
+    <ol>${ENC_FLOW.map(([k, t, s], i) => `<li class="${n[k] ? 'has' : ''} ${i === at ? 'now' : ''} ${at >= 0 && i < at && !n[k] ? 'done' : ''}">
+      <b class="tnum">${n[k]}</b><span>${esc(t)}</span><small>${esc(s)}</small></li>`).join('')}</ol></div>`;
+}
+// Office: the same four states per site, so the Secretariado sees which site has sent its days and which is late.
+function encOfficeFlow(data) {
+  const box = $('#encflow'); if (!box) return;
+  state.encOfficeData = data;
+  const sites = {};
+  for (const r of data) { const k = r.project_id; (sites[k] = sites[k] || { code: r.project_code, title: r.project_title, rows: [] }).rows.push(r); }
+  const cnt = (rows, st) => rows.filter((r) => r.status === st).length;
+  // The menu count covers last month too: say where those days are when this month does not show them.
+  const other = (state.encOfficeWait || []).filter((m) => m !== state.officeMonth);
+  const otherMonth = other.length ? other.sort()[0] : null;
+  if (!data.length && !otherMonth) { box.innerHTML = ''; return; }
+  box.innerHTML = `${otherMonth ? `<button class="enc-al info" id="encother">${ic('clock')}<span><b>${other.length} dia(s) de ${esc(new Date(otherMonth + '-15T12:00:00').toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' }))} à tua espera</b>Validados na obra, ainda por aprovar.</span>${ic('go')}</button>` : ''}${data.length ? `${encFlow(data, 'office')}
+    <details class="fold enc-sites"><summary><span>Por obra<span class="sub">${Object.keys(sites).length} obra(s): quem já enviou, quem falta</span></span></summary>
+    <div class="enc-sitetab" role="table">
+      <div class="enc-sr enc-sh" role="row"><span role="columnheader">Obra</span><span role="columnheader">Na obra</span><span role="columnheader">À tua espera</span><span role="columnheader">Aprovados</span><span role="columnheader">Fechados</span></div>
+      ${Object.values(sites).map((x) => `<div class="enc-sr" role="row"><span role="cell"><b>${esc(x.code)}</b> ${esc(x.title)}</span>
+        ${ENC_FLOW.map(([k]) => { const v = cnt(x.rows, k); return `<span role="cell" class="tnum ${v && k === 'registered' ? 'enc-late' : v && k === 'supervisor_validated' ? 'enc-wait' : ''}">${v || '–'}</span>`; }).join('')}</div>`).join('')}
+    </div></details>` : ''}`;
+  const ob = $('#encother'); if (ob) ob.onclick = () => { state.officeMonth = otherMonth; viewOffice(); };
 }
 // ------------------------------------------------------------------ Primavera: Relógio de Ponto (fixed-width text)
 // Each company sets the codes and positions in its Primavera; GestNow copies the same values here.
@@ -4744,6 +5772,7 @@ async function downloadAct(site, from, to) {
 
 // ------------------------------------------------------------------ Obras
 function viewSites() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   const label = { execution: chip('ok', 'em curso', 'ok'), lead: chip('', 'rascunho') };
   // the address usually ends with the country already: never write it twice
   const addr = (s) => String(s.address || '').replace(/[,·\s]*(Portugal|Espanha|España|Spain|França|France)\s*$/i, '');
@@ -4891,7 +5920,15 @@ function loadUI() {
   });
   return uiLoading;
 }
+// v48: Produção left the menu for whoever opens the Dashboard; it is one tap from here.
+function dashLinks() {
+  if (!canProd() || $('#encdl')) return;
+  const bar = Object.assign(document.createElement('div'), { id: 'encdl', className: 'enc-dashlinks noprint' });
+  bar.innerHTML = `<button class="btn ghost small" id="toprod">${ic('chart')}Abrir a Produção${ic('go')}</button>`;
+  app.prepend(bar); bar.querySelector('#toprod').onclick = () => go('producao');
+}
 async function viewSitePanel() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   // The tab opens the control room (all sites); a site's button in Obras opens that site directly.
   const chosen = state.panelSite; state.panelSite = null;
   const id = chosen || (currentSite() && currentSite().id);
@@ -4907,9 +5944,11 @@ async function viewSitePanel() {
       sites: activeSites().map((x) => ({ id: x.id, title: x.title, code: x.cost_center_code })),
       onSite: (sid) => { store(SITE_KEY, sid); } };
     ui.mountPainel(host, api, chosen || undefined);
+    dashLinks();
     return;
   }
   app.innerHTML = `<div class="noprint">${siteSelect('psite')}</div><div id="pnl" style="margin-top:14px">${skel(4)}</div>`;
+  dashLinks();
   bindSiteSelect('psite', () => { $('#pnl').innerHTML = skel(4); loadSitePanel($('#psite').value); });
   loadSitePanel(id);
 }
@@ -5028,6 +6067,7 @@ function openProcessFor(view) {
   go('processo');
 }
 async function viewProcess() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canProcess()) return viewClock();   // code guard as well as the database's
   const st = procState();
   app.innerHTML = `<div class="ph"><div><p class="ph-k">ISO 9001 · ISO 19443</p><h1>Mapa do processo</h1></div></div>
@@ -5216,6 +6256,7 @@ const estNo = (e) => `ORC-${String(e.number).padStart(4, '0')}${e.version > 1 ? 
 function orcState() { return state.orc || (state.orc = { id: null, mode: 'list', face: null }); }
 function openEstimates() { const st = orcState(); st.id = null; st.mode = 'list'; go('orcamentos'); }
 async function viewEstimates() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canEstimates()) return viewClock();   // code guard as well as the database's
   const st = orcState();
   if (st.mode === 'rules') return viewEstimateRules();
@@ -5308,6 +6349,7 @@ function estFace(e, form) {
   return { head, rows, foot, empty: !(all > 0) };
 }
 async function viewEstimate(id) {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   app.innerHTML = `<div id="eone">${skel(4)}</div>`;
   const { data: e, error } = await sb.rpc('mini_estimate', { p_estimate: id });
   const box = $('#eone'); if (!box) return;
@@ -5540,6 +6582,7 @@ function ruleWhen(r) {
   return w.length ? w.join(' · ') : 'Qualquer valor';
 }
 async function viewEstimateRules() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   const st = orcState();
   app.innerHTML = `<button class="btn ghost small orc-back" id="eback">← Orçamentos</button>
     <div class="ph"><div><p class="ph-k">Matriz de autoridade · ISO 9001 §5.3</p><h1>Quem assina</h1></div></div>
@@ -5643,6 +6686,7 @@ async function delegateSignature() {
 const canLmra = () => can('seguranca.lmra') || can('seguranca.parar_obra');
 const canEmergency = () => can('seguranca.emergencia');
 function viewLmra() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canLmra()) return viewClock();   // code guard as well as the database's
   app.innerHTML = `<div class="ph"><div><p class="ph-k">Antes de começar o trabalho</p><h1>LMRA</h1></div></div>
     <p class="muted lead">Análise de risco de última hora. Respondes no local, com a equipa. Um «Não» para o trabalho; com tudo «Sim», cada pessoa encosta o cartão para assinar.</p>
@@ -5723,10 +6767,10 @@ function lmraSign(id, anchor) {
     <div class="acts"><button class="btn big" value="ok">Terminar</button></div></form>`;
   document.body.appendChild(d); d.showModal();
   const res = d.querySelector('#sres'); const list = d.querySelector('#slist'); let last = { uid: '', at: 0 }; let ctrl = null;
-  const sign = async (raw) => {
+  const sign = async (raw, typed) => {
     const uid = normUid(raw); if (!uid) return;
     if (uid === last.uid && Date.now() - last.at < 3000) return; last = { uid, at: Date.now() };
-    const { data, error } = await sb.rpc('mini_lmra_sign', { p_lmra: id, p_uid: uid });
+    const { data, error } = await rpcCard('mini_lmra_sign', { p_lmra: id, p_uid: uid }, typed);
     if (error) { beep(false); res.innerHTML = `<div class="result bad">${ic('x')}<div><b>Não assinou</b>${esc(friendly(error))}</div></div>`; return; }
     beep(true);
     res.innerHTML = `<div class="result ok">${ic('ok')}<div><b>${esc(data.name)}</b>${data.again ? 'Já tinha assinado.' : 'Assinou.'}</div></div>`;
@@ -5737,7 +6781,8 @@ function lmraSign(id, anchor) {
       r.onreading = (ev) => sign(ev.serialNumber); r.onreadingerror = () => { beep(false); res.innerHTML = `<div class="result bad">${ic('x')}<div><b>NÃO LIDO</b>Encosta outra vez, devagar.</div></div>`; };
     } catch (err) { res.innerHTML = `<div class="result warn">${ic('warn')}<div><b>O leitor não ligou</b>${esc(err.name === 'NotAllowedError' ? 'Dá permissão ao NFC no Chrome.' : 'Escreve o número do cartão.')}</div></div>`; }
   })();
-  d.querySelector('#sgo').onclick = () => { const i = d.querySelector('#suid'); sign(i.value); i.value = ''; i.focus(); };
+  const lmraTyped = typedWatch(d.querySelector('#suid'));
+  d.querySelector('#sgo').onclick = () => { const i = d.querySelector('#suid'); sign(i.value, lmraTyped()); i.value = ''; i.focus(); };
   d.querySelector('#suid').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); d.querySelector('#sgo').click(); } };
   d.addEventListener('close', () => { if (ctrl) ctrl.abort(); d.remove(); if (state.view === 'lmra') loadLmra(); });
 }
@@ -5756,6 +6801,7 @@ async function liftStop(id) {
 const MUSTER_Q = 'gn.muster.q';
 const EMER_KIND = { fire: 'Incêndio', gas_leak: 'Fuga de gás', explosion: 'Explosão', chemical: 'Derrame químico', drill: 'Simulacro', other: 'Outra' };
 function viewEmergency() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canEmergency()) return viewClock();   // code guard as well as the database's
   app.innerHTML = `<div class="ph"><div><p class="ph-k">Contagem no ponto de encontro</p><h1>Emergência</h1></div></div>
     <div class="team-site">${siteSelect('esite')}</div><div id="ebody">${skel(3)}</div>`;
@@ -5767,7 +6813,8 @@ async function flushMuster() {
   const q = load(MUSTER_Q, []); if (!q.length || state.offline || navigator.onLine === false) return;
   const left = [];
   for (const x of q) {
-    const { error } = await sb.rpc('mini_muster_scan', x);
+    const { _typed, ...args } = x;
+    const { error } = await rpcCard('mini_muster_scan', args, !!_typed);
     if (error && /fetch|network|Failed/i.test(error.message || '')) left.push(x);
   }
   store(MUSTER_Q, left);
@@ -5829,7 +6876,8 @@ async function loadEmergency() {
   el.querySelectorAll('[data-pt]').forEach((b) => b.onclick = () => { state.emerPoint = b.dataset.pt; el.querySelectorAll('[data-pt]').forEach((x) => x.classList.toggle('on', x === b)); });
   $('#eadd').onclick = () => addPoint(site);
   if (nfcOk) $('#nfc').onclick = () => (state.nfc ? stopNfc() : musterNfc());
-  $('#emanual').onsubmit = (e) => { e.preventDefault(); const i = $('#euid'); musterTap(i.value); i.value = ''; i.focus(); };
+  const emerTyped = typedWatch($('#euid'));
+  $('#emanual').onsubmit = (e) => { e.preventDefault(); const i = $('#euid'); musterTap(i.value, emerTyped()); i.value = ''; i.focus(); };
   el.querySelectorAll('[data-mark]').forEach((b) => b.onclick = () => markSafe(b.dataset.mark, b.dataset.name));
   $('#eend').onclick = () => endEmergency(ev);
 }
@@ -5843,14 +6891,14 @@ async function musterNfc() {
     reader.onreadingerror = () => { beep(false); showResult('bad', 'NÃO LIDO', 'Encosta outra vez, devagar.'); };
   } catch (err) { toast(err.name === 'NotAllowedError' ? 'Dá permissão ao NFC no Chrome.' : 'O NFC não arrancou: ' + err.message); }
 }
-async function musterTap(raw) {
+async function musterTap(raw, typed) {
   const uid = normUid(raw); const ev = state.emer && state.emer.event; if (!uid || !ev) return;
   if (!state.emerPoint) return toast('Escolhe o ponto de encontro.');
   const x = { p_event: ev.id, p_point: state.emerPoint, p_uid: uid, p_client_id: uuid(), p_at: serverNow().toISOString() };
   let data = null; let error = null;
-  if (!state.offline && navigator.onLine !== false) ({ data, error } = await sb.rpc('mini_muster_scan', x));
+  if (!state.offline && navigator.onLine !== false) ({ data, error } = await rpcCard('mini_muster_scan', x, typed));
   if (state.offline || navigator.onLine === false || (error && /fetch|network|Failed/i.test(error.message || ''))) {
-    store(MUSTER_Q, [...load(MUSTER_Q, []), x]); beep(true);
+    store(MUSTER_Q, [...load(MUSTER_Q, []), typed ? { ...x, _typed: true } : x]); beep(true);
     return showResult('warn', 'GUARDADO', 'Sem rede: a picagem vai quando a rede voltar.');
   }
   if (error) { beep(false); return showResult('bad', 'Não ficou registado', friendly(error)); }
@@ -5924,6 +6972,7 @@ const WH_KIND = { top: 'camisola', bottom: 'calça', shoes: 'botas', gloves: 'lu
 const TOOL_ST = { available: ['ok', 'disponível'], checked_out: ['info', 'emprestada'], maintenance: ['warn', 'em reparação'],
   blocked: ['bad', 'bloqueada'], lost: ['bad', 'perdida'], retired: ['', 'abatida'] };
 function viewWarehouse() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canWh()) return viewClock();   // code guard as well as the database's
   if (!state.wh) state.wh = { tab: null, cart: [], tools: [], person: null, wid: null };
   app.innerHTML = `<div class="ph"><div><p class="ph-k">EPI, farda e ferramentas</p><h1>Armazém</h1></div></div>
@@ -6074,9 +7123,9 @@ function whSign() {
     <div id="sres" aria-live="polite"></div><div class="acts"><button class="btn ghost wide" value="cancel">Cancelar</button></div></form>`;
   document.body.appendChild(d); d.showModal();
   let ctrl = null; let busy = false;
-  const go2 = async (raw) => {
+  const go2 = async (raw, typed) => {
     const uid = normUid(raw); if (!uid || busy) return; busy = true;
-    const { data, error } = await sb.rpc('mini_wh_issue', { ...req, p_uid: uid });
+    const { data, error } = await rpcCard('mini_wh_issue', { ...req, p_uid: uid }, typed);
     busy = false;
     if (error) {
       beep(false); const m = /needs a reason/i.test(error.message || '');
@@ -6088,8 +7137,9 @@ function whSign() {
     Object.assign(W, { cart: [], tools: [], batch: null, needWhy: null }); whPick(p.id, null);
   };
   if (nfcOk) (async () => { try { ctrl = new AbortController(); const r = new NDEFReader(); await r.scan({ signal: ctrl.signal }); r.onreading = (ev) => go2(ev.serialNumber); } catch (_) { /* typed number still works */ } })();
-  d.querySelector('#sgo').onclick = () => go2(d.querySelector('#suid').value);
-  d.querySelector('#suid').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); go2(e.target.value); } };
+  const whTyped = typedWatch(d.querySelector('#suid'));
+  d.querySelector('#sgo').onclick = () => go2(d.querySelector('#suid').value, whTyped());
+  d.querySelector('#suid').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); go2(e.target.value, whTyped()); } };
   d.addEventListener('close', () => { if (ctrl) ctrl.abort(); d.remove(); });
 }
 async function whNfc(onUid) {
@@ -6713,6 +7763,7 @@ async function inspectTool(id, tag) {
 
 // ---- Ficha de entrega de EPI (to print and keep; each line says which card signed it and when)
 async function viewPpeRecord() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canWh() || !state.recordFor) return go('armazem');
   app.innerHTML = `<div class="noprint toolbar"><button class="btn ghost small" id="rback">← Voltar</button><button class="btn small" id="rprint">${ic('print')}Imprimir</button></div><div id="rbody">${skel(2)}</div>`;
   $('#rback').onclick = () => go(state.recordBack || 'armazem');
@@ -6752,6 +7803,7 @@ const BUY_ST = { pending: ['warn', 'à espera de aprovação'], approved: ['ok',
   rejected: ['bad', 'recusado'], cancelled: ['', 'cancelado'] };
 const PO_ST = { issued: ['info', 'encomendada'], partially_received: ['warn', 'chegou uma parte'], received: ['ok', 'recebida'], cancelled: ['', 'cancelada'] };
 function viewBuy() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canBuy()) return viewClock();   // code guard as well as the database's
   if (!state.buy) state.buy = { tab: null, pick: [] };
   app.innerHTML = `<div class="ph"><div><p class="ph-k">Pedidos, aprovações e encomendas</p><h1>Compras</h1></div></div>
@@ -6964,6 +8016,7 @@ function flPaper(label, st, due, extra = '') {
   return `<li class="fl-p ${FL_PAPER[st] || ''}"><span>${esc(label)}</span><b>${esc(txt)}</b>${extra}</li>`;
 }
 function viewFleet() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canFleet()) return viewClock();   // code guard as well as the database's
   if (!state.fleet) state.fleet = { tab: 'viaturas', filter: 'todas' };
   app.innerHTML = `<div class="ph"><div><p class="ph-k">Viaturas, seguros, inspeções e aluguer</p><h1>Frota</h1></div></div>
@@ -7252,6 +8305,7 @@ async function hoThumbs(root) {
   }
 }
 function viewHousing() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canHousing()) return viewClock();   // code guard as well as the database's
   if (!state.housing) state.housing = { tab: 'casas' };
   state.housing.sel = null; state.housing.insp = null;
@@ -7564,6 +8618,7 @@ const EX_CAT = { fuel: 'Combustível', meal: 'Refeição', lodging: 'Alojamento'
   transport: 'Transporte', material: 'Material', other: 'Outro' };
 const EX_STATE = { submitted: ['warn', 'Por aprovar'], approved: ['info', 'Aprovada'], rejected: ['bad', 'Recusada'], reimbursed: ['ok', 'Reembolsada'] };
 function viewExpenses() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canExpenses()) return viewClock();   // code guard as well as the database's
   if (!state.exp) state.exp = { tab: 'tratar' };
   app.innerHTML = `<div class="ph"><div><p class="ph-k">Talões, aprovação e reembolso</p><h1>Despesas</h1></div></div>
@@ -7687,6 +8742,7 @@ const NC_STATE = { open: ['warn', 'Por decidir'], decided: ['info', 'Ação em c
 const NC_DISP = { repair: 'Reparar', rework: 'Refazer', reject: 'Rejeitar', use_as_is: 'Usar como está' };
 const ITP_TYPE = { R: 'R · registo', W: 'W · testemunho', H: 'H · paragem' };
 function viewQuality() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canQuality()) return viewClock();   // code guard as well as the database's
   if (!state.quality) state.quality = { tab: 'nc', site: null };
   if (state.quality.site) return viewQualitySite();
@@ -7860,6 +8916,7 @@ async function qImpact(t) {
 }
 // One site: the inspection plan (R/W/H), its NCs, its stops and its Data Books.
 function viewQualitySite() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   app.innerHTML = `<div class="ph"><div><p class="ph-k"><button class="linkbtn" id="qback">‹ Qualidade</button></p><h1 id="qsh">Plano de inspeção</h1></div></div>
     <div id="qsbody">${skel(2)}</div>`;
   $('#qback').onclick = () => { state.quality.site = null; viewQuality(); };
@@ -7953,6 +9010,7 @@ function qBookShow(b) {
 // Only reads what the other screens already serve (control room, purchases, trips); each block shows only with its permission.
 const canProd = () => can('obras.gerir') || can('horas.validar_obra');
 function viewProd() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canProd()) return viewClock();   // code guard as well as the database's
   app.innerHTML = `<div class="ph"><div><p class="ph-k">Direção de obra e encarregados</p><h1>Produção</h1></div></div>
     <div id="prtop">${skel(1)}</div><div id="prbody"></div>`;
@@ -8024,6 +9082,7 @@ const tvWhen = (iso) => {
 const tvDay = (iso) => iso ? new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Europe/Lisbon' }) : '';
 const tvHour = (iso) => { const h = iso ? fmtHour(iso, 'Europe/Lisbon') : ''; return h === '00:00' ? '' : h; };
 function viewTravel() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canTravel()) return viewClock();   // code guard as well as the database's
   if (!state.travel) state.travel = { tab: 'tratar' };
   app.innerHTML = `<div class="ph"><div><p class="ph-k">Avião, comboio e autocarro</p><h1>Viagens</h1></div></div>
@@ -8197,6 +9256,7 @@ const SC_PHOTO = { erected: 'Montado', inspection: 'Inspeção', report: 'Estrag
 const appUrl = () => (/^https?:/.test(location.protocol) ? location.origin + location.pathname : 'https://gestnowhq.github.io/');
 
 function viewScaffolds() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canScaffolds()) return viewClock();   // code guard as well as the database's
   if (!state.scaf) state.scaf = { site: null, id: null };
   if (state.scaf.id) return viewScaffold();
@@ -8288,6 +9348,7 @@ async function scUpload(scId, f) {
   return { file: path, sha256: sha };
 }
 function viewScaffold() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canScaffolds()) return viewClock();
   app.innerHTML = `<p class="noprint"><button class="btn ghost small" id="scback">‹ Andaimes</button></p><div id="scone">${skel(3)}</div>`;
   $('#scback').onclick = () => { state.scaf.id = null; viewScaffolds(); };
