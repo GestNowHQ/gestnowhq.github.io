@@ -1316,3 +1316,58 @@ body.onboarding .top { display: none; }
 @keyframes emer { from { background: #dc2626; } to { background: #991b1b; } }
 @media (prefers-reduced-motion: reduce) { #emerbar { animation: none; } }
 nav button.em-tab .i { color: var(--bad-fill); }
+
+/* ---------------------------------------------------------------- Armazém (v37): EPI, farda, ferramentas */
+.farda.f4 { grid-template-columns: repeat(4, 1fr); }
+.farda.f4 b { font-size: 22px; }
+.seg { display: flex; gap: 4px; padding: 4px; margin: 0 0 14px; background: var(--surface-2); border-radius: 999px; }
+.seg > button { flex: 1 1 0; min-height: 40px; border: 0; border-radius: 999px; background: transparent; color: var(--ink-2); font: 600 15px/1 var(--font); cursor: pointer; }
+.seg > button[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--sh-1); }
+.wh-kpis .kpi { text-align: left; font: inherit; color: inherit; }
+button.kpi { cursor: pointer; }
+.wh-bar { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; }
+.wh-bar select { flex: 1 1 auto; margin: 0; }
+.acts-row { display: flex; justify-content: flex-end; gap: 8px; margin: 0 0 12px; }
+.wh-who .tapzone { margin-bottom: 14px; }
+.wh-person h3, .farda + p { margin-top: 14px; }
+.wh-miss { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; background: var(--warn-bg); color: var(--warn); border-radius: var(--r-md); padding: 10px 12px; }
+.wh-miss .i { width: 18px; height: 18px; }
+.wh-miss .btn { margin-left: auto; }
+.wh-has { list-style: none; margin: 6px 0 10px; padding: 0; }
+.wh-has li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 0; border-top: var(--bw) solid var(--line); }
+.wh-has li:first-child { border-top: 0; }
+.wh-has li .btn { margin-left: auto; }
+.wh-fams { display: flex; flex-direction: column; }
+.wh-fam { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: var(--bw) solid var(--line); }
+.wh-fam:first-child { border-top: 0; }
+.wh-fam .grow { min-width: 0; }
+.wh-fam .grow b { display: block; }
+.wh-fam .grow small { display: block; color: var(--ink-2); font-size: 13px; margin-bottom: 3px; }
+.wh-fam select { width: auto; min-width: 116px; margin: 0; }
+.wh-fam [data-add] { min-width: 44px; }
+.wh-cart { list-style: none; margin: 4px 0 10px; padding: 0; }
+.wh-cart li { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: var(--bw) solid var(--line); }
+.step { display: inline-flex; align-items: center; gap: 6px; }
+.step b { min-width: 22px; text-align: center; font-variant-numeric: tabular-nums; }
+.wh-row.low { box-shadow: inset 4px 0 0 var(--warn-fill), var(--sh-1); }
+.wh-sizes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.wh-sz { display: inline-flex; flex-direction: column; align-items: center; min-width: 48px; padding: 6px 8px; border-radius: var(--r-sm); background: var(--surface-2); font-size: 14px; font-variant-numeric: tabular-nums; }
+.wh-sz b { font-size: 12px; color: var(--ink-2); font-weight: 650; }
+.wh-sz.low { background: var(--warn-bg); color: var(--warn); }
+.wh-sz.zero { background: var(--bad-bg); color: var(--bad); }
+.wh-tool.late { box-shadow: inset 4px 0 0 var(--bad-fill), var(--sh-1); }
+.wh-tag { flex: 0 0 auto; padding: 6px 9px; border-radius: var(--r-sm); background: var(--ink); color: var(--surface); font: 700 13px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .02em; }
+.toolbar { display: flex; justify-content: space-between; gap: 8px; margin: 0 0 12px; }
+.ppe-rec h1 { font-size: 22px; margin: 2px 0 8px; }
+table.tbl { font-size: 14px; margin-top: 12px; }
+table.tbl th { text-align: left; font-size: 12px; font-weight: 650; color: var(--ink-2); padding: 8px 6px; border-bottom: var(--bw) solid var(--line); }
+table.tbl td { padding: 9px 6px; border-bottom: var(--bw) solid var(--line); vertical-align: top; }
+.ppe-rec { overflow-x: auto; }
+.sign-lines p { margin: 26px 0 0; }
+@media (max-width: 420px) { .farda.f4 { grid-template-columns: repeat(2, 1fr); } }
+.wh-addrow { display: flex; gap: 8px; align-items: center; }
+.wh-addrow select { flex: 1 1 auto; margin: 0; min-width: 0; }
+.wh-addrow .btn { flex: 0 0 44px; min-width: 44px; }
+.wh-miss { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.wh-miss p { margin: 0; flex: 1 1 220px; }
+table.tbl th { white-space: nowrap; vertical-align: bottom; }
