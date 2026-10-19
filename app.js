@@ -37,6 +37,31 @@ const REASON_PREFIX = {
   'skill_missing:': 'Falta a competência: ',
 };
 const ERRORS = [
+  [/choose the site this delivery goes to/i, 'Escolhe a obra: esta pessoa não está colocada em nenhuma obra, e cada entrega conta para o custo de uma obra.'],
+  [/choose the site this cost goes to/i, 'Escolhe a obra: esta viatura não estava em nenhuma obra nesse dia, e cada despesa vai para uma obra.'],
+  [/plate is not valid/i, 'Matrícula inválida (ex.: AA-00-AA).'],
+  [/this plate already exists/i, 'Esta matrícula já está registada.'],
+  [/a rented vehicle needs/i, 'Um carro de aluguer precisa da empresa de aluguer e das datas do contrato.'],
+  [/contract end is before its start/i, 'O fim do contrato é antes do início.'],
+  [/km cannot go down \(now (\d+)\)/i, 'Os km não podem ser menos do que os atuais ($1).'],
+  [/km below the km at hand-over \((\d+)\)/i, 'Os km são menos do que na entrega ($1).'],
+  [/more than (\d+) km/i, 'Mais de $1 km de diferença: confirma os km.'],
+  [/describe the damage/i, 'Descreve o dano (5 letras ou mais).'],
+  [/this vehicle is not with anyone/i, 'Esta viatura não está com ninguém.'],
+  [/the vehicle is with someone/i, 'A viatura está com alguém: recebe-a primeiro.'],
+  [/vehicle not found/i, 'Viatura não encontrada.'],
+  [/write the licence number/i, 'Escreve o número da carta.'],
+  [/choose the licence categories/i, 'Escolhe as categorias da carta.'],
+  [/licence category is not valid/i, 'Categoria de carta inválida.'],
+  [/next service km must be above/i, 'A próxima revisão tem de ser acima dos km atuais.'],
+  [/next service date must be later/i, 'A próxima revisão tem de ser depois desta.'],
+  [/say what was done/i, 'Escreve o que se fez.'],
+  [/kind is not valid/i, 'Escolhe o tipo de custo.'],
+  [/^say why$/i, 'Escreve o motivo.'],
+  [/km out of range/i, 'Km fora do normal: confirma.'],
+  [/price out of range/i, 'Valor fora do normal: confirma.'],
+  [/date out of range/i, 'Data fora do normal: confirma.'],
+  [/person not found/i, 'Pessoa não encontrada.'],
   [/say what you need/i, 'Escreve o que é preciso (3 letras ou mais) ou escolhe do catálogo.'],
   [/this request is not waiting for approval/i, 'Este pedido já não está à espera de aprovação.'],
   [/you cannot approve your own request/i, 'Não podes aprovar o teu próprio pedido: outra pessoa do Secretariado aprova.'],
@@ -487,11 +512,11 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '38';
+const APP_VERSION = '39';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
-const MORE_ORDER = ['equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'obras', 'orcamentos', 'armazem', 'compras', 'processo', 'clientes'];
+const MORE_ORDER = ['equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'obras', 'orcamentos', 'armazem', 'compras', 'frota', 'processo', 'clientes'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -641,6 +666,7 @@ async function boot() {
   nav.querySelector('[data-view=emergencia]').hidden = worker || !canEmergency();
   nav.querySelector('[data-view=armazem]').hidden = worker || state.offline || !canWh();
   nav.querySelector('[data-view=compras]').hidden = worker || state.offline || !canBuy();
+  nav.querySelector('[data-view=frota]').hidden = worker || state.offline || !canFleet();
   if (me.role === 'supervisor' && !state.booted && state.view === 'picar' && canSiteDetails()) state.view = 'equipa';
   state.booted = true;
   if (state.view === 'minhas' && !me.collaborator_id) state.view = (TABS[me.role] || TABS.supervisor)[0];
@@ -993,7 +1019,7 @@ function go(view) {
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
      ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients,
      processo: viewProcess, orcamentos: viewEstimates, lmra: viewLmra, emergencia: viewEmergency,
-     armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy }[view] || viewClock)();
+     armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet }[view] || viewClock)();
   checkEmergencyBar();
 }
 
@@ -2689,6 +2715,7 @@ const TOUR_TEXT = {
   naobra: 'Na obra: quem está lá dentro neste momento.',
   emergencia: 'Emergência: carregas no botão vermelho e cada pessoa pica o cartão no ponto de encontro. Vês logo quem está em falta, com o telefone.',
   lmra: 'LMRA: a análise de risco antes de começar. Um «Não» para o trabalho; com tudo «Sim», a equipa assina com o cartão.',
+  frota: 'Frota: cada viatura com semáforo: seguro, inspeção, IUC, revisão e contrato de aluguer. Entregas e devoluções com km.',
   compras: 'Compras: pedes o que falta; acima do limite o Secretariado aprova; depois encomenda-se e regista-se o que chega.',
   armazem: 'Armazém: EPIs, farda e ferramentas. Quem recebe assina com o cartão; os tamanhos vêm da ficha.',
   horas: 'Horas: as horas da equipa, dia a dia, para corrigir e validar.',
@@ -5674,7 +5701,7 @@ function renderCart() {
   el.innerHTML = `<h3>A entregar</h3><ul class="wh-cart">${W.cart.map((c, i) => `<li><span class="grow">${esc(c.name)}</span>
       <span class="step"><button type="button" class="btn ghost small" data-dec="${i}" aria-label="Menos">−</button><b>${c.qty}</b><button type="button" class="btn ghost small" data-inc="${i}" aria-label="Mais">+</button></span></li>`).join('')}
     ${W.tools.map((id, i) => { const t = W.toolList.find((x) => x.id === id) || {}; return `<li><span class="grow">${ic('key')} ${esc(t.tag)} · ${esc(t.name)}</span><button type="button" class="btn ghost small" data-rmt="${i}" aria-label="Tirar">×</button></li>`; }).join('')}</ul>
-    <div class="row"><div><label for="whsite">Para a obra</label><select id="whsite"><option value="">Sem obra</option>${sites.map((s) => `<option value="${esc(s.id)}" ${cur && cur.id === s.id ? 'selected' : ''}>${esc(s.title)} (${esc(s.cost_center_code)})</option>`).join('')}</select></div>
+    <div class="row"><div><label for="whsite">Custo para a obra</label><select id="whsite"><option value="">A obra onde a pessoa está</option>${sites.map((s) => `<option value="${esc(s.id)}" ${cur && cur.id === s.id ? 'selected' : ''}>${esc(s.title)} (${esc(s.cost_center_code)})</option>`).join('')}</select></div>
       ${W.tools.length ? `<div><label for="whdue">Devolve até</label><input id="whdue" type="date" value="${esc(isoDay(new Date()))}" min="${esc(isoDay(new Date()))}"></div>` : ''}</div>
     <div id="whwhy"${W.needWhy ? '' : ' hidden'}><label for="whr">Porquê? *</label><input id="whr" maxlength="300" placeholder="ex.: botas rasgadas, perdeu as luvas">
       <p class="small muted">${esc(W.needWhy || '')}</p></div>
@@ -6133,4 +6160,277 @@ async function buyReceiveLine(id, left, toStock) {
   const { data, error } = await sb.rpc('mini_buy_receive', { p_line: id, p_qty: Number(fd.get('q')), p_warehouse: null, p_delivery_note: String(fd.get('g') || '').trim() || null });
   if (error) return toast(friendly(error));
   toast(data.complete ? 'Recebido. Quem pediu já foi avisado.' : 'Parte recebida. O resto fica à espera.'); loadBuy();
+}
+
+// ============================================================================ Frota (v39)
+// The RH runs the fleet: papers and dates per vehicle (insurance, IPO, IUC, service, rental contract), who has it now,
+// hand-over and return with km. The database decides the traffic light and what blocks a hand-over (sql/67).
+const canFleet = () => ['frota.ver', 'frota.entregar', 'frota.gerir'].some(can);
+const FL_LIGHT = { verde: ['ok', 'Em ordem'], amarelo: ['warn', 'Atenção'], vermelho: ['bad', 'Não pode circular'] };
+const FL_PAPER = { ok: 'ok', a_caducar: 'warn', caducado: 'bad', em_falta: 'bad', sem_data: 'warn' };
+const FL_OWN = { owned: 'Própria', rented: 'Aluguer', leased: 'Leasing' };
+const FL_COST = { fuel: 'Combustível', toll: 'Portagens', fine: 'Multa', rental: 'Renda do aluguer', repair: 'Reparação', other: 'Outro', over_mileage: 'Km a mais' };
+const FL_CATS = ['AM', 'A1', 'A2', 'A', 'B', 'BE', 'C1', 'C1E', 'C', 'CE', 'D1', 'D1E', 'D', 'DE'];
+const FL_WHY = {
+  vehicle_in_use: 'A viatura já está com outra pessoa.', vehicle_maintenance: 'A viatura está na oficina.', vehicle_blocked: 'A viatura está bloqueada.',
+  vehicle_returned: 'A viatura está arquivada.', insurance_missing: 'Não há seguro registado nesta viatura.', insurance_expired: 'O seguro caducou.',
+  inspection_expired: 'A inspeção (IPO) caducou.', maintenance_overdue: 'A revisão está em atraso.', rental_contract_ended: 'O contrato de aluguer acabou.',
+  licence_invalid_or_wrong_category: 'O condutor não tem carta de condução válida desta categoria.', driver_suspended: 'O condutor está suspenso.',
+  driver_inactive: 'O condutor não está ativo na empresa.', driver_has_vehicle: 'O condutor já tem outra viatura consigo.',
+};
+const flDue = (d) => d ? fmtDate(d) : '—';
+function flPaper(label, st, due, extra = '') {
+  const txt = { ok: due, a_caducar: `acaba a ${due}`, caducado: `caducou a ${due}`, em_falta: 'não registado', sem_data: 'sem data' }[st] || due;
+  return `<li class="fl-p ${FL_PAPER[st] || ''}"><span>${esc(label)}</span><b>${esc(txt)}</b>${extra}</li>`;
+}
+function viewFleet() {
+  if (!canFleet()) return viewClock();   // code guard as well as the database's
+  if (!state.fleet) state.fleet = { tab: 'viaturas', filter: 'todas' };
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Viaturas, seguros, inspeções e aluguer</p><h1>Frota</h1></div></div>
+    <div id="fltop">${skel(1)}</div><div id="flbody"></div>`;
+  loadFleet();
+}
+async function loadFleet() {
+  const top = $('#fltop'); if (!top) return;
+  const { data: h, error } = await sb.rpc('mini_fleet_home');
+  if (!top.isConnected) return;
+  if (error) { top.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  const F = state.fleet; F.home = h;
+  const n = (l) => h.vehicles.filter((v) => v.state.light === l).length;
+  const tabs = [['viaturas', 'Viaturas'], h.can_hand && ['condutores', 'Condutores']].filter(Boolean);
+  if (!tabs.find(([k]) => k === F.tab)) F.tab = 'viaturas';
+  top.innerHTML = `<div class="fl-sum">
+      <div class="fl-n bad"><b>${n('vermelho')}</b><span>não podem circular</span></div>
+      <div class="fl-n warn"><b>${n('amarelo')}</b><span>com papéis a acabar</span></div>
+      <div class="fl-n ok"><b>${n('verde')}</b><span>em ordem</span></div></div>
+    ${h.can_manage ? '<button class="btn big wide" id="flnew">+ Nova viatura</button>' : ''}
+    ${tabs.length > 1 ? `<div class="seg" role="tablist">${tabs.map(([k, l]) => `<button role="tab" data-fltab="${k}" aria-selected="${F.tab === k}">${esc(l)}</button>`).join('')}</div>` : ''}`;
+  top.querySelectorAll('[data-fltab]').forEach((b) => b.onclick = () => { F.tab = b.dataset.fltab; loadFleet(); });
+  if ($('#flnew')) $('#flnew').onclick = () => flVehicleSheet(null);
+  (F.tab === 'condutores' ? flDrivers : flList)();
+}
+function flCard(v) {
+  const s = v.state; const [lk, ll] = FL_LIGHT[s.light] || ['', s.light];
+  const rental = v.ownership !== 'owned';
+  const srv = s.service === 'sem_data' ? 'sem data' : [v.service_km ? `aos ${Number(v.service_km).toLocaleString('pt-PT')} km${s.km_left != null ? ` (faltam ${Number(s.km_left).toLocaleString('pt-PT')})` : ''}` : '', v.service_date ? `até ${fmtDate(v.service_date)}` : ''].filter(Boolean).join(' · ');
+  const who = v.trip ? `Com <b>${esc(v.trip.driver)}</b> desde ${esc(fmtTime(v.trip.since))}${v.trip.site ? ' · Obra ' + esc(v.trip.site) : ''}`
+    : v.status === 'maintenance' ? 'Na oficina' : v.status === 'blocked' ? 'Bloqueada' : 'Livre' + (v.site ? ' · Obra ' + esc(v.site) : '');
+  const H = state.fleet.home;
+  return `<article class="card fl-car ${s.light}" data-id="${esc(v.id)}">
+    <div class="wk"><span class="fl-plate">${esc(v.plate)}</span><div class="grow"><div class="nm">${esc(v.model || 'Viatura')}${rental ? ` <small class="muted">· ${esc(FL_OWN[v.ownership])}</small>` : ''}</div>
+      <div class="sub">${who} · ${Number(v.km).toLocaleString('pt-PT')} km</div></div>${chip(lk, ll)}</div>
+    <ul class="fl-papers">
+      ${flPaper('Seguro', s.insurance, flDue(v.insurance_due))}
+      ${flPaper('Inspeção (IPO)', s.ipo, flDue(v.ipo_due))}
+      ${flPaper('IUC', s.iuc, flDue(v.iuc_due))}
+      ${flPaper('Revisão', s.service, srv)}
+      ${rental ? flPaper('Contrato de aluguer', s.rental, flDue(v.rental_end), v.rental_company ? `<small>${esc(v.rental_company)}${v.rental_ref ? ' · ' + esc(v.rental_ref) : ''}</small>` : '') : ''}
+      ${rental && s.rental_km_left != null ? `<li class="fl-p ${s.rental_km_left < 0 ? 'bad' : s.light === 'amarelo' && s.rental_km_left <= Math.max(1000, (v.rental_km_limit || 0) / 10) ? 'warn' : 'ok'}"><span>Km do contrato</span><b>${s.rental_km_left < 0
+        ? `${Number(-s.rental_km_left).toLocaleString('pt-PT')} km a mais${s.over_cost ? ' ≈ ' + esc(eur2(s.over_cost)) : ''}` : `faltam ${Number(s.rental_km_left).toLocaleString('pt-PT')} km`}</b></li>` : ''}
+    </ul>
+    <div class="acts">
+      ${H.can_hand && v.trip ? `<button class="btn small" data-ret="${esc(v.id)}">Receber viatura</button>` : ''}
+      ${H.can_hand && !v.trip && v.status === 'available' && s.light !== 'vermelho' ? `<button class="btn small" data-give="${esc(v.id)}">Entregar a alguém</button>` : ''}
+      <button class="btn ghost small" data-open="${esc(v.id)}">Ver ficha</button></div></article>`;
+}
+function flList() {
+  const F = state.fleet; const body = $('#flbody'); if (!body) return;
+  const vs = F.home.vehicles;
+  const FIL = { todas: () => true, problemas: (v) => v.state.light !== 'verde', alguem: (v) => !!v.trip, aluguer: (v) => v.ownership !== 'owned' };
+  const list = vs.filter(FIL[F.filter] || FIL.todas);
+  body.innerHTML = vs.length ? `<div class="chips-row fl-fil">${[['todas', 'Todas'], ['problemas', 'Com problemas'], ['alguem', 'Com alguém'], ['aluguer', 'Aluguer']]
+      .map(([k, l]) => `<button class="chip ${F.filter === k ? 'info' : ''}" data-fil="${k}" aria-pressed="${F.filter === k}">${esc(l)}</button>`).join('')}</div>
+    <div class="list">${list.map(flCard).join('') || `<p class="muted">Nenhuma viatura neste filtro.</p>`}</div>
+    ${F.home.archived ? `<p class="small muted">${F.home.archived} viatura(s) arquivada(s) (vendidas ou devolvidas ao aluguer).</p>` : ''}`
+    : `<div class="card">${empty('box', 'Ainda sem viaturas', F.home.can_manage ? 'Carrega em «+ Nova viatura»: matrícula, seguro, inspeção e revisão. Os carros de aluguer também.' : 'O RH regista as viaturas da empresa.')}</div>`;
+  body.querySelectorAll('[data-fil]').forEach((b) => b.onclick = () => { F.filter = b.dataset.fil; flList(); });
+  body.querySelectorAll('[data-give]').forEach((b) => b.onclick = () => flHandover(b.dataset.give));
+  body.querySelectorAll('[data-ret]').forEach((b) => b.onclick = () => flReturn(b.dataset.ret));
+  body.querySelectorAll('[data-open]').forEach((b) => b.onclick = () => flDetail(b.dataset.open));
+}
+function flDrivers() {
+  const F = state.fleet; const body = $('#flbody'); if (!body) return;
+  const ds = F.home.drivers;
+  body.innerHTML = `<p class="small muted">Só se entrega uma viatura a quem tem carta válida da categoria certa.${F.home.can_manage ? ' Regista aqui as cartas.' : ' O RH regista as cartas.'}</p>
+    <div class="list">${ds.map((d) => { const l = d.licence;
+      const st = !l ? chip('bad', 'sem carta registada') : l.expired ? chip('bad', 'carta caducada') : l.soon ? chip('warn', 'carta a acabar') : chip('ok', 'carta válida');
+      return `<article class="card fl-drv"><div class="wk"><div class="grow"><div class="nm">${esc(d.name)}</div>
+        <div class="sub">${esc(d.number || '')}${l ? ` · ${esc(l.categories.join(', '))} · até ${esc(fmtDate(l.valid_until))}` : ''}${d.has_vehicle ? ' · tem uma viatura' : ''}</div></div>${st}</div>
+        ${F.home.can_manage ? `<div class="acts"><button class="btn ghost small" data-lic="${esc(d.id)}">${l ? 'Renovar carta' : 'Registar carta'}</button></div>` : ''}</article>`; }).join('')}</div>`;
+  body.querySelectorAll('[data-lic]').forEach((b) => b.onclick = () => flLicence(b.dataset.lic));
+}
+async function flLicence(id) {
+  const d = state.fleet.home.drivers.find((x) => x.id === id); const l = d.licence;
+  const fd = await askSheet('Carta de condução', `<p><b>${esc(d.name)}</b></p>
+    <div class="row"><div><label for="ln">Número da carta *</label><input id="ln" name="n" required minlength="4" maxlength="32" value="${esc(l ? l.number : '')}" placeholder="ex.: L-123456 7"></div>
+      <div><label for="lv">Válida até *</label><input id="lv" name="v" type="date" required value="${esc(l ? l.valid_until : '')}"></div></div>
+    <fieldset class="fl-cats"><legend>Categorias *</legend>${FL_CATS.map((c) => `<label><input type="checkbox" name="c" value="${c}" ${l && l.categories.includes(c) ? 'checked' : c === 'B' && !l ? 'checked' : ''}> ${c}</label>`).join('')}</fieldset>
+    <p class="small muted">Uma renovação fica guardada como nova carta. A anterior não se apaga.</p>`, 'Guardar');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_fleet_licence_save', { p_collab: id, p_number: String(fd.get('n')).trim(), p_categories: fd.getAll('c'), p_valid_until: fd.get('v') });
+  if (error) return toast(friendly(error));
+  toast('Carta guardada.'); loadFleet();
+}
+async function flVehicleSheet(v) {
+  const sites = activeSites(); v = v || { ownership: 'owned', licence: 'B' };
+  const fd = await askSheet(v.id ? `Editar ${v.plate}` : 'Nova viatura', `
+    <div class="row"><div><label for="fp">Matrícula *</label><input id="fp" name="plate" required maxlength="12" autocapitalize="characters" value="${esc(v.plate || '')}" placeholder="ex.: AA-00-AA"></div>
+      <div><label for="fm">Marca e modelo</label><input id="fm" name="model" maxlength="120" value="${esc(v.model || '')}" placeholder="ex.: Renault Kangoo"></div></div>
+    <div class="row"><div><label for="fo">A viatura é</label><select id="fo" name="ownership">${Object.entries(FL_OWN).map(([k, l]) => `<option value="${k}" ${v.ownership === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+      <div><label for="fk">Km atuais${v.id ? '' : ' *'}</label><input id="fk" name="km" type="number" min="${Number(v.km) || 0}" step="1" inputmode="numeric" ${v.id ? '' : 'required'} value="${v.km ?? ''}"></div></div>
+    <div id="frent">
+      <h3>Contrato de aluguer</h3>
+      <div class="row"><div><label for="frc">Empresa de aluguer *</label><input id="frc" name="rental_company" maxlength="120" value="${esc(v.rental_company || '')}"></div>
+        <div><label for="frr">N.º do contrato</label><input id="frr" name="rental_ref" maxlength="64" value="${esc(v.rental_ref || '')}"></div></div>
+      <div class="row"><div><label for="frs">Início *</label><input id="frs" name="rental_start" type="date" value="${esc(v.rental_start || '')}"></div>
+        <div><label for="fre">Fim *</label><input id="fre" name="rental_end" type="date" value="${esc(v.rental_end || '')}"></div></div>
+      <div class="row"><div><label for="frl">Limite de km do contrato</label><input id="frl" name="rental_km_limit" type="number" min="1" step="1" inputmode="numeric" value="${v.rental_km_limit ?? ''}"></div>
+        <div><label for="frk">Km quando chegou</label><input id="frk" name="rental_km_start" type="number" min="0" step="1" inputmode="numeric" value="${v.rental_km_start ?? ''}" placeholder="se vazio, os km atuais"></div></div>
+      <div class="row"><div><label for="fro">€ por km a mais</label><input id="fro" name="over_rate" type="number" min="0" step="0.01" inputmode="decimal" value="${v.over_rate ?? ''}"></div>
+        <div><label for="frm">Renda mensal (€)</label><input id="frm" name="rental_monthly" type="number" min="0" step="0.01" inputmode="decimal" value="${v.rental_monthly ?? ''}"></div></div>
+    </div>
+    <h3>Papéis</h3>
+    <div class="row"><div><label for="fi">Seguradora</label><input id="fi" name="insurer" maxlength="120" value="${esc(v.insurer || '')}"></div>
+      <div><label for="fy">N.º da apólice</label><input id="fy" name="policy" maxlength="64" value="${esc(v.policy || '')}"></div></div>
+    <div class="row"><div><label for="fid">Seguro válido até *</label><input id="fid" name="insurance_due" type="date" value="${esc(v.insurance_due || '')}"></div>
+      <div><label for="fip">Inspeção (IPO) até</label><input id="fip" name="ipo_due" type="date" value="${esc(v.ipo_due || '')}"></div></div>
+    <div class="row"><div><label for="fiu">IUC pago até</label><input id="fiu" name="iuc_due" type="date" value="${esc(v.iuc_due || '')}"></div>
+      <div><label for="fl">Carta precisa</label><select id="fl" name="licence">${FL_CATS.map((c) => `<option ${(v.licence || 'B') === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div></div>
+    <h3>Revisão</h3>
+    <div class="row"><div><label for="fsk">Próxima revisão aos km</label><input id="fsk" name="service_km" type="number" min="1" step="1" inputmode="numeric" value="${v.service_km ?? ''}"></div>
+      <div><label for="fsd">ou até à data</label><input id="fsd" name="service_date" type="date" value="${esc(v.service_date || '')}"></div></div>
+    <h3>Obra e custo</h3>
+    <div class="row"><div><label for="fs">Obra habitual</label><select id="fs" name="site_id"><option value="">— Nenhuma —</option>${sites.map((s) => `<option value="${esc(s.id)}" ${v.site_id === s.id ? 'selected' : ''}>Obra ${esc(s.cost_center_code)} · ${esc(s.title)}</option>`).join('')}</select></div>
+      <div><label for="fc">Custo por km à obra (€)</label><input id="fc" name="cost_per_km" type="number" min="0" max="100" step="0.01" inputmode="decimal" value="${v.cost_per_km ?? ''}" placeholder="ex.: 0,25"></div></div>
+    <label for="fn">Notas</label><textarea id="fn" name="notes" rows="2" maxlength="500">${esc(v.notes || '')}</textarea>
+    <p class="small muted">Sem seguro válido, com IPO caducada, revisão em atraso ou contrato de aluguer acabado, a viatura fica a vermelho e não pode ser entregue a ninguém.</p>`,
+  'Guardar', (d) => {
+    const sync = () => { const r = d.querySelector('#fo').value !== 'owned'; d.querySelector('#frent').hidden = !r;
+      ['#frc', '#frs', '#fre'].forEach((s) => { d.querySelector(s).required = r; }); };
+    d.querySelector('#fo').onchange = sync; sync();
+  });
+  if (!fd) return;
+  const p = {}; for (const [k, x] of fd.entries()) p[k] = String(x).trim();
+  const { data, error } = await sb.rpc('mini_fleet_vehicle_save', { p_vehicle: v.id || null, p });
+  if (error) return toast(friendly(error));
+  toast(v.id ? 'Viatura guardada.' : 'Viatura criada.');
+  if (state.fleet.sel === data) flDetail(data); else loadFleet();
+}
+async function flHandover(id) {
+  const H = state.fleet.home; const v = H.vehicles.find((x) => x.id === id); const sites = activeSites();
+  const fd = await askSheet(`Entregar ${v.plate}`, `<p>${esc(v.model || '')} · carta ${esc(v.licence)}</p>
+    <label for="hd">Quem leva *</label><select id="hd" name="d" required><option value="">—</option>${H.drivers.map((d) => { const l = d.licence;
+      const ok = l && !l.expired && l.categories.includes(v.licence);
+      return `<option value="${esc(d.id)}">${esc(d.name)}${ok ? '' : !l ? ' (sem carta registada)' : l.expired ? ' (carta caducada)' : ` (sem categoria ${v.licence})`}${d.has_vehicle ? ' · já tem viatura' : ''}</option>`; }).join('')}</select>
+    <div class="row"><div><label for="hk">Km no conta-quilómetros *</label><input id="hk" name="km" type="number" required min="${Number(v.km)}" step="1" inputmode="numeric" value="${Number(v.km)}"></div>
+      <div><label for="hs">Para a obra</label><select id="hs" name="s"><option value="">—</option>${sites.map((s) => `<option value="${esc(s.id)}" ${v.site_id === s.id ? 'selected' : ''}>Obra ${esc(s.cost_center_code)}</option>`).join('')}</select></div></div>
+    <label for="hp">Para quê</label><input id="hp" name="p" maxlength="300" placeholder="ex.: transporte da equipa para Sines">`, 'Entregar');
+  if (!fd) return;
+  const { data, error } = await sb.rpc('mini_fleet_handover', { p_vehicle: id, p_driver: fd.get('d'), p_km: Number(fd.get('km')), p_site: fd.get('s') || null, p_purpose: String(fd.get('p') || '').trim() || null });
+  if (error) return toast(friendly(error));
+  if (!data.ok) {
+    const lic = data.reasons.includes('licence_invalid_or_wrong_category') && H.can_manage;
+    const again = await askSheet('Não pode ser entregue', `<ul class="fl-why">${data.reasons.map((r) => `<li>${ic('warn')} ${esc(FL_WHY[r] || r)}</li>`).join('')}</ul>
+      <p class="small muted">São obrigações legais da empresa: a app não deixa passar por cima.</p>`, lic ? 'Registar a carta' : 'Fechar');
+    if (again && lic) flLicence(fd.get('d'));
+    return;
+  }
+  toast('Viatura entregue.');
+  if (state.fleet.sel === id) flDetail(id); else loadFleet();
+}
+async function flReturn(id) {
+  const v = state.fleet.cur && state.fleet.cur.id === id ? state.fleet.cur : state.fleet.home.vehicles.find((x) => x.id === id);
+  const fd = await askSheet(`Receber ${v.plate}`, `<p>Estava com <b>${esc(v.trip.driver)}</b> desde ${esc(fmtTime(v.trip.since))} (${Number(v.trip.km).toLocaleString('pt-PT')} km).</p>
+    <label for="rk">Km agora *</label><input id="rk" name="km" type="number" required min="${Number(v.trip.km)}" step="1" inputmode="numeric">
+    <label class="check"><input type="checkbox" name="dmg" id="rdmg"> Tem danos ou avaria</label>
+    <label for="rn">Nota</label><textarea id="rn" name="n" rows="2" maxlength="500" placeholder="ex.: risco na porta lateral; luz do óleo acesa"></textarea>
+    <p class="small muted">Com danos, a viatura vai para a oficina e o RH é avisado.</p>`, 'Receber', (d) => {
+    d.querySelector('#rdmg').onchange = (e) => { d.querySelector('#rn').required = e.target.checked; d.querySelector('#rn').minLength = e.target.checked ? 5 : 0; };
+  });
+  if (!fd) return;
+  const { data, error } = await sb.rpc('mini_fleet_return', { p_vehicle: id, p_km: Number(fd.get('km')), p_damage: !!fd.get('dmg'), p_note: String(fd.get('n') || '').trim() || null });
+  if (error) return toast(friendly(error));
+  toast(`Recebida: ${data.km} km${data.cost ? ` · ${eur2(data.cost)} à obra` : ''}${data.workshop ? ' · foi para a oficina' : ''}.`);
+  if (state.fleet.sel === id) flDetail(id); else loadFleet();
+}
+async function flDetail(id) {
+  const F = state.fleet; F.sel = id;
+  const body = $('#flbody'); const top = $('#fltop'); if (!body || !top) return;
+  top.innerHTML = `<button class="btn ghost small" id="flback">← Todas as viaturas</button>`; body.innerHTML = skel(2);
+  $('#flback').onclick = () => { F.sel = null; loadFleet(); };
+  const { data: v, error } = await sb.rpc('mini_fleet_vehicle', { p_vehicle: id });
+  if (!body.isConnected) return;
+  if (error) { body.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  F.cur = v; const H = F.home;
+  if (!state.fleet.sel) return;
+  body.innerHTML = `${flCard(v)}
+    ${H.can_manage ? `<div class="acts-row fl-mng">
+      <button class="btn ghost small" id="fled">Editar dados e papéis</button>
+      <button class="btn ghost small" id="flmt">Registar revisão ou reparação</button>
+      <button class="btn ghost small" id="flco">Registar custo</button>
+      ${v.status === 'available' ? '<button class="btn ghost small" id="flws">Mandar para a oficina</button>' : ''}
+      ${['maintenance', 'blocked'].includes(v.status) ? '<button class="btn ghost small" id="flok">Voltar a disponível</button>' : ''}
+      ${v.status !== 'in_use' ? `<button class="btn ghost small" id="flar">${v.ownership === 'owned' ? 'Arquivar (vendida)' : 'Devolvida ao aluguer'}</button>` : ''}</div>` : ''}
+    ${v.insurer || v.policy ? `<p class="small">Seguro: ${esc(v.insurer || '')}${v.policy ? ' · apólice ' + esc(v.policy) : ''}</p>` : ''}
+    ${v.ownership !== 'owned' && v.rental_monthly ? `<p class="small">Renda: ${esc(eur2(v.rental_monthly))}/mês${v.rental_km_limit ? ` · limite ${Number(v.rental_km_limit).toLocaleString('pt-PT')} km` : ''}${v.over_rate ? ` · ${esc(eur2(v.over_rate))}/km a mais` : ''}</p>` : ''}
+    ${v.notes ? `<p class="small" style="white-space:pre-line">${esc(v.notes)}</p>` : ''}
+    ${H.can_manage && v.month_cost != null ? `<p class="small">Custos este mês: <b>${esc(eur2(v.month_cost))}</b></p>` : ''}
+    <h2 class="sec">Quem a levou</h2>
+    ${v.trips.length ? `<ul class="fl-hist">${v.trips.map((t) => `<li><b>${esc(t.driver)}</b> · ${esc(fmtTime(t.from))}${t.to ? ' → ' + esc(fmtTime(t.to)) : ' · ainda com ela'}
+      <small>${Number(t.km_from).toLocaleString('pt-PT')}${t.km_to != null ? ' → ' + Number(t.km_to).toLocaleString('pt-PT') + ' km' : ' km'}${t.site ? ' · Obra ' + esc(t.site) : ''}${t.purpose ? ' · ' + esc(t.purpose) : ''}</small>
+      ${t.damage ? `<small class="by-no">Dano: ${esc(t.note || '')}</small>` : t.note ? `<small>«${esc(t.note)}»</small>` : ''}</li>`).join('')}</ul>` : '<p class="small muted">Ainda ninguém a levou.</p>'}
+    <h2 class="sec">Revisões e reparações</h2>
+    ${v.maintenance.length ? `<ul class="fl-hist">${v.maintenance.map((m) => `<li><b>${esc(fmtDate(m.on))}</b> · ${esc(m.desc)}
+      <small>${Number(m.km).toLocaleString('pt-PT')} km${H.can_manage ? ' · ' + esc(eur2(m.cost)) : ''}${m.next_km ? ' · próxima aos ' + Number(m.next_km).toLocaleString('pt-PT') + ' km' : ''}${m.next_date ? ' · até ' + esc(fmtDate(m.next_date)) : ''}</small></li>`).join('')}</ul>` : '<p class="small muted">Sem registos.</p>'}
+    ${H.can_manage ? `<h2 class="sec">Custos</h2>${v.costs.length ? `<ul class="fl-hist">${v.costs.map((k) => `<li><b>${esc(FL_COST[k.kind] || k.kind)}</b> · ${esc(eur2(k.amount))}
+      <small>${esc(fmtDate(k.on))}${k.ref && !/^maintenance:/.test(k.ref) ? ' · ' + esc(k.ref) : ''}${k.site ? ' · Obra ' + esc(k.site) : ''}${k.driver ? ' · ' + esc(k.driver) : ''}</small></li>`).join('')}</ul>` : '<p class="small muted">Sem custos.</p>'}` : ''}`;
+  body.querySelectorAll('[data-give]').forEach((b) => b.onclick = async () => { await loadFleetHome(); flHandover(id); });
+  body.querySelectorAll('[data-ret]').forEach((b) => b.onclick = () => flReturn(id));
+  body.querySelectorAll('[data-open]').forEach((b) => b.hidden = true);
+  const on = (s, f) => { const b = $(s); if (b) b.onclick = f; };
+  on('#fled', () => flVehicleSheet(v));
+  on('#flmt', () => flMaintenance(v));
+  on('#flco', () => flCost(v));
+  on('#flws', () => flStatus(v, 'maintenance', 'Mandar para a oficina', 'ex.: travões a chiar'));
+  on('#flok', () => flStatus(v, 'available', 'Voltar a disponível', 'ex.: reparada na oficina X'));
+  on('#flar', () => flStatus(v, 'returned', v.ownership === 'owned' ? 'Arquivar viatura' : 'Devolvida ao aluguer', v.ownership === 'owned' ? 'ex.: vendida' : 'ex.: devolvida no fim do contrato'));
+}
+async function loadFleetHome() { const { data } = await sb.rpc('mini_fleet_home'); if (data) state.fleet.home = data; }
+async function flStatus(v, st, title, ph) {
+  const fd = await askSheet(title, `<p><b>${esc(v.plate)}</b> ${esc(v.model || '')}</p><label for="fx">Motivo *</label><input id="fx" name="x" required minlength="3" maxlength="300" placeholder="${esc(ph)}">`, 'Confirmar');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_fleet_vehicle_status', { p_vehicle: v.id, p_status: st, p_reason: String(fd.get('x')).trim() });
+  if (error) return toast(friendly(error));
+  toast('Guardado.');
+  if (st === 'returned') { state.fleet.sel = null; loadFleet(); } else flDetail(v.id);
+}
+async function flMaintenance(v) {
+  const fd = await askSheet('Revisão ou reparação', `<p><b>${esc(v.plate)}</b> · ${Number(v.km).toLocaleString('pt-PT')} km</p>
+    <div class="row"><div><label for="md">Data *</label><input id="md" name="on" type="date" required max="${esc(isoDay(new Date()))}" value="${esc(isoDay(new Date()))}"></div>
+      <div><label for="mk">Km *</label><input id="mk" name="km" type="number" required min="0" step="1" inputmode="numeric" value="${Number(v.km)}"></div></div>
+    <label for="mx">O que se fez *</label><input id="mx" name="desc" required minlength="3" maxlength="300" placeholder="ex.: revisão dos 60 000 km, óleo e filtros">
+    <div class="row"><div><label for="mc">Custo (€)</label><input id="mc" name="cost" type="number" min="0" step="0.01" inputmode="decimal"></div>
+      <div><label for="msite">Obra do custo</label><select id="msite" name="site"><option value="">${v.trip && v.trip.site ? 'Obra onde está agora (' + esc(v.trip.site) + ')' : v.site ? 'Obra habitual (' + esc(v.site) + ')' : '— Escolhe a obra —'}</option>${activeSites().map((x) => `<option value="${esc(x.id)}">Obra ${esc(x.cost_center_code)} · ${esc(x.title)}</option>`).join('')}</select></div></div>
+    <h3>Próxima revisão</h3>
+    <div class="row"><div><label for="mnk">Aos km</label><input id="mnk" name="nkm" type="number" min="1" step="1" inputmode="numeric"></div>
+      <div><label for="mnd">Ou até</label><input id="mnd" name="ndate" type="date"></div></div>
+    <p class="small muted">Se a viatura estava na oficina, volta a ficar disponível.</p>`, 'Guardar');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_fleet_maintenance', { p_vehicle: v.id, p_on: fd.get('on'), p_km: Number(fd.get('km')), p_desc: String(fd.get('desc')).trim(),
+    p_cost: fd.get('cost') ? Number(fd.get('cost')) : 0, p_next_km: fd.get('nkm') ? Number(fd.get('nkm')) : null, p_next_date: fd.get('ndate') || null, p_site: fd.get('site') || null });
+  if (error) return toast(friendly(error));
+  toast('Revisão registada.'); flDetail(v.id);
+}
+async function flCost(v) {
+  const fd = await askSheet('Registar custo', `<p><b>${esc(v.plate)}</b></p>
+    <div class="row"><div><label for="ck">Tipo *</label><select id="ck" name="k" required>${['fuel', 'toll', 'fine', 'rental', 'repair', 'other'].map((k) => `<option value="${k}">${FL_COST[k]}</option>`).join('')}</select></div>
+      <div><label for="ca">Valor (€) *</label><input id="ca" name="a" type="number" required min="0.01" step="0.01" inputmode="decimal"></div></div>
+    <div class="row"><div><label for="cd">Data *</label><input id="cd" name="on" type="date" required max="${esc(isoDay(new Date()))}" value="${esc(isoDay(new Date()))}"></div>
+      <div><label for="cr">Referência</label><input id="cr" name="r" maxlength="64" placeholder="ex.: talão, n.º da multa"></div></div>
+    <label for="csite">Obra do custo</label><select id="csite" name="site"><option value="">${v.trip && v.trip.site ? 'Obra onde está agora (' + esc(v.trip.site) + ')' : v.site ? 'Obra habitual (' + esc(v.site) + ')' : '— Escolhe a obra —'}</option>${activeSites().map((x) => `<option value="${esc(x.id)}">Obra ${esc(x.cost_center_code)} · ${esc(x.title)}</option>`).join('')}</select>
+    <p class="small muted">Sem escolher, vai para a obra onde a viatura estava nesse dia. Numa multa, a app junta quem a conduzia.</p>`, 'Guardar');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_fleet_cost', { p_vehicle: v.id, p_kind: fd.get('k'), p_amount: Number(fd.get('a')), p_on: fd.get('on'), p_ref: String(fd.get('r') || '').trim() || null, p_site: fd.get('site') || null });
+  if (error) return toast(friendly(error));
+  toast('Custo registado.'); flDetail(v.id);
 }

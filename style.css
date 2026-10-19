@@ -1390,3 +1390,35 @@ table.tbl th { white-space: nowrap; vertical-align: bottom; }
 .by-lines li { display: flex; gap: 10px; align-items: center; padding: 9px 0; border-top: var(--bw) solid var(--line); }
 .by-hint { background: var(--surface-2); border-radius: var(--r-md); padding: 8px 12px; }
 #bygo { margin-top: 12px; }
+
+/* ---------------------------------------------------------------- Frota (v39) */
+.fl-sum { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0 0 12px; }
+.fl-n { background: var(--surface); border-radius: var(--r-md); box-shadow: var(--sh-1); padding: 10px 12px; border-top: 4px solid var(--line); }
+.fl-n b { display: block; font-size: 24px; line-height: 1.1; }
+.fl-n span { font-size: 12px; color: var(--ink-2); }
+.fl-n.bad { border-top-color: var(--bad-fill); } .fl-n.warn { border-top-color: var(--warn-fill); } .fl-n.ok { border-top-color: var(--ok-fill); }
+#flnew { margin: 0 0 14px; }
+.fl-fil { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.fl-fil .chip { border: 0; cursor: pointer; min-height: 36px; padding: 0 12px; font: inherit; font-size: 14px; }
+.fl-car.vermelho { box-shadow: inset 4px 0 0 var(--bad-fill), var(--sh-1); }
+.fl-car.amarelo { box-shadow: inset 4px 0 0 var(--warn-fill), var(--sh-1); }
+.fl-car .wk { align-items: flex-start; }
+.fl-plate { flex: 0 0 auto; font: 700 14px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; padding: 7px 8px;
+  border: 2px solid var(--ink); border-radius: 6px; background: var(--surface); color: var(--ink); white-space: nowrap; }
+.fl-papers { list-style: none; margin: 10px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+.fl-p { background: var(--surface-2); border-radius: var(--r-md); padding: 7px 10px; font-size: 13px; border-left: 4px solid var(--ok-fill); }
+.fl-p span { display: block; color: var(--ink-2); font-size: 12px; }
+.fl-p b { font-weight: 650; }
+.fl-p small { display: block; color: var(--ink-2); }
+.fl-p.warn { border-left-color: var(--warn-fill); } .fl-p.bad { border-left-color: var(--bad-fill); background: var(--bad-bg); }
+.fl-p.bad b { color: var(--bad); }
+.fl-mng { flex-wrap: wrap; justify-content: flex-start; margin-top: 4px; }
+.fl-hist { list-style: none; margin: 0 0 8px; padding: 0; }
+.fl-hist li { padding: 9px 0; border-top: var(--bw) solid var(--line); font-size: 14px; }
+.fl-hist small { display: block; color: var(--ink-2); font-size: 13px; }
+.fl-why { list-style: none; padding: 0; margin: 0 0 8px; }
+.fl-why li { display: flex; gap: 8px; align-items: flex-start; padding: 8px 0; color: var(--bad); font-weight: 600; }
+.fl-cats { display: flex; flex-wrap: wrap; gap: 6px 14px; border: 0; padding: 0; margin: 8px 0; }
+.fl-cats legend { font-weight: 600; margin-bottom: 6px; }
+.fl-cats label { display: flex; gap: 6px; align-items: center; min-height: 40px; font-weight: 500; }
+#frent h3, .sheet h3 { margin-top: 14px; }
