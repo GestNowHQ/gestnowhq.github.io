@@ -37,6 +37,34 @@ const REASON_PREFIX = {
   'skill_missing:': 'Falta a competência: ',
 };
 const ERRORS = [
+  [/not enough stock of (.+?) \(there are ([\d.]+)\)/i, 'Não há stock suficiente de $1 (há $2).'],
+  [/the card is not this person/i, 'Este cartão não é desta pessoa. Quem recebe é quem assina, com o próprio cartão.'],
+  [/needs a reason: .*early/i, 'Ainda não chegou a data de troca. Escreve porquê (ex.: rasgado, perdido) e assina outra vez.'],
+  [/needs a reason/i, 'Já levou tudo a que tem direito este ano. Escreve porquê e assina outra vez.'],
+  [/tool (\S+) calibration expired on (\S+)/i, 'A ferramenta $1 tem a inspeção vencida desde $2. Não pode sair.'],
+  [/tool (\S+) is not available/i, 'A ferramenta $1 não está disponível (emprestada, em reparação ou abatida).'],
+  [/the tool is lent: get it back first/i, 'Esta ferramenta está emprestada. Recebe-a de volta primeiro.'],
+  [/this tool is not lent to anyone/i, 'Esta ferramenta não está emprestada a ninguém.'],
+  [/this tag is already used/i, 'Já existe uma ferramenta com este número.'],
+  [/this item already exists/i, 'Este artigo já existe. Edita-o em vez de criar outro.'],
+  [/a failed inspection is cleared only by a new inspection/i, 'Chumbou na inspeção: só volta a sair com uma inspeção nova aprovada.'],
+  [/say what happened \(5 letters/i, 'Escreve o que aconteceu (5 letras ou mais).'],
+  [/say why the tool is retired/i, 'Escreve porque é que a ferramenta é abatida.'],
+  [/choose what to deliver/i, 'Escolhe o que a pessoa leva.'],
+  [/choose what kind of item/i, 'Escolhe o tipo: EPI, farda ou consumível.'],
+  [/gloves size/i, 'Tamanho de luvas: de 6 a 12.'],
+  [/trousers size/i, 'Tamanho de calça: de XS a XXL.'],
+  [/name the warehouse/i, 'Dá um nome ao armazém.'],
+  [/name the item/i, 'Dá um nome ao artigo.'],
+  [/name the tool/i, 'Dá um nome à ferramenta.'],
+  [/give the tool a number/i, 'Dá um número à ferramenta (o que está na etiqueta).'],
+  [/write the report number/i, 'Escreve o número do relatório ou certificado.'],
+  [/too many lines/i, 'Demasiadas linhas numa entrega (máximo 40).'],
+  [/yearly allowance/i, 'Dotação por ano: de 1 a 50.'],
+  [/life between 1 day/i, 'Duração: de 1 dia a 10 anos.'],
+  [/warehouse not found/i, 'Armazém não encontrado.'],
+  [/tool not found/i, 'Ferramenta não encontrada.'],
+  [/item not found/i, 'Artigo não encontrado.'],
   [/no worker card/i, 'O LMRA é feito por alguém da equipa no local. Este login não tem ficha de trabalhador.'],
   [/LMRA failed \(stop work\)/i, 'Este LMRA falhou: o trabalho está parado. Resolve o risco e faz um novo.'],
   [/LMRA is from another shift/i, 'Este LMRA é de outro turno. Faz um novo.'],
@@ -441,11 +469,11 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '36';
+const APP_VERSION = '37';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
-const MORE_ORDER = ['equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'obras', 'orcamentos', 'processo', 'clientes'];
+const MORE_ORDER = ['equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'obras', 'orcamentos', 'armazem', 'processo', 'clientes'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -593,6 +621,7 @@ async function boot() {
   nav.querySelector('[data-view=equipa]').hidden = me.role !== 'supervisor' || !canSiteDetails();
   nav.querySelector('[data-view=lmra]').hidden = worker || state.offline || !canLmra();
   nav.querySelector('[data-view=emergencia]').hidden = worker || !canEmergency();
+  nav.querySelector('[data-view=armazem]').hidden = worker || state.offline || !canWh();
   if (me.role === 'supervisor' && !state.booted && state.view === 'picar' && canSiteDetails()) state.view = 'equipa';
   state.booted = true;
   if (state.view === 'minhas' && !me.collaborator_id) state.view = (TABS[me.role] || TABS.supervisor)[0];
@@ -937,14 +966,15 @@ function go(view) {
   if (state.uiEl && window.GNUI) { window.GNUI.unmount(state.uiEl); state.uiEl = null; }
   state.view = view;
   app.classList.toggle('wide', view === 'secretariado' || view === 'painel');
-  const tab = view === 'ficha' ? 'trabalhadores' : view;
+  const tab = view === 'ficha' ? 'trabalhadores' : view === 'fichaepi' ? 'armazem' : view;
   nav.querySelectorAll('button[data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === tab));
   const cur = nav.querySelector(`button[data-view="${tab}"]`);
   nav.querySelector('button[data-more]').classList.toggle('on', !!cur && cur.parentElement.id === 'more');
   window.scrollTo(0, 0);
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
      ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients,
-     processo: viewProcess, orcamentos: viewEstimates, lmra: viewLmra, emergencia: viewEmergency }[view] || viewClock)();
+     processo: viewProcess, orcamentos: viewEstimates, lmra: viewLmra, emergencia: viewEmergency,
+     armazem: viewWarehouse, fichaepi: viewPpeRecord }[view] || viewClock)();
   checkEmergencyBar();
 }
 
@@ -1840,15 +1870,16 @@ async function loadWorkerProfile(id, editing) {
     .map(([k, t]) => `<option value="${esc(k)}" ${k === cur ? 'selected' : ''}>${esc(t)}</option>`).join('')
     + (cur && !(Array.isArray(map) ? map.includes(cur) : map[cur]) ? `<option value="${esc(cur)}" selected>${esc(cur)}</option>` : '');
   const age = p && p.birth_date ? Math.floor((Date.now() - new Date(p.birth_date + 'T12:00:00')) / 31557600000) : null;
-  const farda = [['Camisola', wk.size_top], ['Calça', wk.size_bottom], ['Botas', wk.size_shoes]];
+  const farda = [['Camisola', wk.size_top], ['Calça', wk.size_bottom], ['Botas', wk.size_shoes], ['Luvas', wk.size_gloves]];
   if (!editing) {
     box.innerHTML = `<div class="fhead"><h2 style="margin:0">Ficha do colaborador</h2>
         ${data.can_edit ? '<button class="btn small ghost" id="fedit">Editar ficha</button>' : ''}</div>
-      <div class="farda">${farda.map(([l, x]) => `<div class="${x ? '' : 'none'}"><span>${l}</span><b>${x ? esc(x) : '?'}</b></div>`).join('')}</div>
+      <div class="farda f4">${farda.map(([l, x]) => `<div class="${x ? '' : 'none'}"><span>${l}</span><b>${x ? esc(x) : '?'}</b></div>`).join('')}</div>
       ${farda.some(([, x]) => !x) ? '<p class="small muted">Faltam tamanhos da farda: vão ser precisos para entregar EPIs.</p>' : ''}
       <dl class="kv">${item('Telefone', wk.phone ? `<a href="tel:${esc(wk.phone.replace(/ /g, ''))}">${esc(wk.phone)}</a>` : v(null))}
         ${item('Email', v(wk.email))}${item('Profissão', v(wk.job_title))}${item('Categoria profissional', v(wk.category))}</dl>
       ${can('salarios.exportar') || can('salarios.configurar') ? '<div id="frate"></div>' : ''}
+      ${canWh() ? '<div id="fwh"></div>' : ''}
       ${p ? `<h3>Dados pessoais</h3><dl class="kv">
         ${item('Morada', v([p.address, [p.postal_code, p.locality].filter(Boolean).join(' ')].filter(Boolean).join(', ')))}
         ${item('Concelho', v(p.municipality))}
@@ -1863,14 +1894,14 @@ async function loadWorkerProfile(id, editing) {
         </dl>${p.notes ? `<p class="small"><b>Observações:</b> ${esc(p.notes)}</p>` : ''}`
       : '<p class="small muted">Os dados pessoais só aparecem a quem tem a permissão «dados pessoais» (Recursos Humanos).</p>'}`;
     if ($('#fedit')) $('#fedit').onclick = () => loadWorkerProfile(id, true);
-    loadWorkerRate(id);
+    loadWorkerRate(id); loadWorkerKit(id);
     return;
   }
   const inp = (name, label, val, extra = '') => `<div><label>${esc(label)}</label><input name="${name}" value="${esc(val ?? '')}" ${extra}></div>`;
   const sel = (name, label, map, cur) => `<div><label>${esc(label)}</label><select name="${name}">${opts(map, cur)}</select></div>`;
   box.innerHTML = `<h2 style="margin-top:0">Editar ficha</h2><form id="fform">
     <h3>Farda</h3><div class="row">${sel('size_top', 'Camisola', SIZES_TOP, wk.size_top)}${sel('size_bottom', 'Calça', SIZES_BOTTOM, wk.size_bottom)}
-      ${sel('size_shoes', 'Botas (nº)', SIZES_SHOES, wk.size_shoes)}</div>
+      ${sel('size_shoes', 'Botas (nº)', SIZES_SHOES, wk.size_shoes)}${sel('size_gloves', 'Luvas', GLOVES, wk.size_gloves)}</div>
     <h3>Trabalho</h3><div class="row">${inp('phone', 'Telefone', wk.phone, 'type="tel" inputmode="tel" maxlength="20"')}${inp('email', 'Email', wk.email, 'type="email" maxlength="120"')}</div>
     <div class="row">${inp('job_title', 'Profissão', wk.job_title, 'maxlength="80" placeholder="ex.: Serralheiro"')}${inp('category', 'Categoria profissional', wk.category, 'maxlength="40" placeholder="ex.: Oficial 1ª"')}</div>
     ${p ? `<h3>Dados pessoais</h3>
@@ -1892,7 +1923,8 @@ async function loadWorkerProfile(id, editing) {
     const body = { work: pick(['phone', 'email', 'job_title', 'category', 'size_top', 'size_bottom', 'size_shoes']) };
     if (p) body.personal = pick(['address', 'postal_code', 'locality', 'municipality', 'birth_date', 'birthplace', 'nationality', 'sex',
       'marital_status', 'dependents', 'education', 'id_type', 'id_number', 'id_expiry', 'emergency_name', 'emergency_relation', 'emergency_phone', 'notes']);
-    const { error: se } = await sb.rpc('mini_save_worker_profile', { p_collab: id, p_data: body });
+    let { error: se } = await sb.rpc('mini_save_worker_profile', { p_collab: id, p_data: body });
+    if (!se && (f.get('size_gloves') || '') !== (wk.size_gloves || '') && f.get('size_gloves')) ({ error: se } = await sb.rpc('mini_wh_sizes_save', { p_collab: id, p_sizes: { gloves: f.get('size_gloves') } }));
     btn.disabled = false;
     if (se) return toast(friendly(se));
     toast('Ficha guardada.'); loadWorkerProfile(id);
@@ -2638,6 +2670,7 @@ const TOUR_TEXT = {
   naobra: 'Na obra: quem está lá dentro neste momento.',
   emergencia: 'Emergência: carregas no botão vermelho e cada pessoa pica o cartão no ponto de encontro. Vês logo quem está em falta, com o telefone.',
   lmra: 'LMRA: a análise de risco antes de começar. Um «Não» para o trabalho; com tudo «Sim», a equipa assina com o cartão.',
+  armazem: 'Armazém: EPIs, farda e ferramentas. Quem recebe assina com o cartão; os tamanhos vêm da ficha.',
   horas: 'Horas: as horas da equipa, dia a dia, para corrigir e validar.',
   minhas: 'As minhas horas: as tuas horas, o teu mês, e os pedidos de férias e faltas. Se um dia estiver mal, dizes aqui.',
   secretariado: 'Secretaria: o mês de toda a gente, fechar o mês e tirar o ficheiro para os salários.',
@@ -5493,3 +5526,354 @@ async function checkEmergencyBar() {
     bar.innerHTML = `${ic('warn')}<b>${ev.kind === 'drill' ? 'SIMULACRO' : 'EMERGÊNCIA'} em ${esc(site.title)}</b><span>${miss} em falta · tocar para contar</span>`; }
 }
 setInterval(() => { if (document.visibilityState === 'visible') checkEmergencyBar(); }, 20000);
+
+// ------------------------------------------------------------------ Armazém (sql/65): EPI, farda, consumíveis e ferramentas
+// Entregar: a pessoa encosta o cartão (quem recebe), escolhes o que leva, e ela encosta outra vez para assinar.
+// Stock por armazém e por tamanho, com mínimos. Ferramentas: quem tem o quê; inspeção vencida não deixa sair.
+// Nunca se cobra EPI ao trabalhador; perdas e danos ficam com nota, sem desconto.
+const canWh = () => ['armazem.ver', 'armazem.entregar', 'armazem.gerir'].some(can);
+const WH_CAT = { ppe: 'EPI', workwear: 'Farda', consumable: 'Consumível', tool: 'Ferramenta' };
+const WH_KIND = { top: 'camisola', bottom: 'calça', shoes: 'botas', gloves: 'luvas' };
+const TOOL_ST = { available: ['ok', 'disponível'], checked_out: ['info', 'emprestada'], maintenance: ['warn', 'em reparação'],
+  blocked: ['bad', 'bloqueada'], lost: ['bad', 'perdida'], retired: ['', 'abatida'] };
+function viewWarehouse() {
+  if (!canWh()) return viewClock();   // code guard as well as the database's
+  if (!state.wh) state.wh = { tab: null, cart: [], tools: [], person: null, wid: null };
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">EPI, farda e ferramentas</p><h1>Armazém</h1></div></div>
+    <div id="whtop">${skel(1)}</div><div id="whbody"></div>`;
+  loadWarehouse();
+}
+async function loadWarehouse() {
+  const top = $('#whtop'); if (!top) return;
+  const { data: h, error } = await sb.rpc('mini_wh_home');
+  if (!top.isConnected) return;
+  if (error) { top.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  const W = state.wh; W.home = h;
+  if (!W.wid || !h.warehouses.find((w) => w.id === W.wid)) W.wid = h.central;
+  if (!W.tab) W.tab = h.can_issue ? 'entregar' : 'stock';
+  const tabs = [h.can_issue && ['entregar', 'Entregar'], ['stock', 'Stock'], ['ferramentas', 'Ferramentas']].filter(Boolean);
+  top.innerHTML = `<div class="kpis k4 wh-kpis">
+      <button class="kpi ${h.low ? 'warn' : ''}" data-tab="stock"><b>${h.low}</b><span>artigos no mínimo</span></button>
+      <button class="kpi ${h.tools_late ? 'warn' : ''}" data-tab="ferramentas"><b>${h.tools_out}${h.tools_late ? `<small> · ${h.tools_late} atrasadas</small>` : ''}</b><span>ferramentas fora</span></button>
+      <button class="kpi ${h.inspections_due ? 'warn' : ''}" data-tab="ferramentas"><b>${h.inspections_due}</b><span>inspeções a vencer</span></button>
+      <div class="kpi ${h.ppe_due ? 'info' : ''}"><b>${h.ppe_due}</b><span>EPI a trocar em 30 dias</span></div></div>
+    <div class="wh-bar">${h.warehouses.length > 1 ? `<select id="whsel" aria-label="Armazém">${h.warehouses.map((w) => `<option value="${esc(w.id)}" ${w.id === W.wid ? 'selected' : ''}>${esc(w.name)}${w.site ? ' (' + esc(w.site) + ')' : ''}</option>`).join('')}</select>` : `<span class="muted small">${esc(h.warehouses[0].name)}</span>`}
+      ${h.can_manage ? '<button class="btn ghost small" id="whadd">+ Armazém</button>' : ''}</div>
+    <div class="seg wh-tabs" role="tablist">${tabs.map(([k, l]) => `<button role="tab" data-whtab="${k}" aria-selected="${W.tab === k}">${l}</button>`).join('')}</div>`;
+  top.querySelectorAll('[data-whtab]').forEach((b) => b.onclick = () => { W.tab = b.dataset.whtab; stopNfc(); loadWarehouse(); });
+  top.querySelectorAll('button.kpi[data-tab]').forEach((b) => b.onclick = () => { W.tab = b.dataset.tab; stopNfc(); loadWarehouse(); });
+  if ($('#whsel')) $('#whsel').onchange = (e) => { W.wid = e.target.value; W.cart = []; loadWarehouse(); };
+  if ($('#whadd')) $('#whadd').onclick = addWarehouse;
+  ({ entregar: whIssue, stock: whStock, ferramentas: whTools }[W.tab] || whStock)();
+}
+async function addWarehouse() {
+  const sites = activeSites();
+  const fd = await askSheet('Novo armazém', `<label for="wn">Nome *</label><input id="wn" name="n" required minlength="2" maxlength="120" placeholder="ex.: Carrinha 1, Contentor Sines">
+    <label for="ws">Fica numa obra?</label><select id="ws" name="s"><option value="">Não (armazém da empresa)</option>${sites.map((s) => `<option value="${esc(s.id)}">${esc(s.title)} (${esc(s.cost_center_code)})</option>`).join('')}</select>`, 'Criar');
+  if (!fd) return;
+  const { data, error } = await sb.rpc('mini_wh_add', { p_name: String(fd.get('n')).trim(), p_site: fd.get('s') || null });
+  if (error) return toast(friendly(error));
+  state.wh.wid = data; toast('Armazém criado.'); loadWarehouse();
+}
+
+// ---- Entregar
+async function whIssue() {
+  const W = state.wh; const body = $('#whbody'); if (!body) return;
+  const nfcOk = 'NDEFReader' in window;
+  if (!W.person) {
+    const people = (state.people || []).filter((p) => p.is_active !== false);
+    body.innerHTML = `<section class="card wh-who"><h2 style="margin-top:0">Quem recebe?</h2>
+      ${nfcOk ? `<button class="tapzone" id="nfc" aria-pressed="false"><span class="ring">${ic('tap')}</span><b id="nfclbl">Tocar para ligar o leitor</b>
+        <span class="small" id="nfchelp">Depois a pessoa encosta o cartão.</span></button>` : ''}
+      <label for="whp">Ou escolhe a pessoa</label><select id="whp"><option value="">—</option>${people.map((p) => `<option value="${esc(p.id)}">${esc(p.full_name)}${p.employee_number ? ' · ' + esc(p.employee_number) : ''}</option>`).join('')}</select>
+      <div id="result" aria-live="polite"></div></section>`;
+    $('#whp').onchange = (e) => e.target.value && whPick(e.target.value, null);
+    if (nfcOk) $('#nfc').onclick = () => (state.nfc ? stopNfc() : whNfc((uid) => whPick(null, uid)));
+    return;
+  }
+  const p = W.person; const [{ data: stock }, { data: tools }] = await Promise.all([sb.rpc('mini_wh_stock', { p_warehouse: W.wid }), sb.rpc('mini_wh_tools')]);
+  if (!body.isConnected) return;
+  W.stock = stock || []; W.toolList = tools || [];
+  const fams = []; for (const it of W.stock) { let f = fams.find((x) => x.family === it.family); if (!f) fams.push(f = { family: it.family, category: it.category, kind: it.size_kind, items: [] }); f.items.push(it); }
+  W.fams = fams;
+  const sizeOf = (kind) => kind && p.sizes ? p.sizes[kind] : null;
+  const ppe = p.ppe || []; const held = p.tools || [];
+  body.innerHTML = `<section class="card wh-person"><div class="wk">${avatar(p.name)}<div class="grow"><div class="nm">${esc(p.name)}</div>
+        <div class="sub">${esc([p.number, p.job].filter(Boolean).join(' · '))}</div></div><button class="btn ghost small" id="whchg">Trocar</button></div>
+      <h3>Tamanhos da ficha</h3><div class="farda f4">${Object.entries(WH_KIND).map(([k, l]) => `<div class="${p.sizes[k] ? '' : 'none'}"><span>${esc(l[0].toUpperCase() + l.slice(1))}</span><b>${p.sizes[k] ? esc(p.sizes[k]) : '?'}</b></div>`).join('')}</div>
+      ${Object.values(p.sizes).some((x) => !x) ? `<div class="wh-miss"><p class="small"><b>Faltam tamanhos na ficha.</b> Pergunta só desta vez: ficam guardados para as próximas entregas.</p>
+        <button class="btn small" id="whsz" type="button">Preencher tamanhos</button></div>` : `<p class="small muted">Vêm da ficha do trabalhador. <button class="btn ghost small" id="whsz" type="button">Corrigir</button></p>`}
+      ${ppe.length || held.length ? `<h3>Tem agora</h3><ul class="wh-has">${ppe.map((a) => `<li>${esc(a.name)} <span class="muted">· desde ${esc(fmtDate(a.issued.slice(0, 10)))}</span>
+          ${a.replace_after ? (a.late ? chip('bad', 'trocar já') : a.due ? chip('warn', 'trocar a ' + fmtDate(a.replace_after)) : `<span class="small muted">troca ${esc(fmtDate(a.replace_after))}</span>`) : ''}</li>`).join('')}
+        ${held.map((t) => `<li>${ic('key')} ${esc(t.name)} <b>${esc(t.tag)}</b> ${t.late ? chip('bad', 'atrasada') : `<span class="small muted">até ${esc(fmtTime(t.due))}</span>`}
+          <button class="btn ghost small" data-ret="${esc(t.tool)}" data-tag="${esc(t.tag)}">Devolver</button></li>`).join('')}</ul>` : '<p class="small muted">Não tem nada entregue.</p>'}
+      ${(p.allowance || []).length ? `<p class="small">${p.allowance.map((x) => `${esc(x.family)}: <b>${Number(x.taken)}</b> de ${x.per_year} este ano`).join(' · ')}</p>` : ''}
+      <button class="btn ghost small" id="whrec">${ic('doc')}Ficha de EPI</button></section>
+    <section class="card"><h2 style="margin-top:0">O que leva</h2>
+      ${fams.length ? `<div class="wh-fams">${fams.map((f, i) => { const mine = sizeOf(f.kind); const own = mine ? f.items.find((x) => x.size && x.size === String(mine).toUpperCase()) : null;
+        const pick = (own && own.qty > 0 ? own : null) || f.items.find((x) => x.qty > 0) || f.items[0];
+        const note = !f.kind ? '' : !mine ? chip('warn', 'tamanho em falta na ficha') : !own || own.qty <= 0 ? chip('bad', `sem stock no ${mine}`) : chip('ok', `ficha: ${mine}`);
+        return `<div class="wh-fam" data-i="${i}"><div class="grow"><b>${esc(f.family)}</b><small>${esc(WH_CAT[f.category] || f.category)}</small>${note}</div>
+          ${f.items.length > 1 || f.items[0].size ? `<select data-size aria-label="Tamanho">${f.items.map((x) => `<option value="${esc(x.id)}" ${x.id === pick.id ? 'selected' : ''} ${x.qty > 0 ? '' : 'disabled'}>${esc(x.size || '—')} ${own && x.id === own.id ? ' ★' : ''} (${Number(x.qty)})</option>`).join('')}</select>` : `<span class="small muted">${Number(f.items[0].qty)} ${esc(f.items[0].unit)}</span>`}
+          <button class="btn small" data-add>+</button></div>`; }).join('')}</div>`
+        : `<p class="small muted">Este armazém ainda não tem artigos com stock.${W.home.can_manage ? ' Cria-os em «Stock».' : ''}</p>`}
+      ${W.toolList.filter((t) => t.status === 'available').length ? `<label for="wht">Ferramenta</label><div class="wh-addrow"><select id="wht"><option value="">—</option>${W.toolList.filter((t) => t.status === 'available').map((t) => `<option value="${esc(t.id)}" ${t.expired ? 'disabled' : ''}>${esc(t.tag)} · ${esc(t.name)}${t.expired ? ' (inspeção vencida)' : ''}</option>`).join('')}</select><button class="btn small" id="whtadd" type="button">+</button></div>` : ''}
+      <div id="whcart"></div></section>`;
+  $('#whchg').onclick = () => { W.person = null; W.cart = []; W.tools = []; whIssue(); };
+  $('#whrec').onclick = () => { state.recordFor = p.id; state.recordBack = 'armazem'; go('fichaepi'); };
+  $('#whsz').onclick = () => whSizes(p);
+  body.querySelectorAll('[data-ret]').forEach((b) => b.onclick = () => returnTool(b.dataset.ret, b.dataset.tag, () => whPick(p.id, null)));
+  body.querySelectorAll('.wh-fam').forEach((row) => row.querySelector('[data-add]').onclick = () => {
+    const f = fams[+row.dataset.i]; const id = row.querySelector('[data-size]') ? row.querySelector('[data-size]').value : f.items[0].id;
+    const it = f.items.find((x) => x.id === id); const c = W.cart.find((x) => x.item === id);
+    if ((c ? c.qty : 0) + 1 > Number(it.qty)) return toast(`Só há ${Number(it.qty)} em stock.`);
+    if (c) c.qty++; else W.cart.push({ item: id, qty: 1, name: it.name, unit: it.unit });
+    renderCart();
+  });
+  if ($('#whtadd')) $('#whtadd').onclick = () => { const v = $('#wht').value; if (!v || W.tools.includes(v)) return; W.tools.push(v); renderCart(); };
+  renderCart();
+}
+// Sizes live in the worker's card. The storekeeper only fills what is missing (or fixes it); it is saved in the card.
+const GLOVES = ['6', '7', '8', '9', '10', '11', '12'];
+async function whSizes(p) {
+  const lists = { top: SIZES_TOP, bottom: SIZES_BOTTOM, shoes: SIZES_SHOES, gloves: GLOVES };
+  const fd = await askSheet(`Tamanhos de ${p.name}`, `<p class="small muted">Ficam na ficha do trabalhador. Na próxima entrega já não é preciso perguntar.</p>
+    <div class="row">${Object.entries(WH_KIND).map(([k, l]) => `<div><label for="sz${k}">${esc(l[0].toUpperCase() + l.slice(1))}</label><select id="sz${k}" name="${k}">
+      <option value="">${p.sizes[k] ? '' : '?'}</option>${lists[k].map((x) => `<option ${x === p.sizes[k] ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></div>`).join('')}</div>`, 'Guardar na ficha');
+  if (!fd) return;
+  const body = Object.fromEntries(Object.keys(WH_KIND).map((k) => [k, fd.get(k) || '']));
+  const { data, error } = await sb.rpc('mini_wh_sizes_save', { p_collab: p.id, p_sizes: body });
+  if (error) return toast(friendly(error));
+  p.sizes = data; toast('Tamanhos guardados na ficha.'); whIssue();
+}
+function renderCart() {
+  const W = state.wh; const el = $('#whcart'); if (!el) return;
+  const n = W.cart.length + W.tools.length;
+  if (!n) { el.innerHTML = ''; return; }
+  const sites = activeSites(); const cur = currentSite();
+  el.innerHTML = `<h3>A entregar</h3><ul class="wh-cart">${W.cart.map((c, i) => `<li><span class="grow">${esc(c.name)}</span>
+      <span class="step"><button type="button" class="btn ghost small" data-dec="${i}" aria-label="Menos">−</button><b>${c.qty}</b><button type="button" class="btn ghost small" data-inc="${i}" aria-label="Mais">+</button></span></li>`).join('')}
+    ${W.tools.map((id, i) => { const t = W.toolList.find((x) => x.id === id) || {}; return `<li><span class="grow">${ic('key')} ${esc(t.tag)} · ${esc(t.name)}</span><button type="button" class="btn ghost small" data-rmt="${i}" aria-label="Tirar">×</button></li>`; }).join('')}</ul>
+    <div class="row"><div><label for="whsite">Para a obra</label><select id="whsite"><option value="">Sem obra</option>${sites.map((s) => `<option value="${esc(s.id)}" ${cur && cur.id === s.id ? 'selected' : ''}>${esc(s.title)} (${esc(s.cost_center_code)})</option>`).join('')}</select></div>
+      ${W.tools.length ? `<div><label for="whdue">Devolve até</label><input id="whdue" type="date" value="${esc(isoDay(new Date()))}" min="${esc(isoDay(new Date()))}"></div>` : ''}</div>
+    <div id="whwhy"${W.needWhy ? '' : ' hidden'}><label for="whr">Porquê? *</label><input id="whr" maxlength="300" placeholder="ex.: botas rasgadas, perdeu as luvas">
+      <p class="small muted">${esc(W.needWhy || '')}</p></div>
+    <button class="btn big" id="whsign">${ic('card')}Assinar com o cartão de ${esc(W.person.name.split(' ')[0])}</button>`;
+  el.querySelectorAll('[data-inc]').forEach((b) => b.onclick = () => { const c = W.cart[+b.dataset.inc]; const it = W.stock.find((x) => x.id === c.item);
+    if (c.qty + 1 > Number(it.qty)) return toast(`Só há ${Number(it.qty)} em stock.`); c.qty++; renderCart(); });
+  el.querySelectorAll('[data-dec]').forEach((b) => b.onclick = () => { const i = +b.dataset.dec; if (--W.cart[i].qty <= 0) W.cart.splice(i, 1); renderCart(); });
+  el.querySelectorAll('[data-rmt]').forEach((b) => b.onclick = () => { W.tools.splice(+b.dataset.rmt, 1); renderCart(); });
+  $('#whsign').onclick = whSign;
+}
+async function whPick(id, uid) {
+  stopNfc();
+  const { data, error } = await sb.rpc('mini_wh_person', { p_collab: id, p_uid: uid ? normUid(uid) : null });
+  if (error) { beep(false); return showResult('bad', 'Não encontrei', friendly(error)); }
+  if (uid) beep(true);
+  Object.assign(state.wh, { person: data, cart: state.wh.person && state.wh.person.id === data.id ? state.wh.cart : [], tools: state.wh.person && state.wh.person.id === data.id ? state.wh.tools : [], needWhy: null });
+  whIssue();
+}
+// The person signs: their own card, on this phone. The same tap number is sent again if the network failed (no double delivery).
+function whSign() {
+  const W = state.wh; const p = W.person; const nfcOk = 'NDEFReader' in window;
+  const why = $('#whr') ? $('#whr').value.trim() : '';
+  const dueDay = $('#whdue') ? $('#whdue').value : null;
+  const req = { p_warehouse: W.wid, p_collab: p.id, p_lines: W.cart.map((c) => ({ item: c.item, qty: c.qty })), p_tools: W.tools.length ? W.tools : null,
+    p_project: ($('#whsite') && $('#whsite').value) || null, p_due: dueDay ? zonedToUtc(`${dueDay}T20:00`, DEFAULT_TZ) : null, p_reason: why || null, p_client_id: W.batch || (W.batch = uuid()) };
+  const d = document.createElement('dialog'); d.className = 'dlg';
+  d.innerHTML = `<form method="dialog"><h2>${esc(p.name)} assina</h2><p class="small muted">Recebe: ${esc([...W.cart.map((c) => `${c.qty} × ${c.name}`), ...W.tools.map((id) => (W.toolList.find((t) => t.id === id) || {}).tag)].join(', '))}.</p>
+    ${nfcOk ? `<button class="tapzone reading" type="button"><span class="ring">${ic('tap')}</span><b>${esc(p.name.split(' ')[0])}, encoste o seu cartão</b></button>` : ''}
+    <div class="manual"><input id="suid" autocomplete="off" autocapitalize="characters" placeholder="Número do cartão"><button class="btn ghost" type="button" id="sgo">Assinar</button></div>
+    <div id="sres" aria-live="polite"></div><div class="acts"><button class="btn ghost wide" value="cancel">Cancelar</button></div></form>`;
+  document.body.appendChild(d); d.showModal();
+  let ctrl = null; let busy = false;
+  const go2 = async (raw) => {
+    const uid = normUid(raw); if (!uid || busy) return; busy = true;
+    const { data, error } = await sb.rpc('mini_wh_issue', { ...req, p_uid: uid });
+    busy = false;
+    if (error) {
+      beep(false); const m = /needs a reason/i.test(error.message || '');
+      if (m) { W.needWhy = 'Troca antes do tempo ou acima da dotação: escreve o motivo, fica na ficha.'; d.close(); renderCart(); $('#whr').focus(); return toast('Escreve o motivo e assina outra vez.'); }
+      d.querySelector('#sres').innerHTML = `<div class="result bad">${ic('x')}<div><b>Não assinou</b>${esc(friendly(error))}</div></div>`; return;
+    }
+    beep(true); d.close();
+    showFlash('ok', 'ENTREGUE', `${p.name} assinou ${data.replayed ? '(já estava registado)' : ''}.`);
+    Object.assign(W, { cart: [], tools: [], batch: null, needWhy: null }); whPick(p.id, null);
+  };
+  if (nfcOk) (async () => { try { ctrl = new AbortController(); const r = new NDEFReader(); await r.scan({ signal: ctrl.signal }); r.onreading = (ev) => go2(ev.serialNumber); } catch (_) { /* typed number still works */ } })();
+  d.querySelector('#sgo').onclick = () => go2(d.querySelector('#suid').value);
+  d.querySelector('#suid').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); go2(e.target.value); } };
+  d.addEventListener('close', () => { if (ctrl) ctrl.abort(); d.remove(); });
+}
+async function whNfc(onUid) {
+  try {
+    const ctrl = new AbortController(); const reader = new NDEFReader();
+    await reader.scan({ signal: ctrl.signal }); state.nfc = ctrl; nfcLook(true);
+    $('#nfchelp').textContent = 'A pessoa encosta o cartão.';
+    reader.onreading = (ev) => { const uid = normUid(ev.serialNumber); if (uid) onUid(uid); };
+    reader.onreadingerror = () => { beep(false); showResult('bad', 'NÃO LIDO', 'Encosta outra vez, devagar.'); };
+  } catch (err) { toast(err.name === 'NotAllowedError' ? 'Dá permissão ao NFC no Chrome.' : 'O NFC não arrancou: ' + err.message); }
+}
+async function returnTool(id, tag, after) {
+  const fd = await askSheet(`Devolver ${tag}`, `<label>Como veio? *</label><div class="chips reasons" role="radiogroup">
+      <label class="chip"><input type="radio" name="c" value="ok" checked required>Em bom estado</label>
+      <label class="chip"><input type="radio" name="c" value="damaged">Danificada</label><label class="chip"><input type="radio" name="c" value="lost">Perdida</label></div>
+    <label for="rn">Nota</label><input id="rn" name="n" maxlength="300" placeholder="Obrigatória se danificada ou perdida">
+    <p class="small muted">Fica registado. Nada é descontado ao trabalhador por aqui.</p>`, 'Registar');
+  if (!fd) return;
+  const { data, error } = await sb.rpc('mini_wh_return', { p_tool: id, p_condition: fd.get('c'), p_note: String(fd.get('n') || '').trim() || null, p_warehouse: state.wh && state.wh.wid });
+  if (error) return toast(friendly(error));
+  toast(`${data.tag} devolvida por ${data.from}.`); after ? after() : loadWarehouse();
+}
+
+// ---- Stock
+async function whStock() {
+  const W = state.wh; const body = $('#whbody'); if (!body) return;
+  body.innerHTML = skel(3);
+  const { data, error } = await sb.rpc('mini_wh_stock', { p_warehouse: W.wid });
+  if (!body.isConnected) return;
+  if (error) { body.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  W.stock = data; const m = W.home.can_manage;
+  const fams = []; for (const it of data) { let f = fams.find((x) => x.family === it.family); if (!f) fams.push(f = { family: it.family, category: it.category, items: [] }); f.items.push(it); }
+  body.innerHTML = `${m ? '<div class="acts-row"><button class="btn" id="whnew">+ Artigo</button></div>' : ''}
+    ${fams.length ? `<div class="list">${fams.map((f, i) => { const low = f.items.some((x) => x.low); const tot = f.items.reduce((s, x) => s + Number(x.qty), 0);
+      return `<article class="card wh-row ${low ? 'low' : ''}"><div class="wk"><div class="grow"><div class="nm">${esc(f.family)}</div>
+          <div class="sub">${esc(WH_CAT[f.category] || f.category)} · ${tot} ${esc(f.items[0].unit)}${f.items[0].life_days ? ` · troca a cada ${f.items[0].life_days} dias` : ''}${f.items[0].allowance ? ` · ${f.items[0].allowance} por ano` : ''}</div></div>
+          ${low ? chip('warn', 'no mínimo', 'warn') : ''}</div>
+        <div class="wh-sizes">${f.items.map((x) => `<span class="wh-sz ${x.low ? 'low' : Number(x.qty) ? '' : 'zero'}" title="mínimo ${Number(x.min)}"><b>${esc(x.size || 'un')}</b>${Number(x.qty)}</span>`).join('')}</div>
+        ${m ? `<div class="acts"><button class="btn ghost small" data-in="${i}">Entrada</button><button class="btn ghost small" data-min="${i}">Mínimo</button><button class="btn ghost small" data-edit="${i}">Editar</button></div>` : ''}</article>`; }).join('')}</div>`
+      : `<div class="card">${empty('box', 'Ainda sem artigos', m ? 'Carrega em «+ Artigo»: botas, capacetes, luvas, farda.' : 'Quem gere o armazém cria os artigos.')}</div>`}`;
+  if ($('#whnew')) $('#whnew').onclick = () => itemSheet(null);
+  body.querySelectorAll('[data-in]').forEach((b) => b.onclick = () => stockIn(fams[+b.dataset.in]));
+  body.querySelectorAll('[data-min]').forEach((b) => b.onclick = () => setMin(fams[+b.dataset.min]));
+  body.querySelectorAll('[data-edit]').forEach((b) => b.onclick = () => itemSheet(fams[+b.dataset.edit]));
+}
+async function itemSheet(f) {
+  const it = f && f.items[0];
+  const fd = await askSheet(f ? `Editar ${f.family}` : 'Novo artigo', `
+    <label>Tipo *</label><div class="chips reasons" role="radiogroup">${['ppe', 'workwear', 'consumable'].map((k, i) => `<label class="chip"><input type="radio" name="cat" value="${k}" ${(it ? it.category === k : !i) ? 'checked' : ''} required>${WH_CAT[k]}</label>`).join('')}</div>
+    <label for="in">Nome *</label><input id="in" name="name" required minlength="2" maxlength="120" value="${esc(f ? f.family : '')}" placeholder="ex.: Botas S3, Capacete, Calças de trabalho">
+    ${f ? `<label for="ia">Acrescentar um tamanho</label><input id="ia" name="add" maxlength="8" placeholder="ex.: 45">`
+      : `<label for="is">Tamanhos</label><input id="is" name="sizes" maxlength="200" placeholder="ex.: 38, 39, 40, 41, 42 ou S, M, L, XL (vazio se não tem)">`}
+    <div class="row"><div><label for="ik">Tamanho da ficha</label><select id="ik" name="kind"><option value="">—</option>${Object.entries(WH_KIND).map(([k, l]) => `<option value="${k}" ${it && it.size_kind === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+      <div><label for="iu">Unidade</label><input id="iu" name="unit" maxlength="16" value="${esc(it ? it.unit : 'un')}"></div></div>
+    <div class="row"><div><label for="ic">Preço (€)</label><input id="ic" name="cost" type="number" min="0" max="100000" step="0.01" inputmode="decimal" value="${it ? Number(it.unit_cost) : ''}"></div>
+      <div><label for="il">Trocar a cada (dias)</label><input id="il" name="life" type="number" min="1" max="3650" inputmode="numeric" value="${it && it.life_days ? it.life_days : ''}" placeholder="ex.: 365"></div>
+      <div><label for="iy">Dotação por ano</label><input id="iy" name="allow" type="number" min="1" max="50" inputmode="numeric" value="${it && it.allowance ? it.allowance : ''}" placeholder="ex.: 2"></div></div>
+    <p class="small muted">«Tamanho da ficha» escolhe sozinho o tamanho da pessoa na entrega. A dotação por ano é para a farda: acima dela pede-se o motivo.</p>`, f ? 'Guardar' : 'Criar');
+  if (!fd) return;
+  const data = { category: fd.get('cat'), family: String(fd.get('name')).trim(), size_kind: fd.get('kind') || null, unit: String(fd.get('unit') || 'un').trim(),
+    unit_cost: fd.get('cost') || null, life_days: fd.get('life') || null, allowance: fd.get('allow') || null };
+  if (f) data.add_size = String(fd.get('add') || '').trim() || null;
+  else data.sizes = String(fd.get('sizes') || '').split(/[,;\s]+/).map((x) => x.trim()).filter(Boolean);
+  const { error } = await sb.rpc('mini_wh_item_save', { p_item: it ? it.id : null, p_data: data });
+  if (error) return toast(friendly(error));
+  toast(f ? 'Guardado.' : 'Artigo criado. Agora dá entrada do stock.'); loadWarehouse();
+}
+const sizeOpts = (f) => f.items.map((x) => `<option value="${esc(x.id)}">${esc(x.size || f.family)} (tem ${Number(x.qty)})</option>`).join('');
+async function stockIn(f) {
+  const fd = await askSheet(`Entrada: ${f.family}`, `${f.items.length > 1 ? `<label for="sz">Tamanho</label><select id="sz" name="i">${sizeOpts(f)}</select>` : `<input type="hidden" name="i" value="${esc(f.items[0].id)}">`}
+    <div class="row"><div><label for="sq">Quantidade *</label><input id="sq" name="q" type="number" min="1" max="100000" step="1" inputmode="numeric" required autofocus></div>
+      <div><label for="sc">Preço (€/un)</label><input id="sc" name="c" type="number" min="0" max="100000" step="0.01" inputmode="decimal" placeholder="${esc(Number(f.items[0].unit_cost).toFixed(2))}"></div></div>
+    <label for="sn">Nota</label><input id="sn" name="n" maxlength="200" placeholder="ex.: fatura 123 do fornecedor">`, 'Dar entrada');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_wh_stock_in', { p_warehouse: state.wh.wid, p_item: fd.get('i'), p_qty: Number(fd.get('q')), p_unit_cost: fd.get('c') ? Number(fd.get('c')) : null, p_note: String(fd.get('n') || '').trim() || null });
+  if (error) return toast(friendly(error));
+  toast('Entrada registada.'); loadWarehouse();
+}
+async function setMin(f) {
+  const fd = await askSheet(`Mínimo: ${f.family}`, `${f.items.length > 1 ? `<label for="mz">Tamanho</label><select id="mz" name="i">${f.items.map((x) => `<option value="${esc(x.id)}">${esc(x.size || f.family)} (mínimo ${Number(x.min)})</option>`).join('')}</select>` : `<input type="hidden" name="i" value="${esc(f.items[0].id)}">`}
+    <label for="mq">Avisa quando houver só</label><input id="mq" name="q" type="number" min="0" max="100000" step="1" inputmode="numeric" required autofocus>
+    <p class="small muted">Ao chegar ao mínimo, o armazém avisa e fica um pedido de reposição para as compras.</p>`, 'Guardar');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_wh_set_min', { p_warehouse: state.wh.wid, p_item: fd.get('i'), p_min: Number(fd.get('q')) });
+  if (error) return toast(friendly(error));
+  toast('Mínimo guardado.'); loadWarehouse();
+}
+
+// ---- Ferramentas
+async function whTools() {
+  const W = state.wh; const body = $('#whbody'); if (!body) return;
+  body.innerHTML = skel(3);
+  const { data, error } = await sb.rpc('mini_wh_tools');
+  if (!body.isConnected) return;
+  if (error) { body.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  const m = W.home.can_manage; const give = W.home.can_issue;
+  body.innerHTML = `${m ? '<div class="acts-row"><button class="btn" id="whtnew">+ Ferramenta</button></div>' : ''}
+    ${data.length ? `<div class="list">${data.map((t) => { const [k, l] = TOOL_ST[t.status] || ['', t.status]; const h = t.holder;
+      return `<article class="card wh-tool ${h && h.late ? 'late' : ''}"><div class="wk"><span class="wh-tag">${esc(t.tag)}</span><div class="grow"><div class="nm">${esc(t.name)}</div>
+          <div class="sub">${h ? `${esc(h.name)}${h.site ? ' · ' + esc(h.site) : ''} · ${h.late ? '<b style="color:var(--bad)">devia ter voltado ' + esc(fmtTime(h.due)) + '</b>' : 'até ' + esc(fmtTime(h.due))}` : esc(t.warehouse || '')}</div></div>
+          ${h && h.late ? chip('bad', 'atrasada') : chip(k, l)}</div>
+        ${t.inspect ? `<p class="small" style="margin:8px 0 0">${t.expired ? chip('bad', 'inspeção vencida') : t.soon ? chip('warn', 'inspeção a vencer') : ''} Inspeção válida até <b>${t.valid_until ? esc(fmtDate(t.valid_until)) : '—'}</b>${t.ref ? ' · relatório ' + esc(t.ref) : ''}</p>` : ''}
+        ${t.last_note && ['maintenance', 'lost', 'blocked'].includes(t.status) ? `<p class="small muted" style="margin:6px 0 0">«${esc(t.last_note)}»</p>` : ''}
+        <div class="acts">${h && give ? `<button class="btn ghost small" data-ret="${esc(t.id)}" data-tag="${esc(t.tag)}">Devolver</button>` : ''}
+          ${m && !h && !['lost', 'retired'].includes(t.status) ? `<button class="btn ghost small" data-insp="${esc(t.id)}" data-tag="${esc(t.tag)}">Inspeção</button>` : ''}
+          ${m && t.status === 'maintenance' ? `<button class="btn ghost small" data-fix="${esc(t.id)}">Reparada</button>` : ''}
+          ${m && !h && !['lost', 'retired'].includes(t.status) ? `<button class="btn ghost small" data-off="${esc(t.id)}" data-tag="${esc(t.tag)}">Abater</button>` : ''}</div></article>`; }).join('')}</div>`
+      : `<div class="card">${empty('box', 'Ainda sem ferramentas', m ? 'Carrega em «+ Ferramenta» e dá-lhe um número (ex.: F-001), o mesmo da etiqueta.' : 'Quem gere o armazém regista as ferramentas.')}</div>`}`;
+  if ($('#whtnew')) $('#whtnew').onclick = addTool;
+  body.querySelectorAll('[data-ret]').forEach((b) => b.onclick = () => returnTool(b.dataset.ret, b.dataset.tag));
+  body.querySelectorAll('[data-insp]').forEach((b) => b.onclick = () => inspectTool(b.dataset.insp, b.dataset.tag));
+  body.querySelectorAll('[data-fix]').forEach((b) => b.onclick = async () => { const { error: e } = await sb.rpc('mini_wh_tool_status', { p_tool: b.dataset.fix, p_status: 'available', p_reason: null }); if (e) return toast(friendly(e)); toast('Disponível outra vez.'); loadWarehouse(); });
+  body.querySelectorAll('[data-off]').forEach((b) => b.onclick = async () => {
+    const fd = await askSheet(`Abater ${b.dataset.tag}`, `<label>Porquê? *</label><div class="chips reasons" role="radiogroup">${[['damaged', 'Avariada sem arranjo'], ['worn_out', 'Gasta'], ['obsolete', 'Já não serve'], ['stolen', 'Roubada']].map(([v, l], i) => `<label class="chip"><input type="radio" name="r" value="${v}" ${i ? '' : 'checked'} required>${l}</label>`).join('')}</div>`, 'Abater');
+    if (!fd) return; const { error: e } = await sb.rpc('mini_wh_tool_status', { p_tool: b.dataset.off, p_status: 'retired', p_reason: fd.get('r') }); if (e) return toast(friendly(e)); toast('Abatida.'); loadWarehouse(); });
+}
+async function addTool() {
+  const fd = await askSheet('Nova ferramenta', `<label for="tn">O que é *</label><input id="tn" name="n" required minlength="2" maxlength="120" placeholder="ex.: Rebarbadora 125, Detetor de gás">
+    <div class="row"><div><label for="tt">Número (etiqueta) *</label><input id="tt" name="t" required maxlength="64" autocapitalize="characters" placeholder="ex.: F-001"></div>
+      <div><label for="ts">Nº de série</label><input id="ts" name="s" maxlength="128"></div></div>
+    <label class="check inline"><input type="checkbox" name="i" id="ti"> Precisa de inspeção ou calibração</label>
+    <div class="row"><div><label for="tv">Válida até</label><input id="tv" name="v" type="date"></div><div><label for="tc">Preço (€)</label><input id="tc" name="c" type="number" min="0" step="0.01" inputmode="decimal"></div></div>
+    <p class="small muted">Com inspeção vencida, a ferramenta não sai do armazém.</p>`, 'Criar');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_wh_tool_add', { p_name: String(fd.get('n')).trim(), p_tag: String(fd.get('t')).trim(), p_serial: String(fd.get('s') || '').trim() || null,
+    p_warehouse: state.wh.wid, p_inspect: !!fd.get('i'), p_valid_until: fd.get('v') || null, p_cost: fd.get('c') ? Number(fd.get('c')) : null });
+  if (error) return toast(friendly(error));
+  toast('Ferramenta criada.'); loadWarehouse();
+}
+async function inspectTool(id, tag) {
+  const today = isoDay(new Date());
+  const fd = await askSheet(`Inspeção de ${tag}`, `<div class="row"><div><label for="ko">Feita a *</label><input id="ko" name="o" type="date" required value="${today}" max="${today}"></div>
+      <div><label for="kv">Válida até *</label><input id="kv" name="v" type="date" required min="${today}"></div></div>
+    <label>Resultado *</label><div class="chips reasons" role="radiogroup"><label class="chip"><input type="radio" name="r" value="1" checked required>Aprovada</label><label class="chip"><input type="radio" name="r" value="0">Reprovada</label></div>
+    <div class="row"><div><label for="kr">Nº do relatório *</label><input id="kr" name="ref" required minlength="2" maxlength="64"></div><div><label for="kb">Quem fez</label><input id="kb" name="by" maxlength="120" placeholder="ex.: laboratório, técnico"></div></div>
+    <p class="small muted">Reprovada fica bloqueada até nova inspeção aprovada.</p>`, 'Registar');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_wh_tool_inspect', { p_tool: id, p_on: fd.get('o'), p_valid_until: fd.get('v'), p_pass: fd.get('r') === '1', p_ref: String(fd.get('ref')).trim(), p_by: String(fd.get('by') || '').trim() || null });
+  if (error) return toast(friendly(error));
+  toast('Inspeção registada.'); loadWarehouse();
+}
+
+// ---- Ficha de entrega de EPI (to print and keep; each line says which card signed it and when)
+async function viewPpeRecord() {
+  if (!canWh() || !state.recordFor) return go('armazem');
+  app.innerHTML = `<div class="noprint toolbar"><button class="btn ghost small" id="rback">← Voltar</button><button class="btn small" id="rprint">${ic('print')}Imprimir</button></div><div id="rbody">${skel(2)}</div>`;
+  $('#rback').onclick = () => go(state.recordBack || 'armazem');
+  $('#rprint').onclick = () => window.print();
+  const { data: r, error } = await sb.rpc('mini_wh_record', { p_collab: state.recordFor });
+  const el = $('#rbody'); if (!el) return;
+  if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  el.innerHTML = `<article class="card ppe-rec"><p class="ph-k">${esc(r.company)}</p><h1>Ficha de entrega de EPI e farda</h1>
+    <p><b>${esc(r.name)}</b>${r.number ? ' · nº ' + esc(r.number) : ''}${r.job ? ' · ' + esc(r.job) : ''}</p>
+    <p class="small muted">Cada entrega foi confirmada pelo trabalhador com o seu cartão pessoal, na hora indicada. Os EPI são fornecidos pela empresa sem custo para o trabalhador.</p>
+    ${r.lines.length ? `<table class="tbl"><thead><tr><th>Data</th><th>Artigo</th><th>Qtd.</th><th>Trocar a</th><th>Obra</th><th>Cartão</th><th>Entregue por</th></tr></thead><tbody>
+      ${r.lines.map((l) => `<tr><td>${esc(fmtTime(l.at))}</td><td>${esc(l.item)}${l.note ? `<br><small class="muted">${esc(l.note)}</small>` : ''}</td><td>${Number(l.qty)} ${esc(l.unit)}</td>
+        <td>${l.replace_after ? esc(fmtDate(l.replace_after)) : '—'}</td><td>${esc(l.site || '—')}</td><td>…${esc(l.card || '')}</td><td>${esc(l.by || '')}</td></tr>`).join('')}</tbody></table>`
+      : '<p class="muted">Sem entregas registadas.</p>'}
+    ${r.tools.length ? `<h2>Ferramentas</h2><table class="tbl"><thead><tr><th>Ferramenta</th><th>Saiu</th><th>Voltou</th><th>Estado</th></tr></thead><tbody>
+      ${r.tools.map((t) => `<tr><td>${esc(t.tag)} · ${esc(t.name)}</td><td>${esc(fmtTime(t.out))}</td><td>${t.back ? esc(fmtTime(t.back)) : '<b>com a pessoa</b>'}</td>
+        <td>${t.condition ? ({ ok: 'bom estado', damaged: 'danificada', lost: 'perdida' }[t.condition]) : ''}${t.note ? ' · ' + esc(t.note) : ''}</td></tr>`).join('')}</tbody></table>` : ''}
+    <div class="print-only sign-lines"><p>Assinatura do trabalhador: ______________________________</p><p>Data: ____/____/______</p></div></article>`;
+}
+// The worker card: what this person has, with a link to the record.
+async function loadWorkerKit(id) {
+  const box = $('#fwh'); if (!box) return;
+  const { data: p, error } = await sb.rpc('mini_wh_person', { p_collab: id, p_uid: null });
+  if (!box.isConnected) return;
+  if (error) { box.remove(); return; }
+  box.innerHTML = `<h3>EPI, farda e ferramentas</h3>${(p.ppe || []).length || (p.tools || []).length ? `<ul class="wh-has">${p.ppe.map((a) => `<li>${esc(a.name)} <span class="muted">· ${esc(fmtDate(a.issued.slice(0, 10)))}</span> ${a.late ? chip('bad', 'trocar já') : a.due ? chip('warn', 'trocar a ' + fmtDate(a.replace_after)) : ''}</li>`).join('')}
+      ${p.tools.map((t) => `<li>${ic('key')} ${esc(t.name)} <b>${esc(t.tag)}</b> ${t.late ? chip('bad', 'atrasada') : ''}</li>`).join('')}</ul>` : '<p class="small muted">Nada entregue.</p>'}
+    <button class="btn ghost small" id="fwhrec">${ic('doc')}Ficha de EPI</button>`;
+  $('#fwhrec').onclick = () => { state.recordFor = id; state.recordBack = 'ficha'; go('fichaepi'); };
+}
