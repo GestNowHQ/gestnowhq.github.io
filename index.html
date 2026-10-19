@@ -7,6 +7,8 @@
   <meta name="color-scheme" content="light dark">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://hnowcydpmrwlqwsggcqx.supabase.co wss://hnowcydpmrwlqwsggcqx.supabase.co; frame-src https://www.youtube-nocookie.com; object-src 'none'; base-uri 'none'; form-action 'self'">
   <title>GestNow</title>
+  <!-- M3: hidden until app.js checks it is not inside another site's frame (CSP in a meta cannot say frame-ancestors) -->
+  <style id="nofr">html{display:none!important}</style>
   <link rel="stylesheet" href="style.css">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png">
