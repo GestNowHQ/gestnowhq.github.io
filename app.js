@@ -1487,6 +1487,13 @@ async function loadPending(sel, project) {
   box.querySelectorAll('[data-dgo]').forEach((b) => b.onclick = () => go('horas'));
   box.querySelectorAll('[data-aok]').forEach((b) => b.onclick = () => decide(b.dataset.aok, true));
   box.querySelectorAll('[data-ano]').forEach((b) => b.onclick = () => decide(b.dataset.ano, false));
+  // The photo or PDF a worker joined to an absence (sql/82): the office only, never the team leader (it may be health data).
+  if (office && d.absences.length) sb.rpc('mini_absence_files', { p_ids: d.absences.map((a) => a.id) }).then(({ data: files }) => {
+    if (!files || !box.isConnected) return;
+    box.querySelectorAll('[data-aok]').forEach((b) => { const f = files[b.dataset.aok]; if (!f) return;
+      const v = document.createElement('button'); v.className = 'btn ghost small'; v.innerHTML = ic('doc') + 'Ver o ficheiro';
+      v.onclick = () => openDocFile(f.path, 'pedidos'); b.parentElement.appendChild(v); });
+  });
 }
 
 // ------------------------------------------------------------------ Picar
