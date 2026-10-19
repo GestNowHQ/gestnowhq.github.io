@@ -145,6 +145,21 @@ const ERRORS = [
   [/invalid position for/i, 'Uma posição não é válida.'],
   [/invalid marker/i, 'A letra tem de ser uma só letra ou número.'],
   [/simple mode is off/i, 'O modo simples não está ligado nesta empresa.'],
+  [/this estimate is frozen/i, 'Este orçamento já foi enviado e está congelado. Para mudar, faz uma nova versão.'],
+  [/whoever made the estimate does not sign/i, 'Quem fez o orçamento não o pode assinar: tem de ser outra pessoa.'],
+  [/not among the people who sign/i, 'Não estás entre as pessoas que assinam este orçamento (vê «Quem assina»).'],
+  [/say why it is refused/i, 'Escreve porque recusas (umas palavras).'],
+  [/turnkey price needs an estimate of class 2/i, 'Chave na mão pede um orçamento de classe 2 ou melhor. Muda a qualidade do orçamento ou a forma de preço.'],
+  [/estimate needs at least one line/i, 'O orçamento precisa de pelo menos uma linha.'],
+  [/price form is switched off/i, 'Essa forma de preço está desligada nesta empresa (vê «Quem assina»).'],
+  [/not waiting for signatures/i, 'Este orçamento já não está à espera de assinaturas.'],
+  [/already submitted/i, 'Este orçamento já foi enviado.'],
+  [/one rule must cover any value/i, 'Falta uma regra «qualquer valor», para nenhum orçamento ficar sem quem assine.'],
+  [/right to sign estimates/i, 'Essa pessoa não tem o direito de assinar orçamentos (Departamentos e acessos › «Aprovar o preço»).'],
+  [/delegation lasts at most 90 days/i, 'Uma delegação dura no máximo 90 dias.'],
+  [/estimate_signatures_estimate_id_user_id_key|duplicate key.*estimate_signatures/i, 'Já assinaste este orçamento.'],
+  [/client and title are required/i, 'Escreve o cliente e o que se orçamenta.'],
+  [/need <= cardinality|estimate_approval_rules_check/i, 'Uma regra pede mais assinaturas do que pessoas escolhidas.'],
   [/not allowed|insufficient_privilege|permission denied/i, 'Sem permissão. Confirma que entraste com a segunda verificação (código da app).'],
   [/already exists/i, 'Já existe uma obra com esse código.'],
   [/duplicate key.*tax_number|tenant_id, tax_number/i, 'Já existe um trabalhador com esse NIF.'],
@@ -403,16 +418,17 @@ nav.addEventListener('click', (e) => {
   openMore(false);
   if (b.dataset.action === 'sair') return signOut();
   if (b.dataset.action === 'tour') return startTour();
+  if (b.dataset.view === 'orcamentos' && state.orc) { state.orc.id = null; state.orc.mode = 'list'; }   // the menu always opens the list
   go(b.dataset.view);
 });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '33';
+const APP_VERSION = '34';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['seguranca', 'naobra', 'trabalhadores', 'picar'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
-const MORE_ORDER = ['equipa', 'picar', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'obras', 'processo', 'clientes'];
+const MORE_ORDER = ['equipa', 'picar', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'obras', 'orcamentos', 'processo', 'clientes'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -556,6 +572,7 @@ async function boot() {
   nav.querySelector('[data-view=acolhimento]').hidden = worker || !can('acolhimento.gerir');
   nav.querySelector('[data-view=clientes]').hidden = worker || state.offline || !isOwner();
   nav.querySelector('[data-view=processo]').hidden = worker || state.offline || !canProcess();
+  nav.querySelector('[data-view=orcamentos]').hidden = worker || state.offline || !canEstimates();
   nav.querySelector('[data-view=equipa]').hidden = me.role !== 'supervisor' || !canSiteDetails();
   if (me.role === 'supervisor' && !state.booted && state.view === 'picar' && canSiteDetails()) state.view = 'equipa';
   state.booted = true;
@@ -908,7 +925,7 @@ function go(view) {
   window.scrollTo(0, 0);
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
      ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients,
-     processo: viewProcess }[view] || viewClock)();
+     processo: viewProcess, orcamentos: viewEstimates }[view] || viewClock)();
 }
 
 // ------------------------------------------------------------------ Clientes (the GestNow owner's console, sql/59)
@@ -2580,6 +2597,7 @@ const TOUR_TEXT = {
   obras: 'Obras: as moradas, os horários e as regras de cada obra.',
   processo: 'Processo: o caminho de cada obra, do primeiro contacto ao fecho de contas. Toca num passo e eu explico o que vem antes e depois. O ponto de interrogação em cima diz-te onde estás.',
   clientes: 'Clientes: as empresas que usam a GestNow. Crias, entras numa e voltas.',
+  orcamentos: 'Orçamentos: um só cálculo de custo e cinco formas de dar o preço ao cliente, de homem-hora a chave na mão. Quem assina segue as regras da tua empresa.',
 };
 async function startTour() {
   if (!state.ready || document.getElementById('tour')) return;
@@ -4581,6 +4599,8 @@ function sitePanelForm(box, d) {
 // Each step says what comes before and after, who is accountable, the proof that stays and the standard it meets.
 // The bot explains a step from the same rows, so it never says what the map does not. Every profile but the worker.
 const canProcess = () => can('processo.ver');
+// Screens built after the map version was published (a published map never changes): the step still points to them.
+const PROC_SCREENS_MORE = { S3: ['orcamentos'], P2: ['orcamentos'] };
 const PROC_SITE_KEY = 'gestnow.proc.site';
 const PROJECT_STATUS = { lead: 'Angariação', bidding: 'Em orçamento', awarded: 'Adjudicada', preparation: 'Em preparação', execution: 'Em execução',
   suspended: 'Suspensa', completed: 'Concluída', invoiced: 'Faturada', closed: 'Fechada' };
@@ -4696,7 +4716,7 @@ function procCard() {
   const el = $('#pcard'); if (!el) return;
   const st = state.proc; const chain = procChain(); const i = chain.findIndex((s) => s.code === st.step); const s = chain[i];
   const prev = chain[i - 1]; const next = chain[i + 1]; const stt = procStatus(s); const role = procMyRole(s);
-  const screens = (s.screens || []).filter((v) => { const b = nav.querySelector(`button[data-view="${v}"]`); return b && !b.hidden; });
+  const screens = [...(s.screens || []), ...(PROC_SCREENS_MORE[s.code] || [])].filter((v) => { const b = nav.querySelector(`button[data-view="${v}"]`); return b && !b.hidden; });
   const who = (k, list) => list && list.length ? `<dt>${k}</dt><dd>${list.map((c) => `<span class="chip ${k === 'Aprova' ? 'fech' : 'reg'}">${esc(procRoleName(c))}</span>`).join('')}</dd>` : '';
   el.className = 'card proc-card'; el.setAttribute('aria-live', 'polite');
   el.innerHTML = `<div class="proc-card-h"><p class="ph-k">${s.kind === 'gate' ? 'Portão' : 'Passo'} ${i + 1} de ${chain.length}${stt === 'done' ? ' · ' + chip('ok', 'Feito') : stt === 'now' ? ' · ' + chip('warn', 'A obra está aqui') : ''}${role ? ' · ' + chip('info', RACI_YOU[role]) : ''}</p>
@@ -4712,7 +4732,7 @@ function procCard() {
     <h4>Norma</h4><div class="proc-iso">${s.iso.map((x) => `<span class="chip code">ISO ${esc(x)}</span>`).join('')}${st.nuclear && s.nuclear.length ? '<span class="chip code nuc">ISO 19443</span><span class="chip code nuc">10 CFR 50 Anexo B</span>' : ''}</div>
     <div class="proc-bot"><div class="bot-3d small">${botFace(st.bot.look)}</div><div class="grow"><b>${esc(st.bot.name)} explica</b>${procExplain(s.code).map((p) => `<p>${esc(p)}</p>`).join('')}</div></div>
     <div class="acts">${screens.map((v) => `<button type="button" class="btn ghost small" data-open="${esc(v)}">${ic('go')}Abrir ${esc(nav.querySelector(`button[data-view="${v}"]`).textContent.trim())}</button>`).join('')}
-      ${!(s.screens || []).length ? '<span class="chip reg">Ecrã deste passo: em construção</span>' : ''}
+      ${!screens.length && !(PROC_SCREENS_MORE[s.code] || []).length && !(s.screens || []).length ? '<span class="chip reg">Ecrã deste passo: em construção</span>' : ''}
       <button type="button" class="btn ghost small" id="phear">${ic('voice')}Ouvir ${esc(st.bot.name)}</button></div>`;
   el.querySelectorAll('[data-go]').forEach((b) => b.onclick = () => { Voice.stop(); st.step = b.dataset.go; renderProcess(); const c = $('#pcard'); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); });
   el.querySelectorAll('[data-open]').forEach((b) => b.onclick = () => go(b.dataset.open));
@@ -4751,4 +4771,398 @@ async function setSiteGrade() {
   const { error } = await sb.rpc('mini_set_site_grade', { p_site: s.id, p_grade: fd.get('g') || null });
   if (error) return toast(friendly(error));
   toast('Grau da obra guardado.'); state.proc.siteSeen = null; viewProcess();
+}
+
+// ------------------------------------------------------------------ Orçamentos (sql/62)
+// One cost engine, five price forms. The database computes cost and price (what is signed is never this screen's
+// arithmetic); the forms here only show that same price the way the client will see it: hours, unit prices, milestones.
+// Who signs follows the company's own rules. Whoever made an estimate never signs it, and a sent estimate is frozen.
+const canEstimates = () => ['orcamentos.ver', 'orcamentos.gerir', 'orcamentos.aprovar', 'orcamentos.regras'].some(can);
+const EST_STATUS = { draft: ['reg', 'Rascunho'], review: ['warn', 'À espera de assinatura'], approved: ['ok', 'Aprovado'], rejected: ['bad', 'Recusado'], superseded: ['reg', 'Substituído'] };
+const EST_KIND = { labour: 'Mão de obra', material: 'Material', equipment: 'Equipamento', subcontract: 'Subempreitada', indirect: 'Indireto' };
+// AACE 18R-97: how much the real cost may differ from the estimate, by class.
+const AACE = { 5: 'Classe 5 · ordem de grandeza (−50 a +100 %)', 4: 'Classe 4 · estudo (−30 a +50 %)', 3: 'Classe 3 · orçamento (−20 a +30 %)',
+  2: 'Classe 2 · proposta firme (−15 a +20 %)', 1: 'Classe 1 · definitivo (−10 a +15 %)' };
+const EST_FORMS = {
+  hh: { n: 'Homem-hora', risk: 15, what: 'O cliente paga as horas que fizermos, a uma tarifa por categoria. As horas são a estimativa, não um preço fechado.',
+    bill: 'As horas picadas com o cartão, validadas pelo encarregado, viram o auto de medição.', use: 'Paragens com âmbito incerto, trabalhos emergentes.' },
+  up: { n: 'Preço unitário', risk: 45, what: 'O cliente paga cada unidade feita pelo preço da lista. Indiretos, contingência e margem estão espalhados dentro de cada preço.',
+    bill: 'As quantidades vêm do que foi feito e medido no terreno.', use: 'Sabe-se o tipo de trabalho mas não a quantidade exata.' },
+  ls: { n: 'Chave na mão', risk: 88, what: 'Um preço fechado para o âmbito todo. Se gastarmos mais horas, o prejuízo é nosso. Pede orçamento de classe 2 ou melhor.',
+    bill: 'Fatura-se por marcos, cada um quando o seu portão está fechado.', use: 'Âmbito bem definido, desenhos fechados.' },
+  mx: { n: 'Misto', risk: 62, what: 'Preço fechado para o que está bem definido, homem-hora para o que pode aparecer. É o mais comum nas paragens.',
+    bill: 'Marcos para a parte fechada, horas picadas para os trabalhos a mais.', use: 'Âmbito base fechado e descobertas pelo caminho.' },
+  cp: { n: 'Custo + margem', risk: 5, what: 'Livro aberto: o cliente paga o custo real que provarmos e uma margem fixa por cima.',
+    bill: 'Custos reais registados (horas picadas, faturas) e a margem acordada.', use: 'Clientes que exigem ver os custos, contratos-quadro longos.' },
+};
+const eur2 = (v) => Number(v || 0).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+const eur0 = (v) => Math.round(Number(v || 0)).toLocaleString('pt-PT') + ' €';
+const nPt = (v, d = 0) => Number(v || 0).toLocaleString('pt-PT', { maximumFractionDigits: d });
+const estNo = (e) => `ORC-${String(e.number).padStart(4, '0')}${e.version > 1 ? ' v' + e.version : ''}`;
+function orcState() { return state.orc || (state.orc = { id: null, mode: 'list', face: null }); }
+function openEstimates() { const st = orcState(); st.id = null; st.mode = 'list'; go('orcamentos'); }
+async function viewEstimates() {
+  if (!canEstimates()) return viewClock();   // code guard as well as the database's
+  const st = orcState();
+  if (st.mode === 'rules') return viewEstimateRules();
+  if (st.id) return viewEstimate(st.id);
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Orçamentar e propor · ISO 9001 §8.2.3</p><h1>Orçamentos</h1></div>
+      ${can('orcamentos.gerir') ? '<button class="btn" id="enew">+ Novo orçamento</button>' : ''}</div>
+    <p class="muted lead">Um só cálculo de custo e cinco formas de dar o preço ao cliente. Quem assina segue as regras da tua empresa, e quem faz o orçamento nunca o assina.</p>
+    <div class="acts orc-top"><button class="btn ghost small" id="erules">${ic('lock')}Quem assina</button></div>
+    <div id="elist">${skel(3)}</div>`;
+  if ($('#enew')) $('#enew').onclick = newEstimate;
+  $('#erules').onclick = () => { st.mode = 'rules'; viewEstimates(); };
+  const el = $('#elist');
+  const { data, error } = await sb.rpc('mini_estimates');
+  if (!el.isConnected) return;
+  if (error) { el.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
+  if (!data.length) {
+    el.innerHTML = `<div class="card">${empty('box', 'Ainda não há orçamentos', can('orcamentos.gerir') ? 'Carrega em «Novo orçamento». Podes começar com um exemplo de números inventados, para aprender o ecrã.' : 'Quando a Orçamentação fizer um, aparece aqui.')}</div>`;
+    return;
+  }
+  const mine = data.filter((e) => e.my_turn);
+  el.innerHTML = `${mine.length ? `<div class="brief"><span class="brief-ic">${ic('warn')}</span><div class="grow"><b>É a tua vez de assinar</b> <span>${mine.length} orçamento(s) à tua espera.</span></div></div>` : ''}
+    <div class="orc-list">${data.map((e) => {
+      const [k, t] = EST_STATUS[e.status] || ['reg', e.status];
+      return `<button type="button" class="card orc-item${e.my_turn ? ' turn' : ''}" data-id="${esc(e.id)}">
+        <div class="orc-item-h"><span class="orc-no">${esc(estNo(e))}</span>${chip(k, t)}${e.my_turn ? chip('fech', 'Assinar') : ''}</div>
+        <b class="orc-t">${esc(e.title)}</b><small class="muted">${esc(e.client)} · ${esc((EST_FORMS[e.form] || {}).n || e.form)} · por ${esc(e.by || '')}</small>
+        <span class="orc-price">${eur0(e.price)}</span></button>`;
+    }).join('')}</div>`;
+  el.querySelectorAll('[data-id]').forEach((b) => b.onclick = () => { st.id = b.dataset.id; st.face = null; viewEstimates(); });
+}
+async function newEstimate() {
+  const { data: r, error: e1 } = await sb.rpc('mini_estimate_rules');
+  if (e1) return toast(friendly(e1));
+  const forms = r.forms || Object.keys(EST_FORMS);
+  const fd = await askSheet('Novo orçamento', `
+    <label for="oc">Cliente</label><input id="oc" name="client" required maxlength="120" placeholder="ex.: Refinaria do Norte">
+    <label for="ot">O que se orçamenta</label><input id="ot" name="title" required maxlength="160" placeholder="ex.: Paragem 2027, instrumentação da unidade 3">
+    <label>Forma de preço</label><div class="chips reasons" role="radiogroup">${forms.map((f, i) => `<label class="chip"><input type="radio" name="form" value="${f}" ${f === 'mx' || (i === 0 && !forms.includes('mx')) ? 'checked' : ''} required>${esc(EST_FORMS[f].n)}</label>`).join('')}</div>
+    <p class="small muted">Podes mudar a forma depois: o total não muda, só a maneira de o mostrar ao cliente.</p>
+    <label class="check inline"><input type="checkbox" name="ex" checked> Começar com um exemplo de números inventados</label>`, 'Criar');
+  if (!fd) return;
+  const { data, error } = await sb.rpc('mini_estimate_create', { p_client: String(fd.get('client') || '').trim(), p_title: String(fd.get('title') || '').trim(),
+    p_form: fd.get('form'), p_example: !!fd.get('ex') });
+  if (error) return toast(friendly(error));
+  const st = orcState(); st.id = data; st.face = null; viewEstimates();
+}
+// The client's view of the same price. Indirects, contingency and margin are spread over what the client sees
+// (every euro of direct cost carries its share), so each form adds up to the price the database computed.
+function estFace(e, form) {
+  const t = e.totals; const price = Number(t.price) || 0;
+  const L = e.lines.map((l) => ({ ...l, qty: Number(l.qty), hpu: Number(l.hours_per_unit || 0), cost: Number(l.cost) }));
+  const direct = L.filter((l) => l.kind !== 'indirect').reduce((a, l) => a + l.cost, 0);
+  const all = L.reduce((a, l) => a + l.cost, 0);
+  const f = direct > 0 ? price / direct : 0;
+  const cats = {};
+  for (const l of L.filter((x) => x.kind === 'labour')) { const k = l.category || 'Mão de obra'; const c = cats[k] || (cats[k] = { h: 0, v: 0 }); c.h += l.qty * l.hpu; c.v += l.cost * f; }
+  const topRate = Object.values(cats).sort((a, b) => b.h - a.h).map((c) => (c.h ? c.v / c.h : 0))[0] || 0;
+  let head; let rows; let foot = 'Total da proposta';
+  if (form === 'hh') {
+    head = ['Categoria', 'Horas', 'Tarifa', 'Valor estimado']; foot = 'Total estimado';
+    rows = Object.entries(cats).map(([k, c]) => [k, nPt(c.h, 1) + ' h', c.h ? eur2(c.v / c.h) + '/h' : '', c.v]);
+    const other = L.filter((l) => l.kind !== 'labour' && l.kind !== 'indirect').reduce((a, l) => a + l.cost, 0);
+    if (other > 0) rows.push(['Materiais, equipamento e subempreitadas', '', 'custo + ' + nPt((f - 1) * 100, 1) + ' %', other * f]);
+  } else if (form === 'up') {
+    head = ['Item', 'Quantidade', 'Preço unitário', 'Total'];
+    const groups = new Map();
+    for (const l of L.filter((x) => x.kind !== 'indirect')) {
+      const k = l.package || l.description; const g = groups.get(k) || { lines: [], v: 0 }; g.lines.push(l); g.v += l.cost * f; groups.set(k, g);
+    }
+    rows = [...groups.entries()].map(([k, g]) => {
+      const base = g.lines.find((l) => l.kind === 'labour') || g.lines[0];
+      return [k, nPt(base.qty, 2) + ' ' + base.unit, base.qty ? eur2(g.v / base.qty) : '', g.v];
+    });
+  } else if (form === 'ls') {
+    head = ['Marco de pagamento', '%', '', 'Valor'];
+    rows = [['Mobilização e plano de inspeção aprovado', 15], ['Trabalho principal feito (conclusão mecânica)', 35], ['Testes e ensaios aceites', 35], ['Dossiê final (Data Book) entregue e aceite', 15]]
+      .map(([n, p]) => [n, p + ' %', '', price * p / 100]);
+  } else if (form === 'mx') {
+    head = ['Parte', 'Forma', '', 'Valor'];
+    const open = price * Number(e.open_pct) / 100;
+    rows = [['Âmbito definido', 'Preço fechado', '', price - open], ['Trabalhos a mais (reserva estimada)', 'Homem-hora' + (topRate ? ': ' + eur2(topRate) + '/h' : ''), '', open]];
+  } else {
+    head = ['Linha', '', '', 'Valor estimado']; foot = 'Total estimado';
+    const cc = Number(t.cost) + Number(t.contingency || 0);
+    rows = [['Custo real (estimativa, com contingência)', '', '', cc], [`Margem acordada (${nPt(e.margin_pct, 1)} % do preço)`, '', '', price - cc]];
+  }
+  // cents: the last row takes the rounding, so the table always adds up to the signed price
+  rows = rows.map((r) => [r[0], r[1], r[2], Math.round(r[3] * 100) / 100]);
+  if (rows.length && direct > 0) rows[rows.length - 1][3] = Math.round((price - rows.slice(0, -1).reduce((a, r) => a + r[3], 0)) * 100) / 100;
+  return { head, rows, foot, empty: !(all > 0) };
+}
+async function viewEstimate(id) {
+  app.innerHTML = `<div id="eone">${skel(4)}</div>`;
+  const { data: e, error } = await sb.rpc('mini_estimate', { p_estimate: id });
+  const box = $('#eone'); if (!box) return;
+  if (error) { orcState().id = null; box.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
+  const st = orcState(); st.e = e;
+  if (!st.face || !e.forms.includes(st.face)) st.face = e.form;
+  renderEstimate();
+}
+function renderEstimate() {
+  const st = orcState(); const e = st.e; const box = $('#eone'); if (!box) return;
+  const t = e.totals; const [k, stx] = EST_STATUS[e.status] || ['reg', e.status];
+  const edit = e.can_edit;
+  const margin = Number(t.price) - Number(t.cost) - Number(t.contingency || 0);
+  const pkgs = new Map();
+  for (const l of e.lines) { const g = pkgs.get(l.package || '') || []; g.push(l); pkgs.set(l.package || '', g); }
+  const face = estFace(e, st.face); const F = EST_FORMS[st.face];
+  const total = face.rows.reduce((a, r) => a + r[3], 0);
+  const reqOk = e.requirements.every((q) => q.got >= q.need);
+  box.innerHTML = `<button class="btn ghost small orc-back" id="eback">← Orçamentos</button>
+    <div class="ph"><div><p class="ph-k">${esc(estNo(e))} · ${esc(e.client)}</p><h1>${esc(e.title)}</h1></div>${chip(k, stx)}</div>
+    ${e.notes ? `<p class="small muted">${esc(e.notes)}</p>` : ''}
+    <div class="kpis orc-kpis"><div class="kpi"><b>${eur0(t.cost)}</b><span>Custo</span></div><div class="kpi"><b>${eur0(t.contingency)}</b><span>Contingência ${nPt(e.contingency_pct, 1)} %</span></div>
+      <div class="kpi"><b>${eur0(margin)}</b><span>Margem ${nPt(e.margin_pct, 1)} %</span></div><div class="kpi big hot"><b id="eprice">${eur0(t.price)}</b><span>Preço de venda</span></div></div>
+    <div class="orc-cols"><section class="orc-cost">
+      <div class="sec-h"><h2>O custo</h2><span class="small muted">${nPt(t.hours, 1)} horas · só a tua empresa vê</span></div>
+      <div class="card orc-knobs">
+        <label for="ecc">Contingência <b id="eccv">${nPt(e.contingency_pct, 1)} %</b></label><input type="range" id="ecc" min="0" max="30" step="0.5" value="${esc(e.contingency_pct)}" ${edit ? '' : 'disabled'}>
+        <label for="emg">Margem <b id="emgv">${nPt(e.margin_pct, 1)} %</b></label><input type="range" id="emg" min="0" max="40" step="0.5" value="${esc(e.margin_pct)}" ${edit ? '' : 'disabled'}>
+        <p class="small muted">Preço = (custo + contingência) ÷ (1 − margem). A margem conta-se sobre o preço, não sobre o custo.</p>
+        <div class="row"><div><label for="eaace">Qualidade do orçamento (AACE)</label><select id="eaace" ${edit ? '' : 'disabled'}>${[5, 4, 3, 2, 1].map((c) => `<option value="${c}" ${Number(e.aace_class) === c ? 'selected' : ''}>${esc(AACE[c])}</option>`).join('')}</select></div></div>
+        <label class="check inline"><input type="checkbox" id="enewc" ${e.new_client ? 'checked' : ''} ${edit ? '' : 'disabled'}> Cliente novo (primeira obra)</label>
+        <label class="check inline"><input type="checkbox" id="enuc" ${e.nuclear ? 'checked' : ''} ${edit ? '' : 'disabled'}> Obra nuclear</label>
+      </div>
+      <div class="orc-lines">${e.lines.length ? [...pkgs.entries()].map(([p, ls]) => `<div class="card orc-pkg"><div class="orc-pkg-h"><b>${esc(p || 'Sem pacote')}</b><span>${eur0(ls.reduce((a, l) => a + Number(l.cost), 0))}</span></div>
+        ${ls.map((l) => `<button type="button" class="orc-line" data-line="${esc(l.id)}" ${edit ? '' : 'disabled'}><span class="grow"><span>${esc(l.description)}</span>
+          <small>${chip('reg', EST_KIND[l.kind])} ${l.kind === 'labour' ? `${nPt(l.qty, 2)} ${esc(l.unit)} × ${nPt(l.hours_per_unit, 2)} h × ${eur2(l.cost_rate)}/h${l.category ? ' · ' + esc(l.category) : ''}` : `${nPt(l.qty, 2)} ${esc(l.unit)} × ${eur2(l.cost_rate)}`}</small></span>
+          <span class="num">${eur0(l.cost)}</span></button>`).join('')}</div>`).join('')
+        : `<div class="card">${empty('box', 'Sem linhas', 'Acrescenta mão de obra, materiais, equipamento, subempreitadas e indiretos.')}</div>`}</div>
+      ${edit ? `<button class="btn ghost wide" id="eadd">+ Acrescentar linha</button>` : ''}
+    </section>
+    <section class="orc-face">
+      <div class="sec-h"><h2>O que o cliente vê</h2></div>
+      <div class="chips" role="group" aria-label="Forma de preço">${e.forms.map((f) => `<button type="button" class="chip" data-f="${f}" aria-pressed="${f === st.face}">${esc(EST_FORMS[f].n)}${f === e.form ? ' ✓' : ''}</button>`).join('')}</div>
+      <div class="card orc-facecard"><p class="small">${esc(F.what)}</p>
+        <div class="tbl-wrap"><table class="grid orc-tbl"><thead><tr>${face.head.map((h, i) => `<th class="${i >= 2 ? 'num' : ''}">${esc(h)}</th>`).join('')}</tr></thead>
+          <tbody>${face.rows.map((r) => `<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td><td class="num">${esc(r[2])}</td><td class="num">${eur2(r[3])}</td></tr>`).join('')}</tbody>
+          <tfoot><tr><td colspan="3">${esc(face.foot)}</td><td class="num">${eur2(total)}</td></tr></tfoot></table></div>
+        ${face.empty ? '' : Math.abs(total - Number(t.price)) < 0.01 ? `<p class="orc-same">${ic('ok')}Igual ao preço calculado: ${eur2(t.price)}</p>` : `<p class="orc-same bad">${ic('warn')}Diferença de ${eur2(total - Number(t.price))}</p>`}
+        <div class="orc-risk" aria-label="Risco para nós"><span>Risco para nós</span><i><u style="left:${F.risk}%"></u></i><small>baixo</small><small>alto</small></div>
+        <dl class="orc-facts"><dt>Como se fatura</dt><dd>${esc(F.bill)}</dd><dt>Quando se usa</dt><dd>${esc(F.use)}</dd></dl>
+        ${edit && st.face !== e.form ? `<button class="btn wide" id="eform">Usar «${esc(F.n)}» neste orçamento</button>` : ''}
+      </div>
+      <div class="sec-h"><h2>Quem assina</h2></div>
+      <div class="card orc-sign">${e.requirements.map((q) => `<div class="orc-req ${q.got >= q.need ? 'ok' : ''}"><div class="grow"><b>${esc(q.label)}</b>
+          <small>${q.need === q.approvers.length && q.need > 1 ? 'Todos' : q.need + ' de ' + q.approvers.length}: ${esc((q.names || []).join(', ') || 'ninguém definido')}</small></div>
+          <span class="orc-cnt">${q.got}/${q.need}</span></div>`).join('')}
+        ${e.signatures.length ? `<ul class="orc-sigs">${e.signatures.map((s) => `<li>${s.approve ? chip('ok', 'Aprovou') : chip('bad', 'Recusou')} <b>${esc(s.name)}</b>${s.for ? ` <small>por ${esc(s.for)} (delegação)</small>` : ''}
+          <small>${esc(fmtDate(String(s.at).slice(0, 10)))} · ${eur2(s.price)}</small>${s.note ? `<p class="small">«${esc(s.note)}»</p>` : ''}</li>`).join('')}</ul>` : ''}
+        <p class="small muted">${e.status === 'draft' ? 'Quando enviares, o orçamento fica congelado: o preço que se assina é este, ao cêntimo.' : e.status === 'review' ? (e.mine ? 'Fizeste este orçamento: não podes ser tu a assiná-lo.' : reqOk ? '' : 'Cada regra que se aplica tem de ficar completa.') : ''}</p>
+        <div class="acts">${edit && can('orcamentos.gerir') ? `<button class="btn big" id="esub" ${e.lines.length ? '' : 'disabled'}>Enviar para assinatura</button>` : ''}
+          ${e.can_sign ? `<button class="btn big" id="eok">${ic('ok')}Aprovar ${eur0(t.price)}</button><button class="btn ghost wide" id="eno">Recusar</button>` : ''}
+          ${e.can_version ? `<button class="btn ghost wide" id="ever">Fazer nova versão (para mudar)</button>` : ''}</div>
+      </div>
+    </section></div>`;
+  $('#eback').onclick = openEstimates;
+  box.querySelectorAll('[data-f]').forEach((b) => b.onclick = () => { st.face = b.dataset.f; renderEstimate(); });
+  box.querySelectorAll('[data-line]').forEach((b) => b.onclick = () => editLine(e.lines.find((l) => l.id === b.dataset.line)));
+  if ($('#eadd')) $('#eadd').onclick = () => editLine(null);
+  if ($('#eform')) $('#eform').onclick = () => saveEstimate({ form: st.face });
+  if (edit) {
+    const knob = (id, key, out) => {
+      const inp = $(id);
+      inp.oninput = () => {   // a preview while sliding; the database recomputes on release
+        const c = Number($('#ecc').value) / 100; const m = Number($('#emg').value) / 100;
+        $(out).textContent = nPt(inp.value, 1) + ' %'; $('#eprice').textContent = eur0(Number(t.cost) * (1 + c) / (1 - m));
+      };
+      inp.onchange = () => saveEstimate({ [key]: Number(inp.value) });
+    };
+    knob('#ecc', 'contingency_pct', '#eccv'); knob('#emg', 'margin_pct', '#emgv');
+    $('#eaace').onchange = (ev) => saveEstimate({ aace_class: Number(ev.target.value) });
+    $('#enewc').onchange = (ev) => saveEstimate({ new_client: ev.target.checked });
+    $('#enuc').onchange = (ev) => saveEstimate({ nuclear: ev.target.checked });
+  }
+  if ($('#esub')) $('#esub').onclick = submitEstimate;
+  if ($('#eok')) $('#eok').onclick = () => signEstimate(true);
+  if ($('#eno')) $('#eno').onclick = () => signEstimate(false);
+  if ($('#ever')) $('#ever').onclick = newEstimateVersion;
+}
+async function saveEstimate(patch) {
+  const st = orcState();
+  const { error } = await sb.rpc('mini_estimate_update', { p_estimate: st.e.id, p_patch: patch });
+  if (error) toast(friendly(error)); else if (patch.form) toast(`Forma de preço: ${EST_FORMS[patch.form].n}. O total não mudou.`);
+  viewEstimate(st.e.id);
+}
+async function editLine(l) {
+  const st = orcState(); const kind = l ? l.kind : 'labour';
+  const pk = [...new Set(st.e.lines.map((x) => x.package).filter(Boolean))];
+  const fd = await askSheet(l ? 'Linha do orçamento' : 'Nova linha', `
+    <label>Tipo</label><div class="chips reasons" role="radiogroup">${Object.entries(EST_KIND).map(([k, n]) => `<label class="chip"><input type="radio" name="kind" value="${k}" ${k === kind ? 'checked' : ''} required>${esc(n)}</label>`).join('')}</div>
+    <label for="lp">Pacote de trabalho</label><input id="lp" name="package" list="lpl" maxlength="120" value="${esc(l ? l.package || '' : '')}" placeholder="ex.: Montagem de instrumentos">
+    <datalist id="lpl">${pk.map((p) => `<option value="${esc(p)}">`).join('')}</datalist>
+    <label for="ld">Descrição</label><input id="ld" name="description" required maxlength="200" value="${esc(l ? l.description : '')}">
+    <div class="row"><div><label for="lq">Quantidade</label><input id="lq" name="qty" required inputmode="decimal" value="${esc(l ? nPt(l.qty, 3).replace(/\s/g, '') : '')}"></div>
+      <div><label for="lu">Unidade</label><input id="lu" name="unit" maxlength="12" value="${esc(l ? l.unit : 'un')}" placeholder="un, m, sem, vg"></div></div>
+    <div class="row" id="llab"><div><label for="lh">Horas por unidade</label><input id="lh" name="hpu" inputmode="decimal" value="${esc(l && l.hours_per_unit != null ? nPt(l.hours_per_unit, 3).replace(/\s/g, '') : '')}"></div>
+      <div><label for="lc">Categoria</label><input id="lc" name="category" maxlength="60" value="${esc(l ? l.category || '' : '')}" placeholder="ex.: Instrumentista"></div></div>
+    <label for="lr" id="lrl">Custo por hora (€)</label><input id="lr" name="rate" required inputmode="decimal" value="${esc(l ? nPt(l.cost_rate, 2).replace(/\s/g, '') : '')}">
+    <p class="small muted">Custo, não preço: o que isto nos custa. O preço sai da contingência e da margem.</p>
+    ${l ? '<button class="btn ghost wide danger-t" value="del" formnovalidate>Apagar esta linha</button>' : ''}`, 'Guardar', (d) => {
+    const sync = () => { const lab = d.querySelector('input[name=kind]:checked').value === 'labour';
+      d.querySelector('#llab').hidden = !lab; d.querySelector('#lh').required = lab; d.querySelector('#lrl').textContent = lab ? 'Custo por hora (€)' : 'Custo por unidade (€)'; };
+    d.querySelectorAll('input[name=kind]').forEach((r) => r.onchange = sync); sync();
+  });
+  if (!fd) return;
+  if (fd.get('_v') === 'del') {
+    const { error } = await sb.rpc('mini_estimate_line_delete', { p_line: l.id });
+    if (error) return toast(friendly(error));
+    toast('Linha apagada.'); return viewEstimate(st.e.id);
+  }
+  const n = (k) => { const s = String(fd.get(k) || '').replace(/\s/g, '').replace(',', '.'); return s === '' ? null : Number(s); };
+  if ([n('qty'), n('rate')].some((x) => x === null || !Number.isFinite(x) || x < 0) || (fd.get('kind') === 'labour' && !(n('hpu') >= 0))) return toast('Escreve números válidos (podes usar vírgula).');
+  const line = { id: l ? l.id : null, kind: fd.get('kind'), package: fd.get('package'), description: fd.get('description'), qty: n('qty'), unit: fd.get('unit'),
+    hours_per_unit: n('hpu'), category: fd.get('category'), cost_rate: n('rate') };
+  const { error } = await sb.rpc('mini_estimate_line_save', { p_estimate: st.e.id, p_line: line });
+  if (error) return toast(friendly(error));
+  viewEstimate(st.e.id);
+}
+async function submitEstimate() {
+  const e = orcState().e;
+  const fd = await askSheet('Enviar para assinatura', `<p>O orçamento fica congelado com o preço de <b>${eur2(e.totals.price)}</b>, na forma «${esc(EST_FORMS[e.form].n)}».</p>
+    <p class="small muted">Para mudar depois, faz-se uma nova versão, que volta a precisar das assinaturas. Assina quem as regras da empresa disserem.</p>`, 'Enviar');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_estimate_submit', { p_estimate: e.id });
+  if (error) return toast(friendly(error));
+  toast('Enviado. Quem tem de assinar já o vê na lista.'); viewEstimate(e.id);
+}
+async function signEstimate(ok) {
+  const e = orcState().e;
+  const fd = await askSheet(ok ? 'Aprovar o orçamento' : 'Recusar o orçamento', `<p>${esc(estNo(e))} · ${esc(e.title)}<br><b>${eur2(e.totals.price)}</b> · ${esc(EST_FORMS[e.form].n)} · margem ${nPt(e.margin_pct, 1)} %</p>
+    <label for="sn">${ok ? 'Nota (opcional)' : 'Porquê? *'}</label><input id="sn" name="note" maxlength="300" ${ok ? '' : 'required minlength="5"'}>
+    <p class="small muted">A tua assinatura fica guardada com o preço, a hora e o teu nome. Não se apaga.</p>`, ok ? 'Aprovar' : 'Recusar');
+  if (!fd) return;
+  const { data, error } = await sb.rpc('mini_estimate_sign', { p_estimate: e.id, p_approve: ok, p_note: String(fd.get('note') || '').trim() || null });
+  if (error) return toast(friendly(error));
+  toast(data === 'approved' ? 'Aprovado. O preço está fechado.' : data === 'rejected' ? 'Recusado. Quem o fez pode fazer uma nova versão.' : 'Assinado. Ainda faltam assinaturas.');
+  viewEstimate(e.id);
+}
+async function newEstimateVersion() {
+  const st = orcState();
+  const { data, error } = await sb.rpc('mini_estimate_new_version', { p_estimate: st.e.id });
+  if (error) return toast(friendly(error));
+  toast('Nova versão em rascunho. A anterior fica guardada.'); st.id = data; viewEstimate(data);
+}
+
+// Who signs, per company: rules (value, margin, form, new client, nuclear) → named people and how many of them.
+// Every rule that matches must be met; one rule must cover any value, so no estimate is left without signers.
+const EST_TEMPLATES = {
+  one: { n: 'Uma pessoa assina', make: (p) => [{ label: 'Qualquer valor', approvers: p.slice(0, 1), need: 1 }] },
+  two: { n: 'Dois responsáveis, basta um', make: (p) => [{ label: 'Qualquer valor', approvers: p.slice(0, 2), need: 1 },
+    { label: 'Acima de 250 000 €: os dois', min_value: 250000, approvers: p.slice(0, 2), need: Math.min(2, p.slice(0, 2).length) },
+    { label: 'Margem abaixo de 8 %: os dois', margin_below: 8, approvers: p.slice(0, 2), need: Math.min(2, p.slice(0, 2).length) }] },
+  lvl: { n: 'Três níveis por valor', make: (p) => [{ label: 'Qualquer valor', approvers: p.slice(0, 1), need: 1 },
+    { label: 'Acima de 100 000 €', min_value: 100000, approvers: p.slice(0, 2), need: Math.min(2, p.slice(0, 2).length) },
+    { label: 'Acima de 1 000 000 €', min_value: 1000000, approvers: p.slice(0, 3), need: Math.min(2, p.slice(0, 3).length) }] },
+};
+function ruleWhen(r) {
+  const w = [];
+  if (r.min_value != null) w.push('a partir de ' + eur0(r.min_value));
+  if (r.max_value != null) w.push('até ' + eur0(r.max_value));
+  if (r.margin_below != null) w.push('margem abaixo de ' + nPt(r.margin_below, 1) + ' %');
+  if (r.forms && r.forms.length) w.push(r.forms.map((f) => EST_FORMS[f].n).join(' ou '));
+  if (r.new_client_only) w.push('cliente novo');
+  if (r.nuclear_only) w.push('obra nuclear');
+  return w.length ? w.join(' · ') : 'Qualquer valor';
+}
+async function viewEstimateRules() {
+  const st = orcState();
+  app.innerHTML = `<button class="btn ghost small orc-back" id="eback">← Orçamentos</button>
+    <div class="ph"><div><p class="ph-k">Matriz de autoridade · ISO 9001 §5.3</p><h1>Quem assina</h1></div></div>
+    <p class="muted lead">Cada empresa decide quem assina os orçamentos e quando. Todas as regras que se aplicam a um orçamento têm de ficar completas. Quem fez o orçamento nunca conta.</p>
+    <div id="erl">${skel(3)}</div>`;
+  $('#eback').onclick = openEstimates;
+  const { data, error } = await sb.rpc('mini_estimate_rules');
+  const el = $('#erl'); if (!el) return;
+  if (error) { el.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
+  st.r = { ...data, draft: data.rules.map((r) => ({ ...r })), formsDraft: [...data.forms], dirty: false };
+  renderEstimateRules();
+}
+function renderEstimateRules() {
+  const st = orcState(); const R = st.r; const el = $('#erl'); if (!el) return;
+  const edit = R.can_edit; const signers = R.people.filter((p) => p.can_sign);
+  const name = (id) => (R.people.find((p) => p.id === id) || {}).name || '?';
+  el.innerHTML = `<div class="sec-h"><h2>Formas de preço usadas</h2></div>
+    <div class="chips" role="group">${Object.entries(EST_FORMS).map(([k, f]) => `<button type="button" class="chip" data-form="${k}" aria-pressed="${R.formsDraft.includes(k)}" ${edit ? '' : 'disabled'}>${esc(f.n)}</button>`).join('')}</div>
+    <div class="sec-h"><h2>Regras</h2></div>
+    ${edit ? `<p class="small muted">Começa por um modelo e acerta as pessoas:</p><div class="chips">${Object.entries(EST_TEMPLATES).map(([k, t]) => `<button type="button" class="chip" data-tpl="${k}">${esc(t.n)}</button>`).join('')}</div>` : ''}
+    ${R.draft.length ? '' : `<div class="card"><p>Sem regras: assina um administrador da empresa.</p></div>`}
+    <div class="orc-rules">${R.draft.map((r, i) => `<div class="card orc-rule"><div class="grow"><b>${esc(r.label || 'Regra')}</b><small class="muted">${esc(ruleWhen(r))}</small>
+        <small>${r.need === r.approvers.length && r.need > 1 ? 'Todos' : r.need + ' de ' + r.approvers.length}: ${esc(r.approvers.map(name).join(', '))}</small></div>
+        ${edit ? `<button class="btn ghost small" data-edit="${i}">Mudar</button>` : ''}</div>`).join('')}</div>
+    ${edit ? `<div class="acts"><button class="btn ghost" id="radd">+ Regra</button><button class="btn" id="rsave" ${R.dirty ? '' : 'disabled'}>Guardar regras</button></div>
+      ${signers.length ? '' : '<p class="small muted">Ninguém tem ainda o direito de assinar orçamentos. Dá-o em Secretaria › Departamentos e acessos («Aprovar o preço»).</p>'}` : '<p class="small muted">Só quem tem «Definir quem assina» pode mudar as regras.</p>'}
+    <div class="sec-h"><h2>Férias: delegar a assinatura</h2></div>
+    <div class="card">${R.delegations.length ? `<ul class="orc-sigs">${R.delegations.map((d) => `<li><b>${esc(d.from)}</b> → ${esc(d.to)} <small>até ${esc(fmtDate(d.until))}</small></li>`).join('')}</ul>` : '<p class="small muted">Nenhuma delegação em vigor.</p>'}
+      ${can('orcamentos.aprovar') ? '<button class="btn ghost wide" id="rdel">Delegar a minha assinatura</button>' : ''}
+      <p class="small muted">Acaba sozinha na data marcada (no máximo 90 dias). Quem recebe assina em teu nome, e fica escrito.</p></div>`;
+  el.querySelectorAll('[data-form]').forEach((b) => b.onclick = () => {
+    const k = b.dataset.form; R.formsDraft = R.formsDraft.includes(k) ? R.formsDraft.filter((x) => x !== k) : [...R.formsDraft, k];
+    if (!R.formsDraft.length) { R.formsDraft = [k]; toast('Fica pelo menos uma forma de preço.'); }
+    R.dirty = true; renderEstimateRules();
+  });
+  el.querySelectorAll('[data-tpl]').forEach((b) => b.onclick = () => {
+    if (!signers.length) return toast('Primeiro dá a alguém o direito de assinar (Departamentos e acessos).');
+    R.draft = EST_TEMPLATES[b.dataset.tpl].make(signers.map((p) => p.id)); R.dirty = true; renderEstimateRules();
+  });
+  el.querySelectorAll('[data-edit]').forEach((b) => b.onclick = () => editRule(Number(b.dataset.edit)));
+  if ($('#radd')) $('#radd').onclick = () => editRule(-1);
+  if ($('#rsave')) $('#rsave').onclick = saveRules;
+  if ($('#rdel')) $('#rdel').onclick = delegateSignature;
+}
+async function editRule(i) {
+  const R = orcState().r; const r = i >= 0 ? R.draft[i] : { label: '', approvers: [], need: 1 };
+  const signers = R.people.filter((p) => p.can_sign || r.approvers.includes(p.id));
+  const v = (x) => (x == null ? '' : String(x).replace('.', ','));
+  const fd = await askSheet(i >= 0 ? 'Mudar a regra' : 'Nova regra', `
+    <label for="rl">Nome</label><input id="rl" name="label" required maxlength="80" value="${esc(r.label)}" placeholder="ex.: Acima de 500 000 €">
+    <p class="small muted">Quando se aplica (deixa em branco o que não interessa; tudo em branco = qualquer valor):</p>
+    <div class="row"><div><label for="rmin">Preço a partir de (€)</label><input id="rmin" name="min" inputmode="decimal" value="${esc(v(r.min_value))}"></div>
+      <div><label for="rmax">Preço até (€)</label><input id="rmax" name="max" inputmode="decimal" value="${esc(v(r.max_value))}"></div></div>
+    <label for="rmg">Margem abaixo de (%)</label><input id="rmg" name="mg" inputmode="decimal" value="${esc(v(r.margin_below))}">
+    <label>Só nestas formas de preço</label><div class="chips reasons">${Object.entries(EST_FORMS).map(([k, f]) => `<label class="chip"><input type="checkbox" name="forms" value="${k}" ${(r.forms || []).includes(k) ? 'checked' : ''}>${esc(f.n)}</label>`).join('')}</div>
+    <label class="check inline"><input type="checkbox" name="nc" ${r.new_client_only ? 'checked' : ''}> Só cliente novo</label>
+    <label class="check inline"><input type="checkbox" name="nu" ${r.nuclear_only ? 'checked' : ''}> Só obra nuclear</label>
+    <label>Quem pode assinar</label><div class="chips reasons">${signers.map((p) => `<label class="chip"><input type="checkbox" name="who" value="${esc(p.id)}" ${r.approvers.includes(p.id) ? 'checked' : ''}>${esc(p.name)}</label>`).join('') || '<p class="small muted">Ninguém tem o direito de assinar orçamentos.</p>'}</div>
+    <label for="rneed">Quantas assinaturas são precisas</label><input id="rneed" name="need" type="number" min="1" max="9" required value="${esc(r.need)}">
+    ${i >= 0 ? '<button class="btn ghost wide danger-t" value="del" formnovalidate>Apagar esta regra</button>' : ''}`, 'OK');
+  if (!fd) return;
+  if (fd.get('_v') === 'del') { R.draft.splice(i, 1); R.dirty = true; return renderEstimateRules(); }
+  const n = (k) => { const s = String(fd.get(k) || '').replace(/\s/g, '').replace(',', '.'); return s === '' ? null : Number(s); };
+  const who = fd.getAll('who'); const need = Number(fd.get('need'));
+  if (!who.length) return toast('Escolhe pelo menos uma pessoa.');
+  if (need > who.length) return toast(`Pedes ${need} assinaturas mas só escolheste ${who.length} pessoa(s).`);
+  const forms = fd.getAll('forms');
+  const nr = { label: String(fd.get('label')).trim(), min_value: n('min'), max_value: n('max'), margin_below: n('mg'), forms: forms.length ? forms : null,
+    new_client_only: !!fd.get('nc'), nuclear_only: !!fd.get('nu'), approvers: who, need };
+  if (i >= 0) R.draft[i] = nr; else R.draft.push(nr);
+  R.dirty = true; renderEstimateRules();
+}
+async function saveRules() {
+  const R = orcState().r;
+  if (!R.draft.some((r) => r.min_value == null && r.max_value == null && r.margin_below == null && !(r.forms && r.forms.length) && !r.new_client_only && !r.nuclear_only)) {
+    return toast('Falta uma regra «qualquer valor», para nenhum orçamento ficar sem quem assine.');
+  }
+  const rules = R.draft.map((r) => ({ label: r.label, min_value: r.min_value, max_value: r.max_value, margin_below: r.margin_below, forms: r.forms && r.forms.length ? r.forms : null,
+    new_client_only: !!r.new_client_only, nuclear_only: !!r.nuclear_only, approvers: r.approvers, need: r.need }));
+  const { error } = await sb.rpc('mini_estimate_rules_save', { p_rules: rules, p_forms: R.formsDraft });
+  if (error) return toast(friendly(error));
+  toast('Regras guardadas. Valem para os orçamentos enviados a partir de agora.'); viewEstimateRules();
+}
+async function delegateSignature() {
+  const R = orcState().r;
+  const others = R.people.filter((p) => p.can_sign && p.id !== state.me.user_id);
+  if (!others.length) return toast('Não há mais ninguém com o direito de assinar orçamentos.');
+  const max = isoDay(new Date(Date.now() + 90 * 86400000)); const min = isoDay(new Date());
+  const fd = await askSheet('Delegar a minha assinatura', `
+    <label>Para quem</label><div class="chips reasons" role="radiogroup">${others.map((p, i) => `<label class="chip"><input type="radio" name="to" value="${esc(p.id)}" ${i ? '' : 'required'}>${esc(p.name)}</label>`).join('')}</div>
+    <label for="du">Até</label><input id="du" name="until" type="date" required min="${min}" max="${max}">`, 'Delegar');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_estimate_delegate', { p_to: fd.get('to'), p_until: fd.get('until') });
+  if (error) return toast(friendly(error));
+  toast('Delegado. Acaba sozinho nessa data.'); viewEstimateRules();
 }
