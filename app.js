@@ -487,12 +487,14 @@ const skel = (n = 3) => `<div class="skel" aria-busy="true" aria-label="A carreg
   `<div class="card"><span class="av"></span><div class="grow"><div class="sk" style="width:${62 - i * 9}%"></div><div class="sk" style="width:${38 + i * 6}%;margin-top:10px"></div></div></div>`).join('')}</div>`;
 const ART = {
   helmet: '<path d="M30 58a30 30 0 0 1 60 0v6H30z" fill="var(--brand)"/><rect x="22" y="62" width="76" height="9" rx="4.5" fill="var(--brand)"/><path d="M54 28h12v20H54z" fill="var(--accent)"/><ellipse cx="60" cy="78" rx="34" ry="4" fill="var(--line)"/>',
-  calendar: '<rect x="18" y="18" width="84" height="58" rx="8" fill="var(--surface-2)" stroke="var(--line)" stroke-width="2"/><path d="M18 32h84" stroke="var(--line)" stroke-width="2"/><rect x="34" y="10" width="6" height="16" rx="3" fill="var(--brand)"/><rect x="80" y="10" width="6" height="16" rx="3" fill="var(--brand)"/><circle cx="60" cy="54" r="13" fill="var(--accent)"/><path d="M60 47v7l5 3" stroke="#0f1d1c" stroke-width="3" fill="none" stroke-linecap="round"/>',
+  calendar: '<rect x="18" y="18" width="84" height="58" rx="8" fill="var(--surface-2)" stroke="var(--line)" stroke-width="2"/><path d="M18 32h84" stroke="var(--line)" stroke-width="2"/><rect x="34" y="10" width="6" height="16" rx="3" fill="var(--brand)"/><rect x="80" y="10" width="6" height="16" rx="3" fill="var(--brand)"/><circle cx="60" cy="54" r="13" fill="var(--accent)"/><path d="M60 47v7l5 3" stroke="var(--on-accent)" stroke-width="3" fill="none" stroke-linecap="round"/>',
   box: '<path d="M22 34l38-16 38 16v34l-38 14-38-14z" fill="var(--surface-2)" stroke="var(--line)" stroke-width="2"/><path d="M22 34l38 14 38-14M60 48v34" stroke="var(--line)" stroke-width="2" fill="none"/><path d="M41 26l38 16" stroke="var(--accent)" stroke-width="5"/>',
   card: '<rect x="20" y="20" width="80" height="50" rx="8" fill="var(--surface-2)" stroke="var(--line)" stroke-width="2"/><rect x="30" y="50" width="28" height="6" rx="3" fill="var(--brand)"/><path d="M76 34a10 10 0 0 1 14 0M80 39a4 4 0 0 1 6 0" stroke="var(--accent)" stroke-width="3" fill="none" stroke-linecap="round"/>',
   check: '<circle cx="60" cy="44" r="30" fill="var(--ok-bg)"/><path d="M46 45l10 10 18-20" stroke="var(--ok)" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
 };
 const empty = (art, title, text) => `<div class="empty"><svg viewBox="0 0 120 84" aria-hidden="true">${ART[art] || ART.box}</svg><b>${esc(title)}</b>${text ? `<p>${esc(text)}</p>` : ''}</div>`;
+// The same shape for a load that failed: red icon, plain words, optional "Tentar outra vez" button (id given by the screen).
+const errorState = (text, retryId) => `<div class="empty error" role="alert"><span class="e-ic">${ic('warn')}</span><b>Não foi possível carregar</b><p>${esc(text)}</p>${retryId ? `<button class="btn ghost" id="${esc(retryId)}">Tentar outra vez</button>` : ''}</div>`;
 // One line of help, the rest behind an "i".
 const more = (label, html) => `<details class="more"><summary>${esc(label)}</summary><div>${html}</div></details>`;
 // Day bar: periods "08:00–12:00 · 13:00–?" over 06:00–20:00 (wider if needed). Open period: to now (today) or dashed (missing).
@@ -539,12 +541,24 @@ document.getElementById('sol').addEventListener('click', () => {
   applyTheme(); toast(on ? 'Modo sol: mais contraste.' : 'Modo normal.');
 });
 
-function toast(msg) {
+// Toast at the bottom with an icon and a colour per kind. toast(msg) guesses: an error from friendly() or a "não…/falta…" line is
+// 'bad' (red, stays 8 s, closes with a tap), a "guardado/criada/…" line is 'ok', the rest 'info'. toast(msg, kind) to say it.
+const TOAST_BAD = /^(erro|não |sem |falta|escolhe|escreve|só |junta |tenta |as duas|esta pessoa|este |já )|não (foi|consegu|pode|tem|há|está)|falh|inválid|caducad|bloquead|recusad|expir/i;
+const TOAST_OK = /(guardad|criad|registad|enviad|aprovad|apagad|feito|concluíd|atualizad|adicionad|removid|marcad|fechad|validad|assinad|copiad|entregue|recebid|ligad|desativad|reativad|cancelad|reservad|obrigad)[oa]?s?\b/i;
+let lastFriendly = '';
+function toast(msg, kind) {
   const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 3500);
+  msg = String(msg ?? '');
+  kind = kind || (msg === lastFriendly || TOAST_BAD.test(msg) ? 'bad' : TOAST_OK.test(msg) ? 'ok' : 'info');
+  t.className = kind;
+  t.setAttribute('role', kind === 'bad' ? 'alert' : 'status');
+  t.innerHTML = `<span class="t-ic">${ic({ ok: 'ok', bad: 'warn' }[kind] || 'info')}</span><span class="grow">${esc(msg)}</span>${kind === 'bad' ? `<button class="t-x" type="button" aria-label="Fechar">${ic('x')}</button>` : ''}`;
+  t.onclick = kind === 'bad' ? () => t.classList.remove('show') : null;
+  requestAnimationFrame(() => t.classList.add('show'));
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), kind === 'bad' ? 8000 : 3500);
 }
-function friendly(err) {
+function friendly(err) { return (lastFriendly = friendlyText(err)); }
+function friendlyText(err) {
   const msg = (err && (err.message || err.error_description || err.hint)) || String(err);
   if (AUTH_LOST.test(msg)) checkSession();
   // A missed entry for a person who was blocked at that time (inactive, documents): say why, in plain words.
@@ -914,7 +928,7 @@ function showNetworkError() {
 }
 // Before login: brand background, logo, one white card. No menu, no data.
 function signedOut(on) { document.body.classList.toggle('signed-out', !!on); }
-const LOGO = (id) => `<svg viewBox="0 0 44 44" aria-hidden="true"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#818cf8"/><stop offset="1" stop-color="#4338ca"/></linearGradient></defs><rect width="44" height="44" rx="12" fill="url(#${id})"/><path d="M31.5 15.2A11 11 0 1 0 33 22" fill="none" stroke="#fff" stroke-width="4.6" stroke-linecap="round"/><path d="M22.5 22H27" stroke="#fff" stroke-width="4.6" stroke-linecap="round"/><circle cx="33" cy="22" r="3.3" fill="#fbbf24"/></svg>`;
+const LOGO = (id) => `<svg viewBox="0 0 44 44" aria-hidden="true"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1a7f95"/><stop offset="1" stop-color="#0a3d4b"/></linearGradient></defs><rect width="44" height="44" rx="12" fill="url(#${id})"/><path d="M31.5 15.2A11 11 0 1 0 33 22" fill="none" stroke="#fff" stroke-width="4.6" stroke-linecap="round"/><path d="M22.5 22H27" stroke="#fff" stroke-width="4.6" stroke-linecap="round"/><circle cx="33" cy="22" r="3.3" fill="#f6b400"/></svg>`;
 // Before login: the shop window. Left (computer) or top (phone) sells the app; the card only asks for what is needed.
 // Marketing only: no menu, no data, nothing that needs a session.
 function authScreen(inner) {
@@ -923,7 +937,7 @@ function authScreen(inner) {
   const feat = (i, b, t) => `<li><span class="fi">${ic(i)}</span><div><b>${b}</b><small>${t}</small></div></li>`;
   app.innerHTML = `<div class="auth">
     <aside class="auth-hero">
-      <div class="logo-big">${LOGO('lgA')}<div><b>GestNow</b><span>Operações de obra industrial</span></div></div>
+      <div class="logo-big">${LOGO('lgA')}<div><b>GestNow</b><span>Gestão de obra industrial</span></div></div>
       <div class="auth-pitch">
         <h2>A obra inteira,<br><em>num toque.</em></h2>
         <p>Picagem por cartão, horas validadas e documentos em dia. Feito para equipas que não podem parar.</p>
