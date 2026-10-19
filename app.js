@@ -37,6 +37,66 @@ const REASON_PREFIX = {
   'skill_missing:': 'Falta a competência: ',
 };
 const ERRORS = [
+  [/this person may not take tool (\S+) \((.*)\)/i, 'Esta pessoa não pode levar a $1: falta formação ou documento válido ($2).'],
+  [/tool (\S+) carries a tracker that is not Ex-certified/i, 'A $1 tem um localizador sem certificação Ex: tira-o antes de entrar em zona ATEX.'],
+  [/tool (\S+) is in an ATEX zone: only an Ex-certified tracker/i, 'A $1 está em zona ATEX: só pode levar um localizador com certificação Ex.'],
+  [/a gateway that is not Ex-certified cannot be placed in an ATEX zone/i, 'Um recetor sem certificação Ex não pode ficar numa zona ATEX.'],
+  [/Ex-certified tags need BLE or GPS switched on/i, 'Para etiquetas Ex, liga primeiro Bluetooth ou GPS.'],
+  [/has not switched on Ex-certified tags/i, 'A empresa não ligou as etiquetas com certificação Ex.'],
+  [/has not switched on this kind of tracker/i, 'A empresa não ligou este tipo de localizador. Liga-o em Ferramentas › Rastreio.'],
+  [/a GPS reading needs latitude and longitude/i, 'Uma leitura GPS precisa de latitude e longitude.'],
+  [/a second person must decide: you asked for this write-off/i, 'Outra pessoa tem de decidir: foste tu que pediste este abate.'],
+  [/a write-off needs a request and a second person/i, 'Um abate precisa de um pedido e de uma segunda pessoa: usa «Pedir abate».'],
+  [/a write-off request is (already )?open for this tool/i, 'Esta ferramenta já tem um pedido de abate aberto.'],
+  [/write-off request not found/i, 'Pedido de abate não encontrado.'],
+  [/this request was already decided/i, 'Este pedido já foi decidido.'],
+  [/this tool is already written off/i, 'Esta ferramenta já foi abatida.'],
+  [/choose the site this write-off goes to/i, 'Escolhe a obra: cada abate vai para uma obra.'],
+  [/a count is already open here/i, 'Já há uma contagem aberta aqui. Continua essa.'],
+  [/choose the warehouse or the site to count/i, 'Escolhe o armazém ou a obra a contar.'],
+  [/count not found/i, 'Contagem não encontrada.'],
+  [/the count is closed/i, 'Esta contagem já está fechada.'],
+  [/choose the kind of tag/i, 'Escolhe o tipo de etiqueta.'],
+  [/choose the kind of tracker/i, 'Escolhe o tipo de localizador.'],
+  [/the tag code is not valid/i, 'O código da etiqueta não é válido.'],
+  [/this device is already on another tool/i, 'Este aparelho já está noutra ferramenta.'],
+  [/this device is already registered/i, 'Este aparelho já está registado.'],
+  [/this tool already has a tracker of this kind/i, 'Esta ferramenta já tem um localizador deste tipo.'],
+  [/write the device number/i, 'Escreve o número do aparelho.'],
+  [/tracker not found/i, 'Localizador não encontrado.'],
+  [/gateway not found|unknown gateway/i, 'Recetor não encontrado.'],
+  [/unknown device/i, 'Aparelho desconhecido.'],
+  [/name the gateway/i, 'Dá um nome ao recetor.'],
+  [/choose the warehouse or the site of the gateway/i, 'Escolhe o armazém ou a obra onde fica o recetor.'],
+  [/only the tracker service reports readings/i, 'Só o serviço de localização envia leituras.'],
+  [/reading time out of range/i, 'A hora da leitura não é válida.'],
+  [/choose the tool or the tool type/i, 'Escolhe a ferramenta ou o tipo de ferramenta.'],
+  [/choose the tools/i, 'Escolhe as ferramentas.'],
+  [/choose the reason/i, 'Escolhe o motivo.'],
+  [/a choice is not valid/i, 'Uma das escolhas não é válida.'],
+  [/a reference is not valid/i, 'Uma referência não é válida.'],
+  [/document type not found/i, 'Tipo de documento não encontrado.'],
+  [/review not found/i, 'Revisão não encontrada.'],
+  [/this review is already closed/i, 'Esta revisão já está fechada.'],
+  [/write the conclusion of the review/i, 'Escreve a conclusão da revisão (10 letras ou mais).'],
+  [/days out of range/i, 'Número de dias fora do limite.'],
+  [/period out of range/i, 'O período não é válido.'],
+  [/quantity out of range/i, 'A quantidade não é válida.'],
+  [/status not known/i, 'Estado desconhecido.'],
+  [/only a photo is accepted here/i, 'Aqui só aceita fotografia.'],
+  [/only the warehouse moves a tool to another site/i, 'Só o armazém muda uma ferramenta para outra obra.'],
+  [/say how the tool came back/i, 'Diz como voltou a ferramenta.'],
+  [/say who repairs it/i, 'Diz quem a vai reparar.'],
+  [/^the person who receives taps their own card/i, 'Quem recebe passa o próprio cartão.'],
+  [/the tool is already at repair/i, 'A ferramenta já está em reparação.'],
+  [/the tool is already with this person/i, 'A ferramenta já está com esta pessoa.'],
+  [/the tool is at repair: record it back/i, 'A ferramenta está em reparação: regista primeiro que voltou.'],
+  [/this tool is not at repair/i, 'Esta ferramenta não está em reparação.'],
+  [/this tool is not here: use found/i, 'Esta ferramenta está dada como desaparecida: usa «Encontrada».'],
+  [/this tool is not missing/i, 'Esta ferramenta não está desaparecida.'],
+  [/this tool is missing/i, 'Esta ferramenta está desaparecida.'],
+  [/warehouse evidence never changes/i, 'As provas do armazém nunca se alteram.'],
+  [/not enough stock of (.+) \(there are (.+)\)/i, 'Não há stock suficiente de $1 (há $2).'],
   [/choose the site this expense goes to/i, 'Escolhe a obra: cada despesa vai para uma obra.'],
   [/say who paid/i, 'Diz quem pagou: tu (para te reembolsarem) ou a empresa.'],
   [/write the amount and the date of the receipt/i, 'Escreve o valor e a data do talão.'],
@@ -636,7 +696,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '46';
+const APP_VERSION = '47';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -3321,9 +3381,9 @@ function viewMine() {
   const me = state.people.find((x) => x.id === state.me.collaborator_id);
   app.innerHTML = `<div class="ph"><div><p class="ph-k">${esc((me && me.full_name) || '')}</p><h1>As minhas horas</h1></div></div>
     <div class="chips" style="margin-bottom:12px">${months.map((m) => `<button class="chip" data-m="${m}" aria-pressed="${m === state.mineMonth}">${esc(mName(m))}</button>`).join('')}</div>
-    <div id="mytrips"></div><div id="myexp"></div><div id="myclimb"></div><div class="mine-grid"><div><div id="minetop">${skel(1)}</div><div id="minepay"></div><div id="mine">${skel(3)}</div></div>
+    <div id="mytrips"></div><div id="myexp"></div><div id="myclimb"></div><div id="mytools"></div><div class="mine-grid"><div><div id="minetop">${skel(1)}</div><div id="minepay"></div><div id="mine">${skel(3)}</div></div>
     <div><div id="minereq"></div><div id="minesite"></div><div id="pdmine"></div></div></div>`;
-  loadMyPerDiems(); loadMyRequests(); loadMyTravels(); loadMyExpenses(); loadMyClimb();
+  loadMyPerDiems(); loadMyRequests(); loadMyTravels(); loadMyExpenses(); loadMyClimb(); loadMyTools();
   app.querySelectorAll('[data-m]').forEach((b) => b.onclick = () => { state.mineMonth = b.dataset.m; viewMine(); });
   loadMine();
   state.timer = setInterval(() => { if (state.view === 'minhas' && document.visibilityState === 'visible') loadMine(true); }, 60000);
@@ -6006,7 +6066,7 @@ function whSign() {
   const why = $('#whr') ? $('#whr').value.trim() : '';
   const dueDay = $('#whdue') ? $('#whdue').value : null;
   const req = { p_warehouse: W.wid, p_collab: p.id, p_lines: W.cart.map((c) => ({ item: c.item, qty: c.qty })), p_tools: W.tools.length ? W.tools : null,
-    p_project: ($('#whsite') && $('#whsite').value) || null, p_due: dueDay ? zonedToUtc(`${dueDay}T20:00`, DEFAULT_TZ) : null, p_reason: why || null, p_client_id: W.batch || (W.batch = uuid()) };
+    p_project: ($('#whsite') && $('#whsite').value) || null, p_due: dueDay && new Date(zonedToUtc(`${dueDay}T20:00`, DEFAULT_TZ)) > new Date() ? zonedToUtc(`${dueDay}T20:00`, DEFAULT_TZ) : null, p_reason: why || null, p_client_id: W.batch || (W.batch = uuid()) };
   const d = document.createElement('dialog'); d.className = 'dlg';
   d.innerHTML = `<form method="dialog"><h2>${esc(p.name)} assina</h2><p class="small muted">Recebe: ${esc([...W.cart.map((c) => `${c.qty} × ${c.name}`), ...W.tools.map((id) => (W.toolList.find((t) => t.id === id) || {}).tag)].join(', '))}.</p>
     ${nfcOk ? `<button class="tapzone reading" type="button"><span class="ring">${ic('tap')}</span><b>${esc(p.name.split(' ')[0])}, encoste o seu cartão</b></button>` : ''}
@@ -6160,32 +6220,470 @@ async function setMin(f) {
 }
 
 // ---- Ferramentas
+// ---- Ferramentas (sql/76): every tool has an owner at every minute; trail, write-off with four eyes, repair,
+// calibration with a suspect-results review, counts, tracking tiers (QR/NFC, Bluetooth, GPS, Ex) and the ERP export.
+const WT_STATE = { available: ['ok', 'disponível'], checked_out: ['info', 'emprestada'], needs_repair: ['warn', 'precisa de reparação'],
+  in_repair: ['warn', 'em reparação'], quarantine: ['bad', 'em quarentena'], missing: ['bad', 'desaparecida'], lost: ['bad', 'perdida'], retired: ['', 'abatida'] };
+const WT_HOLD = { needs_repair: 'precisa de reparação', damaged: 'veio danificada', in_repair: 'está na reparação', calibration_failed: 'reprovou na calibração',
+  recalibrate: 'tem de ser calibrada outra vez', missing: 'desaparecida' };
+const WT_CAL = { ok: ['ok', 'calibração em dia'], due_soon: ['warn', 'calibração a vencer'], expired: ['bad', 'calibração vencida'], failed: ['bad', 'calibração reprovada'] };
+const WT_OFF = { lost: 'Perdida', stolen: 'Roubada', damaged: 'Avariada sem arranjo', worn_out: 'Gasta', obsolete: 'Já não serve' };
+const WT_SRC = { scan: 'leitura', checkout: 'saída', return: 'devolução', transfer: 'passou de mão', count: 'contagem', ble: 'Bluetooth', gps: 'GPS',
+  found: 'encontrada', writeoff: 'abate', repair: 'reparação', calibration: 'calibração' };
+const WT_COND = { ok: 'em bom estado', damaged: 'danificada', needs_repair: 'precisa de reparação', missing: 'desaparecida', transferred: 'passou para outra pessoa', written_off: 'abatida' };
+const WT_WARN = { tracker_not_ex_certified: 'leva uma etiqueta com pilha não certificada para ATEX', tool_not_ex_rated: 'não é própria para zona ATEX' };
+const wtWhy = (r) => r === 'inactive' ? 'a pessoa já não está ativa' : r === 'suspended' ? 'a pessoa está suspensa pela Segurança'
+  : r.startsWith('missing:') ? 'falta o documento ' + r.slice(8).replace(/_/g, ' ') : r.startsWith('expired:') ? 'caducou o documento ' + r.slice(8).replace(/_/g, ' ') : r;
+const WT_SUBS = [['lista', 'Ferramentas'], ['abates', 'Abates'], ['calib', 'Calibração'], ['contagem', 'Contagem'], ['rasto', 'Rasto'], ['custos', 'Custos e ERP']];
+const WT_LISTS = [['', 'Todas'], ['out', 'Emprestadas'], ['overdue', 'Atrasadas'], ['holder_off_site', 'Pessoa fora da obra'], ['missing', 'Desaparecidas'],
+  ['quarantine', 'Quarentena'], ['repair', 'Reparação'], ['calibration_due', 'Calibração']];
+
 async function whTools() {
   const W = state.wh; const body = $('#whbody'); if (!body) return;
-  body.innerHTML = skel(3);
-  const { data, error } = await sb.rpc('mini_wh_tools');
-  if (!body.isConnected) return;
-  if (error) { body.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
-  const m = W.home.can_manage; const give = W.home.can_issue;
-  body.innerHTML = `${m ? '<div class="acts-row"><button class="btn" id="whtnew">+ Ferramenta</button></div>' : ''}
-    ${data.length ? `<div class="list">${data.map((t) => { const [k, l] = TOOL_ST[t.status] || ['', t.status]; const h = t.holder;
-      return `<article class="card wh-tool ${h && h.late ? 'late' : ''}"><div class="wk"><span class="wh-tag">${esc(t.tag)}</span><div class="grow"><div class="nm">${esc(t.name)}</div>
-          <div class="sub">${h ? `${esc(h.name)}${h.site ? ' · ' + esc(h.site) : ''} · ${h.late ? '<b style="color:var(--bad)">devia ter voltado ' + esc(fmtTime(h.due)) + '</b>' : 'até ' + esc(fmtTime(h.due))}` : esc(t.warehouse || '')}</div></div>
-          ${h && h.late ? chip('bad', 'atrasada') : chip(k, l)}</div>
-        ${t.inspect ? `<p class="small" style="margin:8px 0 0">${t.expired ? chip('bad', 'inspeção vencida') : t.soon ? chip('warn', 'inspeção a vencer') : ''} Inspeção válida até <b>${t.valid_until ? esc(fmtDate(t.valid_until)) : '—'}</b>${t.ref ? ' · relatório ' + esc(t.ref) : ''}</p>` : ''}
-        ${t.last_note && ['maintenance', 'lost', 'blocked'].includes(t.status) ? `<p class="small muted" style="margin:6px 0 0">«${esc(t.last_note)}»</p>` : ''}
-        <div class="acts">${h && give ? `<button class="btn ghost small" data-ret="${esc(t.id)}" data-tag="${esc(t.tag)}">Devolver</button>` : ''}
-          ${m && !h && !['lost', 'retired'].includes(t.status) ? `<button class="btn ghost small" data-insp="${esc(t.id)}" data-tag="${esc(t.tag)}">Inspeção</button>` : ''}
-          ${m && t.status === 'maintenance' ? `<button class="btn ghost small" data-fix="${esc(t.id)}">Reparada</button>` : ''}
-          ${m && !h && !['lost', 'retired'].includes(t.status) ? `<button class="btn ghost small" data-off="${esc(t.id)}" data-tag="${esc(t.tag)}">Abater</button>` : ''}</div></article>`; }).join('')}</div>`
-      : `<div class="card">${empty('box', 'Ainda sem ferramentas', m ? 'Carrega em «+ Ferramenta» e dá-lhe um número (ex.: F-001), o mesmo da etiqueta.' : 'Quem gere o armazém regista as ferramentas.')}</div>`}`;
+  if (!W.tsub) W.tsub = 'lista';
+  body.innerHTML = `<div class="chips wt-subs" role="group" aria-label="Ferramentas">${WT_SUBS.map(([k, l]) => `<button class="chip" data-wtsub="${k}" aria-pressed="${W.tsub === k}">${l}</button>`).join('')}</div><div id="wtbody">${skel(3)}</div>`;
+  body.querySelectorAll('[data-wtsub]').forEach((b) => b.onclick = () => { W.tsub = b.dataset.wtsub; whTools(); });
+  ({ lista: wtList, abates: wtWriteoffs, calib: wtCalibration, contagem: wtCount, rasto: wtTracking, custos: wtCosts }[W.tsub] || wtList)();
+}
+function wtRow(t) {
+  const [k, l] = WT_STATE[t.state] || ['', t.state]; const h = t.holder; const cal = WT_CAL[t.calibration && t.calibration.state];
+  return `<button type="button" class="card wt-row ${t.overdue ? 'late' : ''}" data-wt="${esc(t.id)}"><span class="wh-tag">${esc(t.tag)}</span>
+    <span class="grow"><span class="nm">${esc(t.name)}</span>
+      <span class="sub">${h ? `${esc(h.name)}${t.site ? ' · ' + esc(t.site.code) : ''} · ${t.overdue ? '<b class="bad-t">devia ter voltado ' + esc(fmtTime(t.due)) + '</b>' : 'até ' + esc(fmtTime(t.due))}${h.active === false ? ' · <b class="bad-t">já não está ativa</b>' : ''}`
+        : t.state === 'missing' ? 'desaparecida desde ' + esc(fmtTime(t.missing_since)) : esc((t.warehouse && t.warehouse.name) || '')}
+        ${t.last_seen && t.last_seen.at ? ` · vista ${esc(fmtTime(t.last_seen.at))}` : ''}</span></span>
+    <span class="sc-right">${t.overdue ? chip('bad', 'atrasada') : chip(k, l)}${cal && t.calibration.state !== 'ok' ? chip(cal[0], cal[1]) : ''}</span></button>`;
+}
+async function wtList() {
+  const W = state.wh; const box = $('#wtbody'); if (!box) return;
+  const { data: h, error } = await sb.rpc('mini_wh_tools_home');
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
+  W.th = h; const c = h.counts; const f = W.tf || '';
+  let rows;
+  if (f === 'repair') rows = [...(h.lists.repair || [])];
+  else if (f) rows = h.lists[f] || [];
+  else { const r = await sb.rpc('mini_wh_tool_list', { p: W.tq ? { q: W.tq } : {} }); rows = r.data || []; }
+  if (!box.isConnected) return;
+  const n = (v, cls, l, key) => `<button class="kpi ${v && cls ? cls : ''}" data-wtf="${key}"><b>${v}</b><span>${l}</span></button>`;
+  box.innerHTML = `<div class="kpis k4 wt-kpis">${n(c.out, 'info', 'emprestadas', 'out')}${n(c.overdue, 'bad', 'atrasadas', 'overdue')}
+      ${n(c.holder_off_site, 'warn', 'com pessoa fora da obra', 'holder_off_site')}${n(c.missing, 'bad', 'desaparecidas', 'missing')}
+      ${n(c.quarantine + c.needs_repair, 'warn', 'em quarentena', 'quarantine')}${n(c.in_repair, 'warn', 'na reparação', 'repair')}
+      ${n(c.calibration_due_30 + c.calibration_expired, c.calibration_expired ? 'bad' : 'warn', 'calibrações a tratar', 'calibration_due')}
+      <div class="kpi"><b>${eur0(c.written_off_value_year + c.lost_value_year)}</b><span>abatido este ano</span></div></div>
+    <form class="card sc-climb" id="wtfind"><label for="wtq">Procurar ou ler etiqueta</label>
+      <div class="wk"><input id="wtq" name="q" maxlength="80" value="${esc(W.tq || '')}" placeholder="Número, nº de série ou nome"><button class="btn">Ver</button></div>
+      ${'NDEFReader' in window ? '<button type="button" class="btn ghost small" id="wtnfc">Ler etiqueta NFC</button>' : ''}</form>
+    <div class="pr-acts">${h.can.manage ? '<button class="btn" id="whtnew">+ Ferramenta</button>' : ''}${c.writeoffs_pending ? `<button class="btn ghost" data-go="abates">${c.writeoffs_pending} abate(s) por decidir</button>` : ''}
+      ${c.suspect_reviews_open ? `<button class="btn ghost" data-go="calib">${c.suspect_reviews_open} revisão(ões) de resultados</button>` : ''}</div>
+    <div class="chips wt-subs" role="group" aria-label="Filtro">${WT_LISTS.map(([k, l]) => `<button class="chip" data-wtf="${k}" aria-pressed="${f === k}">${l}</button>`).join('')}</div>
+    ${rows.length ? `<div class="list">${rows.map(wtRow).join('')}</div>` : `<div class="card">${empty('box', f ? 'Nada aqui' : 'Ainda sem ferramentas', f ? 'Ótimo: nenhuma ferramenta nesta situação.' : h.can.manage ? 'Carrega em «+ Ferramenta» e dá-lhe o número da etiqueta (ex.: F-001).' : 'Quem gere o armazém regista as ferramentas.')}</div>`}`;
+  box.querySelectorAll('[data-wtf]').forEach((b) => b.onclick = () => { W.tf = b.dataset.wtf; wtList(); });
+  box.querySelectorAll('[data-go]').forEach((b) => b.onclick = () => { W.tsub = b.dataset.go; whTools(); });
+  box.querySelectorAll('[data-wt]').forEach((b) => b.onclick = () => toolCard(b.dataset.wt));
+  $('#wtfind').onsubmit = async (e) => { e.preventDefault(); const q = String(new FormData(e.target).get('q')).trim();
+    if (!q) { W.tq = null; return wtList(); }
+    const r = await sb.rpc('mini_wh_tool_card', { p_ref: q, p: {} });
+    if (!r.error && r.data) return toolCard(r.data.id);
+    W.tq = q; W.tf = ''; wtList(); };
+  if ($('#wtnfc')) $('#wtnfc').onclick = () => wtReadTag((uid) => toolCard(uid, { scan: true }));
   if ($('#whtnew')) $('#whtnew').onclick = addTool;
-  body.querySelectorAll('[data-ret]').forEach((b) => b.onclick = () => returnTool(b.dataset.ret, b.dataset.tag));
-  body.querySelectorAll('[data-insp]').forEach((b) => b.onclick = () => inspectTool(b.dataset.insp, b.dataset.tag));
-  body.querySelectorAll('[data-fix]').forEach((b) => b.onclick = async () => { const { error: e } = await sb.rpc('mini_wh_tool_status', { p_tool: b.dataset.fix, p_status: 'available', p_reason: null }); if (e) return toast(friendly(e)); toast('Disponível outra vez.'); loadWarehouse(); });
-  body.querySelectorAll('[data-off]').forEach((b) => b.onclick = async () => {
-    const fd = await askSheet(`Abater ${b.dataset.tag}`, `<label>Porquê? *</label><div class="chips reasons" role="radiogroup">${[['damaged', 'Avariada sem arranjo'], ['worn_out', 'Gasta'], ['obsolete', 'Já não serve'], ['stolen', 'Roubada']].map(([v, l], i) => `<label class="chip"><input type="radio" name="r" value="${v}" ${i ? '' : 'checked'} required>${l}</label>`).join('')}</div>`, 'Abater');
-    if (!fd) return; const { error: e } = await sb.rpc('mini_wh_tool_status', { p_tool: b.dataset.off, p_status: 'retired', p_reason: fd.get('r') }); if (e) return toast(friendly(e)); toast('Abatida.'); loadWarehouse(); });
+}
+// One NFC read (a tool's tag or a person's card), then the reader stops.
+async function wtReadTag(onUid) {
+  if (!('NDEFReader' in window)) return toast('Este telemóvel não lê NFC no navegador.');
+  try { const ctrl = new AbortController(); const reader = new NDEFReader(); await reader.scan({ signal: ctrl.signal });
+    toast('Encosta a etiqueta ao telemóvel.');
+    reader.onreading = (ev) => { const uid = normUid(ev.serialNumber); ctrl.abort(); if (uid) onUid(uid); };
+  } catch (err) { toast(err.name === 'NotAllowedError' ? 'Dá permissão ao NFC no Chrome.' : 'O NFC não arrancou: ' + err.message); }
+}
+// Photo or certificate to the private 'armazem' bucket: tenant/tool/uuid.ext, with its fingerprint.
+async function wtUpload(toolId, f, pdfOk) {
+  if (!f || !f.size) { toast(pdfOk ? 'Junta o certificado (PDF ou foto).' : 'Tira uma fotografia.'); return null; }
+  if (!f.type.startsWith('image/') && !(pdfOk && f.type === 'application/pdf')) { toast(pdfOk ? 'Só PDF ou fotografia.' : 'Só fotografias (JPG, PNG ou WebP).'); return null; }
+  if (f.type.startsWith('image/')) f = await shrinkPhoto(f);
+  const bad = fileProblem(f); if (bad) { toast(bad); return null; }
+  const path = `${state.me.tenant_id}/${toolId}/${uuid()}.${FILE_TYPES[f.type]}`;
+  const sha = await sha256Hex(f);
+  const up = await sb.storage.from('armazem').upload(path, f, { contentType: f.type, upsert: false });
+  if (up.error) { toast(friendly(up.error)); return null; }
+  return { file: path, sha256: sha };
+}
+const wtPeople = () => (state.people || []).filter((p) => p.is_active !== false);
+const wtPeopleOpts = (sel) => wtPeople().map((p) => `<option value="${esc(p.id)}" ${p.id === sel ? 'selected' : ''}>${esc(p.full_name)}${p.employee_number ? ' · ' + esc(p.employee_number) : ''}</option>`).join('');
+const wtSiteOpts = (sel) => activeSites().map((s) => `<option value="${esc(s.id)}" ${s.id === sel ? 'selected' : ''}>${esc(s.cost_center_code)} · ${esc(s.title)}</option>`).join('');
+
+async function toolCard(ref, opt = {}) {
+  const { data: t, error } = await sb.rpc('mini_wh_tool_card', { p_ref: ref, p: opt.scan ? { scan: true, warehouse_id: state.wh && state.wh.wid } : {} });
+  if (error) return toast(friendly(error));
+  if (!t) return toast('Nenhuma ferramenta com esta etiqueta.');
+  const [k, l] = WT_STATE[t.state] || ['', t.state]; const cal = WT_CAL[t.calibration.state]; const can = t.can || {};
+  const live = !['lost', 'retired'].includes(t.state);
+  const acts = [
+    can.issue && t.state === 'available' && ['checkout', 'Emprestar', ''],
+    can.issue && t.state === 'checked_out' && ['checkin', 'Devolver', ''],
+    can.issue && t.state === 'checked_out' && ['transfer', 'Passar a outra pessoa', 'ghost'],
+    can.manage && ['needs_repair', 'quarantine'].includes(t.state) && t.hold_reason !== 'calibration_failed' && ['repair', 'Enviar para reparação', 'ghost'],
+    can.manage && t.state === 'in_repair' && ['back', 'Voltou da reparação', ''],
+    can.calibrate && t.calibration.required && live && t.state !== 'checked_out' && ['calibrate', 'Registar calibração', 'ghost'],
+    can.issue && t.state === 'missing' && ['found', 'Foi encontrada', ''],
+    (can.issue || can.manage) && live && !t.open_writeoff && t.state !== 'checked_out' && ['writeoff', 'Pedir abate', 'ghost danger-t'],
+    can.manage && live && ['tagqr', 'Etiqueta QR', 'ghost'],
+    can.manage && live && ['tagnfc', 'Ligar etiqueta NFC', 'ghost'],
+    can.manage && ['rules', 'Regras e preço', 'ghost'],
+  ].filter(Boolean);
+  const d = document.createElement('dialog'); d.className = 'dlg wt-card';
+  d.innerHTML = `<div class="wk"><span class="wh-tag big">${esc(t.tag)}</span><div class="grow"><h2 style="margin:0">${esc(t.name)}</h2>
+      <p class="small muted" style="margin:0">${t.serial ? 'Nº série ' + esc(t.serial) : ''}</p></div></div>
+    <p>${chip(k, l)} ${cal && t.calibration.state !== 'ok' ? chip(cal[0], cal[1]) : ''} ${t.hold_reason && WT_HOLD[t.hold_reason] ? `<span class="small">${esc(WT_HOLD[t.hold_reason])}</span>` : ''}
+      ${t.open_writeoff ? chip('warn', 'abate pedido') : ''}</p>
+    <ul class="fl-papers">
+      ${t.holder ? `<li class="fl-p ${t.overdue ? 'bad' : ''}"><span>Com</span><b>${esc(t.holder.name)}${t.site ? ' · ' + esc(t.site.code) : ''}${t.zone ? ' · ' + esc(t.zone.code) : ''}</b><small>desde ${esc(fmtTime(t.since))} · ${t.overdue ? 'devia ter voltado' : 'volta até'} ${esc(fmtTime(t.due))}</small></li>`
+        : `<li class="fl-p"><span>Onde</span><b>${esc((t.warehouse && t.warehouse.name) || '—')}</b></li>`}
+      <li class="fl-p"><span>Vista por último</span><b>${t.last_seen && t.last_seen.at ? esc(fmtTime(t.last_seen.at)) + ' · ' + esc(WT_SRC[t.last_seen.source] || t.last_seen.source) : '—'}</b>
+        <small>${t.last_seen ? esc([t.last_seen.site, t.last_seen.warehouse, t.last_seen.label, t.last_seen.by].filter(Boolean).join(' · ')) : ''}${t.last_seen && t.last_seen.latitude != null ? ` · <a href="https://maps.google.com/?q=${esc(t.last_seen.latitude)},${esc(t.last_seen.longitude)}" target="_blank" rel="noopener">mapa</a>` : ''}</small></li>
+      ${t.calibration.required ? `<li class="fl-p ${t.calibration.state === 'ok' ? '' : 'bad'}"><span>Calibração</span><b>${t.calibration.due ? 'válida até ' + esc(fmtDate(t.calibration.due)) : 'sem calibração'}</b>${t.calibration.lab ? `<small>${esc(t.calibration.lab)}</small>` : ''}</li>` : ''}
+      ${t.requirements && t.requirements.length ? `<li class="fl-p"><span>Só leva quem tem</span><b>${t.requirements.map((r) => esc(r.name)).join(', ')}</b></li>` : ''}
+      ${t.daily_rate ? `<li class="fl-p"><span>Aluguer interno</span><b>${eur2(t.daily_rate)} por dia, à obra</b></li>` : ''}
+      ${(t.trackers || []).length ? `<li class="fl-p"><span>Etiquetas com pilha</span><b>${t.trackers.map((x) => esc((x.kind === 'gps' ? 'GPS ' : 'Bluetooth ') + (x.label || x.device_id) + (x.ex_certified ? ' (Ex)' : ''))).join(', ')}</b></li>` : ''}
+      ${!t.atex_ok ? '<li class="fl-p warn"><span>ATEX</span><b>Não entra em zona ATEX</b></li>' : ''}
+    </ul>
+    ${t.may_take && !t.may_take.ok ? `<p class="small bad-t"><b>${esc(t.may_take.name || 'Tu')} não pode levar:</b> ${t.may_take.reasons.map(wtWhy).map(esc).join('; ')}</p>` : ''}
+    <div class="acts wt-acts">${acts.map(([a, lb, cls]) => `<button class="btn ${cls} wide" data-a="${a}">${lb}</button>`).join('')}<button class="btn ghost wide" data-x>Fechar</button></div>
+    ${(t.history || []).length ? `<h3>Quem a teve</h3><ul class="q-list">${t.history.slice(0, 12).map((x) => `<li><b>${esc(x.person)}</b>${x.site ? ' · ' + esc(x.site) : ''} · ${esc(fmtTime(x.from))} → ${x.to ? esc(fmtTime(x.to)) : '<b>agora</b>'}${x.condition ? ' · ' + esc(WT_COND[x.condition] || x.condition) : ''}${x.note ? ' · «' + esc(x.note) + '»' : ''}</li>`).join('')}</ul>` : ''}
+    ${(t.sightings || []).length ? `<h3>Rasto</h3><ul class="q-list">${t.sightings.slice(0, 12).map((x) => `<li>${esc(fmtTime(x.at))} · ${esc(WT_SRC[x.source] || x.source)} · ${esc([x.site, x.warehouse, x.label, x.by].filter(Boolean).join(' · '))}</li>`).join('')}</ul>` : ''}
+    ${(t.calibrations || []).length ? `<h3>Calibrações</h3><ul class="q-list">${t.calibrations.map((x) => `<li>${x.result === 'pass' ? chip('ok', 'aprovada') : chip('bad', 'reprovada')} ${esc(fmtDate(x.on))} → ${esc(fmtDate(x.due))}${x.lab ? ' · ' + esc(x.lab) : ''}${x.certificate ? ` <button class="chip" data-file="${esc(x.certificate)}">${ic('doc')}Certificado</button>` : ''}</li>`).join('')}</ul>` : ''}
+    ${(t.repairs || []).length ? `<h3>Reparações</h3><ul class="q-list">${t.repairs.map((x) => `<li>${esc(x.supplier || '')} · ${esc(fmtTime(x.sent_at))}${x.back_at ? ' → ' + esc(fmtTime(x.back_at)) : ' · lá agora'}${x.cost != null ? ' · ' + eur2(x.cost) + (x.site ? ' (' + esc(x.site) + ')' : '') : ''}</li>`).join('')}</ul>` : ''}
+    ${(t.writeoffs || []).length ? `<h3>Abates</h3><ul class="q-list">${t.writeoffs.map((x) => `<li>${esc(WT_OFF[x.reason] || x.reason)} · ${esc(x.status)} · ${esc(x.requested_by || '')}${x.decided_by ? ' / ' + esc(x.decided_by) : ''}${x.found_at ? ' · encontrada ' + esc(fmtTime(x.found_at)) : ''}</li>`).join('')}</ul>` : ''}
+    ${(t.photos || []).length ? `<h3>Provas</h3><div class="chips">${t.photos.map((p, i) => `<button class="chip" data-file="${esc(p.file)}">${ic('camera')}${i + 1}</button>`).join('')}</div>` : ''}`;
+  document.body.appendChild(d); d.showModal();
+  const close = () => d.close();
+  d.querySelector('[data-x]').onclick = close;
+  d.querySelectorAll('[data-file]').forEach((b) => b.onclick = () => openDocFile(b.dataset.file, 'armazem'));
+  const after = () => { if (state.view === 'armazem') loadWarehouse(); };
+  const run = { checkout: wtCheckout, checkin: wtCheckin, transfer: wtTransfer, repair: wtRepairSend, back: wtRepairBack, calibrate: wtCalibrate,
+    found: wtFound, writeoff: wtWriteoff, tagqr: wtTagQr, tagnfc: wtTagNfc, rules: wtRules };
+  d.querySelectorAll('[data-a]').forEach((b) => b.onclick = async () => { close(); if (await run[b.dataset.a](t)) after(); });
+  d.addEventListener('close', () => d.remove());
+}
+// Lending: the person who takes it taps their own card (or the reason there is no card), to a site, until a date.
+async function wtCheckout(t) {
+  const fd = await askSheet(`Emprestar ${t.tag}`, `<p class="small">${esc(t.name)}</p>
+    <label for="wcp">Quem leva *</label><select id="wcp" name="p" required><option value="">Escolhe</option>${wtPeopleOpts()}</select>
+    <label for="wcs">Para que obra *</label><select id="wcs" name="s" required><option value="">Escolhe</option>${wtSiteOpts(currentSite() && currentSite().id)}</select>
+    <label for="wcd">Devolve até</label><input id="wcd" name="d" type="date" min="${esc(isoDay(new Date()))}">
+    <label for="wcu">Cartão de quem leva</label><div class="wk"><input id="wcu" name="u" maxlength="40" placeholder="Encosta o cartão ou escreve o número" autocomplete="off">${'NDEFReader' in window ? '<button type="button" class="btn ghost small" id="wcnfc">Ler</button>' : ''}</div>
+    <label for="wcr">Sem cartão? Porquê</label><input id="wcr" name="r" maxlength="200" placeholder="ex.: cartão esquecido, confirmado pelo encarregado">
+    <p class="small muted">Sem data, volta ao fim do turno. Quem não tem a formação válida não leva.</p>`, 'Emprestar', (d) => {
+    if (d.querySelector('#wcnfc')) d.querySelector('#wcnfc').onclick = () => wtReadTag((uid) => { d.querySelector('#wcu').value = uid; });
+  });
+  if (!fd) return false;
+  const uid = String(fd.get('u') || '').trim(); const why = String(fd.get('r') || '').trim();
+  if (!uid && !why) { toast('Encosta o cartão de quem leva, ou diz porque não há cartão.'); return false; }
+  const p = { tools: [t.id], collaborator_id: fd.get('p'), site_id: fd.get('s'), due: fd.get('d') || null, client_id: uuid() };
+  if (uid) p.uid = uid; else p.no_card_reason = why;
+  const { data, error } = await sb.rpc('mini_wh_checkout', { p });
+  if (error) { toast(friendly(error)); return false; }
+  const w = (data.warnings || []).flatMap((x) => x.codes.map((c) => WT_WARN[c] || c));
+  toast(`${t.tag} emprestada a ${data.name}${w.length ? '. Atenção: ' + w.join('; ') : '.'}`); return true;
+}
+async function wtCheckin(t) {
+  const fd = await askSheet(`Devolver ${t.tag}`, `<p class="small">${esc(t.holder ? t.holder.name : '')}</p>
+    <label>Como veio? *</label><div class="chips reasons" role="radiogroup">${[['ok', 'Em bom estado'], ['needs_repair', 'Precisa de reparação'], ['damaged', 'Danificada'], ['missing', 'Não apareceu']]
+      .map(([v, lb], i) => `<label class="chip"><input type="radio" name="c" value="${v}" ${i ? '' : 'checked'} required>${lb}</label>`).join('')}</div>
+    <label for="wkn">Nota</label><input id="wkn" name="n" maxlength="300" placeholder="Obrigatória se não veio bem">
+    <label for="wkf">Fotografia</label><input id="wkf" name="f" type="file" accept="image/*" capture="environment">
+    <p class="small muted">Danificada ou a precisar de reparação fica em quarentena. Nada é descontado ao trabalhador.</p>`, 'Registar');
+  if (!fd) return false;
+  const p = { condition: fd.get('c'), note: String(fd.get('n') || '').trim() || null, warehouse_id: state.wh && state.wh.wid };
+  const f = fd.get('f'); if (f && f.size) { const up = await wtUpload(t.id, f); if (!up) return false; Object.assign(p, up); }
+  const { data, error } = await sb.rpc('mini_wh_checkin', { p_tool: t.id, p });
+  if (error) { toast(friendly(error)); return false; }
+  toast(`${data.tag} devolvida por ${data.from}${data.charge ? ' · aluguer ' + eur2(data.charge) + ' à obra' : ''}.`); return true;
+}
+async function wtTransfer(t) {
+  const fd = await askSheet(`Passar ${t.tag} a outra pessoa`, `<p class="small">Agora com ${esc(t.holder ? t.holder.name : '')}</p>
+    <label for="wtp">Para quem *</label><select id="wtp" name="p" required><option value="">Escolhe</option>${wtPeopleOpts()}</select>
+    <label for="wts">Obra *</label><select id="wts" name="s" required>${wtSiteOpts(t.site && t.site.id)}</select>
+    <label for="wtd">Devolve até</label><input id="wtd" name="d" type="date" min="${esc(isoDay(new Date()))}">
+    <label for="wtu">Cartão de quem recebe *</label><div class="wk"><input id="wtu" name="u" required maxlength="40" autocomplete="off">${'NDEFReader' in window ? '<button type="button" class="btn ghost small" id="wtnf">Ler</button>' : ''}</div>
+    <label for="wtn">Nota</label><input id="wtn" name="n" maxlength="300">`, 'Passar', (d) => {
+    if (d.querySelector('#wtnf')) d.querySelector('#wtnf').onclick = () => wtReadTag((uid) => { d.querySelector('#wtu').value = uid; });
+  });
+  if (!fd) return false;
+  const { data, error } = await sb.rpc('mini_wh_transfer', { p_tool: t.id, p: { collaborator_id: fd.get('p'), uid: String(fd.get('u')).trim(), site_id: fd.get('s'), due: fd.get('d') || null, note: String(fd.get('n') || '').trim() || null } });
+  if (error) { toast(friendly(error)); return false; }
+  toast(`${data.tag}: de ${data.from} para ${data.to}.`); return true;
+}
+async function wtRepairSend(t) {
+  const fd = await askSheet(`Enviar ${t.tag} para reparação`, `<label for="wrs">Oficina ou fornecedor *</label><input id="wrs" name="s" required minlength="2" maxlength="200">
+    <label for="wrn">O que tem</label><input id="wrn" name="n" maxlength="300">
+    <label for="wrf">Fotografia</label><input id="wrf" name="f" type="file" accept="image/*" capture="environment">`, 'Enviar');
+  if (!fd) return false;
+  const p = { supplier: String(fd.get('s')).trim(), note: String(fd.get('n') || '').trim() || null };
+  const f = fd.get('f'); if (f && f.size) { const up = await wtUpload(t.id, f); if (!up) return false; Object.assign(p, up); }
+  const { error } = await sb.rpc('mini_wh_repair_send', { p_tool: t.id, p });
+  if (error) { toast(friendly(error)); return false; }
+  toast(`${t.tag} na reparação.`); return true;
+}
+async function wtRepairBack(t) {
+  const fd = await askSheet(`${t.tag} voltou da reparação`, `<label>Resultado *</label><div class="chips reasons" role="radiogroup"><label class="chip"><input type="radio" name="o" value="repaired" checked required>Reparada</label><label class="chip"><input type="radio" name="o" value="not_repairable">Sem arranjo</label></div>
+    <div class="row"><div><label for="wbc">Custo (€)</label><input id="wbc" name="c" inputmode="decimal"></div><div><label for="wbs">Obra que paga</label><select id="wbs" name="s"><option value="">A última obra da ferramenta</option>${wtSiteOpts()}</select></div></div>
+    <label for="wbn">Nota</label><input id="wbn" name="n" maxlength="300">
+    <p class="small muted">Instrumentos de medida voltam a pedir calibração antes de sair.</p>`, 'Registar');
+  if (!fd) return false;
+  const cost = String(fd.get('c') || '').replace(',', '.').trim();
+  const { data, error } = await sb.rpc('mini_wh_repair_back', { p_tool: t.id, p: { outcome: fd.get('o'), cost: cost || null, site_id: fd.get('s') || null, note: String(fd.get('n') || '').trim() || null, warehouse_id: state.wh && state.wh.wid } });
+  if (error) { toast(friendly(error)); return false; }
+  toast(fd.get('o') === 'repaired' ? `${data.tag} de volta.` : `${data.tag}: sem arranjo. Pede o abate.`); return true;
+}
+async function wtCalibrate(t) {
+  const today = isoDay(new Date());
+  const fd = await askSheet(`Calibração de ${t.tag}`, `<div class="row"><div><label for="wco">Feita a *</label><input id="wco" name="o" type="date" required max="${today}" value="${today}"></div>
+      <div><label for="wcv">Válida até *</label><input id="wcv" name="v" type="date" required min="${today}"></div></div>
+    <label>Resultado *</label><div class="chips reasons" role="radiogroup"><label class="chip"><input type="radio" name="r" value="pass" checked required>Aprovada</label><label class="chip"><input type="radio" name="r" value="fail">Reprovada</label></div>
+    <div class="row"><div><label for="wcl">Laboratório</label><input id="wcl" name="l" maxlength="200"></div><div><label for="wcn">Nº do certificado</label><input id="wcn" name="n" maxlength="64"></div></div>
+    <label for="wcf">Certificado (PDF ou foto) *</label><input id="wcf" name="f" type="file" required accept="application/pdf,image/*">
+    <p class="small muted">Reprovada: fica em quarentena e abre uma revisão de tudo o que foi medido com ela desde a última calibração boa.</p>`, 'Registar');
+  if (!fd) return false;
+  const up = await wtUpload(t.id, fd.get('f'), true); if (!up) return false;
+  const { data, error } = await sb.rpc('mini_wh_calibrate', { p_tool: t.id, p: { on: fd.get('o'), due: fd.get('v'), result: fd.get('r'), lab: String(fd.get('l') || '').trim() || null, certificate_no: String(fd.get('n') || '').trim() || null, ...up } });
+  if (error) { toast(friendly(error)); return false; }
+  toast(data.review_id ? 'Reprovada: em quarentena e revisão aberta para a Qualidade.' : 'Calibração registada.'); return true;
+}
+async function wtFound(t) {
+  const fd = await askSheet(`${t.tag} foi encontrada`, `<label for="wfn">Onde estava *</label><input id="wfn" name="n" required minlength="3" maxlength="300">
+    <label for="wff">Fotografia</label><input id="wff" name="f" type="file" accept="image/*" capture="environment">`, 'Registar');
+  if (!fd) return false;
+  const p = { note: String(fd.get('n')).trim(), warehouse_id: state.wh && state.wh.wid };
+  const f = fd.get('f'); if (f && f.size) { const up = await wtUpload(t.id, f); if (!up) return false; Object.assign(p, up); }
+  const { data, error } = await sb.rpc('mini_wh_tool_found', { p_tool: t.id, p });
+  if (error) { toast(friendly(error)); return false; }
+  toast(data.writeoff_reversed ? 'Encontrada: o abate foi revertido.' : 'Encontrada.'); return true;
+}
+async function wtWriteoff(t) {
+  const fd = await askSheet(`Pedir abate de ${t.tag}`, `<label>Porquê? *</label><div class="chips reasons" role="radiogroup">${Object.entries(WT_OFF).map(([v, lb]) => `<label class="chip"><input type="radio" name="r" value="${v}" required>${lb}</label>`).join('')}</div>
+    <label for="won">Nota *</label><input id="won" name="n" required minlength="3" maxlength="300">
+    <label for="wos">Obra que assume o valor</label><select id="wos" name="s">${wtSiteOpts(t.last_site && t.last_site.id)}</select>
+    <label for="wof">Fotografia *</label><input id="wof" name="f" type="file" required accept="image/*" capture="environment">
+    <p class="small muted">Outra pessoa com acesso de gestão decide. Só depois a ferramenta sai do inventário.</p>`, 'Pedir abate');
+  if (!fd) return false;
+  const up = await wtUpload(t.id, fd.get('f')); if (!up) return false;
+  const { error } = await sb.rpc('mini_wh_writeoff_request', { p_tool: t.id, p: { reason: fd.get('r'), note: String(fd.get('n')).trim(), site_id: fd.get('s') || null, ...up } });
+  if (error) { toast(friendly(error)); return false; }
+  toast('Abate pedido. Falta a decisão de outra pessoa.'); return true;
+}
+async function wtTagQr(t) {
+  let img = '';
+  try { const qr = await loadQr(); const q = qr(0, 'M'); q.addData(t.id); q.make(); img = q.createDataURL(8, 16); }
+  catch (_) { toast('Não foi possível desenhar o QR code.'); return false; }
+  const d = document.createElement('dialog'); d.className = 'dlg q-book sc-tagdlg';
+  d.innerHTML = `<div class="printable sc-tag"><b class="sc-tagno">${esc(t.tag)}</b><span>${esc(t.name)}</span><img alt="QR code da ferramenta ${esc(t.tag)}" src="${img}">
+      <span>Ler com a app GestNow: Armazém › Ferramentas › Procurar</span></div>
+    <div class="acts noprint"><button class="btn" data-print>${ic('print')}Imprimir</button><button class="btn ghost wide" data-x>Fechar</button></div>`;
+  document.body.appendChild(d); d.showModal();
+  d.querySelector('[data-x]').onclick = () => d.close(); d.querySelector('[data-print]').onclick = () => window.print();
+  d.addEventListener('close', () => d.remove()); return false;
+}
+async function wtTagNfc(t) {
+  const fd = await askSheet(`Etiqueta NFC de ${t.tag}`, `<label for="wnu">Código da etiqueta *</label><div class="wk"><input id="wnu" name="u" required maxlength="64" autocomplete="off">${'NDEFReader' in window ? '<button type="button" class="btn ghost small" id="wnr">Ler</button>' : ''}</div>
+    <p class="small muted">Cola a etiqueta na ferramenta e encosta o telemóvel. Funciona em qualquer zona, ATEX incluída.</p>`, 'Ligar', (d) => {
+    if (d.querySelector('#wnr')) d.querySelector('#wnr').onclick = () => wtReadTag((uid) => { d.querySelector('#wnu').value = uid; });
+  });
+  if (!fd) return false;
+  const { error } = await sb.rpc('mini_wh_tool_tag', { p_tool: t.id, p_kind: 'nfc', p_code: String(fd.get('u')).trim(), p_label: null });
+  if (error) { toast(friendly(error)); return false; }
+  toast('Etiqueta ligada.'); return true;
+}
+async function wtRules(t) {
+  const { data: docs } = await sb.rpc('mini_wh_document_types');
+  const have = new Set((t.requirements || []).map((r) => r.code));
+  const fd = await askSheet(`Regras de ${t.tag}`, `<label for="wrr">Aluguer interno por dia (€)</label><input id="wrr" name="r" inputmode="decimal" value="${t.daily_rate != null ? esc(t.daily_rate) : ''}">
+    <label class="check inline"><input type="checkbox" name="a" ${t.atex_ok ? 'checked' : ''}> Própria para zona ATEX (certificada Ex)</label>
+    <label>Só leva quem tem (para este tipo de ferramenta)</label><div class="chips">${(docs || []).map((x) => `<label class="chip"><input type="checkbox" name="q" value="${esc(x.code)}" ${have.has(x.code) ? 'checked' : ''}>${esc(x.name)}</label>`).join('')}</div>
+    <p class="small muted">O cartão diz não: quem não tem o documento válido não leva a ferramenta.</p>`, 'Guardar');
+  if (!fd) return false;
+  const rate = String(fd.get('r') || '').replace(',', '.').trim();
+  let r = await sb.rpc('mini_wh_tool_settings', { p_tool: t.id, p: { daily_rate: rate || null, atex_ok: !!fd.get('a') } });
+  if (r.error) { toast(friendly(r.error)); return false; }
+  const want = new Set(fd.getAll('q'));
+  for (const code of new Set([...want, ...have])) {
+    if (want.has(code) === have.has(code)) continue;
+    r = await sb.rpc('mini_wh_tool_requirement', { p: { item_id: t.item_id, document_code: code, active: want.has(code) } });
+    if (r.error) { toast(friendly(r.error)); return false; }
+  }
+  toast('Regras guardadas.'); return true;
+}
+// ---- Abates: four eyes
+async function wtWriteoffs() {
+  const box = $('#wtbody'); if (!box) return;
+  const { data, error } = await sb.rpc('mini_wh_writeoffs', { p_status: 'all' });
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
+  const pend = data.filter((w) => w.status === 'pending'); const done = data.filter((w) => w.status !== 'pending').slice(0, 30);
+  const row = (w) => `<article class="card"><div class="wk"><span class="wh-tag">${esc(w.tag)}</span><div class="grow"><div class="nm">${esc(w.name)} · ${esc(WT_OFF[w.reason] || w.reason)}</div>
+      <div class="sub">${esc(w.note || '')} · ${esc(w.site)} · ${w.book_value != null ? eur2(w.book_value) : 'sem valor'}</div>
+      <div class="sub">Pedido por ${esc(w.requested_by || '')} · ${esc(fmtTime(w.requested_at))}${w.decided_by ? ` · ${w.status === 'approved' ? 'aprovado' : w.status === 'refused' ? 'recusado' : esc(w.status)} por ${esc(w.decided_by)}` : ''}</div></div></div>
+    <div class="acts">${(w.photos || []).map((p, i) => `<button class="chip" data-file="${esc(p.file)}">${ic('camera')}${i + 1}</button>`).join('')}
+      ${w.can_decide ? `<button class="btn small" data-ok="${esc(w.id)}">Aprovar abate</button><button class="btn ghost small" data-no="${esc(w.id)}">Recusar</button>` : w.status === 'pending' ? '<span class="small muted">Outra pessoa decide.</span>' : ''}</div></article>`;
+  box.innerHTML = `<div class="sec-h"><h2>Por decidir</h2></div>${pend.length ? `<div class="list">${pend.map(row).join('')}</div>` : `<div class="card">${empty('ok', 'Nada por decidir', 'Os pedidos de abate aparecem aqui.')}</div>`}
+    ${done.length ? `<div class="sec-h"><h2>Decididos</h2></div><div class="list">${done.map(row).join('')}</div>` : ''}`;
+  box.querySelectorAll('[data-file]').forEach((b) => b.onclick = () => openDocFile(b.dataset.file, 'armazem'));
+  const decide = async (id, ok) => {
+    const fd = await askSheet(ok ? 'Aprovar abate' : 'Recusar abate', `<label for="wdn">Nota${ok ? '' : ' *'}</label><input id="wdn" name="n" maxlength="300" ${ok ? '' : 'required minlength="3"'}>`, ok ? 'Aprovar' : 'Recusar');
+    if (!fd) return;
+    const { error: e } = await sb.rpc('mini_wh_writeoff_decide', { p_writeoff: id, p_approve: ok, p_note: String(fd.get('n') || '').trim() || null });
+    if (e) return toast(friendly(e)); toast(ok ? 'Abate aprovado.' : 'Abate recusado.'); wtWriteoffs();
+  };
+  box.querySelectorAll('[data-ok]').forEach((b) => b.onclick = () => decide(b.dataset.ok, true));
+  box.querySelectorAll('[data-no]').forEach((b) => b.onclick = () => decide(b.dataset.no, false));
+}
+// ---- Calibração: due list and the suspect-results reviews
+async function wtCalibration() {
+  const box = $('#wtbody'); if (!box) return;
+  const [due, rev] = await Promise.all([sb.rpc('mini_wh_calibration_due', { p_days: 30 }), sb.rpc('mini_wh_suspect_list')]);
+  if (!box.isConnected) return;
+  if (due.error) { box.innerHTML = `<div class="card"><p>${esc(friendly(due.error))}</p></div>`; return; }
+  const revs = rev.data || [];
+  box.innerHTML = `<div class="sec-h"><h2>A calibrar nos próximos 30 dias</h2></div>
+    ${due.data.length ? `<div class="list">${due.data.map(wtRow).join('')}</div>` : `<div class="card">${empty('ok', 'Tudo em dia', 'Os instrumentos com calibração a vencer aparecem aqui.')}</div>`}
+    <div class="sec-h"><h2>Revisão de resultados suspeitos</h2><span class="small muted">instrumento reprovado: quem o usou e onde</span></div>
+    ${revs.length ? `<div class="list">${revs.map((r) => `<button type="button" class="card wt-row" data-rev="${esc(r.id)}"><span class="wh-tag">${esc(r.tag)}</span><span class="grow"><span class="nm">${r.periods} uso(s) a rever</span>
+      <span class="sub">de ${esc(fmtDate(r.since))} a ${esc(fmtDate(r.failed_on))}</span></span>${r.status === 'closed' ? chip('ok', 'fechada') : chip('bad', 'aberta')}</button>`).join('')}</div>`
+      : `<div class="card">${empty('ok', 'Sem revisões', 'Quando uma calibração reprova, aparece aqui a lista de trabalhos a rever.')}</div>`}`;
+  box.querySelectorAll('[data-wt]').forEach((b) => b.onclick = () => toolCard(b.dataset.wt));
+  box.querySelectorAll('[data-rev]').forEach((b) => b.onclick = () => wtReview(b.dataset.rev));
+}
+async function wtReview(id) {
+  const { data: r, error } = await sb.rpc('mini_wh_suspect', { p_review: id });
+  if (error) return toast(friendly(error));
+  const d = document.createElement('dialog'); d.className = 'dlg';
+  d.innerHTML = `<h2>${esc(r.tag)} · ${esc(r.name)}</h2><p class="small">Reprovou a ${esc(fmtDate(r.failed_on))}. Tudo o que foi medido com ele desde ${esc(fmtDate(r.since))} tem de ser revisto pela Qualidade.</p>
+    <ul class="q-list">${r.periods.map((p) => `<li><b>${esc(p.person)}</b> · ${esc(p.site || '')}${p.zone ? ' · ' + esc(p.zone) : ''} · ${esc(fmtTime(p.from))} → ${p.to ? esc(fmtTime(p.to)) : 'agora'}</li>`).join('') || '<li>Ninguém o usou neste período.</li>'}</ul>
+    ${r.status === 'closed' ? `<p class="small"><b>Conclusão:</b> ${esc(r.conclusion)} · ${esc(r.closed_by || '')}</p>` : `<form id="wrv"><label for="wrc">Conclusão da revisão *</label><textarea id="wrc" name="c" required minlength="10" maxlength="1000" rows="3"></textarea><button class="btn wide">Fechar a revisão</button></form>`}
+    <div class="acts"><button class="btn ghost wide" data-x>Fechar</button></div>`;
+  document.body.appendChild(d); d.showModal();
+  d.querySelector('[data-x]').onclick = () => d.close(); d.addEventListener('close', () => d.remove());
+  if (d.querySelector('#wrv')) d.querySelector('#wrv').onsubmit = async (e) => { e.preventDefault();
+    const { error: x } = await sb.rpc('mini_wh_suspect_close', { p_review: id, p_conclusion: String(new FormData(e.target).get('c')).trim() });
+    if (x) return toast(friendly(x)); d.close(); toast('Revisão fechada.'); wtCalibration(); };
+}
+// ---- Contagem: open, scan every tool on the shelf, close: what is missing and what is elsewhere
+async function wtCount() {
+  const W = state.wh; const box = $('#wtbody'); if (!box) return;
+  if (!W.count) {
+    box.innerHTML = `<div class="card"><h2 style="margin-top:0">Contar as ferramentas</h2><p class="small">Abre a contagem neste armazém e lê cada ferramenta (número, QR ou NFC). No fim, a app diz o que falta e o que está noutro lado.</p>
+      <button class="btn" id="wcopen">Começar contagem em ${esc((W.home.warehouses.find((w) => w.id === W.wid) || {}).name || 'este armazém')}</button></div>`;
+    $('#wcopen').onclick = async () => { const { data, error } = await sb.rpc('mini_wh_count_open', { p: { warehouse_id: W.wid } }); if (error) return toast(friendly(error)); W.count = data; wtCount(); };
+    return;
+  }
+  const { data: c, error } = await sb.rpc('mini_wh_count_get', { p_count: W.count });
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
+  const OUT = { found: ['ok', 'cá está'], missing: ['bad', 'falta'], elsewhere: ['warn', 'está noutro lado'] };
+  box.innerHTML = c.status === 'closed' ? `<div class="card"><h2 style="margin-top:0">Contagem fechada · ${esc(c.warehouse || c.site || '')}</h2>
+      <div class="kpis k4"><div class="kpi ok"><b>${c.summary.found}</b><span>cá estão</span></div><div class="kpi ${c.summary.missing ? 'bad' : ''}"><b>${c.summary.missing}</b><span>faltam</span></div><div class="kpi ${c.summary.elsewhere ? 'warn' : ''}"><b>${c.summary.elsewhere}</b><span>noutro lado</span></div></div>
+      <ul class="q-list">${c.lines.map((l) => `<li>${chip(...OUT[l.outcome])} <b>${esc(l.tag)}</b> ${esc(l.name)}${l.expected_where ? ' · ' + esc(l.expected_where) : ''}</li>`).join('')}</ul>
+      <button class="btn ghost" id="wcnew">Nova contagem</button></div>`
+    : `<form class="card sc-climb" id="wcscan"><label for="wcr">Ler ferramenta · ${esc(c.warehouse || c.site || '')}</label><div class="wk"><input id="wcr" name="r" required maxlength="80" placeholder="Número, QR ou NFC" autocomplete="off"><button class="btn">Contar</button></div>
+        ${'NDEFReader' in window ? '<button type="button" class="btn ghost small" id="wcn">Ler NFC</button>' : ''}<p class="small muted">${c.scanned.length} lida(s)</p></form>
+      <div class="card"><ul class="q-list">${c.scanned.slice().reverse().map((s) => `<li><b>${esc(s.tag)}</b> · ${esc(fmtTime(s.at))}</li>`).join('') || '<li>Ainda nada lido.</li>'}</ul></div>
+      <button class="btn wide" id="wcclose">Fechar a contagem</button>`;
+  if ($('#wcnew')) $('#wcnew').onclick = () => { W.count = null; wtCount(); };
+  const scan = async (ref) => { const { data, error: e } = await sb.rpc('mini_wh_count_scan', { p_count: W.count, p_ref: ref });
+    if (e) { beep(false); return toast(friendly(e)); } beep(true); toast(`${data.tag}${data.already ? ' já estava contada' : data.expected ? '' : ' · não devia estar aqui: ' + (data.where || '')}`); wtCount(); };
+  if ($('#wcscan')) { $('#wcscan').onsubmit = (e) => { e.preventDefault(); scan(String(new FormData(e.target).get('r')).trim()); }; $('#wcr').focus(); }
+  if ($('#wcn')) $('#wcn').onclick = () => wtReadTag(scan);
+  if ($('#wcclose')) $('#wcclose').onclick = async () => { const { error: e } = await sb.rpc('mini_wh_count_close', { p_count: W.count, p_note: null }); if (e) return toast(friendly(e)); wtCount(); };
+}
+// ---- Rasto: which tiers this company uses, its battery tags and fixed receivers
+async function wtTracking() {
+  const box = $('#wtbody'); if (!box) return;
+  const { data: s, error } = await sb.rpc('mini_wh_tracking_settings');
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
+  const tier = (k, l, sub) => `<label class="wt-tier"><input type="checkbox" name="${k}" ${s[k] ? 'checked' : ''} ${s.can_edit ? '' : 'disabled'}><span><b>${l}</b><small>${sub}</small></span></label>`;
+  box.innerHTML = `<form class="card" id="wtset"><h2 style="margin-top:0">Como seguimos as ferramentas</h2>
+      <label class="wt-tier"><input type="checkbox" checked disabled><span><b>QR code e NFC</b><small>Sempre ligado. Sem pilha, barato, funciona em qualquer zona, ATEX incluída. Diz quem levou e quando.</small></span></label>
+      ${tier('ble', 'Etiquetas Bluetooth', 'Etiqueta com pilha + recetores fixos no armazém e nos contentores. Diz onde está agora, sem ninguém ler nada.')}
+      ${tier('gps', 'GPS', 'Para equipamento grande: geradores, compressores, contentores. Localização em qualquer lado com rede.')}
+      ${tier('ex_certified', 'Etiquetas certificadas Ex (ATEX)', 'Etiquetas com pilha que podem entrar em zona ATEX. Mais caras.')}
+      <label for="wtap">Ferramenta com etiqueta de pilha não certificada a caminho de zona ATEX</label>
+      <select id="wtap" name="atex" ${s.can_edit ? '' : 'disabled'}><option value="refuse" ${s.atex_policy === 'refuse' ? 'selected' : ''}>Recusar a saída</option><option value="warn" ${s.atex_policy === 'warn' ? 'selected' : ''}>Só avisar</option></select>
+      ${s.can_edit ? '<button class="btn">Guardar</button>' : ''}</form>
+    ${s.ble || s.gps ? `<div class="sec-h"><h2>Etiquetas com pilha</h2>${s.can_edit ? '<button class="btn ghost small" id="wttadd">+ Etiqueta</button>' : ''}</div>
+      <div class="card"><ul class="q-list" id="wttl"><li class="muted">A carregar…</li></ul></div>
+      ${s.ble ? `<div class="sec-h"><h2>Recetores fixos</h2>${s.can_edit ? '<button class="btn ghost small" id="wtgadd">+ Recetor</button>' : ''}</div><div class="card"><ul class="q-list" id="wtgl"></ul></div>` : ''}` : ''}`;
+  $('#wtset').onsubmit = async (e) => { e.preventDefault(); const fd = new FormData(e.target);
+    const { error: x } = await sb.rpc('mini_wh_tracking_settings_save', { p: { ble: !!fd.get('ble'), gps: !!fd.get('gps'), ex_certified: !!fd.get('ex_certified'), atex_policy: fd.get('atex') } });
+    if (x) return toast(friendly(x)); toast('Guardado.'); wtTracking(); };
+  if (!(s.ble || s.gps)) return;
+  const { data: tr } = await sb.rpc('mini_wh_trackers');
+  if (!box.isConnected || !tr) return;
+  $('#wttl').innerHTML = tr.trackers.map((k) => `<li><b>${esc(k.tag)}</b> · ${k.kind === 'gps' ? 'GPS' : 'Bluetooth'} ${esc(k.label || k.device_id)}${k.ex_certified ? ' · Ex' : ''}${k.battery_pct != null ? ' · pilha ' + k.battery_pct + '%' : ''} · ${k.silent ? chip('warn', 'sem sinal há 24 h') : 'visto ' + esc(fmtTime(k.last_seen_at))}
+    ${s.can_edit ? ` <button class="btn ghost small" data-toff="${esc(k.id)}">Desligar</button>` : ''}</li>`).join('') || '<li class="muted">Nenhuma etiqueta ainda.</li>';
+  if ($('#wtgl')) $('#wtgl').innerHTML = tr.gateways.map((g) => `<li><b>${esc(g.label || g.device_id)}</b> · ${esc([g.warehouse, g.site, g.zone].filter(Boolean).join(' · '))}${g.ex_certified ? ' · Ex' : ''} · ${g.last_seen_at ? 'visto ' + esc(fmtTime(g.last_seen_at)) : 'ainda sem sinal'}
+    ${s.can_edit ? ` <button class="btn ghost small" data-goff="${esc(g.id)}">Desligar</button>` : ''}</li>`).join('') || '<li class="muted">Nenhum recetor ainda.</li>';
+  box.querySelectorAll('[data-toff]').forEach((b) => b.onclick = async () => { const { error: x } = await sb.rpc('mini_wh_tracker_off', { p_tracker: b.dataset.toff }); if (x) return toast(friendly(x)); wtTracking(); });
+  box.querySelectorAll('[data-goff]').forEach((b) => b.onclick = async () => { const { error: x } = await sb.rpc('mini_wh_gateway_off', { p_gateway: b.dataset.goff }); if (x) return toast(friendly(x)); wtTracking(); });
+  if ($('#wttadd')) $('#wttadd').onclick = async () => {
+    const fd = await askSheet('Nova etiqueta com pilha', `<label for="wkt">Ferramenta (número) *</label><input id="wkt" name="t" required maxlength="80">
+      <label>Tipo *</label><div class="chips">${s.ble ? '<label class="chip"><input type="radio" name="k" value="ble" checked required>Bluetooth</label>' : ''}${s.gps ? `<label class="chip"><input type="radio" name="k" value="gps" ${s.ble ? '' : 'checked'} required>GPS</label>` : ''}</div>
+      <label for="wkd">Código do aparelho *</label><input id="wkd" name="d" required maxlength="64"><label for="wkl">Nome</label><input id="wkl" name="l" maxlength="80">
+      ${s.ex_certified ? '<label class="check inline"><input type="checkbox" name="x"> Certificada Ex (pode entrar em zona ATEX)</label>' : ''}`, 'Ligar');
+    if (!fd) return;
+    const c = await sb.rpc('mini_wh_tool_card', { p_ref: String(fd.get('t')).trim(), p: {} }); if (c.error || !c.data) return toast(c.error ? friendly(c.error) : 'Ferramenta não encontrada.');
+    const { error: x } = await sb.rpc('mini_wh_tracker_add', { p_tool: c.data.id, p: { kind: fd.get('k'), device_id: String(fd.get('d')).trim(), label: String(fd.get('l') || '').trim() || null, ex_certified: !!fd.get('x') } });
+    if (x) return toast(friendly(x)); toast('Etiqueta ligada.'); wtTracking(); };
+  if ($('#wtgadd')) $('#wtgadd').onclick = async () => {
+    const W = state.wh;
+    const fd = await askSheet('Novo recetor fixo', `<label for="wgd">Código do recetor *</label><input id="wgd" name="d" required maxlength="64"><label for="wgl">Nome *</label><input id="wgl" name="l" required maxlength="80" placeholder="ex.: Contentor ferramentas Sines">
+      <label for="wgw">Onde está *</label><select id="wgw" name="w"><option value="wh:${esc(W.wid)}">${esc((W.home.warehouses.find((w) => w.id === W.wid) || {}).name || 'Este armazém')}</option>${activeSites().map((x) => `<option value="site:${esc(x.id)}">Obra ${esc(x.cost_center_code)}</option>`).join('')}</select>
+      ${s.ex_certified ? '<label class="check inline"><input type="checkbox" name="x"> Certificado Ex</label>' : ''}`, 'Ligar');
+    if (!fd) return;
+    const [kind, id] = String(fd.get('w')).split(':');
+    const { error: x } = await sb.rpc('mini_wh_gateway_add', { p: { device_id: String(fd.get('d')).trim(), label: String(fd.get('l')).trim(), [kind === 'wh' ? 'warehouse_id' : 'site_id']: id, ex_certified: !!fd.get('x') } });
+    if (x) return toast(friendly(x)); toast('Recetor ligado.'); wtTracking(); };
+}
+// ---- Custos por obra e exportação para o ERP (Primavera ou outro)
+async function wtCosts() {
+  const W = state.wh; const box = $('#wtbody'); if (!box) return;
+  if (!W.cm) W.cm = isoDay(new Date()).slice(0, 7);
+  const { from, to } = monthRange(W.cm);
+  const { data, error } = await sb.rpc('mini_wh_site_costs', { p_from: from, p_to: to });
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
+  const tot = data.reduce((a, x) => a + Number(x.total || 0), 0);
+  box.innerHTML = `<div class="card"><div class="wk"><label for="wcm" class="grow">Mês</label><input id="wcm" type="month" value="${esc(W.cm)}"></div>
+      <p class="small muted">Aluguer interno, reparações e abates, sempre atribuídos a uma obra. É informação para o ERP: o Primavera continua a ser a contabilidade.</p></div>
+    ${data.length ? `<div class="card"><table class="tbl"><thead><tr><th>Obra</th><th class="num">Aluguer</th><th class="num">Reparação</th><th class="num">Abates</th><th class="num">Total</th></tr></thead>
+      <tbody>${data.map((x) => `<tr><td>${esc(x.site)}</td><td class="num">${eur2(x.hire)}</td><td class="num">${eur2(x.repair)}</td><td class="num">${eur2(x.writeoff)}</td><td class="num"><b>${eur2(x.total)}</b></td></tr>`).join('')}</tbody>
+      <tfoot><tr><td>Total</td><td></td><td></td><td></td><td class="num"><b>${eur2(tot)}</b></td></tr></tfoot></table></div>` : `<div class="card">${empty('ok', 'Sem custos neste mês', 'O aluguer, as reparações e os abates aparecem aqui por obra.')}</div>`}
+    <button class="btn" id="wcx">${ic('doc')}Excel para o ERP (abates e custos por obra)</button>`;
+  $('#wcm').onchange = (e) => { W.cm = e.target.value || W.cm; wtCosts(); };
+  $('#wcx').onclick = () => excelExport(async () => { const r = await sb.rpc('mini_wh_erp_export', { p_from: from, p_to: to }); if (r.error) { toast(friendly(r.error)); return null; } return r.data; }, (X, e) => {
+    const doc = xlDoc([], 'Ferramentas: abates e custos por obra', `Período: ${periodLabel(from, to)}`, null);
+    const wb = xlBook(X, doc);
+    const a = xlSheet(wb, 'Abates', doc, [{ h: 'Data', t: 'date', w: 11 }, { h: 'Tipo', t: 'text', w: 10 }, { h: 'Nº ferramenta', t: 'text', w: 12 }, { h: 'Ref. ERP', t: 'text', w: 12 },
+      { h: 'Nº série', t: 'text', w: 12 }, { h: 'Descrição', t: 'text', w: 22, max: 40 }, { h: 'Motivo', t: 'text', w: 12 }, { h: 'Valor', t: 'eur', w: 11 }, { h: 'Obra', t: 'text', w: 9 }, { h: 'Centro de custo', t: 'text', w: 12 }]);
+    let r = a.head + 1;
+    for (const w of e.writeoffs) xlRow(a, r++, [xlDate(String(w.date).slice(0, 10)), w.kind === 'reversal' ? 'reversão' : 'abate', w.asset_tag, w.asset_erp_ref || '', w.serial || '', w.description, WT_OFF[w.reason] || w.reason, Number(w.book_value || 0), w.site_code, w.cost_centre || '']);
+    const c = xlSheet(wb, 'Custos por obra', doc, [{ h: 'Data', t: 'date', w: 11 }, { h: 'Nº ferramenta', t: 'text', w: 12 }, { h: 'Descrição', t: 'text', w: 22, max: 40 }, { h: 'Tipo', t: 'text', w: 10 },
+      { h: 'Dias', t: 'n', w: 7 }, { h: 'Preço/dia', t: 'eur', w: 10 }, { h: 'Valor', t: 'eur', w: 11 }, { h: 'Obra', t: 'text', w: 9 }, { h: 'Centro de custo', t: 'text', w: 12 }]);
+    r = c.head + 1;
+    for (const x of e.site_costs) xlRow(c, r++, [xlDate(String(x.date).slice(0, 10)), x.asset_tag, x.description, x.kind === 'hire' ? 'aluguer' : x.kind === 'repair' ? 'reparação' : x.kind, x.days || '', x.rate != null ? Number(x.rate) : '', Number(x.amount || 0), x.site_code, x.cost_centre || '']);
+    return { wb, name: `gestnow-ferramentas-${from.slice(0, 7)}.xlsx`, msg: 'Excel descarregado.' };
+  });
+}
+// The worker's own tools on top of As minhas horas: what they hold and until when.
+async function loadMyTools() {
+  const box = $('#mytools'); if (!box) return;
+  const { data, error } = await sb.rpc('mini_wh_my_tools');
+  if (!box.isConnected) return;
+  if (error || !data || !data.tools.length) { box.innerHTML = ''; return; }
+  box.innerHTML = `<div class="card"><h2 style="margin-top:0">${ic('key')} As minhas ferramentas</h2><ul class="q-list">${data.tools.map((t) => `<li><b>${esc(t.tag)}</b> ${esc(t.name)}${t.site ? ' · ' + esc(t.site) : ''} · ${t.overdue ? chip('bad', 'devia ter voltado ' + fmtTime(t.due)) : 'devolve até ' + esc(fmtTime(t.due))}
+    ${t.calibration_state && ['expired', 'failed'].includes(t.calibration_state) ? chip('bad', 'não usar: calibração') : ''}</li>`).join('')}</ul>
+    <p class="small muted">Estão em teu nome até as devolveres no armazém.</p></div>`;
 }
 async function addTool() {
   const fd = await askSheet('Nova ferramenta', `<label for="tn">O que é *</label><input id="tn" name="n" required minlength="2" maxlength="120" placeholder="ex.: Rebarbadora 125, Detetor de gás">
