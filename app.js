@@ -556,7 +556,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '41';
+const APP_VERSION = '42';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -5875,12 +5875,14 @@ async function whBaseList(have) {
     <ul class="small">${miss.map((b) => `<li><b>${esc(b.family)}</b>${b.sizes ? ' · ' + esc(b.sizes[0]) + ' a ' + esc(b.sizes[b.sizes.length - 1]) : ''}</li>`).join('')}</ul>
     <p class="small muted">Depois podes mudar o que quiseres em «Editar» e acrescentar outros em «+ Outro EPI ou artigo». O stock começa a zero: dá entrada do que tens.</p>`, 'Criar ' + miss.length);
   if (!fd) return;
-  let ok = 0;
+  let ok = 0, had = 0;
   for (const b of miss) {
     const { error } = await sb.rpc('mini_wh_item_save', { p_item: null, p_data: { unit: 'un', ...b } });
-    if (!error) ok++; else if (!/already exists/i.test(error.message || '')) { toast(friendly(error)); break; }
+    if (!error) ok++; else if (/already exists/i.test(error.message || '')) had++; else { toast(friendly(error)); break; }
   }
-  toast(`${ok} artigo(s) criados. Agora dá entrada do stock.`); loadWarehouse();
+  if (ok) toast(`${ok} artigo(s) criados${had ? `, ${had} já existiam` : ''}. Agora dá entrada do stock.`);
+  else if (had) toast('A lista base já existe. Dá entrada do stock em cada artigo.');
+  loadWarehouse();
 }
 async function itemSheet(f) {
   const it = f && f.items[0];
