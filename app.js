@@ -493,6 +493,11 @@ const ART = {
   check: '<circle cx="60" cy="44" r="30" fill="var(--ok-bg)"/><path d="M46 45l10 10 18-20" stroke="var(--ok)" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
 };
 const empty = (art, title, text) => `<div class="empty"><svg viewBox="0 0 120 84" aria-hidden="true">${ART[art] || ART.box}</svg><b>${esc(title)}</b>${text ? `<p>${esc(text)}</p>` : ''}</div>`;
+// Big zeros are noise: a KPI tile whose number is 0 gets .zero (shown muted). One observer for every screen.
+let zeroTick = 0;
+new MutationObserver(() => { if (zeroTick) return; zeroTick = requestAnimationFrame(() => { zeroTick = 0;
+  for (const b of app.querySelectorAll('.kpi > b, .fl-n > b')) b.parentElement.classList.toggle('zero', /^0([.,]0+)?\s*(€|h|%)?$/.test(b.textContent.trim())); }); })
+  .observe(app, { childList: true, subtree: true });
 // The same shape for a load that failed: red icon, plain words, optional "Tentar outra vez" button (id given by the screen).
 const errorState = (text, retryId) => `<div class="empty error" role="alert"><span class="e-ic">${ic('warn')}</span><b>Não foi possível carregar</b><p>${esc(text)}</p>${retryId ? `<button class="btn ghost" id="${esc(retryId)}">Tentar outra vez</button>` : ''}</div>`;
 // One line of help, the rest behind an "i".
