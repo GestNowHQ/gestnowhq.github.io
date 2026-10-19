@@ -319,6 +319,15 @@ const ERRORS = [
   [/tap the card/i, 'Encosta o cartão ou escreve o número.'],
   [/you already disagreed with this day/i, 'Já reclamaste deste dia. Espera pela resposta.'],
   [/there is no day to disagree/i, 'Não há horas nesse dia para reclamar.'],
+  [/this day is not over yet/i, 'Este dia ainda não acabou: fala com o teu encarregado.'],
+  [/on a day without taps choose/i, 'Num dia sem picagens escolhe «Estive lá e diz que faltei» ou «Outro motivo».'],
+  [/you were not on a site that day/i, 'Nesse dia não estavas em nenhuma obra: fala com o escritório.'],
+  [/a week is confirmed from its Friday/i, 'A semana só se confirma a partir de sexta-feira.'],
+  [/choose the Monday of the week/i, 'Escolhe a semana.'],
+  [/there are no hours in this week/i, 'Esta semana não tem horas.'],
+  [/you disagreed with a day of this week/i, 'Reclamaste de um dia desta semana: espera pela resposta antes de confirmar.'],
+  [/this request already has a file/i, 'Este pedido já tem um ficheiro.'],
+  [/send the file first/i, 'O ficheiro não chegou. Tenta outra vez.'],
   [/write what is wrong/i, 'Em «Outro motivo», escreve o que está errado (pelo menos 10 letras).'],
   [/write the answer/i, 'Escreve a resposta (pelo menos 10 letras).'],
   [/write why you refuse/i, 'Escreve porque recusas (pelo menos 10 letras).'],
@@ -736,6 +745,7 @@ nav.addEventListener('click', (e) => {
   if (b.dataset.action === 'sair') return signOut();
   if (b.dataset.action === 'tour') return startTour();
   if (b.dataset.view === 'orcamentos' && state.orc) { state.orc.id = null; state.orc.mode = 'list'; }   // the menu always opens the list
+  if (b.dataset.view === 'minhas') state.mineTab = 'home';   // «Eu» always opens the home
   go(b.dataset.view);
 });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
@@ -744,8 +754,8 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(f
 const APP_VERSION = '47';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
-  project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas', 'meucontrato'] };
-const MORE_ORDER = ['equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'meucontrato', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'andaimes', 'processo', 'clientes'];
+  project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
+const MORE_ORDER = ['equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'andaimes', 'processo', 'clientes'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -898,9 +908,8 @@ async function boot() {
   nav.querySelector('[data-view=secretariado]').hidden = !canOffice();
   // The worker profile sees only their own hours; anyone with a person behind the login has them under Mais.
   const worker = me.role === 'worker';
-  nav.querySelectorAll('button[data-view]').forEach((b) => { if (!['minhas', 'meucontrato', 'secretariado'].includes(b.dataset.view)) b.hidden = worker; });
+  nav.querySelectorAll('button[data-view]').forEach((b) => { if (b.dataset.view !== 'minhas' && b.dataset.view !== 'secretariado') b.hidden = worker; });
   nav.querySelector('[data-view=minhas]').hidden = !me.collaborator_id;
-  nav.querySelector('[data-view=meucontrato]').hidden = !me.collaborator_id || state.offline;
   nav.querySelector('[data-view=painel]').hidden = worker || !canSiteDetails();
   nav.querySelector('[data-view=acolhimento]').hidden = worker || !can('acolhimento.gerir');
   nav.querySelector('[data-view=clientes]').hidden = worker || state.offline || !isOwner();
@@ -1303,7 +1312,7 @@ function bindSiteSelect(id, after) {
 
 function go(view) {
   if (!state.ready) return boot();   // never show a screen before login (and the phone code, when required)
-  if (state.me.role === 'worker' && view !== 'meucontrato') view = 'minhas';   // the worker profile: their hours and their papers (the database checks the same)
+  if (state.me.role === 'worker') view = 'minhas';   // the worker profile has one screen (the database checks the same)
   else if (state.offline && view !== 'picar' && view !== 'emergencia') { toast('Sem rede: por agora só podes picar.'); view = 'picar'; }
   stopNfc(); clearInterval(state.timer); clearInterval(state.tick); hideFlash(); openMore(false); Voice.stop(); dropRobots();
   if (state.uiEl && window.GNUI) { window.GNUI.unmount(state.uiEl); state.uiEl = null; }
@@ -1315,7 +1324,7 @@ function go(view) {
   nav.querySelector('button[data-more]').classList.toggle('on', !!cur && cur.parentElement.id === 'more');
   window.scrollTo(0, 0);
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
-     ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, meucontrato: viewMyPapers, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients,
+     ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients,
      processo: viewProcess, orcamentos: viewEstimates, lmra: viewLmra, emergencia: viewEmergency,
      armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, producao: viewProd, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
   checkEmergencyBar();
@@ -2297,8 +2306,9 @@ function onbFacts(steps) {
   if (!steps || !steps.length) return '';
   const day = (t) => (t ? new Date(t).toLocaleDateString('pt-PT') : '');
   const paper = steps.filter((x) => x.method === 'paper');
+  if (!paper.length) return '';   // done in the app: the «Entrada na empresa» card above (loadOnbCard) shows it
   const note = (paper.find((x) => x.statement) || {}).statement;
-  return `<h3>Entrada na empresa</h3><ul class="onb-facts">${steps.map((x) => `<li><b>${esc(ONB_STEP_TX[x.step] || x.step)}</b>
+  return `<h3>Entrada na empresa</h3><ul class="onb-hist">${steps.map((x) => `<li><b>${esc(ONB_STEP_TX[x.step] || x.step)}</b>
       ${x.method === 'paper' ? `${chip('warn', 'verificado em papel', 'doc')} <span class="small muted">por ${esc(x.by || '—')} · ${esc(day(x.at))}</span>`
         : `${chip('ok', 'feito na app', 'ok')} <span class="small muted">${esc(day(x.at))}</span>`}</li>`).join('')}</ul>
     ${paper.length ? `<p class="small muted">Verificado em papel: alguém da empresa viu os documentos em papel. A pessoa não assinou nada na app.${note ? ' Nota: ' + esc(note) : ''}</p>` : ''}`;
@@ -2812,10 +2822,9 @@ function onbRates(ob, me) {
     $('#go').onclick = () => showOnboarding();
   };
 }
-// «O meu contrato»: what the person signed and accepted, any time after.
-async function viewMyPapers() {
-  app.innerHTML = `<div class="ph"><div><p class="ph-k">Eu</p><h1>O meu contrato</h1></div></div><div id="mp">${skel(3)}</div>`;
-  const { data, error } = await sb.rpc('mini_my_papers'); const el = $('#mp'); if (!el) return;
+// «O meu contrato» (a tile in «Eu»): what the person signed and accepted, any time after.
+async function renderMyPapers(el) {
+  const { data, error } = await sb.rpc('mini_my_papers'); if (!el.isConnected) return;
   if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
   const k = data.contract; const r = data.rules; const a = data.rates;
   if (!k && !a) { el.innerHTML = `<div class="card">${empty('doc', data.paper ? 'O teu contrato está em papel' : 'Ainda sem contrato na app', data.paper ? 'Assinaste em papel no escritório. Pede uma cópia ao RH.' : 'Quando assinares um contrato na app, fica aqui.')}</div>`; return; }
@@ -3467,7 +3476,7 @@ const TOUR_TEXT = {
   compras: 'Compras: pedes o que falta; acima do limite o Secretariado aprova; depois encomenda-se e regista-se o que chega.',
   armazem: 'Armazém: EPIs, farda e ferramentas. Quem recebe assina com o cartão; os tamanhos vêm da ficha.',
   horas: 'Horas: as horas da equipa, dia a dia, para corrigir e validar.',
-  minhas: 'As minhas horas: as tuas horas, o teu mês, e os pedidos de férias e faltas. Se um dia estiver mal, dizes aqui.',
+  minhas: 'Eu: o teu dia, a tua semana, as tuas horas, pedidos, diárias, documentos, EPI e onde dormes. Se um dia estiver mal, dizes aqui.',
   secretariado: 'Secretaria: o mês de toda a gente, fechar o mês e tirar o ficheiro para os salários.',
   seguranca: 'Segurança: os documentos de cada pessoa, e o que impede alguém de entrar na obra.',
   trabalhadores: 'Pessoas: as fichas, os cartões e os documentos de cada colaborador.',
@@ -3714,7 +3723,7 @@ async function loadHours(from, to) {
   el.innerHTML = Object.values(byWorker).map((rows) => {
     const tot = rows.reduce((a, r) => ({ w: a.w + r.worked_minutes, o: a.o + r.overtime_minutes }), { w: 0, o: 0 });
     return `<div class="card pcard"><div class="wk">${avatar(rows[0].full_name)}<div class="grow"><h2 style="margin:0;font-size:18px">${esc(rows[0].full_name)}</h2>
-      <div class="sub">${rows[0].employee_number ? 'nº ' + esc(rows[0].employee_number) : ''}</div></div>
+      <div class="sub">${rows[0].employee_number ? 'nº ' + esc(rows[0].employee_number) : ''} <span data-visa="${esc(rows[0].collaborator_id)}"></span></div></div>
       <div class="ptop"><b class="tnum">${esc(fmtMin(tot.w))}</b><span>${tot.o ? esc(fmtMin(tot.o)) + ' extra' : 'na semana'}</span></div></div>
     ${weekStrip(rows, from, tz, today)}
     ${rows.map((r) => {
@@ -3740,6 +3749,12 @@ async function loadHours(from, to) {
   // Bulk validation only for plain days: no problem, no overtime, not one's own, and never a day the office sent back (M4).
   const easy = data.filter((r) => r.status === 'registered' && !r.anomalies.length && !r.overtime_minutes && !r.special_day_minutes && r.collaborator_id !== me && !returned[r.work_day_id]);
   const all = $('#all'); if (all) { all.hidden = !easy.length; all.lastChild.textContent = `Validar ${easy.length} dia(s) sem problemas`; all.onclick = () => validate(easy.map((r) => r.work_day_id), null); }
+  // The worker's weekly visa (sql/82): confirmed, changed after confirming, or not yet.
+  sb.rpc('mini_week_confirmations', { p_from: from, p_to: to, p_project: site.id }).then(({ data: vs }) => {
+    if (seq !== hoursSeq || !vs) return;
+    for (const v of vs) { const x = el.querySelector(`[data-visa="${v.collaborator_id}"]`); if (!x) continue;
+      x.innerHTML = v.state === 'confirmed' ? chip('val', 'confirmou a semana', 'ok') : v.state === 'changed' ? chip('warn', 'mudou depois de confirmar') : v.can_confirm ? chip('', 'semana por confirmar') : ''; }
+  }, () => {});
   el.querySelectorAll('button[data-ok]').forEach((b) => b.onclick = () =>
     validate([b.dataset.ok], b.dataset.ot === undefined ? null : b.dataset.ot === '1'));
   el.querySelectorAll('button[data-fix], button[data-taps]').forEach((b) => b.onclick = () => fixDay(b.dataset.fix || b.dataset.taps, b.dataset.day, b.dataset.name));
@@ -3840,36 +3855,268 @@ async function markOut(p) {
 // The worker's start screen: today, the week, the month in big numbers, a calendar of the month, what they will earn
 // (only if the company switches it on), the site card and the diárias. Every number comes from the official taps.
 const MINE_STATE = { registered: 'por validar', supervisor_validated: 'validado na obra', hr_validated: 'aprovado no escritório', sent_to_payroll: 'fechado para salários' };
+// «Eu» (v48, sql/82): the worker's home. Today in big, the week against the contract, what needs a tap now
+// (confirm the week, a document out of date), then one big tile per thing that is theirs. Each tile opens its screen;
+// the phone's back button comes back here. Built for gloves and sunlight: big targets, few words.
+const ME_TABS = {
+  horas: ['clock', 'As minhas horas'], pedidos: ['calendar', 'Pedidos'], diarias: ['card', 'Diárias'], despesas: ['cart', 'Despesas'],
+  viagens: ['plane', 'Viagens'], dormir: ['home', 'Onde durmo'], andaimes: ['scaffold', 'Posso subir?'], docs: ['doc', 'Os meus documentos'],
+  epi: ['shield', 'EPI e ferramentas'], contrato: ['lock', 'O meu contrato'] };
 function viewMine() {
   if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!state.me.collaborator_id) return go((TABS[state.me.role] || TABS.supervisor)[0]);
   if (!state.mineMonth) state.mineMonth = isoDay(new Date()).slice(0, 7);
-  const months = [0, 1, 2].map((k) => { const d = new Date(); d.setDate(15); d.setMonth(d.getMonth() - k); return isoDay(d).slice(0, 7); });
-  const mName = (ym) => new Date(ym + '-15T12:00:00').toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' });
-  const me = state.people.find((x) => x.id === state.me.collaborator_id);
-  app.innerHTML = `<div class="ph"><div><p class="ph-k">${esc((me && me.full_name) || '')}</p><h1>As minhas horas</h1></div></div>
-    <div class="chips" style="margin-bottom:12px">${months.map((m) => `<button class="chip" data-m="${m}" aria-pressed="${m === state.mineMonth}">${esc(mName(m))}</button>`).join('')}</div>
-    <div id="mytrips"></div><div id="myexp"></div><div id="myclimb"></div><div id="mytools"></div><div class="mine-grid"><div><div id="minetop">${skel(1)}</div><div id="minepay"></div><div id="mine">${skel(3)}</div></div>
-    <div><div id="minereq"></div><div id="minesite"></div><div id="pdmine"></div></div></div>`;
-  loadMyPerDiems(); loadMyRequests(); loadMyTravels(); loadMyExpenses(); loadMyClimb(); loadMyTools();
-  app.querySelectorAll('[data-m]').forEach((b) => b.onclick = () => { state.mineMonth = b.dataset.m; viewMine(); });
-  loadMine();
-  state.timer = setInterval(() => { if (state.view === 'minhas' && document.visibilityState === 'visible') loadMine(true); }, 60000);
+  const tab = state.mineTab || 'home';
+  if (tab !== 'home' && ME_TABS[tab]) return meScreen(tab);
+  app.innerHTML = `<div class="me-home"><div id="mehero">${skel(1)}</div><div id="meact"></div><div class="me-tiles" id="metiles"></div></div>`;
+  loadMeHome();
+  state.timer = setInterval(() => { if (state.view === 'minhas' && (state.mineTab || 'home') === 'home' && document.visibilityState === 'visible') loadMeHome(true); }, 60000);
+}
+function meOpen(tab) {
+  state.mineTab = tab;
+  try { history.pushState({ me: tab }, ''); } catch (_) {}
+  clearInterval(state.timer); window.scrollTo(0, 0); viewMine();
+}
+function meBack() {
+  if (history.state && history.state.me) { history.back(); return; }
+  state.mineTab = 'home'; clearInterval(state.timer); window.scrollTo(0, 0); viewMine();
+}
+window.addEventListener('popstate', () => {
+  if (state.view !== 'minhas' || (state.mineTab || 'home') === 'home') return;
+  state.mineTab = 'home'; clearInterval(state.timer); document.querySelectorAll('dialog[open]').forEach((d) => d.close()); viewMine();
+});
+async function loadMeHome(quiet) {
+  const ym = isoDay(new Date()).slice(0, 7);
+  const [home, sum, papers] = await Promise.all([sb.rpc('mini_my_home', { p_month: ym + '-01' }), sb.rpc('mini_my_summary'),
+    state.mePapers === false ? Promise.resolve({ error: true }) : sb.rpc('mini_my_papers').then((r) => r, () => ({ error: true }))]);
+  const hero = $('#mehero'); if (!hero || (state.mineTab || 'home') !== 'home') return;
+  if (home.error) { hero.innerHTML = `<div class="card">${esc(friendly(home.error))}</div>`; return; }
+  if (papers.error) state.mePapers = false;   // the function is not there yet (sql/80): no tile
+  const d = home.data; const s = sum.data || null; state.mineData = d;
+  hero.innerHTML = meHero(d, s);
+  if (quiet && $('#metiles').dataset.on) return;
+  $('#meact').innerHTML = s ? meActions(s) : '';
+  $('#metiles').innerHTML = meTiles(d, s, papers.error ? null : papers.data);
+  $('#metiles').dataset.on = '1';
+  app.querySelectorAll('[data-me]').forEach((b) => b.onclick = () => meOpen(b.dataset.me));
+  app.querySelectorAll('[data-confirm]').forEach((b) => b.onclick = () => meConfirmWeek(b.dataset.confirm, b.dataset.label, () => loadMeHome()));
+}
+// The week as a ring: hours so far against the contract's week.
+function meRing(done, target) {
+  const pct = target ? Math.min(1, done / target) : 0; const r = 46; const c = 2 * Math.PI * r;
+  const over = target && done > target;
+  return `<div class="me-ring" role="img" aria-label="${esc(fmtMin(done))} de ${esc(fmtMin(target))} esta semana">
+    <svg viewBox="0 0 108 108" aria-hidden="true"><circle cx="54" cy="54" r="${r}" class="me-ring-bg"/>
+      <circle cx="54" cy="54" r="${r}" class="me-ring-fg${over ? ' over' : ''}" stroke-dasharray="${(pct * c).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 54 54)"/></svg>
+    <div class="me-ring-t"><b>${esc(fmtMin(done).replace('h00', 'h'))}</b><small>de ${esc(fmtMin(target).replace('h00', 'h'))}</small></div></div>`;
+}
+function meHero(d, s) {
+  const t = d.today || {}; const tz = (d.site && state.sites.find((x) => x.id === d.site.id) || {}).timezone || DEFAULT_TZ;
+  const h = tzParts(Date.now(), tz).hour % 24;
+  const hello = (h >= 6 && h < 13 ? 'Bom dia' : h >= 13 && h < 20 ? 'Boa tarde' : 'Boa noite') + ', ' + String(d.name || '').split(' ')[0];
+  const ev = t.events || []; const inNow = t.last === 'in';
+  let so = 0;
+  for (let i = 0, open = null; i < ev.length; i++) {
+    if (ev[i].dir === 'in') open = new Date(ev[i].at).getTime();
+    else if (open !== null) { so += (new Date(ev[i].at).getTime() - open) / 60000; open = null; }
+    if (i === ev.length - 1 && open !== null) so += (Date.now() - open) / 60000;
+  }
+  so = Math.max(0, Math.round(so));
+  const wk = d.week || []; const wsum = wk.reduce((a, x) => a + (x.date === t.date ? Math.max(x.worked, so) : x.worked), 0);
+  const big = inNow ? 'Na obra' : t.last === 'out' ? 'Dia fechado' : 'Ainda não picaste';
+  const sub = inNow ? `desde as <b>${esc(fmtHour(t.first_in, tz))}</b> · ${esc(fmtMin(so))} hoje`
+    : t.last === 'out' ? `saíste às <b>${esc(fmtHour(t.last_at, tz))}</b> · ${esc(fmtMin(so))} hoje`
+    : 'Pica o cartão no telemóvel do encarregado quando chegares.';
+  const pd = s && s.per_diem;
+  return `<section class="pic-hero me-hero ${inNow ? 'on' : t.last === 'out' ? 'done' : 'off'}">
+    <div class="pic-top"><h1>${esc(hello)}</h1>${inNow ? '<span class="live"><i></i>na obra</span>' : ''}</div>
+    <div class="me-hero-row"><div class="me-now"><div class="me-state">${esc(big)}</div><div class="me-sub">${sub}</div>
+      ${d.site ? `<div class="me-site">${ic('pin')}<span>${esc(d.site.title)}</span><small>${esc(d.site.code || '')}</small></div>` : ''}</div>
+      ${meRing(wsum, (s && s.week_minutes) || 2400)}</div>
+    <div class="me-hero-foot"><span>Esta semana · contrato ${esc(fmtMin((s && s.week_minutes) || 2400).replace('h00', 'h'))}</span>
+      ${pd ? `<span class="me-pd">${ic('card')}Diária ${esc(euro(pd.net))} <small>· semana de ${esc(fmtDate(pd.week_start).slice(0, 5))}</small></span>` : ''}</div>
+  </section>`;
+}
+const weekLabel = (w) => `${fmtDate(w.week_start).slice(0, 5)} a ${fmtDate(w.week_end).slice(0, 5)}`;
+// What needs the worker now, at the top, in big: the week to confirm (art. 202.º CT), documents out of date.
+function meActions(s) {
+  const out = [];
+  for (const w of (s.weeks || []).filter((x) => x.can_confirm).slice(0, 2)) {
+    out.push(`<div class="me-do"><div class="grow"><b>${w.state === 'changed' ? 'As horas mudaram: confirma outra vez' : 'Confirma as horas da semana'}</b>
+      <small>${esc(weekLabel(w))} · ${esc(fmtMin(w.worked))} · até ${esc(fmtDate(w.due_by).slice(0, 5))}</small></div>
+      <button class="btn me-big" data-confirm="${esc(w.week_start)}" data-label="${esc(weekLabel(w))}">${ic('ok')}Confirmo</button></div>`);
+  }
+  const dd = s.docs || {};
+  if (dd.expired || dd.missing) out.push(`<button class="me-do bad" data-me="docs"><span class="me-dot bad"></span><div class="grow"><b>${dd.expired ? (dd.expired === 1 ? '1 documento caducado' : `${dd.expired} documentos caducados`) : dd.missing === 1 ? '1 documento em falta' : `${dd.missing} documentos em falta`}</b>
+      <small>Sem isto podes não entrar na obra. Fala com o escritório.</small></div>${ic('go')}</button>`);
+  return out.length ? `<div class="me-acts">${out.join('')}</div>` : '';
+}
+function meTiles(d, s, papers) {
+  s = s || {}; const t = d.totals || {}; const dd = s.docs || {}; const ppe = s.ppe || {}; const tools = s.tools || {};
+  const tile = (k, sub, light, badge) => `<button class="me-tile ${light || ''}" data-me="${k}">
+    <span class="me-ic">${ic(ME_TABS[k][0])}</span>${badge ? `<span class="me-badge">${esc(badge)}</span>` : ''}
+    <b>${esc(ME_TABS[k][1])}</b><small>${esc(sub)}</small></button>`;
+  const pend = (t.rows || 0) - (t.validated || 0);
+  const docSub = dd.expired ? `${dd.expired} caducado(s)` : dd.missing ? `${dd.missing} em falta` : dd.expiring ? `um vence a ${fmtDate(dd.next_expiry).slice(0, 5)}` : 'Tudo em dia';
+  const c = papers && papers.contract;
+  return [
+    tile('horas', t.worked ? `${fmtMin(t.worked)} este mês${pend ? ` · ${pend} por validar` : ''}` : 'Semana, mês e cada picagem', '', s.weeks_to_confirm ? String(s.weeks_to_confirm) : ''),
+    tile('pedidos', s.requests_pending ? `${s.requests_pending} à espera de resposta` : 'Férias e faltas', '', s.disputes_open ? String(s.disputes_open) : ''),
+    tile('diarias', s.per_diem ? `${euro(s.per_diem.net)} · semana de ${fmtDate(s.per_diem.week_start).slice(0, 5)}` : 'Ainda sem diárias'),
+    tile('despesas', s.expenses_pending ? `${s.expenses_pending} por aprovar` : 'Entregar um talão'),
+    tile('viagens', s.trips_next ? `${s.trips_next} marcada(s)` : 'Sem viagens marcadas'),
+    tile('dormir', s.stay || 'Sem alojamento'),
+    tile('andaimes', 'Vê antes de subir', 'go'),
+    tile('docs', docSub, dd.expired || dd.missing ? 'bad' : dd.expiring ? 'warn' : 'ok'),
+    tile('epi', `${ppe.count || 0} EPI · ${tools.count || 0} ferramenta(s)`, ppe.due || tools.overdue ? 'warn' : ''),
+    papers ? tile('contrato', c && c.signed_at ? `Assinado a ${new Date(c.signed_at).toLocaleDateString('pt-PT')}` : c ? 'Por assinar' : 'Regras e valor à hora', c && !c.signed_at ? 'warn' : '') : '',
+  ].join('');
+}
+async function meConfirmWeek(week, label, after) {
+  const fd = await askSheet('Confirmo as minhas horas', `<p class="me-big-p">Semana de <b>${esc(label)}</b>.</p>
+    <p class="small muted">Confirmas que estas são as horas que fizeste. Se algum dia estiver mal, não confirmes: abre o dia e carrega em «Não concordo».
+    A lei pede este visto quando trabalhas fora das instalações da empresa (Código do Trabalho, art. 202.º).</p>`, 'Confirmo');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_confirm_week', { p_week: week });
+  if (error) return toast(friendly(error));
+  toast('Semana confirmada. Obrigado.'); if (after) after();
+}
+// Each tile's screen: a back button, the title, then the screen's own boxes.
+function meScreen(tab) {
+  const [icon, title] = ME_TABS[tab];
+  const head = `<div class="me-top"><button class="me-back" id="meback" aria-label="Voltar">${ic('go')}</button>
+    <span class="me-ic">${ic(icon)}</span><h1>${esc(title)}</h1></div>`;
+  const body = {
+    horas: () => {
+      const months = [0, 1, 2].map((k) => { const x = new Date(); x.setDate(15); x.setMonth(x.getMonth() - k); return isoDay(x).slice(0, 7); });
+      const mName = (ym) => new Date(ym + '-15T12:00:00').toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' });
+      return `<div class="chips" style="margin-bottom:12px">${months.map((m) => `<button class="chip" data-m="${m}" aria-pressed="${m === state.mineMonth}">${esc(mName(m))}</button>`).join('')}</div>
+        <div id="meweeks"></div><div class="mine-grid"><div><div id="minepay"></div><div id="mine">${skel(3)}</div></div><div><div id="minesite"></div></div></div>`;
+    },
+    pedidos: () => '<div id="minereq"></div>',
+    diarias: () => '<div id="pdmine"></div>',
+    despesas: () => '<div id="myexp"></div>',
+    viagens: () => '<div id="mytrips"></div>',
+    dormir: () => '<div id="mystay"></div>',
+    andaimes: () => '<div id="myclimb"></div>',
+    docs: () => '<div id="mydocs"></div>',
+    epi: () => '<div id="mykit"></div><div id="mytools"></div>',
+    contrato: () => '<div id="mypapers"></div>',
+  }[tab]();
+  app.innerHTML = `<div class="me-screen">${head}${body}</div>`;
+  $('#meback').onclick = meBack;
+  const fallback = (sel, art, t1, t2) => () => { const b = $(sel); if (b && !b.innerHTML.trim()) b.innerHTML = `<div class="card">${empty(art, t1, t2)}</div>`; };
+  if (tab === 'horas') {
+    app.querySelectorAll('[data-m]').forEach((b) => b.onclick = () => { state.mineMonth = b.dataset.m; meScreen('horas'); });
+    loadMine(); loadMeWeeks();
+    state.timer = setInterval(() => { if (state.view === 'minhas' && state.mineTab === 'horas' && document.visibilityState === 'visible') loadMine(true); }, 60000);
+  }
+  if (tab === 'pedidos') loadMyRequests();
+  if (tab === 'diarias') loadMyPerDiems().then(fallback('#pdmine', 'card', 'Ainda sem diárias', 'As diárias aparecem aqui quando o escritório as emitir, à quinta-feira.'));
+  if (tab === 'despesas') loadMyExpenses().then(fallback('#myexp', 'card', 'Sem despesas', 'Quando pagares algo para a obra, entrega aqui o talão.'));
+  if (tab === 'viagens') loadMyTravels().then(fallback('#mytrips', 'box', 'Sem viagens marcadas', 'Quando o RH marcar uma viagem para ti, aparece aqui com o bilhete.'));
+  if (tab === 'dormir') loadMyStay();
+  if (tab === 'andaimes') loadMyClimb();
+  if (tab === 'docs') loadMyDocs();
+  if (tab === 'epi') { loadMyKit(); loadMyTools(); }
+  if (tab === 'contrato') loadMyPapers();
+}
+// The weeks and their visa: confirmed, changed after, to confirm (with the date the law asks for).
+async function loadMeWeeks() {
+  const box = $('#meweeks'); if (!box) return;
+  const { data, error } = await sb.rpc('mini_my_weeks', { p_weeks: 6 });
+  if (!box.isConnected || error || !data) return;
+  const rows = data.filter((w) => w.days > 0);
+  if (!rows.length) { box.innerHTML = ''; return; }
+  const st = (w) => w.state === 'confirmed' ? chip('val', 'confirmada ' + new Date(w.confirmed_at).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' }), 'ok')
+    : w.state === 'changed' ? chip('warn', 'mudou depois de confirmares', 'warn') : w.open_disputes ? chip('reg', 'reclamação aberta', 'clock')
+    : w.can_confirm ? chip('anom', 'por confirmar') : chip('', 'em curso');
+  box.innerHTML = `<div class="card me-weeks"><div class="sec-h" style="margin-top:0"><h2>Confirmar as semanas</h2></div>
+    ${rows.map((w) => `<div class="me-wk"><div class="grow"><b>${esc(weekLabel(w))}</b><small>${esc(fmtMin(w.worked))}${w.can_confirm ? ` · até ${esc(fmtDate(w.due_by).slice(0, 5))}` : ''}</small><div class="tags">${st(w)}</div></div>
+      ${w.can_confirm ? `<button class="btn me-big" data-confirm="${esc(w.week_start)}" data-label="${esc(weekLabel(w))}">${ic('ok')}Confirmo</button>` : ''}</div>`).join('')}
+    ${more('Porquê confirmar', '<p>Quando trabalhas numa obra (fora das instalações da empresa), a lei pede que vejas e confirmes o teu registo de horas (Código do Trabalho, art. 202.º, n.º 3). Fica guardado o que confirmaste, tal como estava. Se as horas mudarem depois, pedimos-te para confirmar outra vez.</p>')}</div>`;
+  box.querySelectorAll('[data-confirm]').forEach((b) => b.onclick = () => meConfirmWeek(b.dataset.confirm, b.dataset.label, loadMeWeeks));
+}
+// Where I sleep: the house or hotel, the room and bed, the house notes, a button to the map.
+async function loadMyStay() {
+  const box = $('#mystay'); if (!box) return;
+  const { data, error } = await sb.rpc('mini_my_stay');
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = `<div class="card">${esc(friendly(error))}</div>`; return; }
+  if (!data.length) { box.innerHTML = `<div class="card">${empty('box', 'Sem alojamento marcado', 'Se a empresa te arranjar casa ou hotel, a morada e o quarto aparecem aqui.')}</div>`; return; }
+  box.innerHTML = data.map((x) => {
+    const q = x.lat && x.lng ? `${x.lat},${x.lng}` : x.address || '';
+    const map = q ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(q)}` : '';
+    return `<div class="card me-stay"><div class="tags">${x.now ? chip('val', 'agora', 'home') : chip('info', 'a partir de ' + fmtDate(x.from).slice(0, 5))}${x.site ? chip('code', x.site) : ''}</div>
+      <h2>${esc(x.name)}</h2>
+      ${x.kind !== 'hotel' ? `<div class="me-bed"><div><small>Quarto</small><b>${esc(x.room || '–')}</b></div><div><small>Cama</small><b>${esc(x.bed || '–')}</b></div></div>`
+        : `<p class="small">${x.ref ? 'Reserva <b>' + esc(x.ref) + '</b> · ' : ''}${esc(fmtDate(x.from))} a ${esc(fmtDate(x.to))}</p>`}
+      ${x.address ? `<p class="addr">${ic('pin')}<span>${esc(x.address)}</span></p>` : ''}
+      ${map ? `<a class="btn wide me-big" href="${esc(map)}" target="_blank" rel="noopener">${ic('go')}Levar-me lá</a>` : ''}
+      ${x.notes ? `<div class="me-note">${ic('help')}<span>${esc(x.notes)}</span></div>` : ''}
+      ${x.to && x.kind !== 'hotel' ? `<p class="small muted">Até ${esc(fmtDate(x.to))}</p>` : ''}</div>`;
+  }).join('');
+}
+// My documents, with a light each: red (out of date or missing), amber (expiring), green. Read-only: the office adds them.
+async function loadMyDocs() {
+  const box = $('#mydocs'); if (!box) return;
+  const { data, error } = await sb.rpc('mini_my_documents');
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = `<div class="card">${esc(friendly(error))}</div>`; return; }
+  const L = { expired: ['bad', 'Caducado'], missing: ['bad', 'Em falta'], expiring: ['warn', 'Vence em breve'], ok: ['ok', 'Em dia'], optional: ['', 'Não tens'] };
+  const line = (x) => { const [k, w] = L[x.state] || ['', x.state];
+    const when = x.expires ? (x.days_left < 0 ? `caducou a ${fmtDate(x.expires)}` : x.days_left === 0 ? 'vence hoje' : `válido até ${fmtDate(x.expires)} · faltam ${x.days_left} dia(s)`) : x.state === 'ok' ? 'sem validade' : '';
+    return `<div class="me-doc ${k}"><span class="me-dot ${k}"></span><div class="grow"><b>${esc(x.name)}</b>
+      <small>${esc(w)}${when ? ' · ' + esc(when) : ''}${x.number ? ' · nº ' + esc(x.number) : ''}</small>
+      ${x.blocking && (x.state === 'expired' || x.state === 'missing') ? `<small class="warn-t">${ic('warn')}Sem isto o cartão não abre a obra</small>` : ''}
+      ${x.state !== 'optional' && x.state !== 'missing' && !x.checked ? '<small class="muted">Ainda por confirmar pelo escritório</small>' : ''}</div></div>`; };
+  const need = data.documents.filter((x) => x.state !== 'optional'); const opt = data.documents.filter((x) => x.state === 'optional');
+  const card = data.card || {};
+  box.innerHTML = `<div class="card me-docs">${need.map(line).join('') || '<p class="small muted">A empresa ainda não pediu documentos.</p>'}</div>
+    ${opt.length ? `<div class="card me-docs"><h3 style="margin-top:0">Outras formações</h3>${opt.map(line).join('')}</div>` : ''}
+    <div class="card me-docs"><div class="me-doc ${card.active ? 'ok' : 'bad'}"><span class="me-dot ${card.active ? 'ok' : 'bad'}"></span><div class="grow"><b>O meu cartão</b>
+      <small>${card.active ? 'Ativo' + (card.until ? ' até ' + esc(new Date(card.until).toLocaleDateString('pt-PT')) : '') : 'Sem cartão ativo: pede ao escritório'}</small></div></div></div>
+    <p class="small muted">Um documento a vencer? Leva o novo ao escritório antes da data: eles juntam-no à tua ficha.</p>`;
+}
+// My PPE and workwear: what, size, since when, when to change it. And my sizes.
+async function loadMyKit() {
+  const box = $('#mykit'); if (!box) return;
+  const { data, error } = await sb.rpc('mini_my_kit');
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = `<div class="card">${esc(friendly(error))}</div>`; return; }
+  const sz = data.sizes || {}; const SZ = { top: 'Casaco', bottom: 'Calças', shoes: 'Botas', gloves: 'Luvas' };
+  const st = (x) => x.state === 'overdue' ? chip('bad', 'trocar já', 'warn') : x.state === 'soon' ? chip('warn', 'trocar até ' + fmtDate(x.replace_by).slice(0, 5)) : chip('val', 'em uso', 'ok');
+  box.innerHTML = `<div class="card"><h2 style="margin-top:0">Os meus EPI</h2>
+    ${data.ppe.length ? data.ppe.map((x) => `<div class="me-kit"><div class="grow"><b>${esc(x.name)}${x.size ? ` <span class="chip code">${esc(x.size)}</span>` : ''}</b>
+      <small>Recebido a ${esc(new Date(x.since).toLocaleDateString('pt-PT'))}${x.replace_by ? ' · trocar até ' + esc(fmtDate(x.replace_by)) : ''}</small></div>${st(x)}</div>`).join('')
+      : '<p class="small muted">Ainda não tens EPI em teu nome.</p>'}
+    ${data.returned.length ? more('Já devolvidos', data.returned.map((x) => `<p class="small">${esc(x.name)} · ${esc(new Date(x.to).toLocaleDateString('pt-PT'))}${x.why ? ' · ' + esc(x.why) : ''}</p>`).join('')) : ''}</div>
+    <div class="card"><h3 style="margin-top:0">Os meus tamanhos</h3><div class="me-sizes">${Object.entries(SZ).map(([k, v]) => `<div><small>${v}</small><b>${esc(sz[k] || '–')}</b></div>`).join('')}</div>
+      <p class="small muted">Tamanho errado? Diz no armazém.</p></div>`;
+}
+// What I signed and accepted: contract, internal rules, hourly rate (sql/80). Read-only.
+async function loadMyPapers() {
+  const box = $('#mypapers'); if (!box) return;
+  box.innerHTML = skel(2); renderMyPapers(box);
 }
 async function loadMine(quiet) {
   const ym = state.mineMonth;
   const { data: d, error } = await sb.rpc('mini_my_home', { p_month: ym + '-01' });
   const el = $('#mine'); if (!el || ym !== state.mineMonth) return;
-  if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; $('#minetop').innerHTML = ''; return; }
+  if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
   state.mineData = d;
-  $('#minetop').innerHTML = mineHero(d);
-  $('#minepay').innerHTML = minePay(d);
-  $('#minesite').innerHTML = mineSite(d.site);
+  const put = (sel, html) => { const b = $(sel); if (b) b.innerHTML = html; };
+  put('#minepay', minePay(d)); put('#minesite', mineSite(d.site));
   if (quiet && el.dataset.ym === ym) return;
   el.dataset.ym = ym;
   const t = d.totals || {};
   const openNow = (r) => r.anomalies.length > 0 && r.anomalies.every((a) => a === 'open_shift') && r.date >= (d.today || {}).date;
-  if (!d.days.length) { el.innerHTML = `<div class="card">${empty('clock', 'Sem horas neste mês', 'Os dias aparecem aqui depois de picares na obra.')}</div>`; return; }
+  if (!d.days.length) {
+    el.innerHTML = `<div class="card">${empty('clock', 'Sem horas neste mês', 'Os dias aparecem aqui depois de picares na obra. Estiveste num dia e não aparece? Toca nesse dia.')}</div>
+      <div class="card cal-card">${mineCalendar(d)}</div>`;
+    el.querySelectorAll('[data-day]').forEach((b) => b.onclick = () => mineDay(b.dataset.day));
+    return;
+  }
   el.innerHTML = `<div class="kpis k4 mine-kpis">
       <div class="kpi big"><b>${esc(fmtMin(t.worked))}</b><span>Total do mês</span></div>
       <div class="kpi info"><b>${esc(fmtMin(t.overtime))}</b><span>horas extra</span></div>
@@ -3882,40 +4129,12 @@ async function loadMine(quiet) {
     <div class="card">${d.days.map((r) => { const tz = r.tz || DEFAULT_TZ; return `<button class="day mday" data-day="${esc(r.date)}">
       <div class="day-h"><span class="d">${esc(dayLabel(r.date))}</span><span class="chip code">${esc(r.code)}</span>
         <span class="hrs">${esc(fmtMin(r.worked))}</span></div>
-      <div class="per">${esc(fmtHour(r.first_in, tz) || '?')}–${esc(fmtHour(r.last_out, tz) || '?')} <span class="small muted">· ${esc(r.title)}</span></div>
+      <div class="per">${!r.first_in && !r.last_out && !r.worked ? 'Sem picagens' : `${esc(fmtHour(r.first_in, tz) || '?')}–${esc(fmtHour(r.last_out, tz) || '?')}`} <span class="small muted">· ${esc(r.title)}</span></div>
       <div class="tags">${openNow(r) ? chip('val', 'a decorrer', 'clock') : r.anomalies.length ? chip('anom', 'falta uma picagem', 'warn') : DAY_STATUS[r.status] || chip('', r.status)}
         ${r.overtime ? chip('info', fmtMin(r.overtime) + ' extra' + (r.ot_ok === null ? ' (por aprovar)' : '')) : ''}${r.holiday ? chip('info', 'feriado') : r.rest ? chip('info', 'dia de descanso') : ''}
         ${r.changed ? chip('', 'corrigido', 'key') : ''}</div></button>`; }).join('')}</div>
-    <p class="small muted">Se faltar um dia ou uma hora estiver errada, fala com o teu encarregado: ele corrige com o motivo, e tu vês aqui quem mudou e porquê.</p>`;
+    <p class="small muted">Uma hora errada, ou um dia em que estiveste e não aparece? Toca no dia e carrega em «Não concordo». Vês aqui quem mudou o quê e porquê, até as picagens canceladas.</p>`;
   el.querySelectorAll('[data-day]').forEach((b) => b.onclick = () => mineDay(b.dataset.day));
-}
-// Today: in since when, hours so far against a normal day, and the week as bars.
-function mineHero(d) {
-  const t = d.today || {}; const tz = (d.site && state.sites.find((s) => s.id === d.site.id) || {}).timezone || DEFAULT_TZ;
-  const h = tzParts(Date.now(), tz).hour % 24;
-  const hello = (h >= 6 && h < 13 ? 'Bom dia' : h >= 13 && h < 20 ? 'Boa tarde' : 'Boa noite') + ', ' + String(d.name || '').split(' ')[0];
-  const inNow = t.last === 'in';
-  let so = 0;
-  for (let i = 0, open = null; i < (t.events || []).length; i++) {
-    const e = t.events[i];
-    if (e.dir === 'in') open = new Date(e.at).getTime();
-    else if (open !== null) { so += (new Date(e.at).getTime() - open) / 60000; open = null; }
-    if (i === t.events.length - 1 && open !== null) so += (Date.now() - open) / 60000;
-  }
-  so = Math.max(0, Math.round(so));
-  const pct = Math.min(100, Math.round((so / (t.normal_day || 480)) * 100));
-  const status = inNow ? `Na obra desde as <b>${esc(fmtHour(t.first_in, tz))}</b>`
-    : t.last === 'out' ? `Saíste às <b>${esc(fmtHour(t.last_at, tz))}</b>` : 'Ainda não picaste hoje';
-  const wk = d.week || []; const wmax = Math.max(600, ...wk.map((x) => x.worked)); const wsum = wk.reduce((a, x) => a + (x.date === t.date ? Math.max(x.worked, so) : x.worked), 0);
-  const today = t.date;
-  return `<section class="pic-hero mine-hero">
-    <div class="pic-top"><h1>${esc(hello)}</h1>${inNow ? '<span class="live"><i></i>na obra</span>' : ''}</div>
-    <div class="mh-now"><div class="mh-big">${esc(fmtMin(so))}</div><div class="mh-sub">${status}${d.site ? ` · ${esc(d.site.title)}` : ''}</div></div>
-    <div class="mh-bar" role="img" aria-label="${pct}% de um dia normal"><i style="width:${pct}%"></i></div>
-    <div class="mh-bl"><span>hoje</span><span>dia normal ${esc(fmtMin(t.normal_day || 480))}</span></div>
-    <div class="mh-week"><div class="mh-wh"><span>Esta semana</span><b>${esc(fmtMin(wsum))}</b></div>
-      <div class="mh-bars">${wk.map((x, i) => `<div class="${x.date === today ? 'today' : ''}"><i style="height:${(x.date === today ? Math.max(x.worked, so) : x.worked) ? Math.max(8, Math.round(((x.date === today ? Math.max(x.worked, so) : x.worked) / wmax) * 100)) : 0}%"></i><span>${['S', 'T', 'Q', 'Q', 'S', 'S', 'D'][i]}</span></div>`).join('')}</div></div>
-  </section>`;
 }
 // What I will earn: only when the company switches it on. Gross, indicative, with the sums shown.
 function minePay(d) {
@@ -3950,33 +4169,44 @@ function mineSite(s) {
       <a class="btn wide" href="${esc(map)}" target="_blank" rel="noopener">${ic('go')}Levar-me lá</a>` : '<p class="small muted">A morada da obra ainda não foi preenchida.</p>'}
     ${who(s.supervisor, 'Encarregado', s.supervisor_phone)}${who(s.contact_name, s.contact_role || 'Contacto do cliente', s.contact_phone)}</div>`;
 }
-// One day in full: every tap (and who added it by hand, and why) and every step of the validation.
+// One day in full: every tap (and who added it by hand, and why), the taps cancelled or moved (struck through, with
+// who and why: nothing is hidden), the taps the reader refused, and every step of the validation. «Não concordo»
+// also works on a day with no taps at all, on the site the person was assigned to (sql/82).
 async function mineDay(day) {
-  const { data: d, error } = await sb.rpc('mini_my_day', { p_day: day });
-  if (error) return toast(friendly(error));
+  const [{ data: d, error }, { data: more, error: e2 }, { data: disp }] = await Promise.all([sb.rpc('mini_my_day', { p_day: day }),
+    sb.rpc('mini_my_day_more', { p_day: day }), sb.rpc('mini_my_day_disputes', { p_day: day })]);
+  if (error || e2) return toast(friendly(error || e2));
   const r = ((state.mineData && state.mineData.days) || []).find((x) => x.date === day);
-  const body = `<div class="mday-sum">${r ? `<b>${esc(fmtMin(r.worked))}</b> trabalhadas${r.overtime ? ` · ${esc(fmtMin(r.overtime))} extra` : ''}` : ''}</div>
+  const who = (x) => `${esc(x.by || 'Escritório')} · ${esc(new Date(x.when).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }))}`;
+  const gone = [...(more.cancelled || []).map((e) => `<li class="me-void"><span class="t"><s>${esc(fmtHour(e.at, e.tz))}</s></span>
+      <span><s>${e.dir === 'in' ? 'Entrada' : 'Saída'} · ${esc(e.code)}</s>${chip('anom', 'cancelada')}<small class="warn-t">${ic('x')}«${esc(e.why || '')}» · ${who(e)}</small></span></li>`),
+    ...(more.moved || []).map((e) => `<li class="me-void"><span class="t"><s>${esc(fmtHour(e.from, e.tz))}</s></span>
+      <span>${e.dir === 'in' ? 'Entrada' : 'Saída'} mudada para <b>${esc(fmtHour(e.to, e.tz))}</b><small class="warn-t">${ic('key')}«${esc(e.why || '')}» · ${who(e)}</small></span></li>`),
+    ...(more.refused || []).map((e) => `<li class="me-void"><span class="t"><s>${esc(fmtHour(e.at, e.tz))}</s></span>
+      <span><s>${e.dir === 'in' ? 'Entrada' : 'Saída'} · ${esc(e.code)}</s>${chip('anom', 'recusada pelo leitor')}<small class="warn-t">${ic('warn')}${esc((e.reasons || []).map(reasonText).join(' · ') || 'sem motivo')}</small></span></li>`)];
+  const body = `<div class="mday-sum">${r ? `<b>${esc(fmtMin(r.worked))}</b> trabalhadas${r.overtime ? ` · ${esc(fmtMin(r.overtime))} extra` : ''}` : '<b>Sem horas</b> neste dia'}</div>
     <h3>Picagens</h3>${d.events.length ? `<ol class="taps">${d.events.map((e) => `<li><span class="t">${esc(fmtHour(e.at, e.tz))}</span>
       <span>${e.dir === 'in' ? 'Entrada' : 'Saída'} · ${esc(e.code)}${e.manual ? `<small class="warn-t">${ic('key')}Adicionada à mão: ${esc(e.reason || '')}</small>` : ''}</span></li>`).join('')}</ol>` : '<p class="small muted">Sem picagens neste dia.</p>'}
-    <h3>Validação</h3><ol class="steps">${(r ? [`<li class="on"><b>Registado</b><small>pelas picagens do cartão</small></li>`] : []).join('')}
+    ${gone.length ? `<h3>Canceladas ou mudadas</h3><ol class="taps me-gone">${gone.join('')}</ol>` : ''}
+    ${r ? `<h3>Validação</h3><ol class="steps"><li class="on"><b>Registado</b><small>pelas picagens do cartão</small></li>
       ${d.log.map((l) => `<li class="on ${l.to === 'registered' ? 'back' : ''}"><b>${esc(l.to === 'registered' ? 'Devolvido para corrigir' : MINE_STATE[l.to] || l.to)}</b>
         <small>${esc(l.by || '')} · ${esc(new Date(l.at).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }))}</small>
         ${l.note ? `<small class="note-t">«${esc(l.note)}»</small>` : ''}</li>`).join('')}
-      ${r && r.status === 'registered' ? '<li><b>À espera do encarregado</b></li>' : ''}</ol>`;
-  const { data: disp } = await sb.rpc('mini_my_day_disputes', { p_day: day });
-  const open = (disp || []).some((x) => x.status === 'open');
-  const canDispute = r && r.status !== 'sent_to_payroll' && !open;
+      ${r.status === 'registered' ? '<li><b>À espera do encarregado</b></li>' : ''}</ol>` : ''}
+    ${more.closed ? '<p class="small muted">Este mês já está fechado. Se achas que está mal, fala com o escritório.</p>' : ''}
+    ${!r && !more.can_dispute && !more.closed && !more.open_dispute ? '<p class="small muted">Nesse dia não estavas atribuído a nenhuma obra. Se estiveste, fala com o escritório.</p>' : ''}`;
   const dispHtml = (disp || []).length ? `<h3>As minhas reclamações</h3>${disp.map(dispLine).join('')}` : '';
-  const fd = await askSheet(dayLabel(day), body + dispHtml + (canDispute ? '<button class="btn ghost wide disagree" value="dispute" formnovalidate>Não concordo com este dia</button>' : ''), 'Fechar');
+  const fd = await askSheet(dayLabel(day), body + dispHtml + (more.can_dispute ? `<button class="btn ghost wide disagree" value="dispute" formnovalidate>${more.blank_day ? 'Estive lá: não concordo' : 'Não concordo com este dia'}</button>` : ''), 'Fechar');
   if (!fd || fd.get('_v') !== 'dispute') return;
-  const f2 = await askSheet('Não concordo: ' + dayLabel(day), `<p class="small muted">O encarregado ou o escritório respondem antes de fechar o mês. Vês a resposta aqui.</p>
-      <div class="chips reasons" role="radiogroup">${Object.entries(DISPUTE_REASON).map(([k, v], i) => `<label class="chip"><input type="radio" name="reason" value="${k}" ${i === 0 ? 'checked' : ''}>${esc(v)}</label>`).join('')}</div>
-      <label for="dnote">Explica (obrigatório em «Outro motivo»)</label><textarea id="dnote" name="note" rows="3" maxlength="500" placeholder="ex.: entrei às 06:45, o cartão não leu"></textarea>`, 'Enviar');
+  const reasons = Object.entries(DISPUTE_REASON).filter(([k]) => !more.blank_day || k === 'was_present' || k === 'other');
+  const f2 = await askSheet('Não concordo: ' + dayLabel(day), `<p class="small muted">${more.blank_day && more.site ? `Obra: <b>${esc(more.site.title)}</b>. ` : ''}O encarregado ou o escritório respondem antes de fechar o mês. Vês a resposta aqui.</p>
+      <div class="chips reasons" role="radiogroup">${reasons.map(([k, v], i) => `<label class="chip"><input type="radio" name="reason" value="${k}" ${i === 0 ? 'checked' : ''}>${esc(v)}</label>`).join('')}</div>
+      <label for="dnote">Explica (obrigatório em «Outro motivo»)</label><textarea id="dnote" name="note" rows="3" maxlength="500" placeholder="${more.blank_day ? 'ex.: estive das 8h às 17h, o cartão não leu' : 'ex.: entrei às 06:45, o cartão não leu'}"></textarea>`, 'Enviar');
   if (!f2) return;
   const { error: e } = await sb.rpc('mini_dispute_day', { p_day: day, p_reason: f2.get('reason'), p_note: String(f2.get('note') || '').trim() || null });
   if (e) return toast(friendly(e));
   toast('Enviado. O encarregado e o escritório vão responder antes de fechar o mês.');
-  loadMyRequests(); loadMine();
+  loadMyRequests(); loadMine(); loadMeWeeks();
 }
 const DISPUTE_REASON = { earlier_in: 'Entrei mais cedo', later_out: 'Saí mais tarde', missing_overtime: 'Faltam horas extra', was_present: 'Estive lá e diz que faltei', other: 'Outro motivo' };
 const ABS_KIND = { vacation: 'Férias', medical_appointment: 'Consulta médica', justified_paid: 'Falta justificada', justified_unpaid: 'Falta sem vencimento',
@@ -4008,12 +4238,21 @@ async function loadMyRequests() {
     <div class="acts"><button class="btn" id="askvac">${ic('calendar')}Pedir férias</button><button class="btn ghost" id="askabs">${ic('clock')}Pedir falta</button></div>
     ${d.absences.length ? `<h3>Os meus pedidos</h3>${d.absences.map((a) => `<details class="req"><summary><span class="req-h"><b>${esc(ABS_KIND[a.kind] || a.kind)}</b>
         <span class="small muted">${esc(absWhen(a))}</span>${ABS_CHIP[a.status] || ''}</span></summary>
-        ${a.note ? `<p class="small">«${esc(a.note)}»</p>` : ''}${absSteps(a)}
+        ${a.note ? `<p class="small">«${esc(a.note)}»</p>` : ''}${absSteps(a)}<div class="me-att" data-att="${esc(a.id)}" data-st="${esc(a.status)}"></div>
         ${a.status === 'requested' ? `<button class="btn ghost small" data-cancel="${esc(a.id)}">Cancelar o pedido</button>` : ''}</details>`).join('')}` : ''}
     ${d.disputes.length ? `<h3>As minhas reclamações</h3>${d.disputes.map(dispLine).join('')}` : ''}<div id="glances"></div></div>`;
   sb.rpc('mini_my_glances').then(({ data: gl }) => { const el = $('#glances'); if (!el || !gl || !gl.length) return;
     el.innerHTML = `<details class="req"><summary><span class="req-h"><b>Quem viu as minhas horas pelo cartão</b><span class="small muted">${gl.length}</span></span></summary>
       ${gl.map((x) => `<p class="small">${esc(x.by || '')} · ${esc(new Date(x.at).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }))}</p>`).join('')}</details>`; });
+  if (d.absences.length) sb.rpc('mini_absence_files', { p_ids: d.absences.map((a) => a.id) }).then(({ data: files }) => {
+    box.querySelectorAll('[data-att]').forEach((el) => {
+      const f = files && files[el.dataset.att];
+      el.innerHTML = f ? `<button class="chip" type="button" data-open="${esc(f.path)}">${ic('doc')}Ver o ficheiro que juntei</button>`
+        : el.dataset.st === 'requested' ? `<label class="btn ghost small me-file">${ic('camera')}Juntar foto ou PDF<input type="file" accept="${FILE_ACCEPT}" hidden></label>` : '';
+      const o = el.querySelector('[data-open]'); if (o) o.onclick = () => openDocFile(o.dataset.open, 'pedidos');
+      const i = el.querySelector('input[type=file]'); if (i) i.onchange = async () => { if (await absenceAttach(el.dataset.att, i.files[0])) loadMyRequests(); };
+    });
+  }, () => {});
   $('#askvac').onclick = () => askAbsence('vacation');
   $('#askabs').onclick = () => askAbsence(null);
   box.querySelectorAll('[data-cancel]').forEach((x) => x.onclick = async () => {
@@ -4031,6 +4270,8 @@ async function askAbsence(kind) {
     ${kind ? '' : `<label class="check inline"><input type="checkbox" name="part" id="apart"> Só umas horas desse dia (ex.: saio à tarde)</label>
       <div id="ahrs" hidden><label for="ah">Quantas horas fora</label><select id="ah" name="hours">${[1, 2, 3, 4, 5, 6].map((h) => `<option value="${h * 60}" ${h === 4 ? 'selected' : ''}>${h} h</option>`).join('')}</select></div>`}
     <label for="an">${kind ? 'Nota (opcional)' : 'Porquê'}</label><textarea id="an" name="note" rows="2" maxlength="500" ${kind ? '' : 'required minlength="5"'}></textarea>
+    ${kind ? '' : `<label for="afile">Comprovativo (opcional)</label><input type="file" id="afile" name="file" accept="${FILE_ACCEPT}">
+      <p class="small muted">Foto ou PDF da declaração. Só o escritório o vê.</p>`}
     <p class="small muted">Vai primeiro ao teu encarregado e depois ao escritório. Vês aqui cada resposta.</p>`, 'Enviar pedido', (dlg) => {
     const f = dlg.querySelector('#af'); const t = dlg.querySelector('#at');
     f.onchange = () => { if (t.value < f.value) t.value = f.value; t.min = f.value; };
@@ -4038,11 +4279,26 @@ async function askAbsence(kind) {
   });
   if (!fd) return;
   const from = fd.get('from'); const part = !!fd.get('part');
-  const { error } = await sb.rpc('mini_request_absence', { p_kind: kind || fd.get('kind'), p_starts: from, p_ends: part ? from : (fd.get('to') || from),
+  const { data: id, error } = await sb.rpc('mini_request_absence', { p_kind: kind || fd.get('kind'), p_starts: from, p_ends: part ? from : (fd.get('to') || from),
     p_minutes: part ? Number(fd.get('hours')) : null, p_note: String(fd.get('note') || '').trim() || null });
   if (error) return toast(friendly(error));
+  const f = fd.get('file');
+  if (f && f.size && id) await absenceAttach(id, f);
   toast('Pedido enviado ao teu encarregado.');
   loadMyRequests();
+}
+// A photo or PDF for one's own request (bucket «pedidos», sql/82): only the person and the office open it.
+async function absenceAttach(id, file) {
+  if (!file || !file.size) return false;
+  let f = file; if (f.type.startsWith('image/')) f = await shrinkPhoto(f);
+  const bad = fileProblem(f); if (bad) { toast(bad); return false; }
+  const path = `${state.me.tenant_id}/${state.me.collaborator_id}/${uuid()}.${FILE_TYPES[f.type]}`;
+  const sha = await sha256Hex(f);
+  const up = await sb.storage.from('pedidos').upload(path, f, { contentType: f.type, upsert: false });
+  if (up.error) { toast(friendly(up.error)); return false; }
+  const { error } = await sb.rpc('mini_absence_attach', { p_id: id, p_file: path, p_sha256: sha });
+  if (error) { toast(friendly(error)); return false; }
+  toast('Ficheiro junto ao pedido.'); return true;
 }
 // The month as a calendar: each day coloured by its state. Monday first.
 function mineCalendar(d) {
@@ -4056,6 +4312,7 @@ function mineCalendar(d) {
     const wd = (lead + n - 1) % 7;
     const k = !x ? (wd >= 5 ? 'off' : '') : x.k.some((r) => r.anomalies.length && !(r.anomalies.every((a) => a === 'open_shift') && iso >= today)) ? 'bad' : x.k.some((r) => r.holiday || r.rest) && x.w ? 'off' : x.k.every((r) => r.status !== 'registered') ? 'ok' : 'todo';
     cells.push(x ? `<button class="cd ${k}${iso === today ? ' today' : ''}" data-day="${iso}"><b>${n}</b><small>${esc(fmtMin(x.w).replace('h00', 'h'))}</small></button>`
+      : iso < today ? `<button class="cd ${k} me-none" data-day="${iso}" aria-label="${esc(dayLabel(iso))}: sem horas"><b>${n}</b></button>`
       : `<span class="cd ${k}${iso === today ? ' today' : ''}"><b>${n}</b></span>`);
   }
   return `<div class="cal-h">${['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((x) => `<span>${x}</span>`).join('')}</div><div class="cal">${cells.join('')}</div>`;
