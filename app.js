@@ -2,6 +2,13 @@
 // Sem passo de compilação: ficheiros estáticos, publicáveis em qualquer alojamento com HTTPS.
 'use strict';
 
+// M3 (audit 2026-10-19): never inside another site's frame (clickjacking). index.html starts hidden; shown only at the top.
+if (window.top !== window.self) {
+  try { window.top.location = window.self.location.href; } catch (_) { /* a sandboxed frame: stays hidden */ }
+  throw new Error('GestNow does not run inside a frame');
+}
+document.getElementById('nofr')?.remove();
+
 const cfg = window.GESTNOW_CONFIG || {};
 const app = document.getElementById('app');
 const nav = document.getElementById('nav');
@@ -329,6 +336,8 @@ const ERRORS = [
   [/an issued diária cannot change|issued diária is never deleted/i, 'Uma diária emitida já não muda.'],
   [/country must be PT, ES or FR/i, 'Escolhe Portugal, Espanha ou França.'],
   [/this profile is not yours/i, 'Esse perfil não é teu. Pede ao administrador.'],
+  [/confirm the phone code before changing profile/i, 'Para mudar de perfil, confirma primeiro o código do telemóvel.'],
+  [/a typed number is only for a card/i, 'Só se escreve o número de um cartão.'],
   [/admin is given only/i, 'O perfil de administrador só se dá com aprovação de uma segunda pessoa.'],
   [/an admin keeps the admin profile/i, 'Um administrador mantém sempre o perfil de administrador.'],
   [/in your own company you change profile/i, 'Na tua empresa já mudas de perfil com a tua própria pessoa.'],
@@ -648,6 +657,8 @@ async function openDocFile(path, bucket = 'documentos') {
   if (win) win.location = data.signedUrl; else location.href = data.signedUrl;
 }
 const normUid = (v) => String(v || '').replace(/[\s:\-]/g, '').toUpperCase();
+// Lists show only the end of a card number (C3): the whole number is a key to the gate. Full only where the card is changed.
+const maskUid = (v) => { const u = String(v || ''); return u.length > 4 ? '…' + u.slice(-4) : u; };
 function uuid() {
   if (crypto.randomUUID) return crypto.randomUUID();
   const b = crypto.getRandomValues(new Uint8Array(16)); b[6] = (b[6] & 15) | 64; b[8] = (b[8] & 63) | 128;
@@ -758,7 +769,20 @@ function idleTooLong(role) {
   let t = 0; try { t = Number(localStorage.getItem(ACTIVE_KEY)) || 0; } catch (_) {}
   return Date.now() - t > IDLE_MIN(role) * 60000;
 }
-async function idleOut() { state.idleOut = true; stopNfc(); state.ready = false; nav.hidden = true; closePalette(); await sb.auth.signOut({ scope: 'local' }); }
+// M1: the session ends on the server too. 'local' revokes this phone's session there (supabase-js refreshes an expired
+// token first, so the logout call is accepted); the person's other devices stay signed in. Personal copies go with it.
+async function idleOut() {
+  state.idleOut = true; stopNfc(); state.ready = false; nav.hidden = true; closePalette(); forgetPersonal();
+  try { await sb.auth.signOut({ scope: 'local' }); } catch (_) { /* no network: the local copy is gone anyway */ }
+}
+// What this phone keeps about people goes when the session ends: the login (ME), the emergency lists, names in the
+// refused list. The offline queues (taps and muster taps) are never touched: a tap is never lost (C2).
+function forgetPersonal() {
+  store(ME_KEY, undefined);
+  try { Object.keys(localStorage).filter((k) => k.startsWith('gn.emer.')).forEach((k) => localStorage.removeItem(k)); } catch (_) { /* storage blocked */ }
+  const rej = load(REJECTED_KEY, []);
+  if (rej.some((x) => x.name)) store(REJECTED_KEY, rej.map((x) => ({ ...x, name: null })));   // kept to be dealt with: «Cartão …1234»
+}
 let lastTouch = 0;
 ['pointerdown', 'keydown'].forEach((ev) => document.addEventListener(ev, () => {
   if (state.ready && Date.now() - lastTouch > 15000) { lastTouch = Date.now(); touch(); }
@@ -959,7 +983,11 @@ async function checkSession() {
   return true;
 }
 
-async function signOut() { stopNfc(); state.ready = false; nav.hidden = true; store(ME_KEY, undefined); await sb.auth.signOut(); }
+// «Sair»: every session of this login ends on the server (scope global, the default), and the personal copies go.
+async function signOut() {
+  stopNfc(); state.ready = false; nav.hidden = true; forgetPersonal();
+  try { await sb.auth.signOut({ scope: 'global' }); } catch (_) { /* no network: the local copy is gone anyway */ }
+}
 
 function showMessage(title, text, withLogout) {
   nav.hidden = true;
@@ -1061,6 +1089,21 @@ function showNewPassword() {
   };
 }
 
+// The phone code asked in a sheet, without leaving the screen (A4: changing profile). True when this session is aal2.
+async function stepUpMfa() {
+  const { data: aal } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (aal && aal.currentLevel === 'aal2') return true;
+  const { data: list } = await sb.auth.mfa.listFactors();
+  const factor = list && list.totp && list.totp[0];
+  if (!factor) { toast('Esta conta ainda não tem o código do telemóvel. Entra no perfil de escritório para o ativar.'); return false; }
+  const fd = await askSheet('Código do telemóvel', `<p class="small muted">Esta conta tem um perfil de escritório: para mudar de perfil, confirma que és tu.</p>
+    <label for="mfac">Abre a app de códigos e escreve os 6 números</label>
+    <input id="mfac" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" required style="font-size:26px;letter-spacing:6px;text-align:center">`, 'Confirmar');
+  if (!fd) return false;
+  const { error } = await sb.auth.mfa.challengeAndVerify({ factorId: factor.id, code: String(fd.get('code') || '').trim() });
+  if (error) { toast('Código errado ou expirado. Tenta o próximo.'); return false; }
+  return true;
+}
 async function verifyCode(factorId, code) {
   const { error } = await sb.auth.mfa.challengeAndVerify({ factorId, code: String(code).trim() });
   if (error) return toast('Código errado ou expirado. Tenta o próximo.');
@@ -1108,6 +1151,8 @@ async function switchProfile() {
     <div class="profiles" role="radiogroup">${opts.map((r) => `<label class="check prof"><input type="radio" name="p" value="${esc(r)}" ${r === me.role ? 'checked' : ''} required>
       <span><b>${esc(roleLabel(r))}</b>${r === me.role ? ' <span class="small muted">(agora)</span>' : ''}<br><span class="small muted">${esc(PROFILE_HELP[r] || '')}</span></span></label>`).join('')}</div>`, 'Mudar');
   if (!fd || fd.get('p') === me.role) return;
+  // A4: an account with an office profile changes hat only after the phone code (the database checks the same).
+  if (me.profiles.some((r) => PRIVILEGED.includes(r)) && !(await stepUpMfa())) return;
   const { error } = await sb.rpc('mini_switch_role', { p_role: fd.get('p') });
   if (error) return toast(friendly(error));
   state.view = (TABS[fd.get('p')] || TABS.supervisor)[0];
@@ -1246,6 +1291,7 @@ function go(view) {
 // is kept. Only the platform owner, with the phone code, sees this screen; the database checks the same.
 const isOwner = () => !!(state.platform && state.platform.platform);
 async function viewClients() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!isOwner()) return viewClock();   // code guard as well as the database's
   app.innerHTML = `<div class="ph"><div><p class="ph-k">GestNow · só o dono vê</p><h1>Clientes</h1></div><button class="btn" id="newc">+ Novo cliente</button></div>
     <p class="muted lead">As empresas que usam a GestNow. Aqui só vês números, nunca nomes de pessoas. Para trabalhar numa, carrega em «Entrar»; voltas por esta lista, e o que tinhas em cada uma fica guardado.</p>
@@ -1307,6 +1353,7 @@ async function newClient() {
 // ------------------------------------------------------------------ A minha equipa (the team leader's start screen)
 // One site at a time: who is in, who has not arrived, who may not enter, and what is waiting for the team leader.
 function viewTeam() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canSiteDetails()) return viewClock();   // code guard as well as the database's
   const today = new Date().toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long' });
   app.innerHTML = `<div class="ph"><div><p class="ph-k">${esc(today)}</p><h1>A minha equipa</h1></div></div>
@@ -1400,6 +1447,7 @@ async function loadPending(sel, project) {
 
 // ------------------------------------------------------------------ Picar
 function viewClock() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   const nfcOk = 'NDEFReader' in window;
   // One dark "terminal" panel: clock, site, the card reader and the direction. Everything else sits beside it (computer) or under it (phone).
   app.innerHTML = `<div class="pic-grid"><div>
@@ -1430,9 +1478,10 @@ function viewClock() {
   app.querySelectorAll('.dir button').forEach((b) => b.onclick = () => {
     state.dirOverride = b.dataset.d === 'auto' ? null : b.dataset.d; renderDir();
   });
+  const wasTyped = typedWatch($('#uid'));
   $('#manual').onsubmit = (e) => {
-    e.preventDefault(); const input = e.target.uid;
-    if (normUid(input.value)) clock(input.value); input.value = ''; input.focus();
+    e.preventDefault(); const input = e.target.uid; const typed = wasTyped();
+    if (normUid(input.value)) clock(input.value, typed); input.value = ''; input.focus();
   };
   if (nfcOk) $('#nfc').onclick = toggleNfc;
   if ($('#pemer')) $('#pemer').onclick = () => go('emergencia');
@@ -1537,7 +1586,7 @@ async function nextDirection(project, raw, at) {
   return { dir: lastDirLocal(raw, at.getTime()), guessed: true };
 }
 
-async function clock(rawUid) {
+async function clock(rawUid, typed) {
   const site = currentSite(); if (!site) return toast('Escolhe uma obra.');
   const seq = ++state.tapSeq;
   const raw = normUid(rawUid); const at = serverNow();
@@ -1547,7 +1596,7 @@ async function clock(rawUid) {
   const ev = { p_project: site.id, p_capture: 'card_on_supervisor_phone', p_raw: raw, p_direction: dir,
     p_event_time: at.toISOString(), p_client_event_id: uuid(), p_device_time: new Date().toISOString() };
   const word = dir === 'in' ? 'ENTRADA' : 'SAÍDA';   // always the direction that was sent (B1)
-  const r = await sendEvent(ev);
+  const r = await sendEvent(ev, typed);
   if (seq === state.tapSeq) state.resultId = ev.p_client_event_id;   // the box below now belongs to this tap
   if (r.notSaved) { showResult('bad', 'PICAGEM NÃO GUARDADA', `${word} do cartão …${raw.slice(-4)}: sem rede e o telemóvel não deixou guardar. Anota a hora e acrescenta-a depois como picagem esquecida.`, seq); beep(false); return; }
   if (r.authLost) { showResult('warn', 'Picagem guardada', `${word} guardada. A sessão terminou: entra outra vez e ela é enviada.`, seq); beep('neutral'); checkSession(); return; }
@@ -1561,7 +1610,7 @@ async function clock(rawUid) {
   const d = r.data; const who = d.name || 'Cartão ' + ev.p_raw;
   if (d.status === 'accepted') {
     rememberDir(raw, dir, at.getTime());
-    showResult('ok', who, `${word} aceite`, seq); beep(true);
+    showResult('ok', who, `${word} aceite${typed ? ' · número escrito à mão: o escritório confirma' : ''}`, seq); beep(true);
     if (dir === 'in' && d.collaborator_id) warnExpiring(d.collaborator_id, who, word, seq);
   } else if (d.status === 'duplicate') { showResult('warn', who, `Já picou há instantes (${word})`, seq); beep(true); }
   else { showResult('bad', `${who}: NÃO ENTRA`, (d.reasons || []).map(reasonText).join(' · '), seq); beep(false); }
@@ -1579,6 +1628,28 @@ async function warnExpiring(collabId, who, word, seq) {
   if (seq !== state.tapSeq) return;
   const el = $('#result'); if (!el) return;
   el.innerHTML = `<div class="result warn">${ic('warn')}<div><b>${esc(who)}</b>${esc(word)} aceite<div class="small" style="margin-top:6px">${esc(note)}</div></div></div>`;
+}
+
+// ---- a card number typed by hand is not a card tap (C3, audit 2026-10-19): the server records it as typed.
+// A USB card reader also "types", but all its characters arrive within a few milliseconds; a person is much slower,
+// and a pasted number counts as typed. When in doubt it counts as typed (the office looks at it, nothing is lost).
+function typedWatch(input) {
+  let first = 0; let last = 0; let n = 0; let pasted = false;
+  input.addEventListener('input', (e) => {
+    const t = performance.now();
+    if (!input.value) { n = 0; pasted = false; return; }
+    if (e.inputType === 'insertFromPaste' || e.inputType === 'insertReplacementText') pasted = true;
+    if (!n) first = t; last = t; n++;
+  });
+  return () => { const reader = !pasted && n >= 6 && (last - first) / (n - 1) < 40; n = 0; pasted = false; return !reader; };
+}
+const TYPED_RPC = { clock_event: 'mini_clock_typed', mini_lmra_sign: 'mini_lmra_sign_typed', mini_muster_scan: 'mini_muster_scan_typed', mini_wh_issue: 'mini_wh_issue_typed' };
+async function rpcCard(fn, args, typed) {
+  if (!typed) return sb.rpc(fn, args);
+  const r = await sb.rpc(TYPED_RPC[fn], args);
+  // a database without sql/81 yet: the tap still counts (as before), never lost
+  if (r.error && (r.error.code === 'PGRST202' || /could not find the function/i.test(r.error.message || ''))) return sb.rpc(fn, args);
+  return r;
 }
 
 // ---- the offline queue (C2): each tap has its own id; items leave the queue one by one, by id, only when the server answered.
@@ -1605,15 +1676,15 @@ async function verdict(r) {
   if (AUTH_LOST.test(msg) && await sessionGone()) return 'retry';
   return 'refused';
 }
-async function sendEvent(ev) {
+async function sendEvent(ev, typed) {
   let r;
-  try { r = await sb.rpc('clock_event', ev); } catch (e) { r = { error: e, status: 0 }; }
+  try { r = await rpcCard('clock_event', ev, typed); } catch (e) { r = { error: e, status: 0 }; }
   const v = await verdict(r);
   if (v === 'ok') return { data: r.data };
   if (v === 'refused') return { error: r.error };
   // Never lose a tap because of the network or the login: keep it and send it later (after the next login if needed).
   const lost = AUTH_LOST.test((r.error && r.error.message) || '') && await sessionGone();
-  const ok = enqueue({ ...ev, p_was_offline: true, _u: state.me && state.me.user_id, _e: state.me && state.me.email });
+  const ok = enqueue({ ...ev, p_was_offline: true, _u: state.me && state.me.user_id, _e: state.me && state.me.email, ...(typed ? { _typed: true } : {}) });
   showQueue();
   if (!ok) return { notSaved: true };
   return lost ? { authLost: true } : { queued: true };
@@ -1630,9 +1701,9 @@ async function doFlush() {
   if (!mine.length) { showQueue(); return; }
   let accepted = 0; let refused = 0; let kept = 0;
   for (const item of mine) {
-    const { _u, _e, _collab, ...ev } = item; void _u; void _e; void _collab;
+    const { _u, _e, _collab, _typed, ...ev } = item; void _u; void _e; void _collab;
     let r;
-    try { r = await sb.rpc('clock_event', ev); } catch (e) { r = { error: e, status: 0 }; }
+    try { r = await rpcCard('clock_event', ev, !!_typed); } catch (e) { r = { error: e, status: 0 }; }
     const v = await verdict(r);
     if (v === 'retry') { kept = queue().filter((x) => !x._u || x._u === state.me.user_id).length; break; }   // still no network: try later
     const word = ev.p_direction === 'in' ? 'ENTRADA' : 'SAÍDA';
@@ -1753,6 +1824,7 @@ async function loadRecent() {
 
 // ------------------------------------------------------------------ Na obra
 function viewOnSite() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!state.onsiteFilter) state.onsiteFilter = 'all';
   app.innerHTML = `<div class="ph"><div><p class="ph-k">Ao vivo</p><h1>Na obra agora</h1></div></div>
     <div class="toolbar noprint"><div class="tb-site">${siteSelect('site')}</div>
@@ -1842,6 +1914,7 @@ function renderOnSite() {
 
 // ------------------------------------------------------------------ Trabalhadores
 async function viewPeople() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   app.innerHTML = `<div class="ph"><div><p class="ph-k">Equipa</p><h1>Trabalhadores</h1></div>
     ${canPeople() ? `<button class="btn" id="new">+ Novo trabalhador</button>` : ''}</div>
     <div id="pboard"></div><div id="list">${skel(4)}</div>
@@ -1936,7 +2009,7 @@ async function viewPeople() {
     <div class="list people">${data.map((w) => `<div class="card link st-${stOf(w)}" role="button" tabindex="0" data-id="${esc(w.collaborator_id)}" data-st="${stOf(w)}"
       data-q="${esc(fold(`${w.full_name} ${w.employee_number || ''} ${w.card_uid || ''}`))}">
     <div class="wk">${avatar(w.full_name)}<div class="grow"><div class="nm">${esc(w.full_name)}</div>
-      <div class="sub">${w.employee_number ? 'nº ' + esc(w.employee_number) + ' · ' : ''}${w.card_uid ? 'cartão ' + esc(w.card_uid) : 'sem cartão'}</div></div></div>
+      <div class="sub">${w.employee_number ? 'nº ' + esc(w.employee_number) + ' · ' : ''}${w.card_uid ? 'cartão ' + esc(maskUid(w.card_uid)) : 'sem cartão'}</div></div></div>
     <div class="tags">${!w.is_active ? chip('', 'inativo')
       : w.blocking_problems ? chip('bad', `não entra: ${w.blocking_problems} documento${w.blocking_problems > 1 ? 's' : ''}`, 'x')
       : !w.card_uid ? chip('warn', 'sem cartão', 'card') : chip('ok', 'pode entrar', 'ok')}
@@ -2004,6 +2077,7 @@ async function showInvite(data) {
 
 // One worker: documents, card, sites, active.
 async function viewWorker() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   const id = state.worker; if (!id) return go('trabalhadores');
   app.innerHTML = `<p class="noprint"><button class="btn ghost small" id="back">‹ Trabalhadores</button></p><div id="w">${skel(3)}</div>`;
   $('#back').onclick = () => go('trabalhadores');
@@ -2041,7 +2115,7 @@ async function viewWorker() {
       <div class="wk">${avatar(w.full_name)}<div class="grow"><h1 style="margin:0">${esc(w.full_name)}</h1>
       <div class="sub">${w.employee_number ? 'nº ' + esc(w.employee_number) + ' · ' : ''}${esc(w.organization)}${w.job_title ? ' · ' + esc(w.job_title) : ''}</div></div></div>
       <div class="tags">${!w.is_active ? chip('', 'inativo') : blocked ? chip('bad', `não entra: ${blocked} documento${blocked > 1 ? 's' : ''}`, 'x') : chip('ok', 'ativo', 'ok')}
-        ${w.card_uid ? chip('', 'cartão ' + w.card_uid, 'card') : chip('warn', 'sem cartão', 'card')}</div>
+        ${w.card_uid ? chip('', 'cartão ' + maskUid(w.card_uid), 'card') : chip('warn', 'sem cartão', 'card')}</div>
       ${need.length ? `<div class="ready ${pct === 100 ? 'ok' : 'bad'}"><div class="ready-t"><span>Pronto para entrar na obra</span><b>${fine} de ${need.length} documentos</b></div>
         <div class="prog"><i style="width:${pct}%"></i></div></div>` : ''}</div></div>
     <div class="card" id="ficha">${skel(2)}</div>
@@ -2180,6 +2254,19 @@ const SEXES = { M: 'Masculino', F: 'Feminino' };
 const MARITAL = { single: 'Solteiro(a)', married: 'Casado(a)', civil_union: 'União de facto', divorced: 'Divorciado(a)', widowed: 'Viúvo(a)' };
 const EDUCATION = { basic: 'Ensino básico', secondary: 'Secundário (12.º ano)', vocational: 'Curso profissional', higher: 'Superior', other: 'Outra' };
 const ID_TYPES = { citizen_card: 'Cartão de Cidadão', passport: 'Passaporte', residence_permit: 'Autorização de residência', other: 'Outro' };
+// How the person joined (C2): each step done in the app, or seen on paper by someone of the company (never «assinou»).
+const ONB_STEP_TX = { safety_videos: 'Acolhimento de segurança', personal_data: 'Dados pessoais', hr_validation: 'Validação do RH',
+  contract_signed: 'Contrato', rate_accepted: 'Condições (valor hora)' };
+function onbFacts(steps) {
+  if (!steps || !steps.length) return '';
+  const day = (t) => (t ? new Date(t).toLocaleDateString('pt-PT') : '');
+  const paper = steps.filter((x) => x.method === 'paper');
+  const note = (paper.find((x) => x.statement) || {}).statement;
+  return `<h3>Entrada na empresa</h3><ul class="onb-facts">${steps.map((x) => `<li><b>${esc(ONB_STEP_TX[x.step] || x.step)}</b>
+      ${x.method === 'paper' ? `${chip('warn', 'verificado em papel', 'doc')} <span class="small muted">por ${esc(x.by || '—')} · ${esc(day(x.at))}</span>`
+        : `${chip('ok', 'feito na app', 'ok')} <span class="small muted">${esc(day(x.at))}</span>`}</li>`).join('')}</ul>
+    ${paper.length ? `<p class="small muted">Verificado em papel: alguém da empresa viu os documentos em papel. A pessoa não assinou nada na app.${note ? ' Nota: ' + esc(note) : ''}</p>` : ''}`;
+}
 
 async function loadWorkerProfile(id, editing) {
   const box = $('#ficha'); if (!box) return;
@@ -2201,6 +2288,7 @@ async function loadWorkerProfile(id, editing) {
       ${farda.some(([, x]) => !x) ? '<p class="small muted">Faltam tamanhos da farda: vão ser precisos para entregar EPIs.</p>' : ''}
       <dl class="kv">${item('Telefone', wk.phone ? `<a href="tel:${esc(wk.phone.replace(/ /g, ''))}">${esc(wk.phone)}</a>` : v(null))}
         ${item('Email', v(wk.email))}${item('Profissão', v(wk.job_title))}${item('Categoria profissional', v(wk.category))}</dl>
+      ${onbFacts(data.onboarding)}
       ${can('salarios.exportar') || can('salarios.configurar') ? '<div id="frate"></div>' : ''}
       ${canWh() ? '<div id="fwh"></div>' : ''}
       ${p ? `<h3>Dados pessoais</h3><dl class="kv">
@@ -2467,6 +2555,7 @@ function onbQuiz(x, n, total, wrong) {
 
 // HR / safety: the videos and manuals of the onboarding, in order, each with its questions; and who is in onboarding now.
 async function viewInduction() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!can('acolhimento.gerir')) return go('trabalhadores');
   app.innerHTML = `<div class="ph"><div><p class="ph-k">Pessoas</p><h1>Acolhimento</h1></div><button class="btn" id="addi">+ Nova parte</button></div>
     <p class="muted lead">O que cada pessoa nova ouve, vê e lê no telemóvel antes de começar. Mudar uma conversa, um vídeo, um texto ou as perguntas cria uma versão nova; a prova diz sempre que versão cada pessoa fez.</p>
@@ -3078,6 +3167,7 @@ async function loadBotCard() {
 
 // ------------------------------------------------------------------ Segurança
 function viewSafety() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   app.innerHTML = `<div class="ph"><div><p class="ph-k">Documentos e acessos</p><h1>Segurança</h1></div></div>
     <div class="toolbar noprint"><div class="tb-site">${siteSelect('site')}</div></div><div id="list" style="margin-top:14px">${skel(3)}</div>
     <p class="noprint"><button class="btn ghost wide" id="print">${ic('print')}Imprimir</button></p>
@@ -3124,6 +3214,7 @@ function showDocTypes() {
 // ------------------------------------------------------------------ Horas
 function monday(d) { const x = new Date(d); x.setHours(12, 0, 0, 0); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; }
 function viewHours() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!state.weekStart) state.weekStart = monday(new Date());
   const from = state.weekStart; const to = new Date(from); to.setDate(to.getDate() + 6);
   const site = currentSite(); const tz = site ? siteTz(site.id) : DEFAULT_TZ;
@@ -3301,7 +3392,8 @@ async function fixDay(collabId, day, name) {
     ${more('Anular uma picagem errada', '<p>Uma picagem errada (por exemplo uma ENTRADA picada em vez de SAÍDA) anula-se aqui, com o motivo: fica no registo como anulada e as horas são recalculadas.</p>')}
     ${taps.length ? taps.map((e) => `<div class="day wk${localDay(e.effective_time, tz) === day ? '' : ' muted'}">
       ${chip(e.direction === 'in' ? 'ok' : 'val', e.direction === 'in' ? 'Entrada' : e.direction === 'out' ? 'Saída' : e.direction)}
-      <div class="grow"><b class="tnum">${esc(fmtTime(e.effective_time, tz))}</b>${e.manual ? `<div class="small muted">à mão: ${esc(e.manual_reason || '')}</div>` : ''}</div>
+      <div class="grow"><b class="tnum">${esc(fmtTime(e.effective_time, tz))}</b>${e.manual ? `<div class="small muted">à mão: ${esc(e.manual_reason || '')}</div>`
+        : e.manual_reason ? ` ${chip('warn', 'escrito à mão', 'key')}` : ''}</div>
       <button class="btn small ghost" data-void="${esc(e.event_id)}">Anular</button></div>`).join('') : '<p class="muted">Sem picagens.</p>'}
     <p><button class="btn ghost wide" id="fixclose">Fechar</button></p>`;
   $('#fixclose').onclick = () => { box.hidden = true; };
@@ -3374,6 +3466,7 @@ async function markOut(p) {
 // (only if the company switches it on), the site card and the diárias. Every number comes from the official taps.
 const MINE_STATE = { registered: 'por validar', supervisor_validated: 'validado na obra', hr_validated: 'aprovado no escritório', sent_to_payroll: 'fechado para salários' };
 function viewMine() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!state.me.collaborator_id) return go((TABS[state.me.role] || TABS.supervisor)[0]);
   if (!state.mineMonth) state.mineMonth = isoDay(new Date()).slice(0, 7);
   const months = [0, 1, 2].map((k) => { const d = new Date(); d.setDate(15); d.setMonth(d.getMonth() - k); return isoDay(d).slice(0, 7); });
@@ -3785,6 +3878,7 @@ function monthRange(ym) {
   return { from: `${ym}-01`, to: isoDay(new Date(y, m, 0, 12)) };
 }
 function viewOffice() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canOffice()) return viewClock();   // code guard as well as the database's
   if (!state.officeMonth) state.officeMonth = isoDay(new Date()).slice(0, 7);
   const { from, to } = monthRange(state.officeMonth);
@@ -3898,7 +3992,8 @@ async function editDepartment(x, perms) {
 }
 // What the office must look at: taps added by hand, taps that arrived late from a phone without network, and
 // supervisors' own taps (mini_manual_taps gives the reason; these two texts come from the server as written).
-const tapKind = (reason) => (/^sem rede/.test(reason || '') ? 'sem rede, chegou tarde' : reason === 'picou o próprio cartão' ? 'próprio cartão' : 'à mão');
+const tapKind = (reason) => (/^sem rede/.test(reason || '') ? 'sem rede, chegou tarde' : reason === 'picou o próprio cartão' ? 'próprio cartão'
+  : reason === 'número do cartão escrito à mão' ? 'cartão escrito à mão' : 'à mão');
 async function loadOffice(from, to) {
   const el = $('#list'); if (!el) return;
   const [{ data, error }, man, per] = await Promise.all([sb.rpc('mini_hours_office', { p_from: from, p_to: to }),
@@ -4744,6 +4839,7 @@ async function downloadAct(site, from, to) {
 
 // ------------------------------------------------------------------ Obras
 function viewSites() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   const label = { execution: chip('ok', 'em curso', 'ok'), lead: chip('', 'rascunho') };
   // the address usually ends with the country already: never write it twice
   const addr = (s) => String(s.address || '').replace(/[,·\s]*(Portugal|Espanha|España|Spain|França|France)\s*$/i, '');
@@ -4892,6 +4988,7 @@ function loadUI() {
   return uiLoading;
 }
 async function viewSitePanel() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   // The tab opens the control room (all sites); a site's button in Obras opens that site directly.
   const chosen = state.panelSite; state.panelSite = null;
   const id = chosen || (currentSite() && currentSite().id);
@@ -5028,6 +5125,7 @@ function openProcessFor(view) {
   go('processo');
 }
 async function viewProcess() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canProcess()) return viewClock();   // code guard as well as the database's
   const st = procState();
   app.innerHTML = `<div class="ph"><div><p class="ph-k">ISO 9001 · ISO 19443</p><h1>Mapa do processo</h1></div></div>
@@ -5216,6 +5314,7 @@ const estNo = (e) => `ORC-${String(e.number).padStart(4, '0')}${e.version > 1 ? 
 function orcState() { return state.orc || (state.orc = { id: null, mode: 'list', face: null }); }
 function openEstimates() { const st = orcState(); st.id = null; st.mode = 'list'; go('orcamentos'); }
 async function viewEstimates() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canEstimates()) return viewClock();   // code guard as well as the database's
   const st = orcState();
   if (st.mode === 'rules') return viewEstimateRules();
@@ -5308,6 +5407,7 @@ function estFace(e, form) {
   return { head, rows, foot, empty: !(all > 0) };
 }
 async function viewEstimate(id) {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   app.innerHTML = `<div id="eone">${skel(4)}</div>`;
   const { data: e, error } = await sb.rpc('mini_estimate', { p_estimate: id });
   const box = $('#eone'); if (!box) return;
@@ -5540,6 +5640,7 @@ function ruleWhen(r) {
   return w.length ? w.join(' · ') : 'Qualquer valor';
 }
 async function viewEstimateRules() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   const st = orcState();
   app.innerHTML = `<button class="btn ghost small orc-back" id="eback">← Orçamentos</button>
     <div class="ph"><div><p class="ph-k">Matriz de autoridade · ISO 9001 §5.3</p><h1>Quem assina</h1></div></div>
@@ -5643,6 +5744,7 @@ async function delegateSignature() {
 const canLmra = () => can('seguranca.lmra') || can('seguranca.parar_obra');
 const canEmergency = () => can('seguranca.emergencia');
 function viewLmra() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canLmra()) return viewClock();   // code guard as well as the database's
   app.innerHTML = `<div class="ph"><div><p class="ph-k">Antes de começar o trabalho</p><h1>LMRA</h1></div></div>
     <p class="muted lead">Análise de risco de última hora. Respondes no local, com a equipa. Um «Não» para o trabalho; com tudo «Sim», cada pessoa encosta o cartão para assinar.</p>
@@ -5723,10 +5825,10 @@ function lmraSign(id, anchor) {
     <div class="acts"><button class="btn big" value="ok">Terminar</button></div></form>`;
   document.body.appendChild(d); d.showModal();
   const res = d.querySelector('#sres'); const list = d.querySelector('#slist'); let last = { uid: '', at: 0 }; let ctrl = null;
-  const sign = async (raw) => {
+  const sign = async (raw, typed) => {
     const uid = normUid(raw); if (!uid) return;
     if (uid === last.uid && Date.now() - last.at < 3000) return; last = { uid, at: Date.now() };
-    const { data, error } = await sb.rpc('mini_lmra_sign', { p_lmra: id, p_uid: uid });
+    const { data, error } = await rpcCard('mini_lmra_sign', { p_lmra: id, p_uid: uid }, typed);
     if (error) { beep(false); res.innerHTML = `<div class="result bad">${ic('x')}<div><b>Não assinou</b>${esc(friendly(error))}</div></div>`; return; }
     beep(true);
     res.innerHTML = `<div class="result ok">${ic('ok')}<div><b>${esc(data.name)}</b>${data.again ? 'Já tinha assinado.' : 'Assinou.'}</div></div>`;
@@ -5737,7 +5839,8 @@ function lmraSign(id, anchor) {
       r.onreading = (ev) => sign(ev.serialNumber); r.onreadingerror = () => { beep(false); res.innerHTML = `<div class="result bad">${ic('x')}<div><b>NÃO LIDO</b>Encosta outra vez, devagar.</div></div>`; };
     } catch (err) { res.innerHTML = `<div class="result warn">${ic('warn')}<div><b>O leitor não ligou</b>${esc(err.name === 'NotAllowedError' ? 'Dá permissão ao NFC no Chrome.' : 'Escreve o número do cartão.')}</div></div>`; }
   })();
-  d.querySelector('#sgo').onclick = () => { const i = d.querySelector('#suid'); sign(i.value); i.value = ''; i.focus(); };
+  const lmraTyped = typedWatch(d.querySelector('#suid'));
+  d.querySelector('#sgo').onclick = () => { const i = d.querySelector('#suid'); sign(i.value, lmraTyped()); i.value = ''; i.focus(); };
   d.querySelector('#suid').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); d.querySelector('#sgo').click(); } };
   d.addEventListener('close', () => { if (ctrl) ctrl.abort(); d.remove(); if (state.view === 'lmra') loadLmra(); });
 }
@@ -5756,6 +5859,7 @@ async function liftStop(id) {
 const MUSTER_Q = 'gn.muster.q';
 const EMER_KIND = { fire: 'Incêndio', gas_leak: 'Fuga de gás', explosion: 'Explosão', chemical: 'Derrame químico', drill: 'Simulacro', other: 'Outra' };
 function viewEmergency() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canEmergency()) return viewClock();   // code guard as well as the database's
   app.innerHTML = `<div class="ph"><div><p class="ph-k">Contagem no ponto de encontro</p><h1>Emergência</h1></div></div>
     <div class="team-site">${siteSelect('esite')}</div><div id="ebody">${skel(3)}</div>`;
@@ -5767,7 +5871,8 @@ async function flushMuster() {
   const q = load(MUSTER_Q, []); if (!q.length || state.offline || navigator.onLine === false) return;
   const left = [];
   for (const x of q) {
-    const { error } = await sb.rpc('mini_muster_scan', x);
+    const { _typed, ...args } = x;
+    const { error } = await rpcCard('mini_muster_scan', args, !!_typed);
     if (error && /fetch|network|Failed/i.test(error.message || '')) left.push(x);
   }
   store(MUSTER_Q, left);
@@ -5829,7 +5934,8 @@ async function loadEmergency() {
   el.querySelectorAll('[data-pt]').forEach((b) => b.onclick = () => { state.emerPoint = b.dataset.pt; el.querySelectorAll('[data-pt]').forEach((x) => x.classList.toggle('on', x === b)); });
   $('#eadd').onclick = () => addPoint(site);
   if (nfcOk) $('#nfc').onclick = () => (state.nfc ? stopNfc() : musterNfc());
-  $('#emanual').onsubmit = (e) => { e.preventDefault(); const i = $('#euid'); musterTap(i.value); i.value = ''; i.focus(); };
+  const emerTyped = typedWatch($('#euid'));
+  $('#emanual').onsubmit = (e) => { e.preventDefault(); const i = $('#euid'); musterTap(i.value, emerTyped()); i.value = ''; i.focus(); };
   el.querySelectorAll('[data-mark]').forEach((b) => b.onclick = () => markSafe(b.dataset.mark, b.dataset.name));
   $('#eend').onclick = () => endEmergency(ev);
 }
@@ -5843,14 +5949,14 @@ async function musterNfc() {
     reader.onreadingerror = () => { beep(false); showResult('bad', 'NÃO LIDO', 'Encosta outra vez, devagar.'); };
   } catch (err) { toast(err.name === 'NotAllowedError' ? 'Dá permissão ao NFC no Chrome.' : 'O NFC não arrancou: ' + err.message); }
 }
-async function musterTap(raw) {
+async function musterTap(raw, typed) {
   const uid = normUid(raw); const ev = state.emer && state.emer.event; if (!uid || !ev) return;
   if (!state.emerPoint) return toast('Escolhe o ponto de encontro.');
   const x = { p_event: ev.id, p_point: state.emerPoint, p_uid: uid, p_client_id: uuid(), p_at: serverNow().toISOString() };
   let data = null; let error = null;
-  if (!state.offline && navigator.onLine !== false) ({ data, error } = await sb.rpc('mini_muster_scan', x));
+  if (!state.offline && navigator.onLine !== false) ({ data, error } = await rpcCard('mini_muster_scan', x, typed));
   if (state.offline || navigator.onLine === false || (error && /fetch|network|Failed/i.test(error.message || ''))) {
-    store(MUSTER_Q, [...load(MUSTER_Q, []), x]); beep(true);
+    store(MUSTER_Q, [...load(MUSTER_Q, []), typed ? { ...x, _typed: true } : x]); beep(true);
     return showResult('warn', 'GUARDADO', 'Sem rede: a picagem vai quando a rede voltar.');
   }
   if (error) { beep(false); return showResult('bad', 'Não ficou registado', friendly(error)); }
@@ -5924,6 +6030,7 @@ const WH_KIND = { top: 'camisola', bottom: 'calça', shoes: 'botas', gloves: 'lu
 const TOOL_ST = { available: ['ok', 'disponível'], checked_out: ['info', 'emprestada'], maintenance: ['warn', 'em reparação'],
   blocked: ['bad', 'bloqueada'], lost: ['bad', 'perdida'], retired: ['', 'abatida'] };
 function viewWarehouse() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canWh()) return viewClock();   // code guard as well as the database's
   if (!state.wh) state.wh = { tab: null, cart: [], tools: [], person: null, wid: null };
   app.innerHTML = `<div class="ph"><div><p class="ph-k">EPI, farda e ferramentas</p><h1>Armazém</h1></div></div>
@@ -6074,9 +6181,9 @@ function whSign() {
     <div id="sres" aria-live="polite"></div><div class="acts"><button class="btn ghost wide" value="cancel">Cancelar</button></div></form>`;
   document.body.appendChild(d); d.showModal();
   let ctrl = null; let busy = false;
-  const go2 = async (raw) => {
+  const go2 = async (raw, typed) => {
     const uid = normUid(raw); if (!uid || busy) return; busy = true;
-    const { data, error } = await sb.rpc('mini_wh_issue', { ...req, p_uid: uid });
+    const { data, error } = await rpcCard('mini_wh_issue', { ...req, p_uid: uid }, typed);
     busy = false;
     if (error) {
       beep(false); const m = /needs a reason/i.test(error.message || '');
@@ -6088,8 +6195,9 @@ function whSign() {
     Object.assign(W, { cart: [], tools: [], batch: null, needWhy: null }); whPick(p.id, null);
   };
   if (nfcOk) (async () => { try { ctrl = new AbortController(); const r = new NDEFReader(); await r.scan({ signal: ctrl.signal }); r.onreading = (ev) => go2(ev.serialNumber); } catch (_) { /* typed number still works */ } })();
-  d.querySelector('#sgo').onclick = () => go2(d.querySelector('#suid').value);
-  d.querySelector('#suid').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); go2(e.target.value); } };
+  const whTyped = typedWatch(d.querySelector('#suid'));
+  d.querySelector('#sgo').onclick = () => go2(d.querySelector('#suid').value, whTyped());
+  d.querySelector('#suid').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); go2(e.target.value, whTyped()); } };
   d.addEventListener('close', () => { if (ctrl) ctrl.abort(); d.remove(); });
 }
 async function whNfc(onUid) {
@@ -6713,6 +6821,7 @@ async function inspectTool(id, tag) {
 
 // ---- Ficha de entrega de EPI (to print and keep; each line says which card signed it and when)
 async function viewPpeRecord() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canWh() || !state.recordFor) return go('armazem');
   app.innerHTML = `<div class="noprint toolbar"><button class="btn ghost small" id="rback">← Voltar</button><button class="btn small" id="rprint">${ic('print')}Imprimir</button></div><div id="rbody">${skel(2)}</div>`;
   $('#rback').onclick = () => go(state.recordBack || 'armazem');
@@ -6752,6 +6861,7 @@ const BUY_ST = { pending: ['warn', 'à espera de aprovação'], approved: ['ok',
   rejected: ['bad', 'recusado'], cancelled: ['', 'cancelado'] };
 const PO_ST = { issued: ['info', 'encomendada'], partially_received: ['warn', 'chegou uma parte'], received: ['ok', 'recebida'], cancelled: ['', 'cancelada'] };
 function viewBuy() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canBuy()) return viewClock();   // code guard as well as the database's
   if (!state.buy) state.buy = { tab: null, pick: [] };
   app.innerHTML = `<div class="ph"><div><p class="ph-k">Pedidos, aprovações e encomendas</p><h1>Compras</h1></div></div>
@@ -6964,6 +7074,7 @@ function flPaper(label, st, due, extra = '') {
   return `<li class="fl-p ${FL_PAPER[st] || ''}"><span>${esc(label)}</span><b>${esc(txt)}</b>${extra}</li>`;
 }
 function viewFleet() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canFleet()) return viewClock();   // code guard as well as the database's
   if (!state.fleet) state.fleet = { tab: 'viaturas', filter: 'todas' };
   app.innerHTML = `<div class="ph"><div><p class="ph-k">Viaturas, seguros, inspeções e aluguer</p><h1>Frota</h1></div></div>
@@ -7252,6 +7363,7 @@ async function hoThumbs(root) {
   }
 }
 function viewHousing() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canHousing()) return viewClock();   // code guard as well as the database's
   if (!state.housing) state.housing = { tab: 'casas' };
   state.housing.sel = null; state.housing.insp = null;
@@ -7564,6 +7676,7 @@ const EX_CAT = { fuel: 'Combustível', meal: 'Refeição', lodging: 'Alojamento'
   transport: 'Transporte', material: 'Material', other: 'Outro' };
 const EX_STATE = { submitted: ['warn', 'Por aprovar'], approved: ['info', 'Aprovada'], rejected: ['bad', 'Recusada'], reimbursed: ['ok', 'Reembolsada'] };
 function viewExpenses() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canExpenses()) return viewClock();   // code guard as well as the database's
   if (!state.exp) state.exp = { tab: 'tratar' };
   app.innerHTML = `<div class="ph"><div><p class="ph-k">Talões, aprovação e reembolso</p><h1>Despesas</h1></div></div>
@@ -7687,6 +7800,7 @@ const NC_STATE = { open: ['warn', 'Por decidir'], decided: ['info', 'Ação em c
 const NC_DISP = { repair: 'Reparar', rework: 'Refazer', reject: 'Rejeitar', use_as_is: 'Usar como está' };
 const ITP_TYPE = { R: 'R · registo', W: 'W · testemunho', H: 'H · paragem' };
 function viewQuality() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canQuality()) return viewClock();   // code guard as well as the database's
   if (!state.quality) state.quality = { tab: 'nc', site: null };
   if (state.quality.site) return viewQualitySite();
@@ -7860,6 +7974,7 @@ async function qImpact(t) {
 }
 // One site: the inspection plan (R/W/H), its NCs, its stops and its Data Books.
 function viewQualitySite() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   app.innerHTML = `<div class="ph"><div><p class="ph-k"><button class="linkbtn" id="qback">‹ Qualidade</button></p><h1 id="qsh">Plano de inspeção</h1></div></div>
     <div id="qsbody">${skel(2)}</div>`;
   $('#qback').onclick = () => { state.quality.site = null; viewQuality(); };
@@ -7953,6 +8068,7 @@ function qBookShow(b) {
 // Only reads what the other screens already serve (control room, purchases, trips); each block shows only with its permission.
 const canProd = () => can('obras.gerir') || can('horas.validar_obra');
 function viewProd() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canProd()) return viewClock();   // code guard as well as the database's
   app.innerHTML = `<div class="ph"><div><p class="ph-k">Direção de obra e encarregados</p><h1>Produção</h1></div></div>
     <div id="prtop">${skel(1)}</div><div id="prbody"></div>`;
@@ -8024,6 +8140,7 @@ const tvWhen = (iso) => {
 const tvDay = (iso) => iso ? new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Europe/Lisbon' }) : '';
 const tvHour = (iso) => { const h = iso ? fmtHour(iso, 'Europe/Lisbon') : ''; return h === '00:00' ? '' : h; };
 function viewTravel() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canTravel()) return viewClock();   // code guard as well as the database's
   if (!state.travel) state.travel = { tab: 'tratar' };
   app.innerHTML = `<div class="ph"><div><p class="ph-k">Avião, comboio e autocarro</p><h1>Viagens</h1></div></div>
@@ -8197,6 +8314,7 @@ const SC_PHOTO = { erected: 'Montado', inspection: 'Inspeção', report: 'Estrag
 const appUrl = () => (/^https?:/.test(location.protocol) ? location.origin + location.pathname : 'https://gestnowhq.github.io/');
 
 function viewScaffolds() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canScaffolds()) return viewClock();   // code guard as well as the database's
   if (!state.scaf) state.scaf = { site: null, id: null };
   if (state.scaf.id) return viewScaffold();
@@ -8288,6 +8406,7 @@ async function scUpload(scId, f) {
   return { file: path, sha256: sha };
 }
 function viewScaffold() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canScaffolds()) return viewClock();
   app.innerHTML = `<p class="noprint"><button class="btn ghost small" id="scback">‹ Andaimes</button></p><div id="scone">${skel(3)}</div>`;
   $('#scback').onclick = () => { state.scaf.id = null; viewScaffolds(); };

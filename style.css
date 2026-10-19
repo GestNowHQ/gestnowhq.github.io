@@ -1558,3 +1558,8 @@ dialog.prop { max-width: 820px; }
 .wt-tier b { display: block; font-size: 16px; }
 .wt-tier small { display: block; color: var(--ink-2); font-size: 13.5px; line-height: 1.4; margin-top: 2px; }
 .bad-t { color: var(--bad); font-weight: 650; }
+
+/* Ficha: how the person joined (sql/81, C2) */
+.onb-facts { list-style: none; padding: 0; margin: 8px 0 4px; }
+.onb-facts li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.onb-facts li b { min-width: 11em; }
