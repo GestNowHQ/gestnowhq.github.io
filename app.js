@@ -826,14 +826,18 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '69';
+const APP_VERSION = '70';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
 // v67 pyramid (Diogo 2026-10-20): the GestNow owner starts on his clients; an admin starts on the dashboard, not on Picar.
 // Picar stays in the menu (group Obra) for the office, and is the encarregado's tool.
+// v70 (Diogo 2026-10-20): on «Os meus clientes» the owner runs a business, not a site: only «Clientes» shows.
+// The company's screens come back when he opens a company (Início, Horas, Secretaria).
+const PLATFORM_VIEWS = ['clientes', 'cliente'];
+const ownerDesk = () => isOwner() && PLATFORM_VIEWS.includes(state.view);
 function tabsFor(role) {
-  if (role === 'admin') return isOwner() ? ['clientes', 'inicio', 'horas', 'secretariado'] : ['inicio', 'painel', 'horas', 'secretariado'];
+  if (role === 'admin') return isOwner() ? (ownerDesk() ? ['clientes'] : ['clientes', 'inicio', 'horas', 'secretariado']) : ['inicio', 'painel', 'horas', 'secretariado'];
   return TABS[role] || TABS.supervisor;
 }
 const MORE_ORDER = ['inicio', 'equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'andaimes', 'processo', 'clientes'];
@@ -879,7 +883,8 @@ function layoutNav(role) {
   const btn = (v) => nav.querySelector(`button[data-view="${v}"]`);
   const all = [...nav.querySelectorAll('button[data-view]')].map((b) => b.dataset.view);
   // Out of the menu, still reachable: Processo by «?» and the search; Produção by the Dashboard (only when this login opens it).
-  const off = (v) => v === 'processo' || (v === 'producao' && !btn('painel').hidden);
+  const off = (v) => v === 'processo' || (v === 'producao' && !btn('painel').hidden) || (ownerDesk() && v !== 'clientes');
+  state.navDesk = ownerDesk();
   for (const v of all) btn(v).classList.toggle('enc-off', off(v));
   const shown = (v) => !btn(v).hidden && !off(v);
   const grouped = MENU_GROUPS.flatMap((g) => g[1]);
@@ -1473,6 +1478,7 @@ function go(view) {
   stopNfc(); clearInterval(state.timer); clearInterval(state.tick); hideFlash(); openMore(false); Voice.stop(); dropRobots();
   if (state.uiEl && window.GNUI) { window.GNUI.unmount(state.uiEl); state.uiEl = null; }
   state.view = view;
+  if (state.navDesk !== ownerDesk()) layoutNav(state.me.role);   // owner moved between his clients and a company
   app.classList.toggle('wide', view === 'secretariado' || view === 'painel');
   const tab = view === 'ficha' ? 'trabalhadores' : view === 'fichaepi' ? 'armazem' : view === 'cliente' ? 'clientes' : view;
   nav.querySelectorAll('button[data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === tab));
@@ -1543,11 +1549,34 @@ async function viewClients() {
   if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!isOwner()) return viewClock();   // code guard as well as the database's
   app.innerHTML = `<div class="ph"><div><p class="ph-k">GestNow · só tu vês</p><h1>Os meus clientes</h1></div><button class="btn" id="newc">+ Novo cliente</button></div>
+    <div id="biz">${skel(1)}</div>
+    <div class="sec-h"><h2 class="eyebrow">Clientes</h2></div>
     <div class="cl-find"><input id="clq" type="search" placeholder="Procurar cliente pelo nome ou NIF" autocomplete="off" aria-label="Procurar cliente">
       <label class="check inline"><input type="checkbox" id="cltest"> Mostrar empresas de teste</label></div>
     <div id="clist">${skel(3)}</div>`;
   $('#newc').onclick = newClient;
-  loadClients();
+  loadBusiness(); loadClients();
+}
+// Money and billing units (sql/92). Prices are indicative (negocio/pacotes.md), without VAT; nothing is charged yet.
+const cts = (c) => (Number(c || 0) / 100).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR', minimumFractionDigits: Number(c) % 100 ? 2 : 0, maximumFractionDigits: 2 });
+const PER = { active_worker: ['pessoa ativa', 'pessoas ativas'], active_scaffold: ['andaime montado', 'andaimes montados'], vehicle: ['viatura', 'viaturas'], site: ['obra', 'obras'], company: ['empresa', 'empresa'] };
+const perUnit = (u) => (PER[u] || ['', ''])[0];
+const unitQty = (u, q) => u === 'company' ? '' : `${Number(q || 0).toLocaleString('pt-PT')} ${(PER[u] || ['', ''])[Number(q) === 1 ? 0 : 1]}`;
+// The business at a glance: real clients only. What sells is what tells you where to push.
+async function loadBusiness() {
+  const el = $('#biz'); if (!el) return;
+  const { data: b, error } = await sb.rpc('platform_business');
+  if (!el.isConnected) return;
+  if (error) { el.innerHTML = `<p class="small muted">${esc(friendly(error))}</p>`; return; }
+  const n = (v) => Number(v || 0).toLocaleString('pt-PT');
+  const sold = b.extras.filter((x) => Number(x.clients)).length;
+  el.innerHTML = `<div class="ov-tiles biz-tiles"><div><b>${n(b.clients)}</b><span>cliente(s)${b.test ? ` · ${n(b.test)} de teste` : ''}</span></div>
+      <div><b>${n(b.active_workers)}</b><span>pessoas ativas este mês</span></div>
+      <div class="biz-money"><b>${esc(cts(b.monthly))}</b><span>receita estimada por mês</span></div>
+      <div><b>${n(sold)}/${n(b.extras.length)}</b><span>extras vendidos</span></div></div>
+    <details class="fold biz-sell"><summary><span>O que se vende<span class="sub">Pack standard ${esc(cts(b.standard_monthly))}/mês · extras ${esc(cts(b.monthly - b.standard_monthly))}/mês</span></span></summary>
+      <ul class="plain biz-list">${b.extras.map((x) => `<li><span class="grow">${esc(x.label)}</span><small>${n(x.clients)} cliente(s)</small><b>${esc(cts(x.monthly))}</b></li>`).join('')}</ul>
+      <p class="small muted">Preços indicativos, sem IVA. Ainda não se cobra nada: é a estimativa com os preços de hoje.</p></details>`;
 }
 // Level 1 for the owner (sql/91): a plain list of client companies, account data only. Tap = the client's card.
 const ACC_STATE = { active: ['ok', 'Ativo'], trialing: ['info', 'Em experiência'], past_due: ['warn', 'Pagamento em atraso'], canceled: ['bad', 'Cancelado'], unpaid: ['bad', 'Suspenso'] };
@@ -1565,7 +1594,7 @@ async function loadClients() {
     el.innerHTML = `<p class="small muted cl-count">${n(real)} cliente(s)${test ? ` · ${n(test)} de teste${tst.checked ? '' : ' escondida(s)'}` : ''}</p>
       ${rows.length ? `<div class="cl-rows">${rows.map((c) => { const [k, t] = c.test ? ['warn', 'Teste'] : (ACC_STATE[c.status] || ['info', c.status || 'Sem plano']);
         return `<button class="cl-row" data-client="${esc(c.id)}">${avatar(c.name).replace('class="av ', 'class="av cl-av ')}
-          <span class="grow"><b>${esc(c.name)}</b><small>${esc(c.demo ? 'Fictícia' : 'NIF ' + c.tax_id)} · ${n(c.people)} pessoas · módulos ${n(c.modules_on)}/${n(c.modules_all)}${c.last_tap ? ' · última picagem ' + esc(fmtDate(c.last_tap.slice(0, 10))) : ''}</small></span>
+          <span class="grow"><b>${esc(c.name)}</b><small>${esc(c.demo ? 'Fictícia' : 'NIF ' + c.tax_id)} · ${n(c.active_workers)} pessoas ativas · ${n(c.extras_on)} extra(s) · ${esc(cts(c.monthly))}/mês${c.last_tap ? ' · última picagem ' + esc(fmtDate(c.last_tap.slice(0, 10))) : ''}</small></span>
           ${chip(k, t)}${c.here ? chip('ok', 'Aberta') : ''}${ic('go')}</button>`; }).join('')}</div>`
         : `<p class="muted">${words ? 'Nenhum cliente com esse nome.' : 'Ainda não tens clientes reais. Carrega em «+ Novo cliente».'}</p>`}`;
     el.querySelectorAll('[data-client]').forEach((b) => b.onclick = () => { state.clientId = b.dataset.client; go('cliente'); });
@@ -1579,7 +1608,7 @@ async function viewClient() {
   if (!state.ready) return boot();
   if (!isOwner() || !state.clientId) return go('clientes');
   app.innerHTML = `<div id="cli">${skel(4)}</div>`;
-  const { data: c, error } = await sb.rpc('platform_client', { p_tenant: state.clientId });
+  const [{ data: c, error }, { data: bill }] = await Promise.all([sb.rpc('platform_client', { p_tenant: state.clientId }), sb.rpc('platform_client_bill', { p_tenant: state.clientId })]);
   const box = $('#cli'); if (!box || !box.isConnected || state.view !== 'cliente') return;
   if (error) { box.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
   const n = (v) => Number(v || 0).toLocaleString('pt-PT');
@@ -1587,16 +1616,21 @@ async function viewClient() {
   box.innerHTML = `<button class="btn ghost small home-back" id="cback">‹ Os meus clientes</button>
     <div class="ph"><div><p class="ph-k">Cliente</p><h1>${esc(c.name)}</h1><p class="small muted">${esc(c.demo ? 'Empresa fictícia' : 'NIF ' + c.tax_id)} · cliente desde ${esc(fmtDate(c.created_at.slice(0, 10)))}</p></div>${chip(k, t)}</div>
     <div class="ov-tiles"><div><b>${n(c.people)}</b><span>pessoas</span></div><div><b>${n(c.logins)}</b><span>contas na app</span></div>
-      <div><b>${n(c.sites)}</b><span>obras a decorrer</span></div><div><b>${n(c.modules.filter((m) => m.on).length)}/${n(c.modules.length)}</b><span>módulos ligados</span></div></div>
+      <div><b>${n(c.sites)}</b><span>obras a decorrer</span></div><div class="biz-money"><b>${bill ? esc(cts(bill.monthly)) : '–'}</b><span>por mês (estimativa)</span></div></div>
     <div class="card">
       ${c.here ? `<button class="btn big wide" id="copen">${ic('go')}Abrir a empresa</button><p class="small muted">Estás dentro desta empresa: vês a app como o administrador dela.</p>`
         : c.open ? `<button class="btn big wide" id="copen">${ic('go')}Entrar como suporte</button><p class="small muted">Fica registado que entraste. Voltas por «Os meus clientes».</p>`
         : `<p class="small muted">${ic('lock')} Esta empresa não te deu acesso. Pede acesso de suporte ao administrador dela.</p>`}
       ${c.here && c.demo && !Number(c.sites) ? `<button class="btn ghost wide" id="cfill">${ic('auto')}Preencher com dados de exemplo</button>` : ''}</div>
-    <div class="sec-h"><h2 class="eyebrow">Módulos que esta empresa tem</h2></div>
-    <p class="small muted">O ponto, as horas, as pessoas, os documentos e as obras estão sempre incluídos. Desligar um módulo esconde os ecrãs e bloqueia alterações; os dados ficam guardados e voltam quando o ligares.</p>
-    <div class="card mods">${c.modules.map((m) => `<label class="mod${m.on ? ' on' : ''}"><span class="grow"><b>${esc(m.label)}</b><small>${esc(m.what)}</small></span>
-        <span class="sw"><input type="checkbox" data-mod="${esc(m.code)}" ${m.on ? 'checked' : ''} aria-label="${esc(m.label)}"><i></i></span></label>`).join('')}</div>
+    <div class="sec-h"><h2 class="eyebrow">Pack standard · incluído</h2></div>
+    <div class="card pack">${bill ? `<ul class="pack-items">${bill.standard.items.map((i) => `<li>${ic('ok')} ${esc(i)}</li>`).join('')}</ul>
+      <p class="pack-price"><span class="grow">${esc(cts(bill.standard.price))} por ${esc(perUnit(bill.standard.unit))} · mínimo ${esc(cts(bill.standard.min))}<small>${esc(unitQty(bill.standard.unit, bill.standard.qty))} este mês</small></span><b>${esc(cts(bill.standard.monthly))}</b></p>` : ''}</div>
+    <div class="sec-h"><h2 class="eyebrow">Extras pagos à parte</h2></div>
+    <p class="small muted">Liga só o que o cliente comprou. Desligar esconde os ecrãs e bloqueia alterações; os dados ficam guardados e voltam quando o ligares.</p>
+    <div class="card mods">${c.modules.map((m) => { const x = bill && bill.extras.find((y) => y.code === m.code); return `<label class="mod${m.on ? ' on' : ''}"><span class="grow"><b>${esc(m.label)}</b><small>${esc(m.what)}</small>
+        ${x ? `<small class="mod-price">${esc(cts(x.price))} por ${esc(perUnit(x.unit))}${m.on ? ` · ${esc(cts(x.monthly))}/mês${x.unit === 'company' ? '' : ` (${esc(unitQty(x.unit, x.qty))})`}` : ''}</small>` : ''}</span>
+        <span class="sw"><input type="checkbox" data-mod="${esc(m.code)}" ${m.on ? 'checked' : ''} aria-label="${esc(m.label)}"><i></i></span></label>`; }).join('')}</div>
+    ${bill ? `<div class="card pack-total"><span class="grow"><b>Total estimado por mês</b><small>Preços indicativos, sem IVA. Ainda não se cobra nada.</small></span><b>${esc(cts(bill.monthly))}</b></div>` : ''}
     <div class="sec-h"><h2 class="eyebrow">Administradores da empresa</h2></div>
     <div class="card">${c.admins.length ? `<ul class="plain">${c.admins.map((a) => `<li>${ic('user')} ${esc(a)}</li>`).join('')}</ul>` : '<p class="small muted">Ainda sem administrador próprio. Por agora és tu que geres esta empresa.</p>'}</div>
     ${c.changes.length ? `<details class="fold"><summary><span>Últimas alterações de módulos</span></summary><ul class="plain small">${c.changes.map((x) => `<li>${esc(fmtTime(x.at))} · ${esc(x.module)} ${x.to === 'off' ? 'desligado' : 'ligado'}</li>`).join('')}</ul></details>` : ''}`;
