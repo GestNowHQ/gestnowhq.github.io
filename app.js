@@ -786,7 +786,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '60';
+const APP_VERSION = '61';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -3703,7 +3703,7 @@ async function onbBot(x, items) {
   onbShell(ob, `<div class="card bot-card"><div class="bot-head bot-stage" id="bhead"><div class="bot-3d" id="b3d">${botFace(bot.look)}</div>
       <div class="grow"><b>${esc(bot.name)}</b><small id="bst">Parte ${n} de ${items.length} · ${esc(x.title)}</small></div>
       <button class="iconbtn" id="voz" type="button" aria-pressed="${Voice.on}" aria-label="Voz" title="Ligar ou desligar a voz">${ic(Voice.on ? 'voice' : 'mute')}</button></div>
-    <div class="bot-log" id="blog" aria-live="polite"><div class="bub bot"><p>Olá, ${esc(String(ob.name || '').split(' ')[0])}! Sou ${esc(bot.name)}. Esta conversa leva ${(() => { const m = Math.max(1, Math.round(lines.reduce((a, l) => a + Voice.pace(l.text), 0) / 60000)); return m === 1 ? 'um minuto' : `${m} minutos`; })()}. Liga o som do telemóvel.</p></div></div>
+    <div class="bot-log" id="blog" aria-live="polite"><div class="bub bot"><p>Olá, ${esc(String(ob.name || '').split(' ')[0])}! Sou ${esc(bot.name)}. Esta conversa leva ${(() => { const m = Math.max(1, Math.round(lines.reduce((a, l) => a + Voice.pace(l.text), 0) / 60000)); return m === 1 ? 'um minuto' : `${m} minutos`; })()}. Liga o som do telemóvel. Não precisas de falar: respondes a tocar nos botões.</p></div></div>
     <div class="bot-act" id="bact"><button class="btn big" id="bgo">${ic('play')}${x.opened_at ? 'Continuar a conversa' : 'Começar a conversa'}</button>
       <button class="btn ghost wide" id="back">Voltar à lista</button></div></div>`);
   const face = () => $('#bhead .botface'); const log = $('#blog'); const act = $('#bact');
