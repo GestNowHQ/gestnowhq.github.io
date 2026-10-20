@@ -2029,3 +2029,15 @@ div.nt { cursor: default; }
 .dlg.acct .acct-who .grow { display: flex; flex-direction: column; min-width: 0; } .dlg.acct .acct-who small { color: var(--ink-2); overflow-wrap: anywhere; }
 .dlg.acct .acts { display: grid; gap: 10px; }
 .nt-more { margin: 10px 0 0; text-align: center; }
+
+/* v59 · entrada do trabalhador: PDF e vídeo próprios dentro da app, documentos pedidos (sql/85, 85b) */
+.onb-pdf { padding: 8px; }
+.onb-pdf .pdf-page { display: block; width: 100%; height: auto; margin: 0 0 10px; border-radius: var(--r-sm); box-shadow: 0 1px 3px rgba(15, 13, 42, .18); }
+.onb-vfile video { position: absolute; inset: 0; width: 100%; height: 100%; background: #000; }
+.onb-rate-hr { margin: 12px 0; padding: 12px 14px; border-radius: var(--r-md); background: var(--surface-2); }
+.onb-rate-hr h3 { margin: 0 0 6px; }
+.entry-doc { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.entry-doc:first-of-type { border-top: 0; }
+.entry-doc b { display: block; }
+.entry-doc small { display: block; color: var(--muted); }
+.entry-doc select { width: auto; min-width: 128px; }
