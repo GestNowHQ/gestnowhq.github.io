@@ -2057,3 +2057,12 @@ dialog.docview { box-sizing: border-box; overflow-x: hidden; max-height: 96vh; p
 .docview-img { display: block; width: 100%; max-width: 100%; height: auto; border-radius: var(--r-sm); background: var(--surface-2); }
 .me-doc > .btn { align-self: center; flex: none; }
 .me-offline { display: flex; gap: 8px; align-items: center; color: var(--warn-ink, var(--ink)); }
+
+/* v66 · Simular picagem (teste) */
+.pic-sim { margin: 12px 0 0; border-style: dashed; }
+.card.sim { margin: 8px 0 0; padding: 16px; border: 1px dashed var(--warn, #d97706); }
+.sim-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sim-list { display: grid; gap: 8px; margin: 12px 0; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.sim-p { justify-content: flex-start; text-align: left; gap: 10px; min-height: 56px; }
+.sim-p span { display: flex; flex-direction: column; min-width: 0; }
+.sim-p small { color: var(--muted); font-weight: 400; }
