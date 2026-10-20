@@ -451,13 +451,24 @@ body.signed-out main { max-width: none; margin: 0; padding: 0; animation: none; 
 .feats b { display: block; font-size: 15px; font-weight: 650; }
 .feats small { display: block; font-size: 13.5px; color: rgba(255,255,255,.62); line-height: 1.45; margin-top: 2px; }
 .demo { display: none; }
-/* phone: the same scene, small, in the bottom-left corner next to the trust lines (everything fits one screen) */
-.auth-low { display: flex; align-items: center; gap: 14px; max-width: 440px; margin: 16px auto 0; }
-.demo-sm { flex: 0 0 auto; width: 140px; height: 104px; }
-.demo-sm .demo { display: block; position: relative; width: 300px; height: 232px; transform: scale(.45); transform-origin: 0 0; }
-.auth-low-txt { min-width: 0; }
-.auth .auth-low .trust { justify-content: flex-start; margin: 0; gap: 4px 12px; }
-.auth .auth-low .foot { justify-content: flex-start; margin: 8px 0 0; }
+/* phone: the same scene, small, in the bottom-left corner; the trust lines stay centred at the bottom */
+.auth-low { position: relative; min-height: 84px; display: flex; align-items: center; justify-content: center; max-width: 440px; margin: 6px auto 0; }
+.demo-sm { position: absolute; left: 0; top: 0; width: 110px; height: 84px; }
+.demo-sm .demo { display: block; position: relative; width: 300px; height: 232px; transform: scale(.36); transform-origin: 0 0; }
+.auth .auth-low .foot { margin: 0; }
+/* phone: tighter so the whole login fits one screen */
+@media (max-width: 639px) {
+  .auth-hero { padding: 18px 20px 56px; }
+  .auth .logo-big { margin-bottom: 18px; } .auth .logo-big svg { width: 38px; height: 38px; }
+  .auth-pitch h2 { font-size: clamp(30px, 7.6vw, 40px); margin-bottom: 10px; }
+  .auth-pitch p { font-size: 14.5px; line-height: 1.5; }
+  .feats { margin-top: 14px; gap: 6px; } .feats li { padding: 4px 12px 4px 4px; }
+  .auth-main { margin-top: -36px; padding-bottom: 8px; }
+  .auth .card { padding: 20px 20px 20px; }
+  .auth h1 { font-size: 24px; } .auth .lead { font-size: 14px; }
+  .auth .card input { min-height: 48px; }
+  .auth .trust { margin-top: 12px; }
+}
 .auth-main { position: relative; flex: 1; margin-top: -44px; padding: 0 14px 28px; }
 .auth .card { max-width: 440px; margin: 0 auto; padding: 26px 22px 24px; border-radius: 22px; border: 0;
   box-shadow: 0 1px 2px rgba(15,13,42,.06), 0 24px 60px -24px rgba(15,13,42,.55); animation: up .4s var(--ease); }
