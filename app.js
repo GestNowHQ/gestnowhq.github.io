@@ -49,6 +49,17 @@ const ERRORS = [
   [/no phone switched on for this login/i, 'Este telemóvel ainda não tem as notificações ligadas: carrega em «Ligar».'],
   [/too many phones for this login/i, 'Esta conta já tem 5 telemóveis ligados. Desliga um antes de ligar outro.'],
   [/invalid push address/i, 'O telemóvel não deu um endereço de notificações válido. Tenta outra vez.'],
+  // Nova ordem da entrada e ficheiros do acolhimento (sql/85, 85b)
+  [/the person already accepted the hourly rate/i, 'A pessoa já aceitou o valor hora. Para o mudar agora, usa a alteração normal do valor hora.'],
+  [/the person has not accepted the hourly rate yet/i, 'A pessoa ainda não aceitou o valor hora. Indica-o primeiro na ficha dela.'],
+  [/hourly rate missing or not valid/i, 'Escreve um valor hora válido.'],
+  [/overtime cannot be paid below the normal rate/i, 'A hora extra não pode ser paga abaixo da hora normal.'],
+  [/no signed contract waiting for HR/i, 'Não há nenhum contrato assinado à espera de validação.'],
+  [/write what is wrong/i, 'Escreve o que está errado (pelo menos 5 letras).'],
+  [/choose obligatory, if they have it, or not asked/i, 'Escolhe «Obrigatório», «Se tiver» ou «Não pedir».'],
+  [/send the (PDF|video file) first/i, 'Envia primeiro o ficheiro.'],
+  [/file not found, send it again/i, 'O ficheiro não chegou. Envia outra vez.'],
+  [/minimum time between 10 seconds and 1 hour/i, 'O tempo mínimo tem de ser entre 10 segundos e 1 hora.'],
   // Passaporte de entrada (sql/80)
   [/social security number \(NISS\) is not valid/i, 'O NISS não está certo: confirma os 11 algarismos no cartão da Segurança Social.'],
   [/IBAN is not valid/i, 'O IBAN não está certo: confirma na app do teu banco.'],
@@ -775,7 +786,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '58';
+const APP_VERSION = '59';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -2226,6 +2237,8 @@ async function viewPeople() {
       <fieldset class="onbmode"><legend>Acolhimento</legend>
         <label class="opt"><input type="radio" name="mode" value="paper" checked><span><b>Já verifiquei em papel</b><small>Fica ativo já e pode picar com o cartão.</small></span></label>
         <label class="opt"><input type="radio" name="mode" value="app"><span><b>Faz o acolhimento na app</b><small>Vê os vídeos e manuais no telemóvel dele. O cartão associa-se quando acabar.</small></span></label></fieldset>
+      <div class="row app-only" hidden><div><label>Valor hora combinado (€)</label><input name="rate" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="ex.: 9,50"></div>
+      <div><label>Hora extra (€)</label><input name="ot" type="number" min="0" step="0.01" inputmode="decimal" placeholder="vazio = +50%"></div></div>
       <div class="row paper-only"><div><label>Cartão</label><input name="card" autocomplete="off" placeholder="Encosta o cartão ou escreve o número"></div>
       ${'NDEFReader' in window ? '<div style="flex:0 0 auto"><button type="button" class="btn ghost" id="read">Ler cartão</button></div>' : ''}</div>
       ${siteSelect('site')}
@@ -2246,7 +2259,8 @@ async function viewPeople() {
     bindSiteSelect('site');
     if ($('#read')) $('#read').onclick = () => readOneCard('input[name=card]');
     const syncMode = () => { const app1 = $('#f').querySelector('input[name=mode]:checked').value === 'app';
-      $('#f').querySelectorAll('.paper-only').forEach((x) => { x.hidden = app1; x.querySelectorAll('input').forEach((i) => { i.disabled = app1; }); }); };
+      $('#f').querySelectorAll('.paper-only').forEach((x) => { x.hidden = app1; x.querySelectorAll('input').forEach((i) => { i.disabled = app1; }); });
+      $('#f').querySelectorAll('.app-only').forEach((x) => { x.hidden = !app1; x.querySelectorAll('input').forEach((i) => { i.disabled = !app1; }); }); };
     $('#f').querySelectorAll('input[name=mode]').forEach((r) => r.onchange = syncMode); syncMode();
     $('#f').onsubmit = async (e) => {
       e.preventDefault();
@@ -2276,6 +2290,11 @@ async function viewPeople() {
         return toast(friendly(error));
       }
       let failed = 0;
+      const num = (v) => (v === null || v === '' ? null : Number(String(v).replace(',', '.')));
+      if (viaApp && num(f.get('rate'))) {
+        const r = await sb.rpc('mini_onb_set_rate', { p_collab: data, p_base: num(f.get('rate')), p_overtime: num(f.get('ot')), p_terms: null });
+        if (r.error) { failed++; toast('Valor hora: ' + friendly(r.error)); }
+      }
       for (const d of docs.filter((x) => x.issue)) {
         const r = await addDocument(data, d.type, d.issue, d.expiry, null, d.file);
         if (r.error) { failed++; toast(d.name + ': ' + friendly(r.error)); }
@@ -2748,13 +2767,14 @@ async function readOneCard(sel) {
 // ------------------------------------------------------------------ Acolhimento (the new worker's mandatory steps)
 // A person whose account is not active yet sees only this: the steps in order, nothing of the app behind them.
 // The database is the lock (is_fully_active); this screen only shows the way through it.
-const ONB_STEPS = ['Acolhimento', 'Os meus dados', 'RH confirma', 'Contrato', 'Valor hora'];
-const ONB_AT = { pending_video: 0, pending_data: 1, pending_hr_validation: 2, pending_contract: 3, pending_rate_approval: 4, active: 5 };
+// The order Diogo set on 2026-10-20 (sql/85): the rate agreed by phone comes before the data; HR validates the signed contract.
+const ONB_STEPS = ['Acolhimento', 'Valor hora', 'Os meus dados', 'RH aprova', 'Contrato', 'RH valida'];
+const ONB_AT = { pending_video: 0, pending_rate_approval: 1, pending_data: 2, pending_hr_validation: 3, pending_contract: 4, pending_contract_validation: 5, active: 6 };
 const ytId = (s) => { const m = /(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/))([A-Za-z0-9_-]{11})/.exec(String(s || '')) || /^([A-Za-z0-9_-]{11})$/.exec(String(s || '').trim());
   return m ? m[1] : null; };
 const paras = (t) => String(t || '').split(/\n\s*\n/).map((x) => `<p>${esc(x.trim()).replace(/\n/g, '<br>')}</p>`).join('');
-const KIND_IC = { video: 'play', document: 'doc', bot: 'bot', hunt: 'search' };
-const KIND_TX = { video: 'Vídeo', document: 'Para ler', bot: 'Conversa com o bot', hunt: 'Encontra o perigo' };
+const KIND_IC = { video: 'play', filevideo: 'play', pdf: 'doc', document: 'doc', bot: 'bot', hunt: 'search' };
+const KIND_TX = { video: 'Vídeo', filevideo: 'Vídeo', pdf: 'Documento (PDF)', document: 'Para ler', bot: 'Conversa com o bot', hunt: 'Encontra o perigo' };
 const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.max(0, s) % 60).padStart(2, '0')}`;
 function onbShell(ob, inner) {
   dropRobots();
@@ -2796,14 +2816,19 @@ async function onbItem(x, items) {
   if (error) return toast(friendly(error));
   const ob = state.onb; const n = items.indexOf(x) + 1;
   const end = new Date(openedAt).getTime() + x.min_seconds * 900 - (ob.skew || 0);
+  const fileUrl = x.file ? await induFileUrl(x.file) : null;
+  if (x.file && !fileUrl) return toast('Não foi possível abrir o ficheiro. Tenta outra vez.');
   onbShell(ob, `<div class="card onb-view"><p class="eyebrow" style="margin-top:0">Parte ${n} de ${items.length}</p><h2>${esc(x.title)}</h2>
-    ${x.kind === 'video' ? `<div class="onb-video"><iframe src="https://www.youtube-nocookie.com/embed/${esc(x.video_id)}?rel=0&modestbranding=1&playsinline=1" title="${esc(x.title)}"
+    ${x.kind === 'filevideo' ? `<div class="onb-video onb-vfile"><video controls playsinline preload="metadata" controlslist="nodownload" disablepictureinpicture src="${esc(fileUrl)}"></video></div>`
+      : x.kind === 'pdf' ? `<div class="onb-manual onb-pdf" id="onbman"><p class="muted small" id="pdfst">A abrir o documento…</p></div>`
+      : x.kind === 'video' ? `<div class="onb-video"><iframe src="https://www.youtube-nocookie.com/embed/${esc(x.video_id)}?rel=0&modestbranding=1&playsinline=1" title="${esc(x.title)}"
         allow="encrypted-media; picture-in-picture; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div>`
       : `<div class="onb-manual" id="onbman">${paras(x.body)}</div>`}
     <div class="onb-go"><button class="btn big" id="seen" disabled>${ic('clock')}<span id="seentx">…</span></button>
       <button class="btn ghost wide" id="back">Voltar à lista</button></div></div>`);
   // A manual counts as read when its last line has been on the screen: the box scrolled to its end, and its bottom in view.
-  let read = x.kind === 'video';
+  let read = x.kind === 'video' || x.kind === 'filevideo';
+  if (x.kind === 'pdf') renderPdf(fileUrl, $('#onbman')).then((ok) => { if (!ok && $('#pdfst')) $('#pdfst').textContent = 'Não foi possível mostrar o documento. Volta à lista e tenta outra vez.'; });
   const atEnd = () => { const m = $('#onbman'); if (!m) return false; const r = m.getBoundingClientRect();
     return m.scrollTop + m.clientHeight >= m.scrollHeight - 8 && r.bottom <= window.innerHeight + 4; };
   const tick = () => {
@@ -2824,6 +2849,40 @@ async function onbItem(x, items) {
     if (!x.questions.length) return showOnboarding();
     onbQuiz(x, n, items.length);
   };
+}
+// Induction files (sql/85b) are private: a link that works for one hour, made for this person.
+async function induFileUrl(path) {
+  const { data, error } = await sb.storage.from('acolhimento').createSignedUrl(path, 3600);
+  return error || !data ? null : data.signedUrl;
+}
+// A PDF shown page by page inside the app (pdf.js, loaded only when needed): nothing to download, nothing to open elsewhere.
+async function loadPdfJs() {
+  if (!state.pdfjs) {
+    const m = await import('./vendor/pdfjs-4.10.38.min.mjs');
+    m.GlobalWorkerOptions.workerSrc = new URL('vendor/pdfjs-4.10.38.worker.min.mjs', location.href).href;
+    state.pdfjs = m;
+  }
+  return state.pdfjs;
+}
+async function renderPdf(url, box) {
+  if (!url || !box) return false;
+  try {
+    const pdfjs = await loadPdfJs();
+    const doc = await pdfjs.getDocument({ url, isEvalSupported: false }).promise;
+    if (!box.isConnected) return true;
+    box.innerHTML = `<p class="muted small">${pl(doc.numPages, 'página', 'páginas')}. Desliza até ao fim.</p>`;
+    const w = Math.max(280, box.clientWidth - 8);
+    for (let i = 1; i <= doc.numPages; i++) {
+      const page = await doc.getPage(i); if (!box.isConnected) return true;
+      const v1 = page.getViewport({ scale: 1 }); const scale = (w / v1.width) * Math.min(2, window.devicePixelRatio || 1);
+      const vp = page.getViewport({ scale }); const cv = document.createElement('canvas');
+      cv.width = Math.floor(vp.width); cv.height = Math.floor(vp.height); cv.className = 'pdf-page'; cv.setAttribute('aria-label', `Página ${i}`);
+      box.appendChild(cv);
+      await page.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+    }
+    box.dispatchEvent(new Event('scroll'));
+    return true;
+  } catch (err) { console.warn('pdf', err); return false; }
 }
 function onbQuiz(x, n, total, wrong) {
   onbShell(state.onb, `<form class="card onb-quiz" id="qz"><p class="eyebrow" style="margin-top:0">Parte ${n} de ${total} · perguntas</p><h2>${esc(x.title)}</h2>
@@ -2870,17 +2929,20 @@ async function onbPassport(ob) {
   const { data: me, error } = await sb.rpc('mini_onb_me');
   if (error) return onbShell(ob, `<div class="card onb-wait bad">${ic('warn')}<h2>Sem ligação</h2><p>${esc(friendly(error))}</p><button class="btn ghost" id="onbre">Tentar outra vez</button></div>`), ($('#onbre').onclick = () => showOnboarding());
   state.onbMe = me;
+  if (me.status === 'pending_rate_approval') return me.rates ? onbRates(ob, me) : onbWait(ob, 'O RH vai pôr aqui o teu valor hora',
+    'É o valor que combinaste com a empresa. Quando o RH o puser, recebes um aviso e confirmas aqui.', me);
   if (me.status === 'pending_data') return onbData(ob, me);
   if (me.status === 'pending_hr_validation') return onbWaitHr(ob, me);
   if (me.status === 'pending_contract') return me.contract && me.contract.status === 'issued' ? onbContract(ob, me) : onbWait(ob, 'O RH está a preparar o teu contrato',
-    'Os teus dados já estão confirmados. Quando o contrato chegar, aparece aqui para leres e assinares com o dedo.', me);
-  if (me.status === 'pending_rate_approval') return onbRates(ob, me);
+    'Os teus dados já estão aprovados. Quando o contrato chegar, aparece aqui para leres e assinares com o dedo.', me);
+  if (me.status === 'pending_contract_validation') return onbWait(ob, 'O RH está a validar o teu contrato',
+    'Assinaste o contrato. Falta só o RH confirmar que está tudo certo. Depois a app abre e podes começar.', me);
   return showOnboarding();
 }
 const onbNote = (me) => me.note ? `<div class="onb-note">${ic('voice')}<div><b>Mensagem do RH</b><p>${esc(me.note.text)}</p><small>${esc(new Date(me.note.at).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' }))}</small></div></div>` : '';
 function onbWait(ob, title, text, me) {
   onbShell(ob, `${onbNote(me)}<div class="card onb-wait">${ic('clock')}<h2>${esc(title)}</h2><p>${esc(text)}</p>
-    <p class="small muted">${ic('ok')} Já feito: ${Object.keys(me.steps || {}).length} de 5 passos.</p>
+    <p class="small muted">${ic('ok')} Já feito: ${Math.min(ONB_AT[me.status] ?? 0, ONB_STEPS.length)} de ${ONB_STEPS.length} passos.</p>
     <button class="btn ghost" id="onbre">Atualizar</button></div>`);
   $('#onbre').onclick = () => showOnboarding();
 }
@@ -2898,13 +2960,14 @@ function onbData(ob, me) {
   const f = (name, label, val, extra = '', hint = '') => `<div><label for="o_${name}">${esc(label)}</label><input id="o_${name}" name="${name}" value="${esc(val ?? '')}" ${extra}>${hint ? `<small class="hint">${hint}</small>` : ''}</div>`;
   const s = (name, label, map, cur, empty) => `<div><label for="o_${name}">${esc(label)}</label><select id="o_${name}" name="${name}">${onbOpts(map, cur, empty)}</select></div>`;
   const docs = (me.documents || []).filter((x) => !x.automatic);
-  const need = docs.filter((x) => x.required || x.blocking); const opt = docs.filter((x) => !(x.required || x.blocking));
-  const docRow = (x) => `<div class="onb-doc ${x.doc ? 'has' : (x.required || x.blocking) ? 'miss' : ''}"><span class="oi">${x.doc ? ic('ok') : ic('doc')}</span>
+  // «required» = the company asks it at entry (sql/85, chosen by HR); the others are «se tiveres».
+  const need = docs.filter((x) => x.required); const opt = docs.filter((x) => !x.required);
+  const docRow = (x) => `<div class="onb-doc ${x.doc ? 'has' : x.required ? 'miss' : ''}"><span class="oi">${x.doc ? ic('ok') : ic('doc')}</span>
       <span class="grow"><b>${esc(x.name)}</b><small>${x.doc ? (x.doc.verified ? 'confirmado pelo RH' : 'enviado, o RH vai ver') + (x.doc.expiry ? ' · válido até ' + esc(fmtDate(x.doc.expiry)) : '')
-        : (x.required || x.blocking) ? 'obrigatório para entrar em obra' : 'se tiveres'}</small></span>
+        : x.required ? 'obrigatório' : x.blocking ? 'se já tiveres (é preciso antes da 1.ª obra)' : 'se tiveres'}</small></span>
       <button type="button" class="btn small ${x.doc ? 'ghost' : ''}" data-doc="${esc(x.type_id)}">${x.doc ? 'Trocar' : ic('camera') + 'Enviar'}</button></div>`;
   onbShell(ob, `${onbNote(me)}<form class="onb-form" id="of" novalidate>
-    <div class="card"><p class="eyebrow" style="margin-top:0">Passo 2 · os teus dados</p><h2>A tua ficha</h2>
+    <div class="card"><p class="eyebrow" style="margin-top:0">Passo 3 · os teus dados</p><h2>A tua ficha</h2>
       <p class="small muted">Só o RH vê estes dados. O NISS e o IBAN ficam fechados à chave na base de dados: nem o RH os vê inteiros no ecrã.</p>
       <div class="onb-meter"><span id="om-t">…</span><div class="prog"><i id="om" style="width:0"></i></div></div></div>
     <div class="card"><h3>${ic('user')}Identificação</h3>
@@ -2926,7 +2989,7 @@ function onbData(ob, me) {
       <div class="row">${s('size_top', 'Camisola *', SIZES_TOP, d.size_top)}${s('size_bottom', 'Calça', SIZES_BOTTOM, d.size_bottom)}${s('size_shoes', 'Botas (nº) *', SIZES_SHOES, d.size_shoes)}${s('size_gloves', 'Luvas', GLOVES, d.size_gloves)}</div></div>
     <div class="card"><h3>${ic('doc')}Os teus documentos</h3><p class="small muted">Tira uma foto nítida, com o documento todo à vista, ou envia o PDF.</p>
       ${need.map(docRow).join('') || '<p class="small muted">A empresa não pede documentos obrigatórios.</p>'}
-      ${opt.length ? `<details class="fold"><summary>Outros (formações, cartas)</summary><div>${opt.map(docRow).join('')}</div></details>` : ''}</div>
+      ${opt.length ? `<details class="fold"><summary>Outros documentos, se tiveres</summary><div>${opt.map(docRow).join('')}</div></details>` : ''}</div>
     <div class="onb-go sticky"><button type="button" class="btn ghost" id="osave">Guardar</button>
       <button class="btn big" id="osend">${sending ? 'Enviar ao RH' : 'Guardar correções'}</button></div></form>`);
   const form = $('#of');
@@ -2993,7 +3056,7 @@ function onbData(ob, me) {
 // Step 4: read the contract and the internal rules to the end, write the name, sign with the finger.
 function onbContract(ob, me) {
   const k = me.contract; const r = me.rules;
-  onbShell(ob, `${onbNote(me)}<div class="card onb-view"><p class="eyebrow" style="margin-top:0">Passo 4 · contrato</p><h2>Lê o teu contrato</h2>
+  onbShell(ob, `${onbNote(me)}<div class="card onb-view"><p class="eyebrow" style="margin-top:0">Passo 5 · contrato</p><h2>Lê o teu contrato</h2>
       <div class="onb-facts"><div><span>Tipo</span><b>${esc(CONTRACT_TYPES[k.type] || k.type || '—')}</b></div><div><span>Começa</span><b>${esc(fmtDate(k.start))}</b></div>
         ${k.end ? `<div><span>Termina</span><b>${esc(fmtDate(k.end))}</b></div>` : ''}<div><span>Horas/semana</span><b>${esc(String(k.weekly_hours ?? '—'))}</b></div>
         <div><span>Função</span><b>${esc(k.job_title || '—')}</b></div></div>
@@ -3056,24 +3119,21 @@ function sigPad(cv) {
     },
   };
 }
-// Step 5: the pay terms, as numbers, before the first day.
+// Step 2: the hourly rate agreed by phone, confirmed before anything else; it goes into the contract as it is.
 function onbRates(ob, me) {
   const r = me.rates || {}; const terms = r.terms && (r.terms.text || (typeof r.terms === 'string' ? r.terms : ''));
-  onbShell(ob, `${onbNote(me)}<form class="card onb-view" id="rf"><p class="eyebrow" style="margin-top:0">Passo 5 · condições</p><h2>O teu valor hora</h2>
+  onbShell(ob, `${onbNote(me)}<form class="card onb-view" id="rf"><p class="eyebrow" style="margin-top:0">Passo 2 · valor hora</p><h2>O teu valor hora</h2>
       <div class="onb-rate"><div><span>Hora normal</span><b>${esc(eur(r.base))}</b></div><div><span>Hora extra</span><b>${esc(eur(r.overtime))}</b></div></div>
       ${terms ? `<p><b>Outras condições:</b> ${esc(terms)}</p>` : ''}
-      <p class="small muted">São os valores do contrato que assinaste. As horas que picas com o cartão são as que contam para o recibo; vês todas em «As minhas horas».</p>
+      <p class="small muted">É o valor combinado contigo. Fica escrito no teu contrato. As horas que picas com o cartão são as que contam para o recibo.</p>
       <label class="check"><input type="checkbox" name="ok" required> Confirmo que estes são os valores combinados comigo.</label>
-      <button class="btn big" id="rgo">Aceitar e começar</button>
+      <button class="btn big" id="rgo">Aceitar e continuar</button>
       <p class="small muted">Se os valores não forem os combinados, não aceites: fala com o RH.</p></form>`);
   $('#rf').onsubmit = async (e) => {
     e.preventDefault(); const b = $('#rgo'); b.disabled = true;
     const { error: ae } = await sb.rpc('mini_onb_accept_rates'); b.disabled = false;
     if (ae) return toast(friendly(ae));
-    onbShell(ob, `<div class="card onb-wait onb-done">${ic('ok')}<h2>Bem-vindo à equipa!</h2>
-      <p>Está tudo feito. Falta só o RH dar-te o cartão pessoal: com ele picas a entrada e a saída na obra.</p>
-      <button class="btn big" id="go">Entrar na app</button></div>`);
-    $('#go').onclick = () => showOnboarding();
+    toast('Valor hora aceite. Agora os teus dados.'); showOnboarding();
   };
 }
 // «O meu contrato» (a tile in «Eu»): what the person signed and accepted, any time after.
@@ -3099,16 +3159,21 @@ async function loadOnbCard(id) {
   if (!box.isConnected || error || !p) return;
   const k = p.contract; const st = p.status;
   if (st === 'active' && !(k && k.status === 'signed')) return;
-  const ST = ['safety_videos', 'personal_data', 'hr_validation', 'contract_signed', 'rate_accepted'];
-  const STT = ['Acolhimento', 'Dados e documentos', 'RH confirmou', 'Contrato assinado', 'Valor hora aceite'];
+  const ST = ['safety_videos', 'rate_accepted', 'personal_data', 'hr_validation', 'contract_signed', 'contract_validated'];
+  const STT = ['Acolhimento', 'Valor hora aceite', 'Dados e documentos', 'RH aprovou', 'Contrato assinado', 'RH validou o contrato'];
   const docs = (p.documents || []).filter((x) => !x.automatic && x.doc);
   const toCheck = docs.filter((x) => !x.doc.verified);
-  const missing = (p.documents || []).filter((x) => !x.automatic && (x.required || x.blocking) && !x.doc);
+  const missing = (p.documents || []).filter((x) => !x.automatic && x.required && !x.doc);
+  const rateOpen = !p.accepted && (st === 'pending_video' || st === 'pending_rate_approval');
   const dd = p.data;
   box.innerHTML = `<div class="card onb-hr"><div class="sec-h" style="margin-top:0"><h2>Entrada na empresa</h2>${st === 'active' ? chip('ok', 'concluída', 'ok') : chip('warn', ONB_LABEL[st] || st, 'clock')}</div>
     <ol class="onb-tl">${ST.map((s, i) => { const x = p.steps[s]; return `<li class="${x ? 'done' : ''}"><span>${x ? ic('ok') : i + 1}</span><b>${STT[i]}</b>
       <small>${x ? esc(new Date(x.at).toLocaleDateString('pt-PT')) + (x.paper ? ' · ' + chip('warn', 'verificado em papel') : ' · na app') : ''}</small></li>`; }).join('')}</ol>
-    ${st === 'pending_data' ? `<p class="small muted">${ic('clock')} A pessoa está a preencher a ficha no telemóvel. Quando enviar, aparece aqui para confirmares.</p>` : ''}
+    ${rateOpen ? `<div class="onb-rate-hr"><h3>Valor hora</h3>${p.rates && p.rates.base ? `<p class="small">Hora normal ${esc(eur(p.rates.base))} · extra ${esc(eur(p.rates.overtime))} · ${chip('warn', 'a pessoa ainda não aceitou', 'clock')}</p>`
+      : `<p class="small">${chip('warn', 'falta indicar', 'warn')} A pessoa confirma este valor logo a seguir ao acolhimento, antes de preencher a ficha.</p>`}
+      <div class="onb-go"><button class="btn ${p.rates && p.rates.base ? 'ghost' : ''}" id="orate">${ic('calc')}${p.rates && p.rates.base ? 'Mudar o valor hora' : 'Indicar o valor hora combinado'}</button></div></div>` : ''}
+    ${p.accepted ? `<p class="small">Valor hora aceite: ${esc(eur(p.accepted.base))} · extra ${esc(eur(p.accepted.overtime))} · ${chip('ok', 'aceite em ' + new Date(p.accepted.at).toLocaleDateString('pt-PT'), 'ok')}</p>` : ''}
+    ${st === 'pending_data' ? `<p class="small muted">${ic('clock')} A pessoa está a preencher a ficha no telemóvel. Quando enviar, aparece aqui para aprovares.</p>` : ''}
     ${dd && st !== 'pending_video' ? `<details class="fold" ${st === 'pending_hr_validation' ? 'open' : ''}><summary>Dados que a pessoa preencheu</summary><div><dl class="kv">
       ${[['Nascimento', dd.birth_date && fmtDate(dd.birth_date)], ['Nacionalidade', COUNTRIES[dd.nationality] || dd.nationality], ['Documento', [ID_TYPES[dd.id_type], dd.id_number].filter(Boolean).join(' nº ')],
         ['Válido até', dd.id_expiry && fmtDate(dd.id_expiry)], ['Morada', [dd.address, [dd.postal_code, dd.locality].filter(Boolean).join(' ')].filter(Boolean).join(', ')],
@@ -3122,15 +3187,17 @@ async function loadOnbCard(id) {
       ${x.doc.verified ? '' : `<button class="btn small" data-verify="${esc(x.doc.id)}">Confirmar</button>`}</div>`).join('')}` : ''}
     ${missing.length && st !== 'pending_video' ? `<p class="small">${chip('bad', 'falta', 'x')} ${missing.map((x) => esc(x.name)).join(', ')}</p>` : ''}
     ${st === 'pending_hr_validation' ? `<div class="onb-go"><button class="btn ghost" id="onote">Pedir uma correção</button>
-      <button class="btn" id="oval" ${toCheck.length ? 'disabled' : ''}>Dados certos: confirmar</button></div>
+      <button class="btn" id="oval" ${toCheck.length ? 'disabled' : ''}>Dados certos: aprovar</button></div>
       ${toCheck.length ? `<p class="small muted">Confirma primeiro ${pl(toCheck.length, 'documento', 'documentos')}.</p>` : ''}` : ''}
     ${st === 'pending_contract' && !(k && k.status === 'issued') ? `<div class="onb-go"><button class="btn big" id="oissue">${ic('doc')}Preparar o contrato</button></div>` : ''}
     ${k ? `<h3>Contrato</h3><p class="small">${esc(CONTRACT_TYPES[k.type] || '')} · início ${esc(fmtDate(k.start))}${k.end ? ' · fim ' + esc(fmtDate(k.end)) : ''} · ${esc(String(k.weekly_hours))} h/semana · ${esc(k.job_title || '')}
       · ${k.status === 'signed' ? chip('ok', 'assinado em ' + new Date(k.signed_at).toLocaleDateString('pt-PT'), 'ok') : chip('warn', 'à espera da assinatura', 'clock')}</p>
-      ${p.rates && p.rates.base ? `<p class="small">Valor hora ${esc(eur(p.rates.base))} · extra ${esc(eur(p.rates.overtime))}${p.accepted ? ' · ' + chip('ok', 'aceite', 'ok') : ''}</p>` : ''}
+      ${k.hr_checked_at ? `<p class="small">${chip('ok', 'validado pelo RH em ' + new Date(k.hr_checked_at).toLocaleDateString('pt-PT'), 'ok')}</p>` : ''}
       <details class="fold"><summary>Ler o contrato</summary><div class="onb-paper">${paras(k.body)}</div>
         ${k.signature_svg ? `<p class="small muted">Assinado por ${esc(k.signed_name)}:</p><img class="sig-img" alt="Assinatura" src="data:image/svg+xml;utf8,${encodeURIComponent(k.signature_svg)}">` : ''}
         <p class="small muted">Impressão digital do texto: <code class="sha">${esc(k.sha256)}</code></p></div></details>` : ''}
+    ${st === 'pending_contract_validation' ? `<p class="small">${ic('doc')} Abre «Ler o contrato» e confirma a assinatura e os termos. Se estiver certo, a app abre para a pessoa.</p>
+      <div class="onb-go"><button class="btn ghost" id="okno">Recusar e refazer</button><button class="btn" id="okyes">${ic('ok')}Contrato certo: validar</button></div>` : ''}
     ${p.notes && p.notes.length ? `<details class="fold"><summary>Mensagens à pessoa (${p.notes.length})</summary><div>${p.notes.map((n) => `<p class="small"><b>${esc(new Date(n.at).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' }))}</b> ${esc(n.text)}</p>`).join('')}</div></details>` : ''}</div>`;
   box.querySelectorAll('[data-verify]').forEach((b) => b.onclick = async () => {
     b.disabled = true; const { error: e } = await sb.rpc('mini_onb_verify_document', { p_doc: b.dataset.verify });
@@ -3151,19 +3218,42 @@ async function loadOnbCard(id) {
     b.disabled = false; if (e) return toast(friendly(e)); toast('Dados confirmados. Agora prepara o contrato.'); loadOnbCard(id);
   };
   if ($('#oissue')) $('#oissue').onclick = () => onbIssue(id, p);
+  if ($('#orate')) $('#orate').onclick = () => onbSetRate(id, p);
+  if ($('#okyes')) $('#okyes').onclick = async () => {
+    const b = $('#okyes'); b.disabled = true; const { error: e } = await sb.rpc('mini_onb_validate_contract', { p_collab: id, p_ok: true, p_note: null });
+    b.disabled = false; if (e) return toast(friendly(e)); toast('Contrato validado. A app já abre para a pessoa. Falta dar-lhe o cartão.'); loadOnbCard(id);
+  };
+  if ($('#okno')) $('#okno').onclick = async () => {
+    const fd = await askSheet('Recusar o contrato assinado', `<label>O que está errado? *</label><textarea name="n" required minlength="5" maxlength="1000" rows="3" placeholder="ex.: A data de início está errada."></textarea>
+      <p class="small muted">O contrato assinado fica guardado como prova, marcado como recusado. A pessoa vê a mensagem e tu preparas um contrato novo.</p>`, 'Recusar');
+    if (!fd) return; const { error: e } = await sb.rpc('mini_onb_validate_contract', { p_collab: id, p_ok: false, p_note: fd.get('n') });
+    if (e) return toast(friendly(e)); toast('Contrato recusado. Prepara o novo.'); loadOnbCard(id);
+  };
+}
+// HR writes the rate agreed by phone (step 2); the person confirms it in the app before filling in their data.
+async function onbSetRate(id, p) {
+  const r = p.rates || {}; const t = r.terms && (r.terms.text || '');
+  const fd = await askSheet('Valor hora de ' + p.name, `<div class="row"><div><label>Valor hora (€) *</label><input name="base" type="number" min="0.01" step="0.01" inputmode="decimal" required value="${esc(r.base ?? '')}"></div>
+    <div><label>Hora extra (€)</label><input name="ot" type="number" min="0" step="0.01" inputmode="decimal" placeholder="vazio = +50%" value="${esc(r.overtime ?? '')}"></div></div>
+    <label>Outras condições</label><textarea name="terms" rows="2" maxlength="1000" placeholder="ex.: Ajudas de custo segundo a obra; alojamento pago pela empresa.">${esc(t || '')}</textarea>
+    <p class="small muted">Escreve o que combinaste por telefone. A pessoa vê e aceita na app; depois vai tal e qual para o contrato.</p>`, 'Guardar');
+  if (!fd) return;
+  const num = (v) => (v === null || v === '' ? null : Number(String(v).replace(',', '.')));
+  const { error: e } = await sb.rpc('mini_onb_set_rate', { p_collab: id, p_base: num(fd.get('base')), p_overtime: num(fd.get('ot')), p_terms: fd.get('terms') || null });
+  if (e) { toast(friendly(e)); return onbSetRate(id, p); }
+  toast('Valor hora guardado. A pessoa confirma na app.'); loadOnbCard(id);
 }
 async function onbIssue(id, p) {
   const fd = await askSheet('Contrato de ' + p.name, `<label>Tipo de contrato *</label><select name="type" required>${onbOpts(CONTRACT_TYPES, 'fixed_term')}</select>
     <div class="row"><div><label>Começa *</label><input name="start" type="date" required min="${isoDay(new Date())}"></div><div><label>Termina (a termo)</label><input name="end" type="date"></div></div>
     <div class="row"><div><label>Função *</label><input name="job" required maxlength="120" value="${esc(p.job_title || '')}" placeholder="ex.: Serralheiro"></div><div><label>Horas por semana *</label><input name="hours" type="number" min="1" max="60" step="0.5" value="40" required></div></div>
     <label>Local de trabalho *</label><input name="loc" required maxlength="200" placeholder="ex.: Sines e obras da empresa">
-    <div class="row"><div><label>Valor hora (€) *</label><input name="base" type="number" min="0" step="0.01" inputmode="decimal" required></div><div><label>Hora extra (€)</label><input name="ot" type="number" min="0" step="0.01" inputmode="decimal" placeholder="vazio = +50%"></div></div>
-    <label>Outras condições</label><textarea name="terms" rows="2" maxlength="1000" placeholder="ex.: Ajudas de custo segundo a obra; alojamento pago pela empresa."></textarea>
-    <p class="small muted">O texto vem do modelo da empresa (Secretariado › Contrato e regulamento). A pessoa recebe-o no telemóvel, lê, assina com o dedo e confirma o valor hora.</p>`, 'Enviar para assinar');
+    <p class="small">Valor hora que a pessoa aceitou: <b>${esc(eur(p.accepted && p.accepted.base))}</b> · extra <b>${esc(eur(p.accepted && p.accepted.overtime))}</b>. Vai assim para o contrato.</p>
+    <p class="small muted">O texto vem do modelo da empresa (Secretariado › Contrato e regulamento). A pessoa recebe-o no telemóvel, lê e assina com o dedo. Depois validas tu o contrato assinado.</p>`, 'Enviar para assinar');
   if (!fd) return;
   const num = (v) => (v === null || v === '' ? null : Number(String(v).replace(',', '.')));
   const { error: e } = await sb.rpc('mini_onb_issue_contract', { p_collab: id, p_type: fd.get('type'), p_start: fd.get('start'), p_end: fd.get('end') || null,
-    p_weekly_hours: num(fd.get('hours')), p_location: fd.get('loc'), p_job_title: fd.get('job'), p_base: num(fd.get('base')), p_overtime: num(fd.get('ot')), p_terms: fd.get('terms') || null });
+    p_weekly_hours: num(fd.get('hours')), p_location: fd.get('loc'), p_job_title: fd.get('job'), p_base: null, p_overtime: null, p_terms: null });
   if (e) { toast(friendly(e)); return onbIssue(id, p); }
   toast('Contrato enviado. A pessoa já o vê no telemóvel.'); loadOnbCard(id);
 }
@@ -3196,9 +3286,24 @@ async function viewInduction() {
   if (!can('acolhimento.gerir')) return go('trabalhadores');
   app.innerHTML = `<div class="ph"><div><p class="ph-k">Pessoas</p><h1>Acolhimento</h1></div><button class="btn" id="addi">+ Nova parte</button></div>
     <p class="muted lead">O que cada pessoa nova ouve, vê e lê no telemóvel antes de começar. Mudar uma conversa, um vídeo, um texto ou as perguntas cria uma versão nova; a prova diz sempre que versão cada pessoa fez.</p>
-    <div id="ibot"></div><div class="ind-grid"><div id="ilist">${skel(3)}</div><div id="iboard"></div></div>`;
+    <div id="ibot"></div><div class="ind-grid"><div id="ilist">${skel(3)}</div><div><div id="iboard"></div><div id="idocs"></div></div></div>`;
   $('#addi').onclick = () => editInduction(null);
-  loadBotCard(); loadInduction(); loadOnbBoard('#iboard');
+  loadBotCard(); loadInduction(); loadOnbBoard('#iboard'); loadEntryDocs();
+}
+// Which documents a new person must send at entry: each company chooses (sql/85). Default: CC/BI and IBAN proof.
+const ENTRY_ASK = { required: 'Obrigatório', optional: 'Se tiver', no: 'Não pedir' };
+async function loadEntryDocs() {
+  const el = $('#idocs'); if (!el) return;
+  const { data, error } = await sb.rpc('mini_onb_doc_settings');
+  if (!el.isConnected || error) return;
+  el.innerHTML = `<div class="card"><div class="sec-h" style="margin-top:0"><h2>Documentos pedidos na entrada</h2></div>
+    <p class="small muted">A pessoa só envia a ficha ao RH com os obrigatórios. Os «se tiver» aparecem à parte.</p>
+    ${data.map((t) => `<div class="entry-doc"><span class="grow"><b>${esc(t.name)}</b>${t.blocking ? '<small>trava a entrada em obra se faltar ou caducar</small>' : ''}</span>
+      <select data-type="${esc(t.id)}" aria-label="${esc(t.name)}">${Object.entries(ENTRY_ASK).map(([k, v]) => `<option value="${k}" ${t.onboarding === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>`).join('')}</div>`;
+  el.querySelectorAll('select[data-type]').forEach((s) => s.onchange = async () => {
+    s.disabled = true; const { error: e } = await sb.rpc('mini_onb_doc_set', { p_type: s.dataset.type, p_mode: s.value }); s.disabled = false;
+    if (e) { toast(friendly(e)); return loadEntryDocs(); } toast('Guardado.');
+  });
 }
 async function loadInduction() {
   const el = $('#ilist'); if (!el) return;
@@ -3220,15 +3325,15 @@ async function loadInduction() {
   if ($('#tpl')) $('#tpl').onclick = useInductionTemplate;
   el.querySelectorAll('[data-id]').forEach((b) => b.onclick = () => editInduction(data.find((x) => x.id === b.dataset.id)));
 }
-const ONB_LABEL = { pending_video: 'Passo 1 · acolhimento', pending_data: 'Passo 2 · a preencher a ficha', pending_hr_validation: 'Passo 3 · o RH tem de confirmar',
-  pending_contract: 'Passo 4 · contrato', pending_rate_approval: 'Passo 5 · valor hora' };
+const ONB_LABEL = { pending_video: 'Passo 1 · acolhimento', pending_rate_approval: 'Passo 2 · valor hora', pending_data: 'Passo 3 · a preencher a ficha',
+  pending_hr_validation: 'Passo 4 · o RH tem de aprovar', pending_contract: 'Passo 5 · contrato', pending_contract_validation: 'Passo 6 · o RH tem de validar o contrato' };
 async function loadOnbBoard(sel, onlyIfAny) {
   const el = $(sel); if (!el) return;
   const { data, error } = await sb.rpc('mini_onboarding_board');
   if (!el.isConnected || error || (onlyIfAny && !data.length)) return;
   el.innerHTML = `<div class="card"><div class="sec-h" style="margin-top:0"><h2>Novas entradas</h2>${data.length ? `<span class="count">${data.length}</span>` : ''}</div>
     ${data.length ? data.map((p) => `<button class="onb-row" data-id="${esc(p.id)}">${avatar(p.name)}
-      <span class="grow"><b>${esc(p.name)}</b><small>${esc(ONB_LABEL[p.status] || p.status)}${p.status === 'pending_video' && p.items ? ` · ${p.passed}/${p.items} partes` : ''}${p.docs_to_check ? ` · ${pl(p.docs_to_check, 'documento', 'documentos')} por ver` : ''}${p.status === 'pending_contract' && p.contract === 'issued' ? ' · à espera da assinatura' : ''}${p.has_login ? '' : ' · ainda sem conta na app'}</small></span>
+      <span class="grow"><b>${esc(p.name)}</b><small>${esc(ONB_LABEL[p.status] || p.status)}${p.status === 'pending_video' && p.items ? ` · ${p.passed}/${p.items} partes` : ''}${p.docs_to_check ? ` · ${pl(p.docs_to_check, 'documento', 'documentos')} por ver` : ''}${p.status === 'pending_contract' && p.contract === 'issued' ? ' · à espera da assinatura' : ''}${!p.rate_set && (p.status === 'pending_video' || p.status === 'pending_rate_approval') ? ' · falta o valor hora' : ''}${p.has_login ? '' : ' · ainda sem conta na app'}</small></span>
       ${p.waiting_hr ? chip('warn', 'é contigo', 'warn') : ''}
       ${p.status === 'pending_video' && p.items ? `<span class="mini-bar"><i style="width:${Math.round(100 * p.passed / p.items)}%"></i></span>` : ''}</button>`).join('')
       : `<p class="small muted">${ic('ok')} Ninguém a meio do acolhimento. Ao registar uma pessoa nova em Pessoas, escolhe «Faz o acolhimento na app».</p>`}</div>`;
@@ -3245,12 +3350,16 @@ async function editInduction(x) {
     <div class="chips reasons" role="radiogroup"><label class="chip"><input type="radio" name="kind" value="bot" ${!x || x.kind === 'bot' ? 'checked' : ''}>Conversa com o bot</label>
       <label class="chip"><input type="radio" name="kind" value="video" ${x && x.kind === 'video' ? 'checked' : ''}>Vídeo do YouTube</label>
       <label class="chip"><input type="radio" name="kind" value="document" ${x && x.kind === 'document' ? 'checked' : ''}>Texto para ler</label>
+      <label class="chip"><input type="radio" name="kind" value="pdf" ${x && x.kind === 'pdf' ? 'checked' : ''}>PDF</label>
+      <label class="chip"><input type="radio" name="kind" value="filevideo" ${x && x.kind === 'filevideo' ? 'checked' : ''}>Vídeo (ficheiro)</label>
       ${scenes.length ? `<label class="chip"><input type="radio" name="kind" value="hunt" ${x && x.kind === 'hunt' ? 'checked' : ''}>Encontra o perigo</label>` : ''}</div>
     <div id="kh" hidden><label for="isc">Imagem</label><select id="isc" name="scene">${scenes.map((c) => `<option value="${esc(c.key)}" ${x && x.scene === c.key ? 'selected' : ''}>${esc(c.title)} · ${c.hazards} perigos</option>`).join('')}</select>
       <img class="hunt-prev" id="iscp" alt="" src="scenes/${esc(x && x.scene ? x.scene : (scenes[0] || {}).key)}.svg">
       <p class="small muted">A pessoa toca em cada perigo. Onde estão fica só no servidor; tocar ao calhas não passa (10 enganos e começa de novo).</p></div>
     <div id="kv"><label for="iv">Link do YouTube</label><input id="iv" name="video" value="${esc(x && x.video_id ? 'https://youtu.be/' + x.video_id : '')}" placeholder="https://youtu.be/…">
       <p class="small muted">Põe o vídeo no YouTube como «Não listado»: só quem tem o link o vê.</p></div>
+    <div id="kf" hidden><label for="ifl" id="ifll">Ficheiro</label><input id="ifl" name="file" type="file">
+      <p class="small muted" id="iflh"></p></div>
     <div id="kd" hidden><label for="ib" id="ibl">Texto (uma linha em branco separa parágrafos)</label>
       <p class="small muted" id="ibh" hidden>Uma linha em branco separa cada fala do bot. Frases curtas, como se falasses com a pessoa. Toca num sinal para o pôr na fala:</p>
       <div class="picto-pick" id="ibp" hidden>${Object.entries(PICTO).map(([k, v]) => `<button type="button" class="chip" data-tag="${k}" title="Põe [${k}] no texto">${esc(v[0])}</button>`).join('')}</div>
@@ -3260,12 +3369,22 @@ async function editInduction(x) {
     <h3>Perguntas (marca a resposta certa)</h3>${[0, 1, 2].map((i) => qrow(i, q[i])).join('')}
     <label class="check inline"><input type="checkbox" name="ext" ${!x || x.for_external ? 'checked' : ''}> Também para trabalhadores de subempreiteiros</label>
     ${x ? `<label class="check inline"><input type="checkbox" name="active" ${x.is_active ? 'checked' : ''}> Ativo (desliga para deixar de mostrar a quem entra)</label>` : ''}`, 'Guardar', (dlg) => {
-    const sync = () => { const v = dlg.querySelector('input[name=kind]:checked').value; dlg.querySelector('#kv').hidden = v !== 'video'; dlg.querySelector('#kd').hidden = v === 'video';
+    const sync = () => { const v = dlg.querySelector('input[name=kind]:checked').value; const isFile = v === 'pdf' || v === 'filevideo';
+      dlg.querySelector('#kv').hidden = v !== 'video'; dlg.querySelector('#kd').hidden = v === 'video' || isFile; dlg.querySelector('#kf').hidden = !isFile;
+      const fi = dlg.querySelector('#ifl'); fi.accept = v === 'pdf' ? 'application/pdf' : 'video/mp4,video/webm';
+      dlg.querySelector('#ifll').textContent = v === 'pdf' ? 'PDF' : 'Vídeo (MP4)';
+      dlg.querySelector('#iflh').textContent = (x && x.file && x.kind === v ? 'Já tem ficheiro. Escolhe outro só se o quiseres trocar (fica uma versão nova). ' : '')
+        + (v === 'pdf' ? 'Até 50 MB. Abre dentro da app, página a página: a pessoa não descarrega nada.' : 'Até 50 MB, em MP4. Grava em 720p: poupa os dados móveis de quem vê.');
       dlg.querySelector('#km').hidden = v === 'bot' || v === 'hunt'; dlg.querySelector('#ibp').hidden = dlg.querySelector('#ibh').hidden = v !== 'bot';
       dlg.querySelector('#kh').hidden = v !== 'hunt';
       dlg.querySelector('#ibl').textContent = v === 'bot' ? 'O que o bot diz' : v === 'hunt' ? 'O que o bot diz antes de começar' : 'Texto (uma linha em branco separa parágrafos)'; };
     const sc = dlg.querySelector('#isc'); if (sc) sc.onchange = () => { dlg.querySelector('#iscp').src = `scenes/${sc.value}.svg`; };
     dlg.querySelectorAll('input[name=kind]').forEach((r) => r.onchange = sync); sync();
+    // a video file: its length becomes the minimum time
+    dlg.querySelector('#ifl').onchange = (ev) => { const f = ev.target.files[0]; if (!f || !/^video\//.test(f.type)) return;
+      const v = document.createElement('video'); v.preload = 'metadata'; const u = URL.createObjectURL(f);
+      v.onloadedmetadata = () => { if (isFinite(v.duration) && v.duration > 0) dlg.querySelector('#im').value = Math.max(0.5, Math.ceil(v.duration / 30) / 2); URL.revokeObjectURL(u); };
+      v.src = u; };
     const ta = dlg.querySelector('#ib');
     dlg.querySelectorAll('[data-tag]').forEach((b) => b.onclick = () => { const at = ta.selectionStart ?? ta.value.length; const t = `[${b.dataset.tag}] `;
       ta.value = ta.value.slice(0, at) + t + ta.value.slice(ta.selectionEnd ?? at); ta.focus(); ta.selectionStart = ta.selectionEnd = at + t.length; });
@@ -3282,7 +3401,29 @@ async function editInduction(x) {
   if (questions.some((y) => y.options.length < 2)) return toast('Cada pergunta precisa de pelo menos 2 respostas.');
   const vid = kind === 'video' ? ytId(fd.get('video')) : kind === 'hunt' ? String(fd.get('scene') || '') : null;
   if (kind === 'video' && !vid) return toast('Esse link não é de um vídeo do YouTube.');
-  if (kind !== 'video' && String(fd.get('body') || '').trim().length < 20) return toast(kind === 'bot' || kind === 'hunt' ? 'Escreve o que o bot diz.' : 'Escreve o texto.');
+  const isFile = kind === 'pdf' || kind === 'filevideo';
+  if (!isFile && kind !== 'video' && String(fd.get('body') || '').trim().length < 20) return toast(kind === 'bot' || kind === 'hunt' ? 'Escreve o que o bot diz.' : 'Escreve o texto.');
+  if (isFile) {
+    const file = fd.get('file'); const has = file && file.size;
+    const keep = !has && x && x.file && x.kind === kind;
+    if (!has && !keep) return toast(kind === 'pdf' ? 'Escolhe o PDF.' : 'Escolhe o vídeo.');
+    let path = keep ? x.file : null; let sha = keep ? x.file_sha256 : null;
+    if (has) {
+      const ext = { 'application/pdf': 'pdf', 'video/mp4': 'mp4', 'video/webm': 'webm' }[file.type];
+      if (!ext || (kind === 'pdf') !== (ext === 'pdf')) return toast(kind === 'pdf' ? 'Esse ficheiro não é um PDF.' : 'O vídeo tem de ser MP4.');
+      if (file.size > 50 * 1024 * 1024) return toast('O ficheiro passa dos 50 MB. Reduz o tamanho (vídeo em 720p) e tenta outra vez.');
+      toast('A enviar o ficheiro…');
+      path = `${state.me.tenant_id}/${uuid()}.${ext}`;
+      const up = await sb.storage.from('acolhimento').upload(path, file, { contentType: file.type, upsert: false });
+      if (up.error) return toast(friendly(up.error));
+      sha = await sha256Hex(file);
+    }
+    const { data: fid, error: fe } = await sb.rpc('mini_induction_save_file', { p_id: x ? x.id : null, p_title: String(fd.get('title')).trim(), p_kind: kind,
+      p_file: path, p_sha256: sha, p_min_seconds: Math.round(Number(fd.get('min') || 1) * 60), p_questions: questions, p_position: x ? x.position : null, p_for_external: !!fd.get('ext') });
+    if (fe) return toast(friendly(fe));
+    if (x && !!fd.get('active') !== x.is_active) { const r = await sb.rpc('mini_induction_set_active', { p_id: fid, p_active: !!fd.get('active') }); if (r.error) return toast(friendly(r.error)); }
+    toast('Guardado.'); return loadInduction();
+  }
   const { data: id, error } = await sb.rpc('mini_induction_save', { p_id: x ? x.id : null, p_title: String(fd.get('title')).trim(), p_kind: kind,
     p_video_id: vid, p_body: kind !== 'video' ? String(fd.get('body') || '') : null, p_min_seconds: kind === 'bot' || kind === 'hunt' ? null : Math.round(Number(fd.get('min') || 1) * 60),
     p_questions: questions, p_position: x ? x.position : null, p_for_external: !!fd.get('ext') });
