@@ -727,12 +727,52 @@ async function addDocument(collab, type, issue, expiry, number, file) {
     p_number: number || null, p_file: path, p_sha256: sha });
 }
 // Open a file with a link that only works for 2 minutes.
-async function openDocFile(path, bucket = 'documentos') {
-  const win = window.open('', '_blank');
-  if (win) win.opener = null;
-  const { data, error } = await sb.storage.from(bucket).createSignedUrl(path, 120);
-  if (error || !data) { if (win) win.close(); return toast(friendly(error || 'sem link')); }
-  if (win) win.location = data.signedUrl; else location.href = data.signedUrl;
+// v64: a document opens inside the app (the picture, or the PDF page by page), never in a new tab: in the installed app on
+// Android the new tab opened blank. The person's own files also stay on the phone (cache gn-docs) for sites without signal;
+// they go at sign-out with the rest (forgetPersonal).
+const DOC_CACHE = 'gn-docs'; const MYDOCS_KEY = 'gn.mydocs';
+const docKey = (bucket, path) => new URL(`__doc/${bucket}/${path}`, location.href).href;
+async function docBlob(path, bucket, keep) {
+  let c = null; try { if (keep && window.caches) c = await caches.open(DOC_CACHE); } catch (_) { /* no cache storage */ }
+  try {
+    const { data, error } = await sb.storage.from(bucket).download(path);
+    if (error || !data) throw error || new Error('sem ficheiro');
+    if (c) { try { await c.put(docKey(bucket, path), new Response(data, { headers: { 'content-type': data.type || '' } })); } catch (_) { /* phone full */ } }
+    return { blob: data };
+  } catch (err) {
+    const hit = c && await c.match(docKey(bucket, path));
+    return hit ? { blob: await hit.blob(), cached: true } : { error: err };
+  }
+}
+// Keep a copy of the person's own files without opening them (only the ones not on the phone yet).
+async function keepDocs(paths) {
+  if (!window.caches || !navigator.onLine) return;
+  try { const c = await caches.open(DOC_CACHE);
+    for (const p of paths) if (!(await c.match(docKey('documentos', p)))) await docBlob(p, 'documentos', true);
+  } catch (_) { /* best effort */ }
+}
+async function openDocFile(path, bucket = 'documentos', opts = {}) {
+  const d = document.createElement('dialog'); d.className = 'dlg docview';
+  d.innerHTML = `<div class="docview-top"><b>${esc(opts.title || 'Documento')}</b><span class="grow"></span><button class="btn small ghost" type="button" data-x>Fechar</button></div>
+    <div class="docview-body" id="dvb"><p class="muted small">${ic('clock')} A abrir…</p></div>`;
+  let url = null;
+  d.addEventListener('close', () => { d.remove(); if (url) URL.revokeObjectURL(url); });
+  d.querySelector('[data-x]').onclick = () => d.close();
+  document.body.appendChild(d); d.showModal();
+  const box = d.querySelector('#dvb');
+  const r = await docBlob(path, bucket, !!opts.keep);
+  if (!d.open) return;
+  if (r.error) { box.innerHTML = `<p>${esc(navigator.onLine ? friendly(r.error) : 'Sem rede, e este ficheiro ainda não está guardado no telemóvel. Abre-o uma vez com rede.')}</p>`; return; }
+  const pdf = /pdf/i.test(r.blob.type) || /\.pdf$/i.test(path);
+  url = URL.createObjectURL(r.blob);
+  const name = (opts.title || 'documento').replace(/[^\wÀ-ÿ -]+/g, '').trim() + (pdf ? '.pdf' : '.' + (path.split('.').pop() || 'jpg'));
+  const foot = `${r.cached ? `<p class="small muted">${ic('warn')} Sem rede: cópia guardada no telemóvel.</p>` : ''}
+    <a class="btn ghost wide" href="${url}" download="${esc(name)}">${ic('clip')}Guardar no telemóvel</a>`;
+  if (pdf) {
+    box.innerHTML = '<div class="onb-pdf"></div>' + foot;
+    const ok = await renderPdf({ data: new Uint8Array(await r.blob.arrayBuffer()) }, box.querySelector('.onb-pdf'));
+    if (!ok && d.open) box.querySelector('.onb-pdf').innerHTML = '<p class="small">Não deu para mostrar este PDF aqui. Usa «Guardar no telemóvel».</p>';
+  } else box.innerHTML = `<img class="docview-img" src="${url}" alt="${esc(opts.title || 'Documento')}">` + foot;
 }
 const normUid = (v) => String(v || '').replace(/[\s:\-]/g, '').toUpperCase();
 // Lists show only the end of a card number (C3): the whole number is a key to the gate. Full only where the card is changed.
@@ -786,7 +826,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '63';
+const APP_VERSION = '64';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -902,6 +942,7 @@ async function idleOut() {
 // refused list. The offline queues (taps and muster taps) are never touched: a tap is never lost (C2).
 function forgetPersonal() {
   store(ME_KEY, undefined);
+  store(MYDOCS_KEY, undefined); try { if (window.caches) caches.delete(DOC_CACHE); } catch (_) { /* none */ }
   try { Object.keys(localStorage).filter((k) => k.startsWith('gn.emer.')).forEach((k) => localStorage.removeItem(k)); } catch (_) { /* storage blocked */ }
   const rej = load(REJECTED_KEY, []);
   if (rej.some((x) => x.name)) store(REJECTED_KEY, rej.map((x) => ({ ...x, name: null })));   // kept to be dealt with: «Cartão …1234»
@@ -2869,7 +2910,7 @@ async function renderPdf(url, box) {
   if (!url || !box) return false;
   try {
     const pdfjs = await loadPdfJs();
-    const doc = await pdfjs.getDocument({ url, isEvalSupported: false }).promise;
+    const doc = await pdfjs.getDocument({ ...(typeof url === 'string' ? { url } : url), isEvalSupported: false }).promise;
     if (!box.isConnected) return true;
     box.innerHTML = `<p class="muted small">${pl(doc.numPages, 'página', 'páginas')}. Desliza até ao fim.</p>`;
     const w = Math.max(280, box.clientWidth - 8);
@@ -4463,16 +4504,20 @@ async function loadMyStay() {
 // My documents, with a light each: red (out of date or missing), amber (expiring), green. Read-only: the office adds them.
 async function loadMyDocs() {
   const box = $('#mydocs'); if (!box) return;
-  const { data, error } = await sb.rpc('mini_my_documents');
+  let { data, error } = await sb.rpc('mini_my_documents');
   if (!box.isConnected) return;
-  if (error) { box.innerHTML = `<div class="card">${esc(friendly(error))}</div>`; return; }
+  // v64: the last list stays on the phone, so a site without signal still shows it
+  let old = null;
+  if (error) { old = load(MYDOCS_KEY, null); if (!old || old.who !== (state.me || {}).user_id) { box.innerHTML = `<div class="card">${esc(friendly(error))}</div>`; return; } data = old.data; }
+  else { store(MYDOCS_KEY, { who: (state.me || {}).user_id, at: new Date().toISOString(), data }); keepDocs(data.documents.filter((x) => x.file).map((x) => x.file)); }
   const L = { expired: ['bad', 'Caducado'], missing: ['bad', 'Em falta'], expiring: ['warn', 'Vence em breve'], ok: ['ok', 'Em dia'], optional: ['', 'Não tens'] };
   const line = (x) => { const [k, w] = L[x.state] || ['', x.state];
     const when = x.expires ? (x.days_left < 0 ? `caducou a ${fmtDate(x.expires)}` : x.days_left === 0 ? 'vence hoje' : `válido até ${fmtDate(x.expires)} · faltam ${x.days_left} dia(s)`) : x.state === 'ok' ? 'sem validade' : '';
     return `<div class="me-doc ${k}"><span class="me-dot ${k}"></span><div class="grow"><b>${esc(x.name)}</b>
       <small>${esc(w)}${when ? ' · ' + esc(when) : ''}${x.number ? ' · nº ' + esc(x.number) : ''}</small>
       ${x.blocking && (x.state === 'expired' || x.state === 'missing') ? `<small class="warn-t">${ic('warn')}Sem isto o cartão não abre a obra</small>` : ''}
-      ${x.state !== 'optional' && x.state !== 'missing' && !x.checked ? '<small class="muted">Ainda por confirmar pelo escritório</small>' : ''}</div></div>`; };
+      ${x.state !== 'optional' && x.state !== 'missing' && !x.checked ? '<small class="muted">Ainda por confirmar pelo escritório</small>' : ''}</div>
+      ${x.file ? `<button class="btn small ghost" data-open="${esc(x.file)}" data-t="${esc(x.name)}">${ic('doc')}Ver</button>` : ''}</div>`; };
   const need = data.documents.filter((x) => x.state !== 'optional'); const opt = data.documents.filter((x) => x.state === 'optional');
   const card = data.card || {};
   box.innerHTML = `<div class="card me-docs">${need.map(line).join('') || '<p class="small muted">A empresa ainda não pediu documentos.</p>'}</div>
@@ -4480,6 +4525,8 @@ async function loadMyDocs() {
     <div class="card me-docs"><div class="me-doc ${card.active ? 'ok' : 'bad'}"><span class="me-dot ${card.active ? 'ok' : 'bad'}"></span><div class="grow"><b>O meu cartão</b>
       <small>${card.active ? 'Ativo' + (card.until ? ' até ' + esc(new Date(card.until).toLocaleDateString('pt-PT')) : '') : 'Sem cartão ativo: pede ao escritório'}</small></div></div></div>
     <p class="small muted">Um documento a vencer? Leva o novo ao escritório antes da data: eles juntam-no à tua ficha.</p>`;
+  if (old) box.insertAdjacentHTML('afterbegin', `<div class="card me-offline">${ic('warn')}<span>Sem rede. Mostro o que tinhas a ${esc(new Date(old.at).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }))}.</span></div>`);
+  box.querySelectorAll('[data-open]').forEach((b) => b.onclick = () => openDocFile(b.dataset.open, 'documentos', { keep: true, title: b.dataset.t }));
 }
 // My PPE and workwear: what, size, since when, when to change it. And my sizes.
 async function loadMyKit() {
