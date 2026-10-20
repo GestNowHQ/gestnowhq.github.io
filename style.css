@@ -2090,3 +2090,16 @@ dialog.docview { box-sizing: border-box; overflow-x: hidden; max-height: 96vh; p
 @media (max-width: 560px) { .ov-tiles { grid-template-columns: repeat(2, 1fr); } }
 /* v67: small phones (360 px): the owner's top bar has 5 buttons; keep it inside the screen */
 @media (max-width: 400px) { .top { gap: 2px; padding-left: 12px; padding-right: 6px; } .top .iconbtn, .top .search { width: 40px; height: 40px; padding: 0; } .brand { font-size: var(--t-md); } }
+
+/* v68 · Início da empresa (level 2) */
+.home-back { margin: 0 0 8px; }
+.home-wait { display: grid; gap: 8px; margin-bottom: 8px; }
+.home-w { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 14px 16px; border-radius: var(--r-lg);
+  border: var(--bw) solid var(--line); border-left: 4px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+.home-w:hover { box-shadow: var(--sh-1); } .home-w > .i { color: var(--ink-2); flex: 0 0 auto; }
+.home-w b { display: block; } .home-w small { display: block; color: var(--ink-2); font-size: var(--t-sm); }
+.home-w.warn { border-left-color: var(--warn-fill); } .home-w.bad { border-left-color: var(--bad-fill); } .home-w.info { border-left-color: var(--brand, #4f46e5); }
+.home-wi { width: 40px; height: 40px; border-radius: var(--r-md); background: var(--surface-2); display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.home-w.bad .home-wi { background: var(--bad-bg); color: var(--bad); } .home-w.warn .home-wi { background: var(--warn-bg); color: var(--warn); }
+.home-ok { display: flex; gap: 12px; align-items: center; } .home-ok > .i { color: var(--ok); width: 28px; height: 28px; } .home-ok small { display: block; color: var(--ink-2); }
+.home-st { margin: 0; }

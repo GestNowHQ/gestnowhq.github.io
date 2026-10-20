@@ -826,17 +826,17 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '67';
+const APP_VERSION = '68';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
 // v67 pyramid (Diogo 2026-10-20): the GestNow owner starts on his clients; an admin starts on the dashboard, not on Picar.
 // Picar stays in the menu (group Obra) for the office, and is the encarregado's tool.
 function tabsFor(role) {
-  if (role === 'admin') return isOwner() ? ['clientes', 'painel', 'horas', 'secretariado'] : ['painel', 'horas', 'secretariado', 'obras'];
+  if (role === 'admin') return isOwner() ? ['clientes', 'inicio', 'horas', 'secretariado'] : ['inicio', 'painel', 'horas', 'secretariado'];
   return TABS[role] || TABS.supervisor;
 }
-const MORE_ORDER = ['equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'andaimes', 'processo', 'clientes'];
+const MORE_ORDER = ['inicio', 'equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'andaimes', 'processo', 'clientes'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -853,7 +853,7 @@ const MENU_GROUPS = [
   ['Pessoas', ['trabalhadores', 'acolhimento', 'horas', 'minhas']],
   ['Logística', ['armazem', 'compras', 'frota', 'alojamento', 'viagens']],
   ['Gestão', ['orcamentos', 'qualidade', 'despesas', 'producao']],
-  ['Empresa', ['secretariado', 'clientes', 'processo']],
+  ['Empresa', ['inicio', 'secretariado', 'clientes', 'processo']],
 ];
 // Icons drawn for the menu so no two screens share one (M-3): added to the page's sprite once.
 const ENC_ICONS = {
@@ -1040,6 +1040,7 @@ async function boot() {
   nav.querySelector('[data-view=painel]').hidden = worker || !canSiteDetails();
   nav.querySelector('[data-view=acolhimento]').hidden = worker || !can('acolhimento.gerir');
   nav.querySelector('[data-view=clientes]').hidden = worker || state.offline || !isOwner();
+  nav.querySelector('[data-view=inicio]').hidden = worker || state.offline || !canHome();
   nav.querySelector('[data-view=processo]').hidden = worker || state.offline || !canProcess();
   nav.querySelector('[data-view=orcamentos]').hidden = worker || state.offline || !canEstimates();
   nav.querySelector('[data-view=equipa]').hidden = me.role !== 'supervisor' || !canSiteDetails();
@@ -1478,10 +1479,59 @@ function go(view) {
   nav.querySelector('button[data-more]').classList.toggle('on', !!cur && cur.parentElement.id === 'more');
   window.scrollTo(0, 0);
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
-     ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients,
+     ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients, inicio: viewHome,
      processo: viewProcess, orcamentos: viewEstimates, lmra: viewLmra, emergencia: viewEmergency,
      armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, producao: viewProd, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
   checkEmergencyBar(); encBadges();
+}
+
+// ------------------------------------------------------------------ Início (level 2 of the pyramid, sql/90)
+// The company's home: what waits for someone (each line opens the screen where it is solved), then its sites
+// (each card opens that site's dashboard, level 3). The owner reaches it from «Os meus clientes».
+const canHome = () => can('obras.ver_detalhes');
+async function viewHome() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
+  if (!canHome()) return viewClock();   // code guard as well as the database's
+  app.innerHTML = `<div id="home">${skel(4)}</div>`;
+  const { data, error } = await sb.rpc('mini_company_home');
+  const box = $('#home'); if (!box || !box.isConnected || state.view !== 'inicio') return;
+  if (error) { box.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
+  const n = (v) => Number(v || 0).toLocaleString('pt-PT');
+  const W = data.waiting || {};
+  const items = [
+    ['to_validate', 'clock', 'dia(s) por validar na obra', 'O encarregado valida em Horas.', 'horas', 'warn', can('horas.validar_obra')],
+    ['to_approve', 'ok', 'dia(s) por aprovar', 'Aprovas no Secretariado.', 'secretariado', 'warn', can('horas.aprovar')],
+    ['disputes', 'warn', 'reclamação(ões) de horas', 'Responde no Secretariado.', 'secretariado', 'warn', can('horas.aprovar')],
+    ['docs_expired', 'doc', 'pessoa(s) com documento caducado', 'Não podem entrar na obra até renovar.', 'trabalhadores', 'bad', can('pessoas.ver')],
+    ['docs_expiring', 'doc', 'pessoa(s) com documento a caducar', 'Nos próximos 30 dias.', 'trabalhadores', 'warn', can('pessoas.ver')],
+    ['joining', 'users', 'pessoa(s) a fazer a entrada', 'Contrato, documentos e acolhimento.', 'trabalhadores', 'info', can('pessoas.ver')],
+  ].filter((x) => x[6] && Number(W[x[0]]));
+  const sites = data.sites || [];
+  const inside = sites.reduce((t, s) => t + Number(s.inside_now || 0), 0);
+  const L = { red: ['bad', 'Documento caducado na equipa'], amber: ['warn', 'Dias à espera'], green: ['ok', 'Em dia'] };
+  box.innerHTML = `
+    ${isOwner() ? `<button class="btn ghost small home-back" id="hback">‹ Os meus clientes</button>` : ''}
+    <div class="ph"><div><p class="ph-k">Início${data.test ? ' · empresa de teste' : ''}</p><h1>${esc(data.company || '')}</h1></div></div>
+    <div class="ov-tiles home-tiles"><div><b>${n(sites.length)}</b><span>obra(s) a decorrer</span></div><div><b>${n(inside)}</b><span>na obra agora</span></div>
+      <div><b>${n(data.people)}</b><span>pessoas</span></div><div><b>${n(items.length)}</b><span>assunto(s) à espera</span></div></div>
+    <div class="sec-h"><h2 class="eyebrow">À tua espera</h2></div>
+    ${items.length ? `<div class="home-wait">${items.map(([k, icon, label, help, view, kind]) => `<button class="home-w ${kind}" data-go="${esc(view)}">
+        <span class="home-wi">${ic(icon)}</span><span class="grow"><b>${n(W[k])} ${esc(label)}</b><small>${esc(help)}</small></span>${ic('go')}</button>`).join('')}</div>`
+      : `<div class="card home-ok">${ic('ok')}<div><b>Tudo em dia</b><small>Não há nada à tua espera.</small></div></div>`}
+    <div class="sec-h"><h2 class="eyebrow">Obras (${n(sites.length)})</h2>${can('obras.gerir') ? '<button class="btn ghost small" id="hsites">Todas as obras</button>' : ''}</div>
+    ${sites.length ? `<div class="clients">${sites.map((s) => { const [k, t] = L[s.light] || L.green; return `<article class="card client ov-card ${k}" data-site="${esc(s.id)}" tabindex="0" role="button" aria-label="Abrir ${esc(s.title)}">
+        <div class="cl-top"><span class="ov-light ${k}" aria-hidden="true"></span><div class="grow"><b>${esc(s.title)}</b>
+          <small>${esc([s.client, s.code].filter(Boolean).join(' · '))}</small></div><span class="ov-go" aria-hidden="true">${ic('go')}</span></div>
+        <p class="small ${k === 'ok' ? 'muted' : ''} home-st">${esc(t)}${Number(s.waiting_days) ? ` · ${n(s.waiting_days)} dia(s)` : ''}${Number(s.doc_problems) ? ` · ${n(s.doc_problems)} pessoa(s)` : ''}${s.last_tap ? ` · última picagem ${esc(fmtTime(s.last_tap, siteTz(s.id)))}` : ''}</p>
+        <div class="cl-stats ov-stats"><span><b>${n(s.inside_now)}</b>na obra agora</span><span><b>${n(s.placed)}</b>colocadas</span><span><b>${n(s.waiting_days)}</b>dias à espera</span></div></article>`; }).join('')}</div>`
+      : `<div class="card">${empty('helmet', 'Ainda não há obras a decorrer', can('obras.gerir') ? 'Abre a primeira em Obras.' : 'Quando houver, aparecem aqui.')}</div>`}`;
+  if ($('#hback')) $('#hback').onclick = () => go('clientes');
+  if ($('#hsites')) $('#hsites').onclick = () => go('obras');
+  box.querySelectorAll('[data-go]').forEach((b) => b.onclick = () => go(b.dataset.go));
+  box.querySelectorAll('[data-site]').forEach((c) => {
+    const open = () => { state.panelSite = c.dataset.site; go('painel'); };
+    c.onclick = open; c.onkeydown = (e) => { if (e.key === 'Enter') open(); };
+  });
 }
 
 // ------------------------------------------------------------------ Clientes (the GestNow owner's console, sql/59)
@@ -1497,7 +1547,7 @@ async function viewClients() {
   $('#newc').onclick = newClient;
   loadClients();
 }
-// Level 1 of the pyramid (sql/89): one card per company with a light. Tap = open that company (its dashboard).
+// Level 1 of the pyramid (sql/89): one card per company with a light. Tap = open that company (its Início).
 // Numbers only, never names of people.
 const LIGHT = { red: ['bad', 'Precisa de ti'], amber: ['warn', 'Há coisas à espera'], green: ['ok', 'Tudo em dia'], grey: ['info', 'Sem obras a decorrer'] };
 async function loadClients() {
@@ -1537,10 +1587,10 @@ async function loadClients() {
   });
   const fill = el.querySelector('[data-fill]'); if (fill) fill.onclick = (e) => { e.stopPropagation(); fillDemo(e.currentTarget); };
 }
-// The company this login is in opens straight on its dashboard; another one is entered first (sql/59).
+// The company this login is in opens straight on its home (Início, level 2); another one is entered first (sql/59).
 function openClient(id, card) {
-  if (card.classList.contains('here')) return go('painel');
-  return enterClient(id, card, 'painel');
+  if (card.classList.contains('here')) return go('inicio');
+  return enterClient(id, card, 'inicio');
 }
 async function enterClient(id, btn, then) {
   // Taps still waiting on this phone belong to the company they were made in: send them first.
