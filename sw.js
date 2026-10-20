@@ -2,7 +2,7 @@
 // Only GET requests to this same site are handled. Supabase (data, login, files) is another site: never touched,
 // never cached. Network first, so a new version arrives as soon as there is network; the copy is only a fallback.
 'use strict';
-const CACHE = 'gestnow-mini-v49';
+const CACHE = 'gestnow-mini-v50';
 const SHELL = ['./', 'index.html', 'app.js', 'style.css', 'config.js', 'vendor/supabase-2.117.2.js', 'ui/gnui.js', 'ui/gnui.css', 'vendor/inter-latin-wght.woff2'];
 
 self.addEventListener('install', (e) => {
@@ -29,4 +29,24 @@ self.addEventListener('fetch', (e) => {
     return res;
   }).catch(() => caches.match(req, { ignoreSearch: true })
     .then((hit) => hit || (req.mode === 'navigate' ? caches.match('index.html') : Response.error()))));
+});
+
+// Phone notifications (sql/84). The text never has names; a tap opens the app on the bell (login first, as always).
+self.addEventListener('push', (e) => {
+  let d = {}; try { d = e.data ? e.data.json() : {}; } catch (_) { d = { body: e.data ? e.data.text() : '' }; }
+  const urgent = !!d.urgent;
+  e.waitUntil(self.registration.showNotification(d.title || 'GestNow', {
+    body: d.body || 'Tens um aviso novo.', icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', tag: d.tag || undefined,
+    renotify: !!d.tag, requireInteraction: urgent, vibrate: urgent ? [300, 120, 300, 120, 600] : [150],
+    data: { url: d.url || './#avisos' },
+  }));
+});
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const url = new URL((e.notification.data && e.notification.data.url) || './#avisos', self.registration.scope).href;
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+    const open = list.find((c) => c.url.startsWith(self.registration.scope));
+    if (open) { open.postMessage('gn-avisos'); return open.focus(); }
+    return self.clients.openWindow(url);
+  }));
 });
