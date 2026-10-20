@@ -770,7 +770,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '48';
+const APP_VERSION = '49';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -878,7 +878,7 @@ function idleTooLong(role) {
 // M1: the session ends on the server too. 'local' revokes this phone's session there (supabase-js refreshes an expired
 // token first, so the logout call is accepted); the person's other devices stay signed in. Personal copies go with it.
 async function idleOut() {
-  state.idleOut = true; stopNfc(); state.ready = false; nav.hidden = true; closePalette(); forgetPersonal();
+  if (Live) Live.stop(); state.idleOut = true; stopNfc(); state.ready = false; nav.hidden = true; closePalette(); forgetPersonal();
   try { await sb.auth.signOut({ scope: 'local' }); } catch (_) { /* no network: the local copy is gone anyway */ }
 }
 // What this phone keeps about people goes when the session ends: the login (ME), the emergency lists, names in the
@@ -923,7 +923,7 @@ boot();
 async function boot() {
   stopNfc(); clearInterval(state.timer); clearInterval(state.tick); hideFlash(); openMore(false);
   state.ready = false; state.offline = false; nav.hidden = true; document.getElementById('whoami').hidden = true;
-  document.getElementById('sol').hidden = true; document.getElementById('search').hidden = true; document.getElementById('help').hidden = true; closePalette(); signedOut(true); showNet();
+  document.getElementById('sol').hidden = true; document.getElementById('search').hidden = true; document.getElementById('help').hidden = true; document.getElementById('bell').hidden = true; if (Live) Live.stop(); closePalette(); signedOut(true); showNet();
   takeClimbLink();
   if (await openInvite()) return;
   let session = null; let sErr = null;
@@ -1005,6 +1005,7 @@ async function boot() {
   const other = queue().filter((x) => x._u && x._u !== state.me.user_id);
   if (other.length) toast(`Há ${other.length} picagem(ns) de outra conta neste telemóvel, ainda por enviar.`);
   go(state.view);
+  document.getElementById('bell').hidden = false; bellCount(); if (Live) Live.start();
   climbAfterLogin();
   if (state.tourNext) { state.tourNext = false; setTimeout(startTour, 700); return; }   // just finished the onboarding: the bot shows the app
   showBrief();
@@ -1093,7 +1094,7 @@ async function checkSession() {
 
 // «Sair»: every session of this login ends on the server (scope global, the default), and the personal copies go.
 async function signOut() {
-  stopNfc(); state.ready = false; nav.hidden = true; forgetPersonal();
+  if (Live) Live.stop(); stopNfc(); state.ready = false; nav.hidden = true; forgetPersonal();
   try { await sb.auth.signOut({ scope: 'global' }); } catch (_) { /* no network: the local copy is gone anyway */ }
 }
 
@@ -9509,3 +9510,150 @@ async function loadMyClimb() {
     <p class="small muted">Ou aponta a câmara do telemóvel à etiqueta do andaime. Viste um estrago? Vê o andaime e carrega em «Avisar de um estrago».</p></form>`;
   $('#myclimbf').onsubmit = (e) => { e.preventDefault(); climbCheck(String(new FormData(e.target).get('r')).trim()); };
 }
+
+// ------------------------------------------------------------------ Avisos (sql/83): the bell, and the screens that change by themselves
+// The database writes a notice for a role or a person (documents to expire, a week to confirm, a contract unsigned,
+// a tool overdue…). The bell shows the ones for this login; each one is read per person, and a tap opens where it
+// is dealt with. Only screens this login has are opened: the database shows only notices this login may see.
+const NOTICE_SEV = { critical: ['bad', 'Urgente'], high: ['warn', 'Importante'], medium: ['info', 'Aviso'], low: ['reg', 'Info'] };
+async function bellCount() {
+  const b = document.getElementById('bell'); const n = document.getElementById('belln');
+  if (!state.ready || state.offline) return;
+  const { data, error } = await sb.rpc('mini_notices_count');
+  if (error || !state.ready) return;
+  const v = Number(data || 0);
+  n.hidden = !v; n.textContent = v > 99 ? '99+' : String(v);
+  b.setAttribute('aria-label', v ? `Avisos: ${v} por ler` : 'Avisos');
+}
+const viewOpen = (v) => { const b = nav.querySelector(`button[data-view="${v}"]`); return !!b && !b.hidden; };
+// Where a notice is dealt with. Unknown kinds only mark the notice as read.
+function noticeRoute(x) {
+  const k = x.kind || ''; const l = x.link || {};
+  const mine = (tab) => () => { if (!state.me.collaborator_id) return false; state.mineTab = 'home'; go('minhas'); if (tab) meOpen(tab); return true; };
+  const view = (v) => () => (viewOpen(v) ? (go(v), true) : false);
+  if (k === 'job_failed') return () => (can('contas.gerir') ? (showJobs(), true) : false);
+  if (k === 'week_to_confirm') return mine('horas');
+  if (k === 'contract_unsigned') return mine('contrato');
+  if (/^(document|doc)_/.test(k) && state.me.role === 'worker') return mine('docs');
+  if (l.collaborator_id && state.me.role !== 'worker' && viewOpen('trabalhadores') && /^(document|doc|onboarding|contract|suspended|perstat)/.test(k))
+    return () => { state.worker = l.collaborator_id; go('ficha'); return true; };
+  if (/^scaffold_/.test(k)) return view('andaimes');
+  if (/^(tool|ppe|calibration|critical_item|stock)/.test(k)) return view('armazem');
+  if (/^(vehicle|rental|fleet)/.test(k)) return view('frota');
+  if (/^housing/.test(k)) return view('alojamento');
+  if (/^purchase/.test(k)) return view('compras');
+  if (/^(emergency|muster|buddy|escort|zone_)/.test(k)) return view('emergencia');
+  if (/^(stop_work|red_card|team_risk)/.test(k)) return view('seguranca');
+  if (/^(open_shift|no_show|locked_day)/.test(k)) return viewOpen('equipa') ? view('equipa') : view('horas');
+  if (/^onboarding/.test(k)) return view('acolhimento');
+  return () => false;
+}
+async function showNotices() {
+  if (!state.ready) return boot();
+  if (state.offline) { toast('Sem rede: os avisos aparecem quando a rede voltar.'); return; }
+  const d = document.createElement('dialog'); d.className = 'dlg notices';
+  d.innerHTML = `<div class="nt-head"><h2>Avisos</h2><button class="btn small ghost" id="ntall" hidden>Marcar tudo como lido</button>
+    <button class="iconbtn" id="ntx" aria-label="Fechar">${ic('x')}</button></div><div id="ntlist">${skel(3)}</div>`;
+  d.addEventListener('close', () => { d.remove(); bellCount(); });
+  d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
+  document.body.appendChild(d); d.showModal();
+  d.querySelector('#ntx').onclick = () => d.close();
+  const { data, error } = await sb.rpc('mini_notices', { p_limit: 40 });
+  const el = d.querySelector('#ntlist'); if (!el.isConnected) return;
+  if (error) { el.innerHTML = errorState(friendly(error)); return; }
+  const items = (data && data.items) || [];
+  if (!items.length) { el.innerHTML = empty('box', 'Sem avisos', 'Quando houver algo para ti (um documento a caducar, uma semana para confirmar), aparece aqui.'); return; }
+  const all = d.querySelector('#ntall'); all.hidden = !data.unread;
+  all.onclick = async () => { const r = await sb.rpc('mini_notices_read', { p_ids: null }); if (r.error) return toast(friendly(r.error), 'bad');
+    el.querySelectorAll('.nt.unread').forEach((x) => x.classList.remove('unread')); all.hidden = true; bellCount(); };
+  if (can('contas.gerir')) el.insertAdjacentHTML('beforebegin', '<p class="small muted"><button class="linkbtn" id="ntjobs">Ver as tarefas automáticas</button> (o que a app faz sozinha, todas as manhãs)</p>');
+  const jb = d.querySelector('#ntjobs'); if (jb) jb.onclick = () => { d.close(); showJobs(); };
+  el.innerHTML = `<ul class="nt-list">${items.map((x, i) => { const [cls, lab] = NOTICE_SEV[x.severity] || NOTICE_SEV.low;
+    const sub = [x.person, x.site, ago(x.at)].filter(Boolean).map(esc).join(' · ');
+    return `<li><button class="nt${x.read ? '' : ' unread'} sev-${esc(x.severity || 'low')}" data-i="${i}"><span class="nt-dot" aria-hidden="true"></span>
+      <span class="grow"><b>${esc(x.title)}</b><small>${sub}</small></span>${x.severity === 'critical' || x.severity === 'high' ? chip(cls, lab) : ''}</button></li>`; }).join('')}</ul>`;
+  el.querySelectorAll('[data-i]').forEach((b) => b.onclick = async () => {
+    const x = items[Number(b.dataset.i)];
+    if (!x.read) { sb.rpc('mini_notices_read', { p_ids: [x.id] }).then(() => bellCount()); x.read = true; b.classList.remove('unread'); }
+    const run = noticeRoute(x);
+    d.close();
+    if (!run()) toast('Aviso marcado como lido.');
+  });
+}
+function ago(at) {
+  if (!at) return '';
+  const m = Math.round((Date.now() - new Date(at).getTime()) / 60000);
+  if (m < 1) return 'agora'; if (m < 60) return `há ${m} min`;
+  const h = Math.round(m / 60); if (h < 24) return `há ${h} h`;
+  const dd = Math.round(h / 24); return dd === 1 ? 'ontem' : dd < 7 ? `há ${dd} dias` : fmtDate(String(at).slice(0, 10));
+}
+// The admin sees what the app does by itself and whether it worked (sql/83 job runs). Jobs that are switched off
+// say why: they wait for a decision (for example, removing old personal data after the legal period).
+async function showJobs() {
+  if (!state.ready || !can('contas.gerir')) return;
+  const d = document.createElement('dialog'); d.className = 'dlg notices';
+  d.innerHTML = `<div class="nt-head"><h2>Tarefas automáticas</h2><button class="iconbtn" id="jbx" aria-label="Fechar">${ic('x')}</button></div>
+    <p class="small muted">A app corre isto sozinha: de manhã (avisos do dia), à noite (saídas em falta) e de 15 em 15 minutos (andaimes). Se uma falhar, as outras continuam e recebes um aviso.</p><div id="jblist">${skel(3)}</div>`;
+  d.addEventListener('close', () => d.remove()); d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
+  document.body.appendChild(d); d.showModal(); d.querySelector('#jbx').onclick = () => d.close();
+  const { data, error } = await sb.rpc('mini_jobs_status');
+  const el = d.querySelector('#jblist'); if (!el.isConnected) return;
+  if (error) { el.innerHTML = errorState(friendly(error)); return; }
+  const grp = { morning: 'manhã', evening: 'noite', frequent: '15 em 15 min' };
+  el.innerHTML = `<ul class="nt-list">${(data || []).map((j) => { const l = j.last;
+    const st = !j.on ? chip('reg', 'Desligada') : !l ? chip('info', 'Ainda não correu') : l.ok ? chip('ok', 'OK') : chip('bad', 'Falhou');
+    const sub = !j.on ? (j.off_reason || '') : l ? `${grp[j.group] || j.group} · ${ago(l.at)}${l.ok ? '' : ' · ' + (l.error || '')}` : grp[j.group] || j.group;
+    return `<li><div class="nt${j.fails_7d ? ' sev-high' : ''}"><span class="grow"><b>${esc(JOB_NAMES[j.code] || j.code)}</b><small>${esc(sub)}</small></span>${st}</div></li>`; }).join('')}</ul>`;
+}
+const JOB_NAMES = { week_visa: 'Lembrar a semana para confirmar', onboarding_nudges: 'Lembrar quem está a entrar na empresa', open_shifts: 'Saídas em falta ao fim do dia',
+  scaffolds_sweep: 'Andaimes: inspeções vencidas', scaffolds: 'Andaimes: aluguer do dia', scaffolds_daily: 'Andaimes: aluguer do dia',
+  document_alerts: 'Documentos a caducar', tools_overdue: 'Ferramentas por devolver', calibrations_due: 'Calibrações a vencer', ppe_due: 'EPI a trocar',
+  housing_nights_posted: 'Noites de alojamento lançadas', vehicles_blocked: 'Viaturas sem inspeção ou seguro', perstat_unknowns: 'Pessoas sem estado conhecido',
+  readiness_snapshots: 'Fotografia diária da prontidão', visits_expired: 'Visitas fora de prazo', usage_records: 'Contagem de uso da app', hr_retention: 'Apagar dados pessoais fora do prazo legal',
+  no_shows: 'Faltas sem aviso', meeting_audio_purged: 'Apagar áudio de reuniões antigo', ai_transcripts_purged: 'Apagar transcrições antigas', referral_awards: 'Prémios por indicar colegas' };
+document.getElementById('bell').addEventListener('click', () => { touch(); showNotices(); });
+
+// Live: the database bumps a small signal row (core.live_signals) when taps, hours, requests, the muster or notices
+// change; the open screen reloads itself at once. Polling stays as the fallback (no network, realtime down).
+// The screen is never reloaded while the person is typing or a window is open over it.
+var Live = (() => {   // var: boot() runs before this line is reached; it checks «Live &&»
+  let ch = null; let timer = null; const due = new Set();
+  const busy = () => !!document.querySelector('dialog[open]') || (document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName));
+  function refresh() {
+    timer = null;
+    if (!state.ready || document.visibilityState !== 'visible') { due.clear(); return; }
+    if (due.has('notices')) bellCount();
+    const t = [...due]; due.clear();
+    if (busy()) { t.filter((x) => x !== 'notices').forEach((x) => due.add(x)); if (due.size) timer = setTimeout(refresh, 4000); return; }
+    const v = state.view; const has = (...a) => a.some((x) => t.includes(x));
+    if (v === 'emergencia' && has('muster', 'taps')) return loadEmergency();
+    if (v === 'equipa' && has('taps', 'hours', 'requests')) return loadTeam();
+    if (v === 'naobra' && has('taps')) return loadOnSite();
+    if (v === 'minhas' && (state.mineTab || 'home') === 'home' && has('taps', 'hours', 'requests', 'onboarding')) return loadMeHome(true);
+    if ((v === 'secretariado' || v === 'horas' || v === 'painel' || v === 'acolhimento') && has('taps', 'hours', 'requests', 'onboarding')) freshBar();
+  }
+  // Screens with a filter or a month open get a «new data» bar instead of being redrawn under the person's eyes.
+  function freshBar() {
+    if ($('#fresh')) return;
+    const el = document.createElement('button'); el.id = 'fresh'; el.className = 'fresh'; el.type = 'button';
+    el.innerHTML = `${ic('auto')} Há dados novos · Atualizar`;
+    el.onclick = () => { el.remove(); go(state.view); };
+    app.prepend(el);
+  }
+  function start() {
+    if (ch || state.offline || !sb.channel) return;
+    try {
+      ch = sb.channel('live-' + state.me.tenant_id)
+        .on('postgres_changes', { event: '*', schema: 'core', table: 'live_signals', filter: 'tenant_id=eq.' + state.me.tenant_id }, (p) => {
+          const topic = p && p.new && p.new.topic; if (!topic) return;
+          due.add(topic); if (!timer) timer = setTimeout(refresh, 800);   // a burst of taps reloads once
+        })
+        .subscribe((s) => { document.body.classList.toggle('live-on', s === 'SUBSCRIBED'); });
+    } catch (_) { ch = null; }   // realtime not available: the screens keep polling
+  }
+  function stop() {
+    clearTimeout(timer); timer = null; due.clear(); document.body.classList.remove('live-on');
+    if (ch) { try { sb.removeChannel(ch); } catch (_) {} ch = null; }
+  }
+  return { start, stop };
+})();
