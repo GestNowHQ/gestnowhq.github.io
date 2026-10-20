@@ -786,7 +786,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '59';
+const APP_VERSION = '60';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -2785,6 +2785,7 @@ function onbShell(ob, inner) {
     <div class="onb-hello"><p class="ph-k">${esc(ob.company || '')}</p><h1>Bem-vindo, ${esc(String(ob.name || '').split(' ')[0])}</h1>
       <p class="muted">Antes de começares a trabalhar connosco, há ${ONB_STEPS.length} passos. Cada um abre quando o anterior estiver feito.</p></div>
     <ol class="onb-steps">${ONB_STEPS.map((s, i) => `<li class="${i < at ? 'done' : i === at ? 'now' : ''}"><span>${i < at ? ic('ok') : i + 1}</span><b>${esc(s)}</b></li>`).join('')}</ol>
+    <p class="onb-now">Passo ${Math.min(at + 1, ONB_STEPS.length)} de ${ONB_STEPS.length} · <b>${esc(ONB_STEPS[Math.min(at, ONB_STEPS.length - 1)])}</b></p>
     <div id="onbbody">${inner}</div></div>`;
   $('#onbout').onclick = () => { document.body.classList.remove('onboarding'); signOut(); };
 }
