@@ -2066,3 +2066,27 @@ dialog.docview { box-sizing: border-box; overflow-x: hidden; max-height: 96vh; p
 .sim-p { justify-content: flex-start; text-align: left; gap: 10px; min-height: 56px; }
 .sim-p span { display: flex; flex-direction: column; min-width: 0; }
 .sim-p small { color: var(--muted); font-weight: 400; }
+
+/* v67 · Os meus clientes (level 1 of the pyramid) */
+.ov-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 0 0 20px; }
+.ov-tiles > div { background: var(--card, #fff); border: var(--bw) solid var(--line); border-radius: var(--r-lg); padding: 12px 8px; display: grid; gap: 2px; text-align: center; }
+.ov-tiles b { font-size: var(--t-xl); font-variant-numeric: tabular-nums; letter-spacing: -.3px; }
+.ov-tiles span { font-size: var(--t-xs); color: var(--ink-2); line-height: 1.25; }
+.ov-card { cursor: pointer; transition: transform .12s ease, box-shadow .12s ease; border-left: 4px solid var(--line); }
+.ov-card[data-open]:hover { transform: translateY(-1px); box-shadow: var(--sh-2, 0 6px 18px rgba(0,0,0,.08)); }
+.ov-card[data-open]:focus-visible { outline: 3px solid var(--brand, #4f46e5); outline-offset: 2px; }
+.ov-card.bad { border-left-color: var(--bad, #dc2626); } .ov-card.warn { border-left-color: var(--warn-fill, #f6b400); }
+.ov-card.ok { border-left-color: var(--ok, #16a34a); } .ov-card.info { border-left-color: var(--ink-3, #9ca3af); }
+.ov-card.here { box-shadow: 0 0 0 2px var(--brand, #4f46e5), var(--sh-1); }
+.ov-light { width: 14px; height: 14px; border-radius: 50%; flex: 0 0 auto; background: var(--ink-3, #9ca3af); }
+.ov-light.bad { background: var(--bad, #dc2626); box-shadow: 0 0 0 4px color-mix(in srgb, var(--bad, #dc2626) 20%, transparent); }
+.ov-light.warn { background: var(--warn-fill, #f6b400); box-shadow: 0 0 0 4px color-mix(in srgb, var(--warn-fill, #f6b400) 25%, transparent); }
+.ov-light.ok { background: var(--ok, #16a34a); box-shadow: 0 0 0 4px color-mix(in srgb, var(--ok, #16a34a) 20%, transparent); }
+.ov-go { color: var(--ink-2); display: flex; }
+.ov-why { margin: 0; padding: 0 0 0 18px; display: grid; gap: 4px; font-size: var(--t-sm); color: var(--ink); }
+.ov-stats { grid-template-columns: repeat(3, 1fr); }
+.ov-test { margin-top: 24px; }
+.ov-test .clients { margin-top: 12px; }
+@media (max-width: 560px) { .ov-tiles { grid-template-columns: repeat(2, 1fr); } }
+/* v67: small phones (360 px): the owner's top bar has 5 buttons; keep it inside the screen */
+@media (max-width: 400px) { .top { gap: 2px; padding-left: 12px; padding-right: 6px; } .top .iconbtn, .top .search { width: 40px; height: 40px; padding: 0; } .brand { font-size: var(--t-md); } }

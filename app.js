@@ -826,10 +826,16 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '66';
+const APP_VERSION = '67';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
+// v67 pyramid (Diogo 2026-10-20): the GestNow owner starts on his clients; an admin starts on the dashboard, not on Picar.
+// Picar stays in the menu (group Obra) for the office, and is the encarregado's tool.
+function tabsFor(role) {
+  if (role === 'admin') return isOwner() ? ['clientes', 'painel', 'horas', 'secretariado'] : ['painel', 'horas', 'secretariado', 'obras'];
+  return TABS[role] || TABS.supervisor;
+}
 const MORE_ORDER = ['equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'andaimes', 'processo', 'clientes'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
@@ -857,9 +863,10 @@ const ENC_ICONS = {
   crew: '<path d="M7.5 9a4.5 4.5 0 0 1 9 0M6 9h12M9 12.5a3 3 0 0 0 6 0M5 21a7 7 0 0 1 14 0"/>',
   myclock: '<path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2.5 21a6.5 6.5 0 0 1 9-6M17 13a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM17 15.5V17l1 1"/>',
   gate: '<path d="M3 21V7M21 21V7M3 10h18M3 15h18M8 10v5M13 10v5M18 10v5M3 7l4-3h10l4 3"/>',
+  firms: '<path d="M3 21h18M5 21V8l6-3v16M11 21V3l8 4v14M14 9h2M14 13h2M14 17h2M7 11h1M7 15h1"/>',
   medal: '<path d="M12 14a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM9.5 13.3 8 21l4-2 4 2-1.5-7.7M10 9l1.5 1.5L14.5 7.5"/>',
 };
-const MENU_ICON = { painel: 'gauge', producao: 'chart', seguranca: 'hhat', equipa: 'crew', minhas: 'myclock', naobra: 'gate', qualidade: 'medal' };
+const MENU_ICON = { painel: 'gauge', producao: 'chart', seguranca: 'hhat', equipa: 'crew', minhas: 'myclock', naobra: 'gate', qualidade: 'medal', clientes: 'firms' };
 (function encIcons() {
   const ns = 'http://www.w3.org/2000/svg'; const sp = document.createElementNS(ns, 'svg');
   sp.setAttribute('width', '0'); sp.setAttribute('height', '0'); sp.setAttribute('aria-hidden', 'true'); sp.style.position = 'absolute';
@@ -877,7 +884,7 @@ function layoutNav(role) {
   const shown = (v) => !btn(v).hidden && !off(v);
   const grouped = MENU_GROUPS.flatMap((g) => g[1]);
   const groups = [...MENU_GROUPS, ['Outros', all.filter((v) => !grouped.includes(v))]];
-  const first = (TABS[role] || TABS.supervisor).filter((v) => !btn(v).hidden);
+  const first = tabsFor(role).filter((v) => !btn(v).hidden);
   const moreBtn = nav.querySelector('button[data-more]');
   nav.querySelectorAll('.enc-mh').forEach((h) => h.remove());
   sheet.querySelectorAll('hr').forEach((h) => h.remove());
@@ -1049,9 +1056,9 @@ async function boot() {
   nav.querySelector('[data-view=andaimes]').hidden = worker || state.offline || !canScaffolds();
   if (me.role === 'supervisor' && !state.booted && state.view === 'picar' && canSiteDetails()) state.view = 'equipa';
   // v48: the office opens on its own first tab (Secretariado for HR), not on Picar, which it rarely uses.
-  if (!state.booted && state.view === 'picar' && TABS[me.role] && !TABS[me.role].includes('picar')) state.view = TABS[me.role][0];
+  if (!state.booted && state.view === 'picar' && !tabsFor(me.role).includes('picar')) state.view = tabsFor(me.role)[0];
   state.booted = true;
-  if (state.view === 'minhas' && !me.collaborator_id) state.view = (TABS[me.role] || TABS.supervisor)[0];
+  if (state.view === 'minhas' && !me.collaborator_id) state.view = tabsFor(me.role)[0];
   layoutNav(me.role);
   signedOut(false); nav.hidden = false; document.getElementById('sol').hidden = false; document.getElementById('search').hidden = me.role === 'worker';
   document.getElementById('help').hidden = nav.querySelector('[data-view=processo]').hidden; showNet();
@@ -1328,7 +1335,7 @@ async function switchProfile() {
   if (me.profiles.some((r) => PRIVILEGED.includes(r)) && !(await stepUpMfa())) return;
   const { error } = await sb.rpc('mini_switch_role', { p_role: fd.get('p') });
   if (error) return toast(friendly(error));
-  state.view = (TABS[fd.get('p')] || TABS.supervisor)[0];
+  state.view = tabsFor(fd.get('p'))[0];
   toast(`Agora estás como ${roleLabel(fd.get('p'))}.`);
   boot();   // asks for the phone code when the new profile needs it
 }
@@ -1484,31 +1491,58 @@ const isOwner = () => !!(state.platform && state.platform.platform);
 async function viewClients() {
   if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!isOwner()) return viewClock();   // code guard as well as the database's
-  app.innerHTML = `<div class="ph"><div><p class="ph-k">GestNow · só o dono vê</p><h1>Clientes</h1></div><button class="btn" id="newc">+ Novo cliente</button></div>
-    <p class="muted lead">As empresas que usam a GestNow. Aqui só vês números, nunca nomes de pessoas. Para trabalhar numa, carrega em «Entrar»; voltas por esta lista, e o que tinhas em cada uma fica guardado.</p>
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">GestNow · só tu vês</p><h1>Os meus clientes</h1></div><button class="btn ghost" id="newc">+ Novo cliente</button></div>
+    <div id="ovsum">${skel(1)}</div>
     <div id="clist">${skel(3)}</div>`;
   $('#newc').onclick = newClient;
   loadClients();
 }
+// Level 1 of the pyramid (sql/89): one card per company with a light. Tap = open that company (its dashboard).
+// Numbers only, never names of people.
+const LIGHT = { red: ['bad', 'Precisa de ti'], amber: ['warn', 'Há coisas à espera'], green: ['ok', 'Tudo em dia'], grey: ['info', 'Sem obras a decorrer'] };
 async function loadClients() {
   const el = $('#clist'); if (!el) return;
-  const { data, error } = await sb.rpc('platform_clients');
+  const { data, error } = await sb.rpc('platform_overview');
   if (!el.isConnected) return;
-  if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; $('#ovsum').innerHTML = ''; return; }
   const n = (v) => Number(v || 0).toLocaleString('pt-PT');
-  el.innerHTML = `<div class="clients">${data.map((c) => `<article class="card client${c.here ? ' here' : ''}">
-      <div class="cl-top">${avatar(c.name).replace('class="av ', 'class="av cl-av ')}<div class="grow"><b>${esc(c.name)}</b>
-        <small>${c.demo ? 'Empresa fictícia, para testes' : 'NIF ' + esc(c.tax_id)}</small></div>
-        ${c.here ? chip('ok', 'Estás aqui', 'ok') : c.demo ? chip('warn', 'fictícia') : chip('info', 'real')}</div>
-      <div class="cl-stats"><span><b>${n(c.sites)}</b>obras</span><span><b>${n(c.people)}</b>pessoas</span><span><b>${n(c.taps_7d)}</b>picagens 7 dias</span><span><b>${n(c.induction)}</b>partes de acolhimento</span></div>
-      <div class="cl-act">${c.here ? (c.demo && !Number(c.sites) ? `<button class="btn wide" data-fill>${ic('auto')}Preencher com dados de exemplo</button>`
-          : `<p class="small muted">${ic('ok')} Os ecrãs da app mostram agora os dados desta empresa.</p>`)
-        : c.open ? `<button class="btn wide ghost" data-enter="${esc(c.id)}">${ic('go')}Entrar</button>`
-        : `<p class="small muted">${ic('lock')} Esta empresa não te deu acesso. Pede acesso de suporte ao administrador dela.</p>`}</div></article>`).join('')}</div>`;
-  el.querySelectorAll('[data-enter]').forEach((b) => b.onclick = () => enterClient(b.dataset.enter, b));
-  if (el.querySelector('[data-fill]')) el.querySelector('[data-fill]').onclick = (e) => fillDemo(e.currentTarget);
+  const real = data.filter((c) => !c.test); const test = data.filter((c) => c.test);
+  const sum = (k) => real.reduce((t, c) => t + Number(c[k] || 0), 0);
+  $('#ovsum').innerHTML = `<div class="ov-tiles"><div><b>${n(real.length)}</b><span>cliente(s)</span></div><div><b>${n(sum('inside_now'))}</b><span>na obra agora</span></div>
+    <div><b>${n(sum('to_approve'))}</b><span>dias por aprovar</span></div><div><b>${n(sum('docs_expired'))}</b><span>com documento caducado</span></div></div>`;
+  const why = (c) => {
+    const w = [];
+    if (Number(c.docs_expired)) w.push(`${n(c.docs_expired)} pessoa(s) com documento caducado`);
+    if (Number(c.to_approve)) w.push(`${n(c.to_approve)} dia(s) por aprovar`);
+    if (Number(c.docs_expiring)) w.push(`${n(c.docs_expiring)} pessoa(s) com documento a caducar`);
+    if (Number(c.joining)) w.push(`${n(c.joining)} pessoa(s) a fazer a entrada`);
+    return w;
+  };
+  const card = (c) => {
+    const [k, t] = LIGHT[c.light] || LIGHT.grey; const w = why(c); const can = c.open || c.here;
+    return `<article class="card client ov-card ${k}${c.here ? ' here' : ''}" ${can ? `data-open="${esc(c.id)}" tabindex="0" role="button" aria-label="Abrir ${esc(c.name)}"` : ''}>
+      <div class="cl-top"><span class="ov-light ${k}" aria-hidden="true"></span><div class="grow"><b>${esc(c.name)}</b><small>${esc(t)}</small></div>
+        ${can ? `<span class="ov-go" aria-hidden="true">${ic('go')}</span>` : ''}</div>
+      ${w.length ? `<ul class="ov-why">${w.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+      <div class="cl-stats ov-stats"><span><b>${n(c.sites)}</b>obras</span><span><b>${n(c.people)}</b>pessoas</span><span><b>${n(c.inside_now)}</b>na obra agora</span></div>
+      ${can ? '' : `<p class="small muted">${ic('lock')} Esta empresa não te deu acesso. Pede acesso de suporte ao administrador dela.</p>`}
+      ${c.here && c.demo && !Number(c.sites) ? `<button class="btn wide" data-fill>${ic('auto')}Preencher com dados de exemplo</button>` : ''}</article>`;
+  };
+  el.innerHTML = `${real.length ? `<div class="clients">${real.map(card).join('')}</div>` : '<p class="muted">Ainda não tens clientes reais. Carrega em «+ Novo cliente».</p>'}
+    ${test.length ? `<details class="fold ov-test"${real.length ? '' : ' open'}><summary><span>Empresas de teste (${test.length})<span class="sub">Fictícias e a Empresa Teste: só para experimentar</span></span></summary>
+      <div class="clients">${test.map(card).join('')}</div></details>` : ''}`;
+  el.querySelectorAll('[data-open]').forEach((x) => {
+    const open = (e) => { if (e.target.closest('[data-fill]')) return; openClient(x.dataset.open, x); };
+    x.onclick = open; x.onkeydown = (e) => { if (e.key === 'Enter') open(e); };
+  });
+  const fill = el.querySelector('[data-fill]'); if (fill) fill.onclick = (e) => { e.stopPropagation(); fillDemo(e.currentTarget); };
 }
-async function enterClient(id, btn) {
+// The company this login is in opens straight on its dashboard; another one is entered first (sql/59).
+function openClient(id, card) {
+  if (card.classList.contains('here')) return go('painel');
+  return enterClient(id, card, 'painel');
+}
+async function enterClient(id, btn, then) {
   // Taps still waiting on this phone belong to the company they were made in: send them first.
   if (queue().some((x) => !x._u || x._u === state.me.user_id)) return toast('Há picagens por enviar neste telemóvel. Espera que sejam enviadas e tenta outra vez.');
   btn.disabled = true;
@@ -1516,7 +1550,7 @@ async function enterClient(id, btn) {
   if (error) { btn.disabled = false; return toast(friendly(error)); }
   Object.assign(state, { sites: [], people: [], indItems: null, bot: null, worker: null, panelSite: null });
   toast(`Agora estás em ${data.tenant}.`);
-  state.view = 'clientes'; boot();
+  state.view = then || 'clientes'; boot();
 }
 async function fillDemo(btn) {
   btn.disabled = true; btn.lastChild.textContent = 'A preencher…';
@@ -4373,7 +4407,7 @@ const ME_TABS = {
   epi: ['shield', 'EPI e ferramentas'], contrato: ['lock', 'O meu contrato'] };
 function viewMine() {
   if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
-  if (!state.me.collaborator_id) return go((TABS[state.me.role] || TABS.supervisor)[0]);
+  if (!state.me.collaborator_id) return go(tabsFor(state.me.role)[0]);
   if (!state.mineMonth) state.mineMonth = isoDay(new Date()).slice(0, 7);
   const tab = state.mineTab || 'home';
   if (tab !== 'home' && ME_TABS[tab]) return meScreen(tab);
