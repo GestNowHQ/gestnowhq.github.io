@@ -450,8 +450,14 @@ body.signed-out main { max-width: none; margin: 0; padding: 0; animation: none; 
 .feats .fi .i { width: 20px; height: 20px; }
 .feats b { display: block; font-size: 15px; font-weight: 650; }
 .feats small { display: block; font-size: 13.5px; color: rgba(255,255,255,.62); line-height: 1.45; margin-top: 2px; }
-/* phone too: the card taps the phone under the pitch (Diogo wants the movement on the phone) */
-.demo { display: block; position: relative; width: 300px; height: 232px; margin: 26px auto 0; }
+.demo { display: none; }
+/* phone: the same scene, small, in the bottom-left corner next to the trust lines (everything fits one screen) */
+.auth-low { display: flex; align-items: center; gap: 14px; max-width: 440px; margin: 16px auto 0; }
+.demo-sm { flex: 0 0 auto; width: 140px; height: 104px; }
+.demo-sm .demo { display: block; position: relative; width: 300px; height: 232px; transform: scale(.45); transform-origin: 0 0; }
+.auth-low-txt { min-width: 0; }
+.auth .auth-low .trust { justify-content: flex-start; margin: 0; gap: 4px 12px; }
+.auth .auth-low .foot { justify-content: flex-start; margin: 8px 0 0; }
 .auth-main { position: relative; flex: 1; margin-top: -44px; padding: 0 14px 28px; }
 .auth .card { max-width: 440px; margin: 0 auto; padding: 26px 22px 24px; border-radius: 22px; border: 0;
   box-shadow: 0 1px 2px rgba(15,13,42,.06), 0 24px 60px -24px rgba(15,13,42,.55); animation: up .4s var(--ease); }
@@ -489,6 +495,7 @@ body.signed-out main { max-width: none; margin: 0; padding: 0; animation: none; 
   .trust .i { color: var(--brand); }
   .auth .foot { margin-top: 8px; }
   .demo { display: block; position: relative; height: 230px; margin: 34px 0 auto; max-width: 520px; }
+  .demo-sm { display: none; } .auth-low { display: block; max-width: 400px; width: 100%; margin: 0; }
 }
 /* the little animated scene: a card taps the phone, the phone answers */
 .demo .phone { position: absolute; left: 0; top: 6px; width: 132px; height: 218px; border-radius: 26px; padding: 8px;

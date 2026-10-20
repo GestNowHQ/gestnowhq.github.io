@@ -775,7 +775,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '53';
+const APP_VERSION = '54';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -1061,6 +1061,12 @@ const LOGO = (id) => `<svg viewBox="0 0 44 44" aria-hidden="true"><defs><linearG
 function authScreen(inner) {
   signedOut(true);
   const online = navigator.onLine !== false;
+  // the card taps the phone: big in the story on a computer, small in the bottom-left corner on a phone
+  const demo = `<div class="demo" aria-hidden="true">
+        <div class="phone"><div class="scr"><small>PICAR</small><b>07:58</b><div class="ring"><span></span><span></span>${ic('tap')}</div></div></div>
+        <div class="tag-card"><i></i><span>GestNow</span></div>
+        <div class="ok-pill">${ic('ok')}<div><b>Entrada registada</b><small>07:58 · Obra Exemplo</small></div></div>
+      </div>`;
   const feat = (i, b, t) => `<li><span class="fi">${ic(i)}</span><div><b>${b}</b><small>${t}</small></div></li>`;
   app.innerHTML = `<div class="auth">
     <aside class="auth-hero">
@@ -1074,16 +1080,13 @@ function authScreen(inner) {
           ${feat('shield', 'Ninguém entra sem documentos', 'Validades controladas, entrada bloqueada quando algo falta.')}
         </ul>
       </div>
-      <div class="demo" aria-hidden="true">
-        <div class="phone"><div class="scr"><small>PICAR</small><b>07:58</b><div class="ring"><span></span><span></span>${ic('tap')}</div></div></div>
-        <div class="tag-card"><i></i><span>GestNow</span></div>
-        <div class="ok-pill">${ic('ok')}<div><b>Entrada registada</b><small>07:58 · Obra Exemplo</small></div></div>
-      </div>
+      ${demo}
     </aside>
     <section class="auth-main">
       <div class="card">${inner}</div>
+      <div class="auth-low"><div class="demo-sm">${demo}</div><div class="auth-low-txt">
       <p class="trust">${ic('shield')}<span>Dados alojados na UE</span><span>RGPD</span><span>Verificação em 2 passos</span></p>
-      <p class="foot"><i class="${online ? '' : 'off'}"></i>${online ? 'Ligado à rede' : 'Sem rede'}</p>
+      <p class="foot"><i class="${online ? '' : 'off'}"></i>${online ? 'Ligado à rede' : 'Sem rede'}</p></div></div>
     </section></div>`;
 }
 
