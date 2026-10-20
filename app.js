@@ -786,7 +786,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '61';
+const APP_VERSION = '62';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -3005,9 +3005,14 @@ function onbData(ob, me) {
   };
   // Live checks on the two numbers that are most often mistyped.
   const live = (name, ok, fmt, msg) => { const i = form.elements[name]; i.addEventListener('input', () => { const p = i.selectionStart === i.value.length; i.value = fmt(i.value); if (p) i.selectionStart = i.selectionEnd = i.value.length;
-    i.setCustomValidity(i.value && !ok(i.value) ? msg : ''); i.classList.toggle('bad', !!i.value && !ok(i.value)); i.classList.toggle('good', !!i.value && ok(i.value)); meter(); }); };
-  live('niss', nissOk, nissFmt, 'O NISS tem 11 algarismos. Confirma no cartão.');
-  live('iban', ibanOk, ibanFmt, 'Este IBAN não está certo. Confirma na app do banco.');
+    i.setCustomValidity(i.value && !ok(i.value) ? msg : ''); i.classList.toggle('bad', !!i.value && !ok(i.value)); i.classList.toggle('good', !!i.value && ok(i.value)); say(); meter(); });
+    // v62: say why it is red under the box (once the number is complete or the person leaves the box), not just a red border.
+    const h = i.nextElementSibling; const tip = h ? h.innerHTML : ''; let left = false;
+    const say = () => { if (!h) return; const bad = !!i.value && !ok(i.value) && (left || i.value.replace(/\s/g, '').length >= (name === 'niss' ? 11 : 25));
+      h.innerHTML = bad ? esc(msg) : tip; h.classList.toggle('err', bad); };
+    i.addEventListener('blur', () => { left = true; say(); }); };
+  live('niss', nissOk, nissFmt, 'Este NISS não existe: os números não batem certo (o último algarismo é de controlo). Confirma no cartão.');
+  live('iban', ibanOk, ibanFmt, 'Este IBAN não existe: os números não batem certo (os 2 algarismos depois de PT são de controlo). Copia-o da app do banco.');
   form.addEventListener('input', meter); form.addEventListener('change', meter); meter();
   const body = () => {
     const fd = new FormData(form); const o = {};
