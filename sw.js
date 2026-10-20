@@ -2,7 +2,7 @@
 // Only GET requests to this same site are handled. Supabase (data, login, files) is another site: never touched,
 // never cached. Network first, so a new version arrives as soon as there is network; the copy is only a fallback.
 'use strict';
-const CACHE = 'gestnow-mini-v51';
+const CACHE = 'gestnow-mini-v52';
 const SHELL = ['./', 'index.html', 'app.js', 'style.css', 'config.js', 'vendor/supabase-2.117.2.js', 'ui/gnui.js', 'ui/gnui.css', 'vendor/inter-latin-wght.woff2'];
 
 self.addEventListener('install', (e) => {
@@ -36,8 +36,8 @@ self.addEventListener('push', (e) => {
   let d = {}; try { d = e.data ? e.data.json() : {}; } catch (_) { d = { body: e.data ? e.data.text() : '' }; }
   const urgent = !!d.urgent;
   e.waitUntil(self.registration.showNotification(d.title || 'GestNow', {
-    body: d.body || 'Tens um aviso novo.', icon: 'icons/icon-192.png', badge: 'icons/badge-96.png', tag: d.tag || undefined,
-    renotify: !!d.tag, requireInteraction: urgent, vibrate: urgent ? [300, 120, 300, 120, 600] : [150],
+    body: d.body || 'Tens um aviso novo.', icon: 'icons/icon-192.png', badge: 'icons/badge-96.png', tag: d.tag && d.tag !== 'test' ? d.tag : undefined,   // a test always shows as a new one
+    renotify: !!d.tag && d.tag !== 'test', requireInteraction: urgent, vibrate: urgent ? [300, 120, 300, 120, 600] : [150],
     data: { url: d.url || './#avisos' },
   }));
 });

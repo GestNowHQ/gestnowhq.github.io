@@ -44,6 +44,11 @@ const REASON_PREFIX = {
   'skill_missing:': 'Falta a competência: ',
 };
 const ERRORS = [
+  // Notificações no telemóvel (sql/84)
+  [/wait a minute before another test/i, 'Já enviaste um teste há menos de um minuto. Espera um pouco e tenta outra vez.'],
+  [/no phone switched on for this login/i, 'Este telemóvel ainda não tem as notificações ligadas: carrega em «Ligar».'],
+  [/too many phones for this login/i, 'Esta conta já tem 5 telemóveis ligados. Desliga um antes de ligar outro.'],
+  [/invalid push address/i, 'O telemóvel não deu um endereço de notificações válido. Tenta outra vez.'],
   // Passaporte de entrada (sql/80)
   [/social security number \(NISS\) is not valid/i, 'O NISS não está certo: confirma os 11 algarismos no cartão da Segurança Social.'],
   [/IBAN is not valid/i, 'O IBAN não está certo: confirma na app do teu banco.'],
@@ -770,7 +775,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '51';
+const APP_VERSION = '52';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -1050,7 +1055,7 @@ function showNetworkError() {
 }
 // Before login: brand background, logo, one white card. No menu, no data.
 function signedOut(on) { document.body.classList.toggle('signed-out', !!on); }
-const LOGO = (id) => `<svg viewBox="0 0 44 44" aria-hidden="true"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1a7f95"/><stop offset="1" stop-color="#0a3d4b"/></linearGradient></defs><rect width="44" height="44" rx="12" fill="url(#${id})"/><path d="M31.5 15.2A11 11 0 1 0 33 22" fill="none" stroke="#fff" stroke-width="4.6" stroke-linecap="round"/><path d="M22.5 22H27" stroke="#fff" stroke-width="4.6" stroke-linecap="round"/><circle cx="33" cy="22" r="3.3" fill="#f6b400"/></svg>`;
+const LOGO = (id) => `<svg viewBox="0 0 44 44" aria-hidden="true"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#818cf8"/><stop offset="1" stop-color="#4338ca"/></linearGradient></defs><rect width="44" height="44" rx="12" fill="url(#${id})"/><path d="M31.5 15.2A11 11 0 1 0 33 22" fill="none" stroke="#fff" stroke-width="4.6" stroke-linecap="round"/><path d="M22.5 22H27" stroke="#fff" stroke-width="4.6" stroke-linecap="round"/><circle cx="33" cy="22" r="3.3" fill="#f6b400"/></svg>`;
 // Before login: the shop window. Left (computer) or top (phone) sells the app; the card only asks for what is needed.
 // Marketing only: no menu, no data, nothing that needs a session.
 function authScreen(inner) {
@@ -1272,7 +1277,25 @@ async function switchProfile() {
   toast(`Agora estás como ${roleLabel(fd.get('p'))}.`);
   boot();   // asks for the phone code when the new profile needs it
 }
-document.getElementById('whoami').addEventListener('click', switchProfile);
+// v51: the card in the top bar (photo, role, name) always opens the account: switch profile when there is more
+// than one, and «Sair», which on the phone was only under Mais (Diogo, 20/10: «onde está o botão de sair?»).
+async function accountSheet() {
+  if (!state.ready || !state.me) return;
+  const me = state.me; const p = me.collaborator_id && state.people.find((x) => x.id === me.collaborator_id);
+  const many = ((me.profiles && me.profiles.length > 1) || canSimulate()) && !state.offline;
+  const d = document.createElement('dialog'); d.className = 'dlg acct';
+  d.innerHTML = `<div class="nt-head"><h2>A tua conta</h2><button class="iconbtn" id="acx" aria-label="Fechar">${ic('x')}</button></div>
+    <div class="acct-who">${avatar(p ? p.full_name : me.email)}<div class="grow"><b>${esc(p ? p.full_name : me.email)}</b><small>${esc(roleLabel(me.role))}${p ? ' · ' + esc(me.email) : ''}</small></div></div>
+    <div class="acts">${many ? `<button class="btn wide" id="acsw">${ic('users')} Mudar de perfil</button>` : ''}
+      <button class="btn big danger-ghost" id="acout">${ic('out')} Sair da app</button></div>
+    <p class="small muted">Ao sair, este telemóvel deixa de receber os avisos desta conta. As picagens guardadas sem rede não se perdem.</p>`;
+  d.addEventListener('close', () => d.remove()); d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
+  document.body.appendChild(d); d.showModal();
+  d.querySelector('#acx').onclick = () => d.close();
+  if (many) d.querySelector('#acsw').onclick = () => { d.close(); switchProfile(); };
+  d.querySelector('#acout').onclick = async (e) => { e.currentTarget.disabled = true; e.currentTarget.textContent = 'A sair…'; d.close(); await signOut(); };
+}
+document.getElementById('whoami').addEventListener('click', accountSheet);
 function showWho() {
   const me = state.me; const p = me.collaborator_id && state.people.find((x) => x.id === me.collaborator_id);
   const el = document.getElementById('whoami');
@@ -1281,9 +1304,9 @@ function showWho() {
   // The GestNow owner can be in any client company: the second line says which.
   const nm = isOwner() && state.platform.tenant ? state.platform.tenant : p ? p.full_name.split(' ')[0] + ' ' + p.full_name.split(' ').slice(-1)[0] : me.email;
   el.innerHTML = `${avatar(p ? p.full_name : me.email).replace('class="av ', 'class="av wav ')}<span class="wtx"><b>${esc(roleLabel(me.role))}${many ? ' ▾' : ''}</b><small>${esc(nm)}</small></span>`;
-  el.setAttribute('aria-label', `${roleLabel(me.role)}, ${p ? p.full_name : me.email}${many ? '. Mudar de perfil' : ''}`);
-  el.title = (p ? p.full_name : me.email) + (many ? ' · toca para mudar de perfil' : ''); el.className = 'who' + (PRIVILEGED.includes(me.role) ? ' strong' : '') + (many ? ' sw' : '');
-  el.disabled = !many; el.hidden = false;
+  el.setAttribute('aria-label', `${roleLabel(me.role)}, ${p ? p.full_name : me.email}. A tua conta e Sair`);
+  el.title = (p ? p.full_name : me.email) + ' · a tua conta e Sair'; el.className = 'who' + (PRIVILEGED.includes(me.role) ? ' strong' : '') + (many ? ' sw' : '');
+  el.disabled = false; el.hidden = false;
 }
 // Search everything (Ctrl+K or the magnifier in the top bar): the screens this login can open, and the people and sites
 // already loaded for it. Nothing new is fetched, and go() and each screen still check who may open what.
@@ -9568,22 +9591,33 @@ async function showNotices() {
   if (error) { el.innerHTML = errorState(friendly(error)); return; }
   const items = (data && data.items) || [];
   if (!items.length) { el.innerHTML = empty('box', 'Sem avisos', 'Quando houver algo para ti (um documento a caducar, uma semana para confirmar), aparece aqui.'); return; }
-  const all = d.querySelector('#ntall'); all.hidden = !data.unread;
-  all.onclick = async () => { const r = await sb.rpc('mini_notices_read', { p_ids: null }); if (r.error) return toast(friendly(r.error), 'bad');
-    el.querySelectorAll('.nt.unread').forEach((x) => x.classList.remove('unread')); all.hidden = true; bellCount(); };
+  const all = d.querySelector('#ntall');
   if (can('contas.gerir')) el.insertAdjacentHTML('beforebegin', '<p class="small muted"><button class="linkbtn" id="ntjobs">Ver as tarefas automáticas</button> (o que a app faz sozinha, todas as manhãs)</p>');
   const jb = d.querySelector('#ntjobs'); if (jb) jb.onclick = () => { d.close(); showJobs(); };
-  el.innerHTML = `<ul class="nt-list">${items.map((x, i) => { const [cls, lab] = NOTICE_SEV[x.severity] || NOTICE_SEV.low;
-    const sub = [x.person, x.site, ago(x.at)].filter(Boolean).map(esc).join(' · ');
-    return `<li><button class="nt${x.read ? '' : ' unread'} sev-${esc(x.severity || 'low')}" data-i="${i}"><span class="nt-dot" aria-hidden="true"></span>
-      <span class="grow"><b>${esc(x.title)}</b><small>${sub}</small></span>${x.severity === 'critical' || x.severity === 'high' ? chip(cls, lab) : ''}</button></li>`; }).join('')}</ul>`;
-  el.querySelectorAll('[data-i]').forEach((b) => b.onclick = async () => {
-    const x = items[Number(b.dataset.i)];
-    if (!x.read) { sb.rpc('mini_notices_read', { p_ids: [x.id] }).then(() => bellCount()); x.read = true; b.classList.remove('unread'); }
-    const run = noticeRoute(x);
-    d.close();
-    if (!run()) toast('Aviso marcado como lido.');
-  });
+  // v51: the list shows what is still to read; what was read stays one tap away («Ver os já lidos»).
+  let showRead = false;
+  const render = () => {
+    const list = items.map((x, i) => [x, i]).filter(([x]) => showRead || !x.read);
+    const nRead = items.filter((x) => x.read).length;
+    all.hidden = !items.some((x) => !x.read);
+    const more = !showRead && nRead ? `<p class="small muted nt-more"><button class="linkbtn" id="ntread">Ver os já lidos (${nRead})</button></p>` : '';
+    el.innerHTML = (list.length ? `<ul class="nt-list">${list.map(([x, i]) => { const [cls, lab] = NOTICE_SEV[x.severity] || NOTICE_SEV.low;
+      const sub = [x.person, x.site, ago(x.at)].filter(Boolean).map(esc).join(' · ');
+      return `<li><button class="nt${x.read ? '' : ' unread'} sev-${esc(x.severity || 'low')}" data-i="${i}"><span class="nt-dot" aria-hidden="true"></span>
+        <span class="grow"><b>${esc(x.title)}</b><small>${sub}</small></span>${x.severity === 'critical' || x.severity === 'high' ? chip(cls, lab) : ''}</button></li>`; }).join('')}</ul>`
+      : empty('box', 'Tudo lido', 'Não tens avisos por ler. Os novos aparecem aqui.')) + more;
+    const rb = el.querySelector('#ntread'); if (rb) rb.onclick = () => { showRead = true; render(); };
+    el.querySelectorAll('[data-i]').forEach((b) => b.onclick = async () => {
+      const x = items[Number(b.dataset.i)];
+      if (!x.read) { sb.rpc('mini_notices_read', { p_ids: [x.id] }).then(() => bellCount()); x.read = true; }
+      const run = noticeRoute(x);
+      d.close();
+      if (!run()) toast('Aviso marcado como lido.');
+    });
+  };
+  all.onclick = async () => { const r = await sb.rpc('mini_notices_read', { p_ids: null }); if (r.error) return toast(friendly(r.error), 'bad');
+    items.forEach((x) => { x.read = true; }); showRead = false; render(); bellCount(); toast('Tudo marcado como lido.', 'ok'); };
+  render();
 }
 function ago(at) {
   if (!at) return '';
@@ -9733,9 +9767,11 @@ async function pushCard(box) {
   }
   card('on', `${ic('ok')}<div class="grow"><b>Notificações ligadas neste telemóvel</b><small>Segurança toca logo; o resto às 7h.</small></div>
     <button class="btn small ghost" id="pushtest">Testar</button><button class="btn small ghost" id="pushoff">Desligar</button>`);
-  box.querySelector('#pushtest').onclick = async () => {
+  box.querySelector('#pushtest').onclick = async (e) => {
+    const b = e.currentTarget; b.disabled = true; b.textContent = 'A enviar…';
     const { error } = await sb.rpc('mini_push_test');
-    toast(error ? friendly(error) : 'Enviado. Deve chegar em segundos.', error ? 'bad' : 'ok');
+    toast(error ? friendly(error) : 'Enviado. Fecha a app: a notificação aparece em segundos no topo do telemóvel.', error ? 'bad' : 'ok');
+    b.textContent = 'Enviado'; setTimeout(() => { if (b.isConnected) { b.disabled = false; b.textContent = 'Testar'; } }, 60000);   // one a minute
   };
   box.querySelector('#pushoff').onclick = async () => { await Push.off(); toast('Notificações desligadas neste telemóvel.'); pushCard(box); };
 }
