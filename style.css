@@ -454,8 +454,8 @@ body.signed-out main { max-width: none; margin: 0; padding: 0; animation: none; 
 /* phone: the same scene, small, just under the card on the left; the trust lines sit at the very bottom of the screen */
 .auth-main { display: flex; flex-direction: column; }
 .auth-main > .card { width: 100%; }
-.demo-sm { width: 110px; height: 84px; margin: 10px 0 0 4px; }
-.demo-sm .demo { display: block; position: relative; width: 300px; height: 232px; transform: scale(.36); transform-origin: 0 0; }
+.demo-sm { width: 165px; height: 128px; margin: 12px 0 0 4px; }
+.demo-sm .demo { display: block; position: relative; width: 300px; height: 232px; transform: scale(.55); transform-origin: 0 0; }
 .auth-low { margin-top: auto; padding-top: 8px; }
 /* phone: tighter so the whole login fits one screen */
 @media (max-width: 639px) {
@@ -465,9 +465,12 @@ body.signed-out main { max-width: none; margin: 0; padding: 0; animation: none; 
   .auth-pitch p { font-size: 14.5px; line-height: 1.5; }
   .feats { margin-top: 14px; gap: 6px; } .feats li { padding: 4px 12px 4px 4px; }
   .auth .auth-main { margin-top: -36px; padding-bottom: 8px; }
-  .auth .card { padding: 20px 20px 20px; }
-  .auth h1 { font-size: 24px; } .auth .lead { font-size: 14px; }
-  .auth .card input { min-height: 48px; }
+  .auth .auth-main .card { padding: 16px 18px 18px; }
+  .auth .auth-main h1 { font-size: 22px; } .auth .auth-main .lead { font-size: 13.5px; margin-bottom: 2px; }
+  .auth .auth-main .card label { font-size: 13px; }
+  .auth .auth-main .card input { min-height: 44px; height: 44px; padding-top: 8px; padding-bottom: 8px; }
+  .auth .auth-main .card label { margin-top: 12px; } .auth .auth-main form > p:last-child { margin-top: 14px; }
+  .auth .auth-main .card .btn.go { min-height: 48px; margin-top: 0; }
   .auth .trust { margin-top: 12px; }
 }
 .auth-main { position: relative; flex: 1; margin-top: -44px; padding: 0 14px 28px; }
