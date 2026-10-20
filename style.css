@@ -1968,3 +1968,27 @@ button.cd.me-none { background: transparent; color: var(--ink-2); box-shadow: in
 :root[data-theme="sol"] .enc-res, :root[data-theme="sol"] .enc-picar { box-shadow: none; outline: 3px solid #000; }
 .office-main { min-width: 0; }   /* the day-state bar must not widen the office column */
 .enc-flow li { overflow: hidden; } .enc-flow li span, .enc-flow li small { overflow-wrap: anywhere; }
+
+/* v49 Avisos: the bell, its panel and the live screens */
+.bell { position: relative; }
+.bell .bdg { position: absolute; top: 5px; right: 4px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--bad); color: #fff;
+  font-size: 11px; font-weight: 800; line-height: 18px; text-align: center; box-shadow: 0 0 0 2px var(--top-bg, #0a3d4b); }
+.live-on .bell::after { content: ""; position: absolute; left: 8px; bottom: 8px; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); opacity: .9; }
+.dlg.notices .nt-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.dlg.notices .nt-head h2 { flex: 1; margin: 0; }
+.nt-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.nt { width: 100%; display: flex; align-items: center; gap: 10px; text-align: left; padding: 12px; border: 0; border-radius: var(--r-md); background: var(--surface-2);
+  color: var(--ink); font: inherit; cursor: pointer; min-height: var(--tap); }
+div.nt { cursor: default; }
+.nt .grow { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nt b { font-weight: 650; } .nt small { color: var(--ink-2); }
+.nt .nt-dot { flex: 0 0 9px; width: 9px; height: 9px; border-radius: 50%; background: transparent; }
+.nt.unread { background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--field); }
+.nt.unread b { font-weight: 800; }
+.nt.unread .nt-dot { background: var(--info); }
+.nt.unread.sev-high .nt-dot { background: var(--warn); }
+.nt.unread.sev-critical .nt-dot { background: var(--bad); }
+.nt.sev-critical { box-shadow: inset 4px 0 0 var(--bad); }
+.fresh { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; margin: 0 0 12px; padding: 10px; border: 0; border-radius: var(--r-md);
+  background: var(--info-bg); color: var(--info); font: inherit; font-weight: 700; cursor: pointer; }
+.fresh .i { width: 18px; height: 18px; }
