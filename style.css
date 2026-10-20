@@ -2126,3 +2126,21 @@ dialog.docview { box-sizing: border-box; overflow-x: hidden; max-height: 96vh; p
 .sw input:focus-visible + i { outline: 3px solid var(--brand, #4f46e5); outline-offset: 2px; }
 .sw input:disabled + i { opacity: .5; }
 ul.plain { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; } ul.plain li { display: flex; gap: 8px; align-items: center; }
+
+/* v70 · Painel de negócio do dono e ficha com pack standard e extras */
+.biz-money b { color: var(--brand, #4f46e5); }
+.biz-sell { margin: -8px 0 16px; }
+.biz-list li { display: flex; align-items: baseline; gap: 10px; padding: 8px 0; border-bottom: var(--bw) solid var(--line); }
+.biz-list li:last-child { border-bottom: 0; }
+.biz-list small { color: var(--ink-2); white-space: nowrap; }
+.biz-list b { min-width: 72px; text-align: right; font-variant-numeric: tabular-nums; }
+.pack-items { list-style: none; margin: 0 0 12px; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 6px 14px; }
+.pack-items li { display: flex; align-items: center; gap: 8px; font-size: var(--t-sm); }
+.pack-items svg { width: 16px; height: 16px; color: var(--ok, #16a34a); flex: none; }
+.pack-price, .pack-total { display: flex; align-items: center; gap: 12px; margin: 0; }
+.pack-price { padding-top: 12px; border-top: var(--bw) solid var(--line); }
+.pack-price small, .pack-total small { display: block; color: var(--ink-2); font-size: var(--t-xs); }
+.pack-price > b, .pack-total > b { font-size: var(--t-lg); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pack-total { margin-top: 12px; }
+.pack-total > b { color: var(--brand, #4f46e5); }
+.mod .mod-price { display: block; margin-top: 4px; color: var(--ink-1, inherit); font-weight: 600; }
