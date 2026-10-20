@@ -826,7 +826,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '64';
+const APP_VERSION = '65';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -3102,6 +3102,25 @@ function onbData(ob, me) {
   });
 }
 
+// v65 (sql/87): the company's tolerance on card taps. The taps never change; only the hours to pay use it.
+async function showTapRounding() {
+  const box = $('#roundform'); if (!box) return;
+  const { data, error } = await sb.rpc('mini_tap_rounding');
+  if (!box.isConnected) return;
+  if (error || !data) { box.innerHTML = `<p class="small">${esc(error ? friendly(error) : 'Sem regras de horas nesta empresa.')}</p>`; return; }
+  const pad = (n) => String(n).padStart(2, '0');
+  const eg = (tol, grid) => tol ? `Chega às 07:${pad(tol)}: conta 07:00. Chega às 07:${pad(tol + 1)}: conta 07:${pad(tol + 1)} (desconta ${tol + 1} min, nunca ${grid} min).` : 'Paga-se o minuto exato de cada picagem.';
+  box.innerHTML = `<form id="rf2"><div class="row"><div><label for="rtol">Tolerância (minutos)</label><select id="rtol" name="tol">${[0, 2, 3, 5, 10, 15].map((n) => `<option value="${n}" ${n === data.tolerance ? 'selected' : ''}>${n === 0 ? 'Sem tolerância' : n + ' min'}</option>`).join('')}</select></div>
+      <div><label for="rgrid">Horas certas de</label><select id="rgrid" name="grid">${[[15, '15 em 15 min'], [30, 'meia em meia hora'], [60, 'hora a hora']].map(([v, l]) => `<option value="${v}" ${v === data.grid ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div>
+    <p class="small muted" id="reg">${esc(eg(data.tolerance, data.grid))}</p>
+    <p class="small muted">Uma picagem perto de uma hora certa conta como essa hora, à entrada e à saída. Mais longe, conta o minuto exato. As picagens reais nunca mudam: é o que vai para o registo de tempos (ACT). Depois da hora só conta como extra se for aprovada. Conta a partir de hoje; os dias anteriores ficam como estavam.</p>
+    <button class="btn wide">Guardar</button></form>`;
+  const f = $('#rf2');
+  f.onchange = () => { $('#reg').textContent = eg(Number(f.tol.value), Number(f.grid.value)); };
+  f.onsubmit = async (e) => { e.preventDefault();
+    const { error: e2 } = await sb.rpc('mini_set_tap_rounding', { p_tolerance: Number(f.tol.value), p_grid: Number(f.grid.value) });
+    if (e2) return toast(friendly(e2)); toast('Regra guardada. Conta a partir de hoje.'); };
+}
 // Step 4: read the contract and the internal rules to the end, write the name, sign with the finger.
 function onbContract(ob, me) {
   const k = me.contract; const r = me.rules;
@@ -4979,6 +4998,7 @@ function viewOffice() {
         <button class="btn ghost wide" id="prim">Ficheiro para o Primavera (Relógio de Ponto)</button></div>
       ${more('Sobre o ficheiro do Primavera', '<p>Horas extra aprovadas, uma linha por pessoa, dia e tipo (1.ª hora, seguintes, descanso, feriado, e os mesmos acima das 100 h do ano). As noturnas não vão neste ficheiro. No Primavera: Recursos Humanos › Alterações Mensais › Relógio de Ponto. O "Nº de trabalhador" tem de ser o número do funcionário no Primavera.</p>')}
       ${can('salarios.configurar') ? `<details class="fold" id="primcfg"><summary><span>Configurar o ficheiro do Primavera<span class="sub">Códigos de horas extra, formato e posições</span></span></summary><div id="primform">${skel(1)}</div></details>` : ''}
+      ${can('salarios.configurar') ? `<details class="fold" id="roundcfg"><summary><span>Tolerância nas picagens<span class="sub">Minutos perdoados à entrada e à saída</span></span></summary><div id="roundform">${skel(1)}</div></details>` : ''}
       ${can('salarios.configurar') ? `<label class="check prof payest"><input type="checkbox" id="payest" disabled><span><b>Mostrar ao colaborador quanto vai ganhar</b><small>Estimativa do bruto do mês, em «As minhas horas», com o valor à hora de cada um. Só para quem é da empresa (nunca para subempreiteiros).</small></span></label>` : ''}
 </div>` : ''}
     ${can('diarias.emitir') ? `<div class="card noprint" id="pdcard"><h2 style="margin-top:0">Diárias</h2>
@@ -5015,6 +5035,7 @@ function viewOffice() {
       if (e) { x.checked = !x.checked; return toast(friendly(e)); }
       toast(x.checked ? 'Os colaboradores passam a ver a estimativa do que vão ganhar.' : 'A estimativa deixou de aparecer aos colaboradores.'); };
   });
+  on('#roundcfg', 'ontoggle', () => { if ($('#roundcfg').open) showTapRounding(); });
   on('#act', 'onclick', () => downloadAct($('#actsite').value, from, to));
   on('#pdcfg', 'ontoggle', () => { if ($('#pdcfg').open) showPerDiemSettings(); });
   on('#pdcases', 'ontoggle', () => { if ($('#pdcases').open) loadPdCases('#pdcasebox'); });
