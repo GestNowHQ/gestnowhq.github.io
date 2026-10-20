@@ -786,7 +786,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '62';
+const APP_VERSION = '63';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -3040,9 +3040,11 @@ function onbData(ob, me) {
     const t = docs.find((x) => x.type_id === b.dataset.doc);
     // keep what was typed before opening the sheet
     const typed = await save(b); if (!typed) return;
-    const fd = await askSheet(t.name, `<div class="row"><div><label>Data de emissão *</label><input name="issue" type="date" required max="${isoDay(new Date())}"></div>
+    // 85d: a proof (the IBAN one) needs only the file; its number is the one typed above.
+    const fileOnly = t.form === 'file';
+    const fd = await askSheet(t.name, `${fileOnly ? `<p class="small muted">${t.code === 'comprovativo_iban' ? 'O número do IBAN já o escreveste em cima. Aqui só precisas da foto ou PDF do comprovativo do banco, com o teu nome e o IBAN à vista.' : 'Só precisas da foto ou PDF.'}</p>` : `<div class="row"><div><label>Data de emissão *</label><input name="issue" type="date" required max="${isoDay(new Date())}"></div>
         <div><label>Válido até</label><input name="expiry" type="date" min="${isoDay(new Date())}"></div></div>
-      <label>Número (se tiver)</label><input name="num" maxlength="40" autocomplete="off">
+      <label>Número (se tiver)</label><input name="num" maxlength="40" autocomplete="off">`}
       <label>Foto ou PDF *</label><input name="file" type="file" accept="${FILE_ACCEPT}" capture="environment" required>
       <p class="small muted">Até 10 MB. Fica guardado em privado e nunca se apaga.</p>`, 'Enviar documento');
     if (!fd) return onbData(ob, typed);
@@ -3051,7 +3053,7 @@ function onbData(ob, me) {
     const path = `${state.me.tenant_id}/${state.me.collaborator_id}/${uuid()}.${FILE_TYPES[file.type]}`;
     const up = await sb.storage.from('documentos').upload(path, file, { contentType: file.type, upsert: false });
     if (up.error) { toast(friendly(up.error)); return onbData(ob, typed); }
-    const r = await sb.rpc('mini_onb_add_document', { p_type: t.type_id, p_number: fd.get('num') || null, p_issue: fd.get('issue'),
+    const r = await sb.rpc('mini_onb_add_document', { p_type: t.type_id, p_number: fd.get('num') || null, p_issue: fd.get('issue') || null,
       p_expiry: fd.get('expiry') || null, p_file: path, p_sha256: await sha256Hex(file) });
     if (r.error) { toast(friendly(r.error)); return onbData(ob, typed); }
     toast('Documento enviado.');
