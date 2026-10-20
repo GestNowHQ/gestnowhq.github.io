@@ -826,7 +826,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '65';
+const APP_VERSION = '66';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -1756,6 +1756,7 @@ function viewClock() {
       <p class="small" id="dirhelp"></p>
     </section>
     ${canEmergency() ? `<button class="btn danger wide pic-emer" id="pemer">${ic('warn')}Emergência: contar pessoas no ponto de encontro</button>` : ''}
+    ${canSimTaps() ? `<button class="btn ghost wide pic-sim" id="simtap" aria-expanded="false">${ic('tap')}Simular picagem (teste)</button><div id="simbox"></div>` : ''}
     <div id="result" aria-live="polite"></div><div id="queue"></div>
     <form id="manual" class="manual card"><div><label for="uid">Número do cartão (ou leitor USB)</label>
       <input id="uid" name="uid" autocomplete="off" autocapitalize="characters" placeholder="ex.: 04:A1:B2:C3"></div>
@@ -1778,6 +1779,7 @@ function viewClock() {
   };
   if (nfcOk) $('#nfc').onclick = toggleNfc;
   if ($('#pemer')) $('#pemer').onclick = () => go('emergencia');
+  if ($('#simtap')) $('#simtap').onclick = toggleSimTaps;
   renderDir(); renderTapLog(); showQueue(); showRejected(); showClockWarn(); loadRecent(); loadLive();
   tickClock(); state.tick = setInterval(tickClock, 1000);
   state.timer = setInterval(() => { loadRecent(); loadLive(); }, 60000);
@@ -1841,6 +1843,48 @@ function nfcLook(on) {
   $('#nfchelp').textContent = on ? 'O leitor está ligado. Toque aqui para desligar.' : 'Depois é só encostar o cartão às costas do telemóvel.';
 }
 
+// ---- «Simular picagem» (sql/88): only the GestNow owner, only in a test company. Each person has a virtual card
+// (UID F5…); the tap goes through the same path as a real card, so the gate and the hours engine are the real ones.
+// «Anular simuladas» voids them all; the rows go with the test-data cleanup before real use.
+const canSimTaps = () => isOwner() && !!state.platform.sim_taps && !state.offline;
+async function toggleSimTaps() {
+  const b = $('#simtap'); const box = $('#simbox'); if (!b || !box) return;
+  if (b.getAttribute('aria-expanded') === 'true') { b.setAttribute('aria-expanded', 'false'); box.innerHTML = ''; return; }
+  b.setAttribute('aria-expanded', 'true'); box.innerHTML = `<div class="card sim">${skel(3)}</div>`;
+  const [{ data, error }, { data: n }] = await Promise.all([sb.rpc('mini_sim_people'), sb.rpc('mini_sim_count')]);
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = `<div class="result bad">${ic('x')}<div><b>Simulador</b>${esc(friendly(error))}</div></div>`; return; }
+  const site = currentSite(); const tz = site ? siteTz(site.id) : DEFAULT_TZ;
+  const people = data.people || [];
+  box.innerHTML = `<div class="card sim">
+    <div class="sim-h"><b>Cartões virtuais</b>${chip('warn', 'teste')}</div>
+    <p class="small muted">Toca numa pessoa: é como se ela encostasse o cartão a este telemóvel, na obra escolhida e com a direção de cima. Só existe em empresas de teste.</p>
+    <div class="row"><div><label for="simat">Hora da picagem (hoje, ${esc(tzName(tz))})</label>
+      <input id="simat" type="time" max="${esc(localInput(serverNow().toISOString(), tz).slice(11))}"></div></div>
+    <p class="small muted">Vazio = agora. Escreve uma hora mais cedo para testar, por exemplo, 07:04 ou 07:06.</p>
+    <div class="sim-list">${people.map((p) => `<button type="button" class="btn ghost sim-p" data-uid="${esc(p.uid)}">${avatar(p.name)}<span><b>${esc(p.name)}</b><small>${esc(p.number || '')} · cartão …${esc(p.uid.slice(-4))}</small></span></button>`).join('')
+      || '<p class="small muted">Ainda não há pessoas com a entrada completa nesta empresa.</p>'}</div>
+    ${data.joining ? `<p class="small muted">${data.joining} pessoa(s) ainda a fazer a entrada: só recebem cartão quando a acabarem.</p>` : ''}
+    <button type="button" class="btn ghost wide" id="simclear" ${n ? '' : 'disabled'}>${ic('x')}Anular as picagens simuladas${n ? ` (${n})` : ''}</button></div>`;
+  box.querySelectorAll('.sim-p').forEach((x) => x.onclick = () => {
+    const t = $('#simat').value; let at = null;
+    if (t) {
+      at = new Date(zonedToUtc(`${localDay(serverNow().toISOString(), tz)}T${t}`, tz));
+      if (at.getTime() > serverNow().getTime()) return toast('Essa hora ainda não chegou.');
+    }
+    clock(x.dataset.uid, false, { at });
+    const c = $('#simclear'); if (c) { c.disabled = false; c.textContent = 'Anular as picagens simuladas'; }
+  });
+  $('#simclear').onclick = async () => {
+    const fd = await askSheet('Anular as picagens simuladas', '<p>Todas as picagens feitas com cartões virtuais deixam de contar nas horas, e os cartões virtuais desligam-se. Abrir o simulador outra vez liga-os de novo.</p>', 'Anular');
+    if (!fd) return;
+    const { data: r, error: e } = await sb.rpc('mini_sim_clear');
+    if (e) return toast(friendly(e));
+    toast(`${r.voided} picagem(ns) simulada(s) anulada(s).${r.locked ? ` ${r.locked} ficou(aram): dia já enviado para salários.` : ''}`);
+    $('#simtap').setAttribute('aria-expanded', 'false'); $('#simbox').innerHTML = ''; loadRecent(); loadLive();
+  };
+}
+
 // ---- the phone's clock: taps use the server's time (M5)
 const serverNow = () => new Date(Date.now() + (state.clockOffset || 0));
 async function syncClock() {
@@ -1880,15 +1924,17 @@ async function nextDirection(project, raw, at) {
   return { dir: lastDirLocal(raw, at.getTime()), guessed: true };
 }
 
-async function clock(rawUid, typed) {
+async function clock(rawUid, typed, sim) {
   const site = currentSite(); if (!site) return toast('Escolhe uma obra.');
   const seq = ++state.tapSeq;
-  const raw = normUid(rawUid); const at = serverNow();
+  const raw = normUid(rawUid); const at = (sim && sim.at) || serverNow();
   let dir = state.dirOverride; let guessed = false;
   state.dirOverride = null; renderDir();
   if (!dir) ({ dir, guessed } = await nextDirection(site.id, raw, at));
   const ev = { p_project: site.id, p_capture: 'card_on_supervisor_phone', p_raw: raw, p_direction: dir,
     p_event_time: at.toISOString(), p_client_event_id: uuid(), p_device_time: new Date().toISOString() };
+  // a simulated tap at an earlier time is sent like a tap kept without signal (the server flags it as late)
+  if (sim && sim.at) { ev.p_device_time = at.toISOString(); ev.p_was_offline = true; }
   const word = dir === 'in' ? 'ENTRADA' : 'SAÍDA';   // always the direction that was sent (B1)
   const r = await sendEvent(ev, typed);
   if (seq === state.tapSeq) state.resultId = ev.p_client_event_id;   // the box below now belongs to this tap
@@ -1904,7 +1950,7 @@ async function clock(rawUid, typed) {
   const d = r.data; const who = d.name || 'Cartão ' + ev.p_raw;
   if (d.status === 'accepted') {
     rememberDir(raw, dir, at.getTime());
-    showResult('ok', who, `${word} aceite${typed ? ' · número escrito à mão: o escritório confirma' : ''}`, seq); beep(true);
+    showResult('ok', who, `${word} aceite${typed ? ' · número escrito à mão: o escritório confirma' : ''}${sim ? ` · simulada às ${fmtHour(at.toISOString(), siteTz(site.id))}` : ''}`, seq); beep(true);
     if (dir === 'in' && d.collaborator_id) warnExpiring(d.collaborator_id, who, word, seq);
   } else if (d.status === 'duplicate') { showResult('warn', who, `Já picou há instantes (${word})`, seq); beep(true); }
   else { showResult('bad', `${who}: NÃO ENTRA`, (d.reasons || []).map(reasonText).join(' · '), seq); beep(false); }
