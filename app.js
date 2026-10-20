@@ -770,7 +770,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '49';
+const APP_VERSION = '50';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -878,6 +878,7 @@ function idleTooLong(role) {
 // M1: the session ends on the server too. 'local' revokes this phone's session there (supabase-js refreshes an expired
 // token first, so the logout call is accepted); the person's other devices stay signed in. Personal copies go with it.
 async function idleOut() {
+  await pushForget();
   if (Live) Live.stop(); state.idleOut = true; stopNfc(); state.ready = false; nav.hidden = true; closePalette(); forgetPersonal();
   try { await sb.auth.signOut({ scope: 'local' }); } catch (_) { /* no network: the local copy is gone anyway */ }
 }
@@ -1006,6 +1007,8 @@ async function boot() {
   if (other.length) toast(`Há ${other.length} picagem(ns) de outra conta neste telemóvel, ainda por enviar.`);
   go(state.view);
   document.getElementById('bell').hidden = false; bellCount(); if (Live) Live.start();
+  if (typeof Push !== 'undefined') Push.refresh();
+  if (location.hash === '#avisos') { history.replaceState(null, '', location.pathname + location.search); setTimeout(showNotices, 300); }
   climbAfterLogin();
   if (state.tourNext) { state.tourNext = false; setTimeout(startTour, 700); return; }   // just finished the onboarding: the bot shows the app
   showBrief();
@@ -1094,6 +1097,7 @@ async function checkSession() {
 
 // «Sair»: every session of this login ends on the server (scope global, the default), and the personal copies go.
 async function signOut() {
+  await pushForget();
   if (Live) Live.stop(); stopNfc(); state.ready = false; nav.hidden = true; forgetPersonal();
   try { await sb.auth.signOut({ scope: 'global' }); } catch (_) { /* no network: the local copy is gone anyway */ }
 }
@@ -9553,11 +9557,12 @@ async function showNotices() {
   if (state.offline) { toast('Sem rede: os avisos aparecem quando a rede voltar.'); return; }
   const d = document.createElement('dialog'); d.className = 'dlg notices';
   d.innerHTML = `<div class="nt-head"><h2>Avisos</h2><button class="btn small ghost" id="ntall" hidden>Marcar tudo como lido</button>
-    <button class="iconbtn" id="ntx" aria-label="Fechar">${ic('x')}</button></div><div id="ntlist">${skel(3)}</div>`;
+    <button class="iconbtn" id="ntx" aria-label="Fechar">${ic('x')}</button></div><div id="pushbox"></div><div id="ntlist">${skel(3)}</div>`;
   d.addEventListener('close', () => { d.remove(); bellCount(); });
   d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
   document.body.appendChild(d); d.showModal();
   d.querySelector('#ntx').onclick = () => d.close();
+  pushCard(d.querySelector('#pushbox'));
   const { data, error } = await sb.rpc('mini_notices', { p_limit: 40 });
   const el = d.querySelector('#ntlist'); if (!el.isConnected) return;
   if (error) { el.innerHTML = errorState(friendly(error)); return; }
@@ -9657,3 +9662,82 @@ var Live = (() => {   // var: boot() runs before this line is reached; it checks
   }
   return { start, stop };
 })();
+
+// ------------------------------------------------------------------ Notificações no telemóvel (sql/84, Web Push)
+// The bell's panel has the switch. «Ligar» asks the phone (Allow), then the database keeps this phone's push address
+// for this login. Safety rings at once; the rest comes in one summary at 07:00. Leaving the app («Sair», or the idle
+// logout) switches this phone off for this login, so the next person on the phone gets nothing of the last one.
+const PUSH_KEY = 'gn.push.user';
+async function pushForget() { try { if (typeof Push !== 'undefined') await Push.forget(); } catch (_) { /* never blocks the logout */ } }
+var Push = {   // var: boot() and the logout check «typeof Push» before this line may have run
+  supported: () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window && !!cfg.pushKey && (location.protocol === 'https:' || location.hostname === 'localhost'),
+  iosNotInstalled: () => /iPhone|iPad/.test(navigator.userAgent) && !(window.navigator.standalone || matchMedia('(display-mode: standalone)').matches),
+  async sub() { try { const r = await navigator.serviceWorker.ready; return await r.pushManager.getSubscription(); } catch (_) { return null; } },
+  key() { const s = cfg.pushKey.replace(/-/g, '+').replace(/_/g, '/'); const b = atob(s + '='.repeat((4 - s.length % 4) % 4)); return Uint8Array.from(b, (c) => c.charCodeAt(0)); },
+  label() { const u = navigator.userAgent; return (/Android/.test(u) ? 'Android' : /iPhone|iPad/.test(u) ? 'iPhone' : /Windows/.test(u) ? 'Windows' : /Mac/.test(u) ? 'Mac' : 'Outro')
+    + (/Edg\//.test(u) ? ' · Edge' : /Firefox/.test(u) ? ' · Firefox' : /Chrome/.test(u) ? ' · Chrome' : /Safari/.test(u) ? ' · Safari' : ''); },
+  async save(s) {
+    const j = s.toJSON();
+    const { error } = await sb.rpc('mini_push_register', { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth, p_label: Push.label() });
+    if (error) throw error;
+    store(PUSH_KEY, state.me.user_id);
+  },
+  async on() {
+    if (Notification.permission === 'denied') throw new Error('denied');
+    const p = await Notification.requestPermission();
+    if (p !== 'granted') throw new Error('denied');
+    const r = await navigator.serviceWorker.ready;
+    let s = await r.pushManager.getSubscription();
+    if (s) { const k = s.options && s.options.applicationServerKey; if (k && btoa(String.fromCharCode(...new Uint8Array(k))).replace(/=+$/, '') !== btoa(String.fromCharCode(...Push.key())).replace(/=+$/, '')) { await s.unsubscribe(); s = null; } }
+    if (!s) s = await r.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: Push.key() });
+    await Push.save(s);
+  },
+  // On login: this phone was switched on by this same login: tell the database again (keys can change).
+  async refresh() {
+    if (!Push.supported() || state.offline || Notification.permission !== 'granted' || load(PUSH_KEY, '') !== state.me.user_id) return;
+    const s = await Push.sub(); if (s) Push.save(s).catch(() => {});
+  },
+  async off() {
+    const s = await Push.sub(); store(PUSH_KEY, undefined);
+    if (s) { await sb.rpc('mini_push_unregister', { p_endpoint: s.endpoint }).then(() => {}, () => {}); }
+  },
+  // Before signing out (the call needs the session). Never blocks the logout for more than 2 s.
+  forget() {
+    if (!Push.supported() || load(PUSH_KEY, '') !== (state.me && state.me.user_id)) return Promise.resolve();
+    return Promise.race([Push.off(), new Promise((r) => setTimeout(r, 2000))]).catch(() => {});
+  },
+};
+async function pushCard(box) {
+  if (!box) return;
+  const card = (cls, html) => { box.className = 'push-card ' + cls; box.innerHTML = html; };
+  if (!Push.supported()) {
+    return card('off', Push.iosNotInstalled()
+      ? `${ic('bell')}<div class="grow"><b>Notificações no iPhone</b><small>Primeiro adiciona a GestNow ao ecrã principal (Partilhar › Adicionar ao ecrã principal) e abre-a por lá.</small></div>`
+      : `${ic('bell')}<div class="grow"><b>Notificações no telemóvel</b><small>Este browser não as recebe. No Android usa o Chrome.</small></div>`);
+  }
+  const s = await Push.sub();
+  const mine = s && Notification.permission === 'granted' && load(PUSH_KEY, '') === state.me.user_id;
+  if (Notification.permission === 'denied') {
+    return card('warn', `${ic('bell')}<div class="grow"><b>Notificações bloqueadas neste telemóvel</b><small>No Chrome: cadeado ao lado do endereço › Notificações › Permitir. Depois volta aqui.</small></div>`);
+  }
+  if (!mine) {
+    card('ask', `${ic('bell')}<div class="grow"><b>Receber avisos no telemóvel</b><small>Segurança toca logo; o resto chega num resumo às 7h. Nunca aparecem nomes no ecrã bloqueado.</small></div>
+      <button class="btn small" id="pushon">Ligar</button>`);
+    box.querySelector('#pushon').onclick = async (e) => {
+      e.target.disabled = true; e.target.textContent = 'A ligar…';
+      try { await Push.on(); toast('Notificações ligadas neste telemóvel.', 'ok'); }
+      catch (err) { toast(err && err.message === 'denied' ? 'O telemóvel não deu autorização. Carrega em «Permitir» quando perguntar.' : friendly(err), 'bad'); }
+      pushCard(box);
+    };
+    return;
+  }
+  card('on', `${ic('ok')}<div class="grow"><b>Notificações ligadas neste telemóvel</b><small>Segurança toca logo; o resto às 7h.</small></div>
+    <button class="btn small ghost" id="pushtest">Testar</button><button class="btn small ghost" id="pushoff">Desligar</button>`);
+  box.querySelector('#pushtest').onclick = async () => {
+    const { error } = await sb.rpc('mini_push_test');
+    toast(error ? friendly(error) : 'Enviado. Deve chegar em segundos.', error ? 'bad' : 'ok');
+  };
+  box.querySelector('#pushoff').onclick = async () => { await Push.off(); toast('Notificações desligadas neste telemóvel.'); pushCard(box); };
+}
+// A tap on a notification opens the app on the bell: from a closed app (#avisos) or an open one (a message).
+if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', (e) => { if (e.data === 'gn-avisos' && state.ready) showNotices(); });

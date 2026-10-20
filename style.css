@@ -1992,3 +1992,11 @@ div.nt { cursor: default; }
 .fresh { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; margin: 0 0 12px; padding: 10px; border: 0; border-radius: var(--r-md);
   background: var(--info-bg); color: var(--info); font: inherit; font-weight: 700; cursor: pointer; }
 .fresh .i { width: 18px; height: 18px; }
+/* v50 the phone notifications switch, on top of the bell's panel */
+.push-card { display: flex; align-items: center; gap: 10px; padding: 12px; margin: 0 0 12px; border-radius: var(--r-md); background: var(--surface-2); flex-wrap: wrap; }
+.push-card > .i { width: 22px; height: 22px; flex: 0 0 auto; }
+.push-card .grow { display: flex; flex-direction: column; gap: 2px; min-width: 180px; flex: 1; }
+.push-card small { color: var(--ink-2); }
+.push-card.ask { background: var(--info-bg); } .push-card.ask > .i { color: var(--info); }
+.push-card.on > .i { color: var(--ok); }
+.push-card.warn { background: var(--warn-bg); } .push-card.warn > .i { color: var(--warn); }
