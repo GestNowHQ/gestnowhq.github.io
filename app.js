@@ -826,7 +826,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '68';
+const APP_VERSION = '69';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -1029,6 +1029,7 @@ async function boot() {
     if (acc) { state.me.perms = acc.permissions || []; state.me.depts = acc.departments || []; state.me.profiles = acc.profiles || state.me.profiles; }
     const { data: pw } = await sb.rpc('platform_whoami');
     state.platform = pw || null;
+    await loadModules();
     store(ME_KEY, { ...state.me });
   }
   state.ready = true; touch();
@@ -1473,13 +1474,13 @@ function go(view) {
   if (state.uiEl && window.GNUI) { window.GNUI.unmount(state.uiEl); state.uiEl = null; }
   state.view = view;
   app.classList.toggle('wide', view === 'secretariado' || view === 'painel');
-  const tab = view === 'ficha' ? 'trabalhadores' : view === 'fichaepi' ? 'armazem' : view;
+  const tab = view === 'ficha' ? 'trabalhadores' : view === 'fichaepi' ? 'armazem' : view === 'cliente' ? 'clientes' : view;
   nav.querySelectorAll('button[data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === tab));
   const cur = nav.querySelector(`button[data-view="${tab}"]`);
   nav.querySelector('button[data-more]').classList.toggle('on', !!cur && cur.parentElement.id === 'more');
   window.scrollTo(0, 0);
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
-     ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients, inicio: viewHome,
+     ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients, cliente: viewClient, inicio: viewHome,
      processo: viewProcess, orcamentos: viewEstimates, lmra: viewLmra, emergencia: viewEmergency,
      armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, producao: viewProd, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
   checkEmergencyBar(); encBadges();
@@ -1541,53 +1542,89 @@ const isOwner = () => !!(state.platform && state.platform.platform);
 async function viewClients() {
   if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!isOwner()) return viewClock();   // code guard as well as the database's
-  app.innerHTML = `<div class="ph"><div><p class="ph-k">GestNow · só tu vês</p><h1>Os meus clientes</h1></div><button class="btn ghost" id="newc">+ Novo cliente</button></div>
-    <div id="ovsum">${skel(1)}</div>
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">GestNow · só tu vês</p><h1>Os meus clientes</h1></div><button class="btn" id="newc">+ Novo cliente</button></div>
+    <div class="cl-find"><input id="clq" type="search" placeholder="Procurar cliente pelo nome ou NIF" autocomplete="off" aria-label="Procurar cliente">
+      <label class="check inline"><input type="checkbox" id="cltest"> Mostrar empresas de teste</label></div>
     <div id="clist">${skel(3)}</div>`;
   $('#newc').onclick = newClient;
   loadClients();
 }
-// Level 1 of the pyramid (sql/89): one card per company with a light. Tap = open that company (its Início).
-// Numbers only, never names of people.
-const LIGHT = { red: ['bad', 'Precisa de ti'], amber: ['warn', 'Há coisas à espera'], green: ['ok', 'Tudo em dia'], grey: ['info', 'Sem obras a decorrer'] };
+// Level 1 for the owner (sql/91): a plain list of client companies, account data only. Tap = the client's card.
+const ACC_STATE = { active: ['ok', 'Ativo'], trialing: ['info', 'Em experiência'], past_due: ['warn', 'Pagamento em atraso'], canceled: ['bad', 'Cancelado'], unpaid: ['bad', 'Suspenso'] };
 async function loadClients() {
   const el = $('#clist'); if (!el) return;
   const { data, error } = await sb.rpc('platform_overview');
   if (!el.isConnected) return;
-  if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; $('#ovsum').innerHTML = ''; return; }
+  if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
   const n = (v) => Number(v || 0).toLocaleString('pt-PT');
-  const real = data.filter((c) => !c.test); const test = data.filter((c) => c.test);
-  const sum = (k) => real.reduce((t, c) => t + Number(c[k] || 0), 0);
-  $('#ovsum').innerHTML = `<div class="ov-tiles"><div><b>${n(real.length)}</b><span>cliente(s)</span></div><div><b>${n(sum('inside_now'))}</b><span>na obra agora</span></div>
-    <div><b>${n(sum('to_approve'))}</b><span>dias por aprovar</span></div><div><b>${n(sum('docs_expired'))}</b><span>com documento caducado</span></div></div>`;
-  const why = (c) => {
-    const w = [];
-    if (Number(c.docs_expired)) w.push(`${n(c.docs_expired)} pessoa(s) com documento caducado`);
-    if (Number(c.to_approve)) w.push(`${n(c.to_approve)} dia(s) por aprovar`);
-    if (Number(c.docs_expiring)) w.push(`${n(c.docs_expiring)} pessoa(s) com documento a caducar`);
-    if (Number(c.joining)) w.push(`${n(c.joining)} pessoa(s) a fazer a entrada`);
-    return w;
+  const q = $('#clq'); const tst = $('#cltest');
+  const draw = () => {
+    const words = q.value.trim().toLowerCase();
+    const rows = data.filter((c) => (tst.checked || !c.test) && (!words || `${c.name} ${c.tax_id}`.toLowerCase().includes(words)));
+    const real = data.filter((c) => !c.test).length; const test = data.length - real;
+    el.innerHTML = `<p class="small muted cl-count">${n(real)} cliente(s)${test ? ` · ${n(test)} de teste${tst.checked ? '' : ' escondida(s)'}` : ''}</p>
+      ${rows.length ? `<div class="cl-rows">${rows.map((c) => { const [k, t] = c.test ? ['warn', 'Teste'] : (ACC_STATE[c.status] || ['info', c.status || 'Sem plano']);
+        return `<button class="cl-row" data-client="${esc(c.id)}">${avatar(c.name).replace('class="av ', 'class="av cl-av ')}
+          <span class="grow"><b>${esc(c.name)}</b><small>${esc(c.demo ? 'Fictícia' : 'NIF ' + c.tax_id)} · ${n(c.people)} pessoas · módulos ${n(c.modules_on)}/${n(c.modules_all)}${c.last_tap ? ' · última picagem ' + esc(fmtDate(c.last_tap.slice(0, 10))) : ''}</small></span>
+          ${chip(k, t)}${c.here ? chip('ok', 'Aberta') : ''}${ic('go')}</button>`; }).join('')}</div>`
+        : `<p class="muted">${words ? 'Nenhum cliente com esse nome.' : 'Ainda não tens clientes reais. Carrega em «+ Novo cliente».'}</p>`}`;
+    el.querySelectorAll('[data-client]').forEach((b) => b.onclick = () => { state.clientId = b.dataset.client; go('cliente'); });
   };
-  const card = (c) => {
-    const [k, t] = LIGHT[c.light] || LIGHT.grey; const w = why(c); const can = c.open || c.here;
-    return `<article class="card client ov-card ${k}${c.here ? ' here' : ''}" ${can ? `data-open="${esc(c.id)}" tabindex="0" role="button" aria-label="Abrir ${esc(c.name)}"` : ''}>
-      <div class="cl-top"><span class="ov-light ${k}" aria-hidden="true"></span><div class="grow"><b>${esc(c.name)}</b><small>${esc(t)}</small></div>
-        ${can ? `<span class="ov-go" aria-hidden="true">${ic('go')}</span>` : ''}</div>
-      ${w.length ? `<ul class="ov-why">${w.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
-      <div class="cl-stats ov-stats"><span><b>${n(c.sites)}</b>obras</span><span><b>${n(c.people)}</b>pessoas</span><span><b>${n(c.inside_now)}</b>na obra agora</span></div>
-      ${can ? '' : `<p class="small muted">${ic('lock')} Esta empresa não te deu acesso. Pede acesso de suporte ao administrador dela.</p>`}
-      ${c.here && c.demo && !Number(c.sites) ? `<button class="btn wide" data-fill>${ic('auto')}Preencher com dados de exemplo</button>` : ''}</article>`;
-  };
-  el.innerHTML = `${real.length ? `<div class="clients">${real.map(card).join('')}</div>` : '<p class="muted">Ainda não tens clientes reais. Carrega em «+ Novo cliente».</p>'}
-    ${test.length ? `<details class="fold ov-test"${real.length ? '' : ' open'}><summary><span>Empresas de teste (${test.length})<span class="sub">Fictícias e a Empresa Teste: só para experimentar</span></span></summary>
-      <div class="clients">${test.map(card).join('')}</div></details>` : ''}`;
-  el.querySelectorAll('[data-open]').forEach((x) => {
-    const open = (e) => { if (e.target.closest('[data-fill]')) return; openClient(x.dataset.open, x); };
-    x.onclick = open; x.onkeydown = (e) => { if (e.key === 'Enter') open(e); };
-  });
-  const fill = el.querySelector('[data-fill]'); if (fill) fill.onclick = (e) => { e.stopPropagation(); fillDemo(e.currentTarget); };
+  q.oninput = draw; tst.onchange = draw;
+  if (!data.some((c) => !c.test)) tst.checked = true;   // only test companies so far: show them
+  draw();
 }
-// The company this login is in opens straight on its home (Início, level 2); another one is entered first (sql/59).
+// Level 2 for the owner: one client's card. What they have (modules), who runs it there (admins), and the way in.
+async function viewClient() {
+  if (!state.ready) return boot();
+  if (!isOwner() || !state.clientId) return go('clientes');
+  app.innerHTML = `<div id="cli">${skel(4)}</div>`;
+  const { data: c, error } = await sb.rpc('platform_client', { p_tenant: state.clientId });
+  const box = $('#cli'); if (!box || !box.isConnected || state.view !== 'cliente') return;
+  if (error) { box.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
+  const n = (v) => Number(v || 0).toLocaleString('pt-PT');
+  const [k, t] = c.test ? ['warn', 'Empresa de teste'] : (ACC_STATE[c.status] || ['info', c.status || 'Sem plano']);
+  box.innerHTML = `<button class="btn ghost small home-back" id="cback">‹ Os meus clientes</button>
+    <div class="ph"><div><p class="ph-k">Cliente</p><h1>${esc(c.name)}</h1><p class="small muted">${esc(c.demo ? 'Empresa fictícia' : 'NIF ' + c.tax_id)} · cliente desde ${esc(fmtDate(c.created_at.slice(0, 10)))}</p></div>${chip(k, t)}</div>
+    <div class="ov-tiles"><div><b>${n(c.people)}</b><span>pessoas</span></div><div><b>${n(c.logins)}</b><span>contas na app</span></div>
+      <div><b>${n(c.sites)}</b><span>obras a decorrer</span></div><div><b>${n(c.modules.filter((m) => m.on).length)}/${n(c.modules.length)}</b><span>módulos ligados</span></div></div>
+    <div class="card">
+      ${c.here ? `<button class="btn big wide" id="copen">${ic('go')}Abrir a empresa</button><p class="small muted">Estás dentro desta empresa: vês a app como o administrador dela.</p>`
+        : c.open ? `<button class="btn big wide" id="copen">${ic('go')}Entrar como suporte</button><p class="small muted">Fica registado que entraste. Voltas por «Os meus clientes».</p>`
+        : `<p class="small muted">${ic('lock')} Esta empresa não te deu acesso. Pede acesso de suporte ao administrador dela.</p>`}
+      ${c.here && c.demo && !Number(c.sites) ? `<button class="btn ghost wide" id="cfill">${ic('auto')}Preencher com dados de exemplo</button>` : ''}</div>
+    <div class="sec-h"><h2 class="eyebrow">Módulos que esta empresa tem</h2></div>
+    <p class="small muted">O ponto, as horas, as pessoas, os documentos e as obras estão sempre incluídos. Desligar um módulo esconde os ecrãs e bloqueia alterações; os dados ficam guardados e voltam quando o ligares.</p>
+    <div class="card mods">${c.modules.map((m) => `<label class="mod${m.on ? ' on' : ''}"><span class="grow"><b>${esc(m.label)}</b><small>${esc(m.what)}</small></span>
+        <span class="sw"><input type="checkbox" data-mod="${esc(m.code)}" ${m.on ? 'checked' : ''} aria-label="${esc(m.label)}"><i></i></span></label>`).join('')}</div>
+    <div class="sec-h"><h2 class="eyebrow">Administradores da empresa</h2></div>
+    <div class="card">${c.admins.length ? `<ul class="plain">${c.admins.map((a) => `<li>${ic('user')} ${esc(a)}</li>`).join('')}</ul>` : '<p class="small muted">Ainda sem administrador próprio. Por agora és tu que geres esta empresa.</p>'}</div>
+    ${c.changes.length ? `<details class="fold"><summary><span>Últimas alterações de módulos</span></summary><ul class="plain small">${c.changes.map((x) => `<li>${esc(fmtTime(x.at))} · ${esc(x.module)} ${x.to === 'off' ? 'desligado' : 'ligado'}</li>`).join('')}</ul></details>` : ''}`;
+  $('#cback').onclick = () => go('clientes');
+  if ($('#cfill')) $('#cfill').onclick = (e) => fillDemo(e.currentTarget);
+  if ($('#copen')) $('#copen').onclick = (e) => c.here ? go('inicio') : enterClient(c.id, e.currentTarget, 'inicio');
+  box.querySelectorAll('[data-mod]').forEach((x) => x.onchange = async () => {
+    const m = c.modules.find((y) => y.code === x.dataset.mod); const on = x.checked;
+    if (!on) {
+      const fd = await askSheet(`Desligar ${m.label}?`, `<p>${esc(c.name)} deixa de ver estes ecrãs e não consegue alterar nada neste módulo. Os dados ficam guardados e voltam quando o ligares outra vez.</p>`, 'Desligar');
+      if (!fd) { x.checked = true; return; }
+    }
+    x.disabled = true;
+    const { data: r, error: e } = await sb.rpc('platform_set_module', { p_tenant: c.id, p_module: m.code, p_on: on });
+    if (e) { x.checked = !on; x.disabled = false; return toast(/switch off (.+) first/.test(e.message || '') ? `Primeiro desliga ${e.message.match(/switch off (.+) first/)[1]}: precisa deste módulo.` : friendly(e)); }
+    const also = (r.also_on || []).map((code) => (c.modules.find((y) => y.code === code) || {}).label).filter(Boolean);
+    toast(`${m.label} ${on ? 'ligado' : 'desligado'}${also.length ? `. Também liguei: ${also.join(', ')} (é preciso)` : ''}.`);
+    if (c.here) await loadModules();
+    viewClient();
+  });
+}
+// The modules this company has on (sql/91): the screens of a module that is off are hidden. The database blocks the rest.
+async function loadModules() {
+  const { data } = await sb.rpc('mini_modules');
+  state.mods = data && typeof data === 'object' ? data : null;
+}
+const mod = (code) => !state.mods || state.mods[code] !== false;
+// The company this login is in opens straight on its home (Início); another one is entered first (sql/59).
 function openClient(id, card) {
   if (card.classList.contains('here')) return go('inicio');
   return enterClient(id, card, 'inicio');
@@ -7061,8 +7098,8 @@ async function delegateSignature() {
 // ------------------------------------------------------------------ LMRA (sql/64): the last-minute risk check, before the work starts
 // The team leader answers the questions on the spot; every «Não» stops the work (a stop-work order, the safety team is told).
 // When all is «Sim», each person of the team taps their card to sign. A blocked person (documents) cannot sign.
-const canLmra = () => can('seguranca.lmra') || can('seguranca.parar_obra');
-const canEmergency = () => can('seguranca.emergencia');
+const canLmra = () => mod('safety') && (can('seguranca.lmra') || can('seguranca.parar_obra'));
+const canEmergency = () => can('seguranca.emergencia');   // protective (sql/22 P-17): the emergency count is never switched off
 function viewLmra() {
   if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canLmra()) return viewClock();   // code guard as well as the database's
@@ -7344,7 +7381,7 @@ setInterval(() => { if (document.visibilityState === 'visible') checkEmergencyBa
 // Entregar: a pessoa encosta o cartão (quem recebe), escolhes o que leva, e ela encosta outra vez para assinar.
 // Stock por armazém e por tamanho, com mínimos. Ferramentas: quem tem o quê; inspeção vencida não deixa sair.
 // Nunca se cobra EPI ao trabalhador; perdas e danos ficam com nota, sem desconto.
-const canWh = () => ['armazem.ver', 'armazem.entregar', 'armazem.gerir'].some(can);
+const canWh = () => mod('warehouse') && ['armazem.ver', 'armazem.entregar', 'armazem.gerir'].some(can);
 const WH_CAT = { ppe: 'EPI', workwear: 'Farda', consumable: 'Consumível', tool: 'Ferramenta' };
 const WH_KIND = { top: 'camisola', bottom: 'calça', shoes: 'botas', gloves: 'luvas' };
 const TOOL_ST = { available: ['ok', 'disponível'], checked_out: ['info', 'emprestada'], maintenance: ['warn', 'em reparação'],
@@ -8176,7 +8213,7 @@ async function loadWorkerKit(id) {
 // ============================================================================ Compras (v38)
 // Ask → (Secretariado approves above the company's limit) → order to a supplier → receive. The database decides every
 // rule (sql/66); this screen only shows what each person can do next.
-const canBuy = () => ['compras.pedir', 'compras.aprovar', 'compras.gerir', 'armazem.gerir'].some(can);
+const canBuy = () => mod('procurement') && ['compras.pedir', 'compras.aprovar', 'compras.gerir', 'armazem.gerir'].some(can);
 const BUY_ST = { pending: ['warn', 'à espera de aprovação'], approved: ['ok', 'aprovado'], ordered: ['info', 'encomendado'],
   rejected: ['bad', 'recusado'], cancelled: ['', 'cancelado'] };
 const PO_ST = { issued: ['info', 'encomendada'], partially_received: ['warn', 'chegou uma parte'], received: ['ok', 'recebida'], cancelled: ['', 'cancelada'] };
@@ -8375,7 +8412,7 @@ async function buyReceiveLine(id, left, toStock) {
 // ============================================================================ Frota (v39)
 // The RH runs the fleet: papers and dates per vehicle (insurance, IPO, IUC, service, rental contract), who has it now,
 // hand-over and return with km. The database decides the traffic light and what blocks a hand-over (sql/67).
-const canFleet = () => ['frota.ver', 'frota.entregar', 'frota.gerir'].some(can);
+const canFleet = () => mod('fleet') && ['frota.ver', 'frota.entregar', 'frota.gerir'].some(can);
 const FL_LIGHT = { verde: ['ok', 'Em ordem'], amarelo: ['warn', 'Atenção'], vermelho: ['bad', 'Não pode circular'] };
 const FL_PAPER = { ok: 'ok', a_caducar: 'warn', caducado: 'bad', em_falta: 'bad', sem_data: 'warn' };
 const FL_OWN = { owned: 'Própria', rented: 'Aluguer', leased: 'Leasing' };
@@ -8650,7 +8687,7 @@ async function flCost(v) {
 // The RH runs the houses and hotels: rooms and beds, who sleeps where, hotel bookings and costs to a site. A house takes
 // nobody until its entry inspection, with a photo of every room, is finished; it is handed back with an exit inspection
 // that shows the entry photos next to the new ones (sql/68). Photos go to a private bucket and are never deleted.
-const canHousing = () => ['alojamento.ver', 'alojamento.vistoria', 'alojamento.gerir'].some(can);
+const canHousing = () => mod('housing') && ['alojamento.ver', 'alojamento.vistoria', 'alojamento.gerir'].some(can);
 const HO_KIND = { corporate_house: 'Casa', apartment: 'Apartamento', hotel: 'Hotel', other: 'Outro' };
 const HO_LIGHT = { verde: ['ok', 'Em ordem'], amarelo: ['warn', 'Atenção'], vermelho: ['bad', 'Não pode receber ninguém'], cinzento: ['', 'Entregue'] };
 const HO_COST = { rent: 'Renda', power: 'Luz', water: 'Água', gas: 'Gás', internet: 'Internet', cleaning: 'Limpeza', repair: 'Reparação', other: 'Outro' };
@@ -8991,7 +9028,7 @@ async function hoInspection(id) {
 // site at once) and adds the tickets. The traveller sees the trip and opens the ticket in As minhas horas (sql/69).
 // Despesas com recibo: the photo of the receipt, the site it goes to, Produção approves (the cost goes to the site),
 // the Secretariado pays back. A worker hands in their own in As minhas horas; the database checks the same.
-const canExpenses = () => ['despesas.registar', 'despesas.aprovar', 'despesas.pagar'].some(can);
+const canExpenses = () => mod('housing') && ['despesas.registar', 'despesas.aprovar', 'despesas.pagar'].some(can);
 const EX_CAT = { fuel: 'Combustível', meal: 'Refeição', lodging: 'Alojamento', toll: 'Portagem', parking: 'Estacionamento',
   transport: 'Transporte', material: 'Material', other: 'Outro' };
 const EX_STATE = { submitted: ['warn', 'Por aprovar'], approved: ['info', 'Aprovada'], rejected: ['bad', 'Recusada'], reimbursed: ['ok', 'Reembolsada'] };
@@ -9113,7 +9150,7 @@ async function loadMyExpenses() {
 }
 // Qualidade: non-conformities, the inspection and test plan with its hold points, stopping work, the instruments
 // to re-check and the Data Book. Each action shows only with its permission; the database checks the same.
-const canQuality = () => ['qualidade.reportar', 'qualidade.gerir', 'qualidade.parar_obra'].some(can);
+const canQuality = () => mod('projects') && ['qualidade.reportar', 'qualidade.gerir', 'qualidade.parar_obra'].some(can);
 const NC_KIND = { work: 'Trabalho', material: 'Material', supplier: 'Fornecedor', client: 'Reclamação do cliente', audit: 'Auditoria' };
 const NC_SEV = { minor: ['info', 'Ligeira'], major: ['warn', 'Grave'], critical: ['bad', 'Crítica'] };
 const NC_STATE = { open: ['warn', 'Por decidir'], decided: ['info', 'Ação em curso'], closed: ['ok', 'Fechada'] };
@@ -9386,7 +9423,7 @@ function qBookShow(b) {
 }
 // Produção (direção de obra): the sites this login runs, what is waiting on them today, and the shortcuts to act.
 // Only reads what the other screens already serve (control room, purchases, trips); each block shows only with its permission.
-const canProd = () => can('obras.gerir') || can('horas.validar_obra');
+const canProd = () => mod('projects') && (can('obras.gerir') || can('horas.validar_obra'));
 function viewProd() {
   if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canProd()) return viewClock();   // code guard as well as the database's
@@ -9445,7 +9482,7 @@ async function loadProd() {
   body.querySelectorAll('[data-panel]').forEach((b) => b.onclick = () => { state.panelSite = b.dataset.panel; go('painel'); });
   body.querySelectorAll('[data-hours]').forEach((b) => b.onclick = () => { store(SITE_KEY, b.dataset.hours); go('horas'); });
 }
-const canTravel = () => ['viagens.pedir', 'viagens.aprovar', 'viagens.gerir'].some(can);
+const canTravel = () => mod('housing') && ['viagens.pedir', 'viagens.aprovar', 'viagens.gerir'].some(can);
 const TV_MODE = { plane: 'Avião', train: 'Comboio', bus: 'Autocarro', other: 'Outro' };
 const TV_STATE = { requested: ['warn', 'Por aprovar'], approved: ['info', 'Aprovada, por marcar'], booked: ['ok', 'Marcada'], done: ['', 'Feita'],
   rejected: ['bad', 'Recusada'], cancelled: ['', 'Cancelada'] };
@@ -9616,7 +9653,7 @@ async function loadMyTravels() {
 
 // Andaimes (v46): request, build, inspect (green / amber / red), damage reports, "posso subir?", waiting evidence and hire cost.
 // A scaffold whose inspection is overdue turns red by itself. Every move is checked again by the database.
-const canScaffolds = () => ['andaimes.ver', 'andaimes.gerir', 'andaimes.inspecionar'].some(can);
+const canScaffolds = () => mod('scaffolds') && ['andaimes.ver', 'andaimes.gerir', 'andaimes.inspecionar'].some(can);
 const SC_STATE = { requested: 'Pedido', approved: 'Pedido aprovado', erecting: 'Em montagem', awaiting_inspection: 'À espera de inspeção',
   in_use: 'Em uso', in_use_restricted: 'Uso com restrições', blocked: 'Bloqueado', modifying: 'Em alteração',
   dismantle_requested: 'Desmontagem pedida', dismantling: 'Em desmontagem', dismantled: 'Desmontado', cancelled: 'Cancelado' };
