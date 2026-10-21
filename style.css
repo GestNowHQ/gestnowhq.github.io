@@ -2155,3 +2155,11 @@ ul.plain { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; } u
 .price-row small { display: block; color: var(--ink-2); font-size: var(--t-xs); }
 .price-v { text-align: right; white-space: nowrap; }
 .price-v b { font-size: var(--t-lg); font-variant-numeric: tabular-nums; color: var(--brand); }
+
+/* v72 · Administradores de cada cliente */
+.adm-rows { list-style: none; margin: 0; padding: 0; }
+.adm-rows li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 0; border-bottom: var(--bw) solid var(--line); }
+.adm-rows li:last-child { border-bottom: 0; }
+.adm-rows .grow { min-width: 0; flex: 1 1 180px; }
+.adm-rows b { display: block; overflow-wrap: anywhere; }
+.adm-rows small { display: block; color: var(--ink-2); font-size: var(--t-xs); }

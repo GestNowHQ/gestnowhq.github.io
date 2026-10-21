@@ -522,6 +522,8 @@ const ERRORS = [
   [/login is already in use/i, 'Esta conta já foi usada: a pessoa já escolheu a palavra-passe.'],
   [/invite e-mail could not be sent/i, 'O email de convite não saiu. Usa o QR code em mão.'],
   [/invalid e-mail/i, 'O email não parece válido.'],
+  [/cannot switch yourself off/i, 'Não te podes desligar a ti próprio.'],
+  [/administrator not found/i, 'Esse administrador já não está ativo.'],
   [/this person is inactive/i, 'Esta pessoa está inativa.'],
   [/your own login/i, 'Não podes desligar a tua própria conta.'],
   [/could not create the login/i, 'Não consegui criar a conta. Tenta outra vez.'],
@@ -826,7 +828,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '71';
+const APP_VERSION = '72';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -1664,12 +1666,15 @@ async function viewClient() {
         ${x ? `<small class="mod-price">${esc(cts(x.price))} por ${esc(perUnit(x.unit))}${m.on ? ` · ${esc(cts(x.monthly))}/mês${x.unit === 'company' ? '' : ` (${esc(unitQty(x.unit, x.qty))})`}` : ''}</small>` : ''}</span>
         <span class="sw"><input type="checkbox" data-mod="${esc(m.code)}" ${m.on ? 'checked' : ''} aria-label="${esc(m.label)}"><i></i></span></label>`; }).join('')}</div>
     ${bill ? `<div class="card pack-total"><span class="grow"><b>Total estimado por mês</b><small>Preços indicativos, sem IVA. Ainda não se cobra nada.</small></span><b>${esc(cts(bill.monthly))}</b></div>` : ''}
-    <div class="sec-h"><h2 class="eyebrow">Administradores da empresa</h2></div>
-    <div class="card">${c.admins.length ? `<ul class="plain">${c.admins.map((a) => `<li>${ic('user')} ${esc(a)}</li>`).join('')}</ul>` : '<p class="small muted">Ainda sem administrador próprio. Por agora és tu que geres esta empresa.</p>'}</div>
+    <div class="sec-h"><h2 class="eyebrow">Administradores da empresa</h2><button class="btn small" id="cadm">+ Convidar administrador</button></div>
+    <p class="small muted">Quem tu nomeias vê e gere tudo nesta empresa: as pessoas, os departamentos e os acessos de cada um.</p>
+    <div class="card" id="cadms">${skel(1)}</div>
     ${c.changes.length ? `<details class="fold"><summary><span>Últimas alterações de módulos</span></summary><ul class="plain small">${c.changes.map((x) => `<li>${esc(fmtTime(x.at))} · ${esc(x.module)} ${x.to === 'off' ? 'desligado' : 'ligado'}</li>`).join('')}</ul></details>` : ''}`;
   $('#cback').onclick = () => go('clientes');
   if ($('#cfill')) $('#cfill').onclick = (e) => fillDemo(e.currentTarget);
   if ($('#copen')) $('#copen').onclick = (e) => c.here ? go('inicio') : enterClient(c.id, e.currentTarget, 'inicio');
+  $('#cadm').onclick = () => inviteClientAdmin(c);
+  loadClientAdmins(c);
   box.querySelectorAll('[data-mod]').forEach((x) => x.onchange = async () => {
     const m = c.modules.find((y) => y.code === x.dataset.mod); const on = x.checked;
     if (!on) {
@@ -1684,6 +1689,59 @@ async function viewClient() {
     if (c.here) await loadModules();
     viewClient();
   });
+}
+// The client's administrators (sql/94): only the owner names them, by invite. Nobody sees a password.
+async function loadClientAdmins(c) {
+  const el = $('#cadms'); if (!el) return;
+  const { data, error } = await sb.rpc('platform_client_admins', { p_tenant: c.id });
+  if (!el.isConnected) return;
+  if (error) { el.innerHTML = `<p class="small muted">${esc(friendly(error))}</p>`; return; }
+  el.innerHTML = data.length ? `<ul class="adm-rows">${data.map((a) => `<li><span class="grow"><b>${esc(a.email)}</b>
+      <small>${a.pending ? `Convidado a ${esc(fmtDate(String(a.invited_at).slice(0, 10)))} · ainda não entrou` : `Último acesso ${esc(fmtTime(a.last_seen))}`}</small></span>
+      ${a.pending ? `<button class="btn ghost small" data-again="${esc(a.user_id)}">Reenviar</button>` : chip('ok', 'Ativo')}
+      <button class="btn ghost small" data-off="${esc(a.user_id)}" aria-label="Desligar ${esc(a.email)}">Desligar</button></li>`).join('')}</ul>`
+    : '<p class="small muted">Ainda sem administrador. Por agora és tu que geres esta empresa. Carrega em «+ Convidar administrador».</p>';
+  el.querySelectorAll('[data-again]').forEach((b) => b.onclick = async () => {
+    const how = await askSheet('Reenviar convite', `<p>Como queres entregar o convite novo? O anterior deixa de servir.</p>
+      <label class="check inline"><input type="radio" name="how" value="email" checked> Por email</label>
+      <label class="check inline"><input type="radio" name="how" value="link"> Em mão (QR code)</label>`, 'Reenviar');
+    if (!how) return;
+    b.disabled = true;
+    const { data: r, error: e } = await inviteCall({ platform_tenant: c.id, user_id: b.dataset.again, again: true, mode: how.get('how') });
+    b.disabled = false;
+    if (e) return toast(e);
+    showAdminInvite(r);
+  });
+  el.querySelectorAll('[data-off]').forEach((b) => b.onclick = async () => {
+    const a = data.find((x) => x.user_id === b.dataset.off);
+    const fd = await askSheet('Desligar administrador?', `<p><b>${esc(a.email)}</b> deixa de entrar em ${esc(c.name)}. Fica registado. Podes convidá-lo outra vez mais tarde com outro email.</p>`, 'Desligar');
+    if (!fd) return;
+    const { error: e } = await sb.rpc('platform_admin_off', { p_tenant: c.id, p_user: a.user_id });
+    if (e) return toast(friendly(e));
+    toast('Administrador desligado.'); loadClientAdmins(c);
+  });
+}
+async function inviteClientAdmin(c) {
+  const fd = await askSheet(`Convidar administrador · ${c.name}`, `
+    <label for="ae">Email da pessoa</label><input id="ae" name="email" type="email" required autocomplete="off" placeholder="nome@empresa.pt">
+    <p class="small muted">Recebe um convite e escolhe a sua palavra-passe. Ninguém a vê, nem tu. Na primeira entrada ativa o código do telemóvel.</p>
+    <label class="check inline"><input type="radio" name="how" value="email" checked> Enviar por email</label>
+    <label class="check inline"><input type="radio" name="how" value="link"> Entregar em mão (QR code)</label>`, 'Convidar');
+  if (!fd) return;
+  const { data: r, error } = await inviteCall({ platform_tenant: c.id, email: fd.get('email'), mode: fd.get('how') });
+  if (error) return toast(error);
+  showAdminInvite(r);
+  loadClientAdmins(c);
+}
+async function showAdminInvite(r) {
+  if (r.sent) return toast(`Convite enviado para ${r.email}.`);
+  let img = '';
+  try { const qr = await loadQr(); const q = qr(0, 'M'); q.addData(r.link); q.make(); img = q.createDataURL(6, 12); }
+  catch (_) { return toast('Não foi possível desenhar o QR code. Tenta outra vez.'); }
+  await askSheet(`Convite para ${r.email}`, `<div class="qr invite"><img alt="QR code do convite" src="${img}"></div>
+    <p><b>Mostra este código à pessoa.</b> Ela lê-o com a câmara do telemóvel dela e escolhe a sua palavra-passe.</p>
+    <p class="small muted">Funciona uma vez e expira. Não tires fotografia ao código nem o envies: quem o usar primeiro fica com a conta.
+    Se a pessoa disser que o convite «já não serve», alguém o usou: desliga-a e convida outra vez.</p>`, 'A pessoa já entrou');
 }
 // The modules this company has on (sql/91): the screens of a module that is off are hidden. The database blocks the rest.
 async function loadModules() {
