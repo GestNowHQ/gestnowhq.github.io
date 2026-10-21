@@ -828,7 +828,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '72';
+const APP_VERSION = '73';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -842,7 +842,7 @@ function tabsFor(role) {
   if (role === 'admin') return isOwner() ? (ownerDesk() ? ['clientes'] : ['clientes', 'inicio', 'horas', 'secretariado']) : ['inicio', 'painel', 'horas', 'secretariado'];
   return TABS[role] || TABS.supervisor;
 }
-const MORE_ORDER = ['inicio', 'equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'andaimes', 'processo', 'clientes'];
+const MORE_ORDER = ['inicio', 'empresa', 'onbtextos', 'equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'andaimes', 'processo', 'clientes'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -854,13 +854,49 @@ WIDE.addEventListener('change', () => {
 });
 // «Mais» grouped under headings (founder-approved v48): each screen once, each icon with one meaning. «Processo» left the
 // menu (the «?» button and the search still open it); «Produção» is reached from the Dashboard when this login sees it.
+// v73 (Diogo 2026-10-21): the menu is arranged BY DEPARTMENT; each person sees only the screens their departments give.
 const MENU_GROUPS = [
-  ['Obra', ['picar', 'naobra', 'painel', 'obras', 'equipa', 'lmra', 'emergencia', 'seguranca', 'andaimes']],
-  ['Pessoas', ['trabalhadores', 'acolhimento', 'horas', 'minhas']],
-  ['Logística', ['armazem', 'compras', 'frota', 'alojamento', 'viagens']],
-  ['Gestão', ['orcamentos', 'qualidade', 'despesas', 'producao']],
-  ['Empresa', ['inicio', 'secretariado', 'clientes', 'processo']],
+  ['Administração', ['inicio', 'empresa', 'processo', 'clientes']],
+  ['Secretariado', ['secretariado', 'despesas', 'viagens', 'alojamento']],
+  ['Recursos Humanos', ['trabalhadores', 'onbtextos']],
+  ['Segurança', ['seguranca', 'lmra', 'emergencia', 'acolhimento']],
+  ['Obra', ['obras', 'painel', 'naobra', 'equipa', 'picar', 'horas', 'andaimes', 'producao']],
+  ['Compras e Armazém', ['armazem', 'compras', 'frota']],
+  ['Comercial', ['orcamentos']],
+  ['Qualidade', ['qualidade']],
+  ['Eu', ['minhas']],
 ];
+// What each screen needs, to place it under the department that gives it (the visibility itself is set in boot).
+const VIEW_NEEDS = {
+  inicio: () => canHome(), empresa: () => canCompanyRules(), processo: () => canProcess(),
+  secretariado: () => canOffice(), despesas: () => canExpenses(), viagens: () => canTravel(), alojamento: () => canHousing(),
+  trabalhadores: () => can('pessoas.ver') || can('pessoas.gerir'), onbtextos: () => canPeople(),
+  seguranca: () => ['seguranca.lmra', 'seguranca.parar_obra', 'seguranca.emergencia'].some(can), lmra: () => canLmra(),
+  emergencia: () => can('seguranca.emergencia'), acolhimento: () => can('acolhimento.gerir'),
+  obras: () => can('obras.gerir') || can('obras.ver_detalhes'), painel: () => canSiteDetails(), naobra: () => canSiteDetails() || can('ponto.picar'),
+  equipa: () => canSiteDetails(), picar: () => can('ponto.picar'), horas: () => can('horas.ver') || can('horas.validar_obra'),
+  andaimes: () => canScaffolds(), producao: () => canProd(), armazem: () => canWh(), compras: () => canBuy(), frota: () => canFleet(),
+  orcamentos: () => canEstimates(), qualidade: () => canQuality(),
+};
+// v73 (Diogo 2026-10-21): «o standard da gestão serve para todas as empresas, mas o administrador de cada empresa adapta».
+// Administrators (and the owner) see the standard groups. Everyone else sees THEIR departments as the menu headings,
+// with the screens each one gives: a company that joins Secretariado and RH into «Escritório» gets one «Escritório» group.
+function menuGroups(shown) {
+  const me = state.me || {};
+  const depts = (me.depts || []).filter((d) => d.kind !== 'admin' && d.kind !== 'worker' && Array.isArray(d.permissions));
+  if (me.role === 'admin' || isOwner() || !depts.length) return MENU_GROUPS;
+  const saved = me.perms; const used = new Set(); const out = [];
+  try {
+    for (const d of depts) {
+      me.perms = d.permissions;
+      const views = MENU_GROUPS.flatMap((g) => g[1]).filter((v) => !used.has(v) && shown(v) && VIEW_NEEDS[v] && VIEW_NEEDS[v]());
+      views.forEach((v) => used.add(v));
+      if (views.length) out.push([d.name, views]);
+    }
+  } finally { me.perms = saved; }
+  out.push(['Eu', ['minhas']]);
+  return out;
+}
 // Icons drawn for the menu so no two screens share one (M-3): added to the page's sprite once.
 const ENC_ICONS = {
   gauge: '<path d="M4 17a8 8 0 1 1 16 0M12 17l4-5M7 17h.01M17 17h.01M12 9h.01"/>',
@@ -889,8 +925,9 @@ function layoutNav(role) {
   state.navDesk = ownerDesk();
   for (const v of all) btn(v).classList.toggle('enc-off', off(v));
   const shown = (v) => !btn(v).hidden && !off(v);
-  const grouped = MENU_GROUPS.flatMap((g) => g[1]);
-  const groups = [...MENU_GROUPS, ['Outros', all.filter((v) => !grouped.includes(v))]];
+  const base = menuGroups((v) => shown(v));
+  const grouped = base.flatMap((g) => g[1]);
+  const groups = [...base, ['Outros', all.filter((v) => !grouped.includes(v))]];
   const first = tabsFor(role).filter((v) => !btn(v).hidden);
   const moreBtn = nav.querySelector('button[data-more]');
   nav.querySelectorAll('.enc-mh').forEach((h) => h.remove());
@@ -1047,6 +1084,8 @@ async function boot() {
   nav.querySelector('[data-view=minhas]').hidden = !me.collaborator_id;
   nav.querySelector('[data-view=painel]').hidden = worker || !canSiteDetails();
   nav.querySelector('[data-view=acolhimento]').hidden = worker || !can('acolhimento.gerir');
+  nav.querySelector('[data-view=empresa]').hidden = worker || state.offline || !canCompanyRules();
+  nav.querySelector('[data-view=onbtextos]').hidden = worker || state.offline || !canPeople();
   nav.querySelector('[data-view=clientes]').hidden = worker || state.offline || !isOwner();
   nav.querySelector('[data-view=inicio]').hidden = worker || state.offline || !canHome();
   nav.querySelector('[data-view=processo]').hidden = worker || state.offline || !canProcess();
@@ -1488,7 +1527,7 @@ function go(view) {
   nav.querySelector('button[data-more]').classList.toggle('on', !!cur && cur.parentElement.id === 'more');
   window.scrollTo(0, 0);
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
-     ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients, cliente: viewClient, precos: viewPrices, inicio: viewHome,
+     ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients, cliente: viewClient, precos: viewPrices, empresa: viewCompanyRules, inicio: viewHome,
      processo: viewProcess, orcamentos: viewEstimates, lmra: viewLmra, emergencia: viewEmergency,
      armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, producao: viewProd, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
   checkEmergencyBar(); encBadges();
@@ -3619,10 +3658,10 @@ async function onbIssue(id, p) {
 }
 // Secretariado › the company's contract model and internal rules (each change is a new version; signed ones keep theirs).
 async function viewOnbTexts() {
-  if (!canPeople()) return go('secretariado');
-  app.innerHTML = `<p><button class="btn ghost small" id="back">‹ Secretariado</button></p><div class="ph"><div><p class="ph-k">Pessoas</p><h1>Contrato e regulamento</h1></div></div>
+  if (!state.ready) return boot();
+  if (!canPeople()) return viewClock();   // code guard as well as the database's
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Recursos Humanos</p><h1>Contrato e regulamento</h1></div></div>
     <p class="muted lead">O texto que cada pessoa nova lê e assina no telemóvel. Mudar cria uma versão nova: quem já assinou fica com a versão que leu.</p><div id="tx">${skel(2)}</div>`;
-  $('#back').onclick = () => go('secretariado');
   const { data, error } = await sb.rpc('mini_onb_texts'); const el = $('#tx'); if (!el) return;
   if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
   const one = (t, kind, label) => `<form class="card" data-kind="${kind}"><div class="sec-h" style="margin-top:0"><h2>${esc(label)}</h2><span class="count">versão ${t ? t.version : 1}</span></div>
@@ -5289,26 +5328,18 @@ function viewOffice() {
       <div class="acts"><button class="btn wide" id="sheet">Descarregar a folha do mês (Excel)</button>
         <button class="btn ghost wide" id="prim">Ficheiro para o Primavera (Relógio de Ponto)</button></div>
       ${more('Sobre o ficheiro do Primavera', '<p>Horas extra aprovadas, uma linha por pessoa, dia e tipo (1.ª hora, seguintes, descanso, feriado, e os mesmos acima das 100 h do ano). As noturnas não vão neste ficheiro. No Primavera: Recursos Humanos › Alterações Mensais › Relógio de Ponto. O "Nº de trabalhador" tem de ser o número do funcionário no Primavera.</p>')}
-      ${can('salarios.configurar') ? `<details class="fold" id="primcfg"><summary><span>Configurar o ficheiro do Primavera<span class="sub">Códigos de horas extra, formato e posições</span></span></summary><div id="primform">${skel(1)}</div></details>` : ''}
-      ${can('salarios.configurar') ? `<details class="fold" id="roundcfg"><summary><span>Tolerância nas picagens<span class="sub">Minutos perdoados à entrada e à saída</span></span></summary><div id="roundform">${skel(1)}</div></details>` : ''}
-      ${can('salarios.configurar') ? `<label class="check prof payest"><input type="checkbox" id="payest" disabled><span><b>Mostrar ao colaborador quanto vai ganhar</b><small>Estimativa do bruto do mês, em «As minhas horas», com o valor à hora de cada um. Só para quem é da empresa (nunca para subempreiteiros).</small></span></label>` : ''}
 </div>` : ''}
     ${can('diarias.emitir') ? `<div class="card noprint" id="pdcard"><h2 style="margin-top:0">Diárias</h2>
       <p class="small muted">Pagas à quinta, adiantadas, para a semana toda. Escolhe quem e emite para pagamento.</p>
       <div id="pdbody">${skel(2)}</div>
       ${can('diarias.decidir_faltas') ? `<details class="fold" id="pdcases"><summary><span>Faltas nas diárias pagas<span class="sub">Descontar ou justificar, em todas as obras</span></span></summary><div data-pdcases="all"><div id="pdcasebox">${skel(1)}</div></div></details>` : ''}
-      ${can('diarias.configurar') ? `<details class="fold" id="pdcfg"><summary><span>Valores e regra da empresa<span class="sub">Portugal, estrangeiro, mínimo de horas</span></span></summary><div id="pdform">${skel(1)}</div></details>` : ''}</div>` : ''}
+</div>` : ''}
     ${can('salarios.exportar') ? `<div class="card noprint"><h2 style="margin-top:0">Registo de tempos (ACT)</h2>
       <p class="small muted">Registo legal das entradas e saídas de uma obra. Guardar 5 anos.</p>
       ${more('Porquê', '<p>Código do Trabalho, art. 202. Mostra-o se a inspeção pedir.</p>')}
       <label for="actsite">Obra</label><select id="actsite">${sites.map((s) => `<option value="${esc(s.id)}">${esc(s.title)} (${esc(s.cost_center_code)})</option>`).join('')}</select>
       <div class="acts"><button class="btn ghost wide" id="act">Descarregar o registo do mês (Excel)</button></div></div>` : ''}
-    ${canPeople() ? `<div class="card noprint"><h2 style="margin-top:0">Contrato e regulamento</h2>
-      <p class="small muted">O texto que cada pessoa nova lê e assina no telemóvel, com versões.</p>
-      <div class="acts"><button class="btn ghost wide" id="onbtx">Abrir o contrato e o regulamento</button></div></div>` : ''}
-    ${can('contas.gerir') ? `<div class="card noprint"><h2 style="margin-top:0">Departamentos e acessos</h2>
-      <p class="small muted">Quem faz o quê na empresa. Cada conta pertence a um ou mais departamentos e só faz o que eles permitem.</p>
-      <div id="depts">${skel(2)}</div></div>` : ''}`;
+`;
   // Computer mode: the month's days on the left, closing the month and the exports on the right.
   app.innerHTML = isWide() ? `<div class="office-grid"><div class="office-main">${main}</div>
       <aside class="office-side">${can('horas.aprovar') ? '<div id="checklist"></div>' : ''}${side}</aside></div>` : main + side;
@@ -5317,9 +5348,38 @@ function viewOffice() {
   const step = (n) => { const [y, m] = state.officeMonth.split('-').map(Number); const d = new Date(Date.UTC(y, m - 1 + n, 1)); state.officeMonth = d.toISOString().slice(0, 7); viewOffice(); };
   on('#mprev', 'onclick', () => step(-1)); on('#mnext', 'onclick', () => step(1));
   on('#sheet', 'onclick', () => downloadPayroll(from, to));
-  on('#onbtx', 'onclick', () => go('onbtextos'));
   on('#prim', 'onclick', () => downloadPrimavera(from, to));
+  on('#act', 'onclick', () => downloadAct($('#actsite').value, from, to));
+  on('#pdcases', 'ontoggle', () => { if ($('#pdcases').open) loadPdCases('#pdcasebox'); });
+  if (can('horas.aprovar')) { loadOffice(from, to); loadPending('#offreq', null); }
+  if (can('diarias.emitir')) loadPerDiems();
+}
+
+
+// ------------------------------------------------------------------ Administração › Acessos e regras (v73)
+// The client's pyramid (Diogo 2026-10-21): the company's administrator says who reaches which department, and sets the
+// company's rules. Moved here from the Secretariado, which keeps only the month's work (hours, salaries, diárias).
+const canCompanyRules = () => can('contas.gerir') || can('salarios.configurar') || can('diarias.configurar');
+function viewCompanyRules() {
+  if (!state.ready) return boot();
+  if (!canCompanyRules()) return viewClock();   // code guard as well as the database's
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Administração</p><h1>Acessos e regras</h1></div></div>
+    ${can('contas.gerir') ? `<div class="sec-h"><h2 class="eyebrow">Quem tem acesso a quê</h2></div>
+    <p class="small muted">Toca numa pessoa para escolher os departamentos dela. Cada pessoa só vê as áreas dos seus departamentos.</p>
+    <div id="logins">${skel(2)}</div>
+    <div class="sec-h"><h2 class="eyebrow">Departamentos</h2></div>
+    <div id="depts">${skel(2)}</div>` : ''}
+    ${can('salarios.configurar') || can('diarias.configurar') ? `<div class="sec-h"><h2 class="eyebrow">Regras da empresa</h2></div>
+    <div class="card">
+      ${can('salarios.configurar') ? `<details class="fold" id="roundcfg"><summary><span>Tolerância nas picagens<span class="sub">Minutos perdoados à entrada e à saída</span></span></summary><div id="roundform">${skel(1)}</div></details>` : ''}
+      ${can('salarios.configurar') ? `<details class="fold" id="primcfg"><summary><span>Configurar o ficheiro do Primavera<span class="sub">Códigos de horas extra, formato e posições</span></span></summary><div id="primform">${skel(1)}</div></details>` : ''}
+      ${can('diarias.configurar') ? `<details class="fold" id="pdcfg"><summary><span>Valores e regra da empresa<span class="sub">Portugal, estrangeiro, mínimo de horas</span></span></summary><div id="pdform">${skel(1)}</div></details>` : ''}
+      ${can('salarios.configurar') ? `<label class="check prof payest"><input type="checkbox" id="payest" disabled><span><b>Mostrar ao colaborador quanto vai ganhar</b><small>Estimativa do bruto do mês, em «As minhas horas», com o valor à hora de cada um. Só para quem é da empresa (nunca para subempreiteiros).</small></span></label>` : ''}
+    </div>` : ''}`;
+  const on = (sel, ev, fn) => { const x = $(sel); if (x) x[ev] = fn; };
   on('#primcfg', 'ontoggle', () => { if ($('#primcfg').open) showPrimaveraSettings(); });
+  on('#roundcfg', 'ontoggle', () => { if ($('#roundcfg').open) showTapRounding(); });
+  on('#pdcfg', 'ontoggle', () => { if ($('#pdcfg').open) showPerDiemSettings(); });
   if ($('#payest')) sb.rpc('mini_pay_estimate_setting').then(({ data, error }) => {
     const x = $('#payest'); if (!x || error) return;
     x.checked = !!data; x.disabled = false;
@@ -5327,13 +5387,33 @@ function viewOffice() {
       if (e) { x.checked = !x.checked; return toast(friendly(e)); }
       toast(x.checked ? 'Os colaboradores passam a ver a estimativa do que vão ganhar.' : 'A estimativa deixou de aparecer aos colaboradores.'); };
   });
-  on('#roundcfg', 'ontoggle', () => { if ($('#roundcfg').open) showTapRounding(); });
-  on('#act', 'onclick', () => downloadAct($('#actsite').value, from, to));
-  on('#pdcfg', 'ontoggle', () => { if ($('#pdcfg').open) showPerDiemSettings(); });
-  on('#pdcases', 'ontoggle', () => { if ($('#pdcases').open) loadPdCases('#pdcasebox'); });
-  if (can('horas.aprovar')) { loadOffice(from, to); loadPending('#offreq', null); }
-  if (can('diarias.emitir')) loadPerDiems();
-  if (can('contas.gerir')) loadDepartments();
+  if (can('contas.gerir')) { loadLogins(); loadDepartments(); }
+}
+// Every login of the company with its departments; one tap changes them (mini_set_user_departments keeps the
+// two-person rule for Administração).
+async function loadLogins() {
+  const box = $('#logins'); if (!box) return;
+  const [l, d] = await Promise.all([sb.rpc('mini_company_logins'), sb.rpc('mini_departments')]);
+  if (!box.isConnected) return;
+  if (l.error || d.error) { box.innerHTML = `<p>${esc(friendly(l.error || d.error))}</p>`; return; }
+  const depts = d.data.filter((x) => x.is_active);
+  const nameOf = (id) => (depts.find((x) => x.id === id) || {}).name;
+  box.innerHTML = l.data.length ? `<div class="card acc-rows">${l.data.map((u) => `<button class="acc-row" data-login="${esc(u.user_id)}">
+      <span class="grow"><b>${esc(u.name)}</b><small>${esc(u.email)}${u.pending ? ' · ainda não entrou' : ''}</small>
+        <span class="acc-chips">${u.departments.map(nameOf).filter(Boolean).map((n) => chip('info', n)).join('') || chip('warn', 'Sem departamento')}</span></span>${ic('go')}</button>`).join('')}</div>`
+    : `<div class="card">${empty('users', 'Ainda ninguém tem conta', 'Dá conta a uma pessoa na ficha dela, em Pessoas › Conta na app.')}</div>`;
+  box.querySelectorAll('[data-login]').forEach((b) => b.onclick = async () => {
+    const u = l.data.find((x) => x.user_id === b.dataset.login);
+    const fd = await askSheet(u.name, `<p class="small muted">${esc(u.email)}</p>
+      ${depts.map((x) => `<label class="check"><input type="checkbox" name="d" value="${esc(x.id)}" ${u.departments.includes(x.id) ? 'checked' : ''}><span>${esc(x.name)}<small>${esc(KIND_NAMES[x.kind] || x.kind)}</small></span></label>`).join('')}
+      <p class="small muted">Dar Administração a alguém precisa da aprovação de uma segunda pessoa.</p>`, 'Guardar');
+    if (!fd) return;
+    const ids = fd.getAll('d');
+    if (!ids.length) return toast('Escolhe pelo menos um departamento.');
+    const { error } = await sb.rpc('mini_set_user_departments', { p_user: u.user_id, p_depts: ids });
+    if (error) return toast(friendly(error));
+    toast('Acessos guardados.'); loadLogins(); loadDepartments();
+  });
 }
 
 // ------------------------------------------------------------------ Departamentos (admin)
@@ -5354,14 +5434,14 @@ async function loadDepartments() {
         <div class="small muted">${x.kind === 'admin' ? 'Tudo. Só se dá com aprovação de uma segunda pessoa.' : x.kind === 'worker' ? 'Só as próprias horas e diárias.'
           : x.permissions.length ? esc(areasOf(x.permissions)) : 'Sem permissões.'}</div></div></div></div>`).join('')}</div>
     <p><button class="btn ghost wide" id="newdept">+ Novo departamento</button></p>
-    ${more('Como funciona', '<p>Ex.: «Compras» do tipo escritório, só com «Ver trabalhadores». Para dar um departamento a alguém, abre a pessoa em Trabalhadores › Conta na app. Os departamentos não se apagam: arquivam-se, e quem lá estava perde essas permissões.</p>')}`;
+    ${more('Como funciona', '<p>A GestNow traz os departamentos de base. Adapta-os à tua empresa: muda o nome, junta dois num só («+ Novo departamento» › «Juntar as permissões de») e arquiva os que não usas. Cada pessoa vê no menu os seus departamentos, com os ecrãs que eles dão. Ex.: «Compras» do tipo escritório, só com «Ver trabalhadores». Para dar um departamento a alguém, toca nela em «Quem tem acesso a quê». Os departamentos não se apagam: arquivam-se, e quem lá estava perde essas permissões.</p>')}`;
   box.querySelectorAll('[data-dept]').forEach((el) => {
-    const open = () => editDepartment(d.data.find((x) => x.id === el.dataset.dept), perms);
+    const open = () => editDepartment(d.data.find((x) => x.id === el.dataset.dept), perms, d.data);
     el.onclick = open; el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } };
   });
-  box.querySelector('#newdept').onclick = () => editDepartment(null, perms);
+  box.querySelector('#newdept').onclick = () => editDepartment(null, perms, d.data);
 }
-async function editDepartment(x, perms) {
+async function editDepartment(x, perms, all = []) {
   if (x && x.kind === 'admin') return toast('A Administração tem tudo e não se altera.');
   const kinds = ['hr', 'hse', 'supervisor', 'worker'];
   const areas = [...new Set(perms.map((p) => p.area))];
@@ -5370,6 +5450,9 @@ async function editDepartment(x, perms) {
     <label>Tipo de acesso *</label><div class="chips reasons" role="radiogroup">${kinds.map((k) => `<label class="chip"><input type="radio" name="kind" value="${k}" required
       ${(x ? x.kind : 'hr') === k ? 'checked' : ''} ${x && x.system_key && x.kind !== k ? 'disabled' : ''}>${esc(KIND_NAMES[k])}</label>`).join('')}</div>
     <p class="small muted" id="kh">${esc(KIND_HELP[x ? x.kind : 'hr'])}</p>
+    ${others(all, x).length ? `<details class="fold" id="mg"><summary><span>Juntar as permissões de…<span class="sub">Para quem junta dois departamentos num só</span></span></summary>
+      <div class="chips reasons">${others(all, x).map((o) => `<label class="chip"><input type="checkbox" data-merge="${esc(o.id)}">${esc(o.name)}</label>`).join('')}</div>
+      <p class="small muted">Marca as permissões desses departamentos aqui. Depois arquiva os que deixas de usar.</p></details>` : ''}
     <div id="pp">${areas.map((a) => `<h3 style="margin:12px 0 4px">${esc(a)}</h3>${perms.filter((p) => p.area === a).map((p) => `<label class="check">
       <input type="checkbox" name="perm" value="${esc(p.code)}" ${x && x.permissions.includes(p.code) ? 'checked' : ''}><span>${esc(p.label)}${p.sensitive ? ' <span class="small muted">· pede código</span>' : ''}</span></label>`).join('')}`).join('')}</div>
     ${x && !x.system_key ? `<p><label class="check"><input type="checkbox" name="arch" ${x.is_active ? '' : 'checked'}>Arquivado (ninguém usa estas permissões)</label></p>` : ''}`,
@@ -5377,6 +5460,11 @@ async function editDepartment(x, perms) {
     const pp = dl.querySelector('#pp'); const kh = dl.querySelector('#kh');
     const sync = () => { const k = (dl.querySelector('input[name=kind]:checked') || {}).value; pp.hidden = k === 'worker'; kh.textContent = KIND_HELP[k] || ''; };
     dl.querySelectorAll('input[name=kind]').forEach((r) => r.onchange = sync); sync();
+    dl.querySelectorAll('[data-merge]').forEach((m) => m.onchange = () => {
+      if (!m.checked) return;
+      const o = all.find((y) => y.id === m.dataset.merge);
+      (o ? o.permissions : []).forEach((code) => { const c = dl.querySelector(`input[name=perm][value="${CSS.escape(code)}"]`); if (c) c.checked = true; });
+    });
   });
   if (!fd) return;
   const kind = fd.get('kind');
@@ -5387,8 +5475,10 @@ async function editDepartment(x, perms) {
     const { error: e2 } = await sb.rpc('mini_set_department_active', { p_id: x.id, p_active: !x.is_active });
     if (e2) return toast(friendly(e2));
   }
-  toast('Departamento guardado.'); loadDepartments();
+  toast('Departamento guardado.'); loadDepartments(); loadLogins();
 }
+// Departments one can merge into this one: active, not Administração or Colaboradores (those are fixed kinds).
+const others = (all, x) => all.filter((o) => o.is_active && (!x || o.id !== x.id) && o.kind !== 'admin' && o.kind !== 'worker' && o.permissions.length);
 // What the office must look at: taps added by hand, taps that arrived late from a phone without network, and
 // supervisors' own taps (mini_manual_taps gives the reason; these two texts come from the server as written).
 const tapKind = (reason) => (/^sem rede/.test(reason || '') ? 'sem rede, chegou tarde' : reason === 'picou o próprio cartão' ? 'próprio cartão'

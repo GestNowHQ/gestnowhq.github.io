@@ -2163,3 +2163,10 @@ ul.plain { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; } u
 .adm-rows .grow { min-width: 0; flex: 1 1 180px; }
 .adm-rows b { display: block; overflow-wrap: anywhere; }
 .adm-rows small { display: block; color: var(--ink-2); font-size: var(--t-xs); }
+
+/* v73 · Acessos e regras (menu por departamento) */
+.acc-rows { padding: 4px 16px; }
+.acc-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 0; background: none; border: 0; border-bottom: var(--bw) solid var(--line); text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.acc-row:last-child { border-bottom: 0; }
+.acc-row small { display: block; color: var(--ink-2); font-size: var(--t-xs); overflow-wrap: anywhere; }
+.acc-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
