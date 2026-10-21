@@ -36,6 +36,10 @@ const REASONS = {
   daily_limit_reached: 'Limite de horas do dia atingido',
   weekly_limit_reached: 'Limite de horas da semana atingido',
   handover_not_acknowledged: 'Falta confirmar a passagem de turno',
+  no_gps: 'Telemóvel sem GPS: liga a localização',
+  site_area_missing: 'Obra sem área da fábrica: os RH têm de a desenhar',
+  outside_site: 'Fora da área da fábrica',
+  gps_imprecise: 'GPS impreciso: vai para o exterior e tenta outra vez',
 };
 const REASON_PREFIX = {
   'document_invalid:': 'Documento em falta ou caducado: ',
@@ -44,6 +48,11 @@ const REASON_PREFIX = {
   'skill_missing:': 'Falta a competência: ',
 };
 const ERRORS = [
+  // Área da fábrica (sql/104)
+  [/choose the GPS rule/i, 'Escolhe a regra do GPS.'],
+  [/the area needs at least 3 corners/i, 'A área precisa de pelo menos 3 cantos.'],
+  [/too many corners/i, 'A área tem cantos a mais (no máximo 200).'],
+  [/corner of the area is not a valid position/i, 'Um canto da área não é uma posição válida.'],
   // Prémios (sql/98)
   [/rules of this prize are closed/i, 'As regras deste prémio já estão fechadas para o ano.'],
   [/prize rules are not closed yet/i, 'Ainda não se pode propor: as regras deste prémio não foram fechadas.'],
@@ -863,7 +872,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '80';
+const APP_VERSION = '81';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -912,7 +921,7 @@ const VIEW_NEEDS = {
   trabalhadores: () => can('pessoas.ver') || can('pessoas.gerir'), onbtextos: () => canPeople(),
   seguranca: () => ['seguranca.lmra', 'seguranca.parar_obra', 'seguranca.emergencia'].some(can), lmra: () => canLmra(),
   emergencia: () => can('seguranca.emergencia'), acolhimento: () => can('acolhimento.gerir'),
-  obras: () => can('obras.gerir') || can('obras.ver_detalhes'), painel: () => canSiteDetails(), naobra: () => canSiteDetails() || can('ponto.picar'),
+  obras: () => can('obras.gerir') || can('obras.ver_detalhes') || can('obras.area'), painel: () => canSiteDetails(), naobra: () => canSiteDetails() || can('ponto.picar'),
   equipa: () => canSiteDetails(), picar: () => can('ponto.picar'), horas: () => can('horas.ver') || can('horas.validar_obra'),
   andaimes: () => canScaffolds(), producao: () => canProd(), progresso: () => canProgress(), armazem: () => canWh(), compras: () => canBuy(), frota: () => canFleet(),
   orcamentos: () => canEstimates(), qualidade: () => canQuality(), comercial: () => canSales(), premios: () => canAwards(), custos: () => canCosts(),
@@ -1565,7 +1574,7 @@ document.addEventListener('keydown', (e) => {
 });
 async function loadBasics() {
   const [s, p] = await Promise.all([
-    core().from('projects').select('id, title, cost_center_code, status, address, timezone, country, municipality').order('title').retry(!state.offline),
+    core().from('projects').select('id, title, cost_center_code, status, address, timezone, country, municipality, gps_rule, geofence_polygon, latitude, geofence_radius_m').order('title').retry(!state.offline),
     core().from('collaborators').select('id, full_name, employee_number, job_title, onboarding_status, is_active, organization_id').order('full_name').retry(!state.offline),
   ]);
   // Without network the site list comes from the phone (sites only: no names of people are kept).
@@ -1601,18 +1610,18 @@ function go(view) {
   if (!state.ready) return boot();   // never show a screen before login (and the phone code, when required)
   if (state.me.role === 'worker') view = 'minhas';   // the worker profile has one screen (the database checks the same)
   else if (state.offline && view !== 'picar' && view !== 'emergencia') { toast('Sem rede: por agora só podes picar.'); view = 'picar'; }
-  stopNfc(); clearInterval(state.timer); clearInterval(state.tick); hideFlash(); openMore(false); Voice.stop(); dropRobots();
+  stopNfc(); gpsStop(); clearInterval(state.timer); clearInterval(state.tick); hideFlash(); openMore(false); Voice.stop(); dropRobots();
   if (state.uiEl && window.GNUI) { window.GNUI.unmount(state.uiEl); state.uiEl = null; }
   state.view = view;
   if (state.navDesk !== ownerDesk()) layoutNav(state.me.role);   // owner moved between his clients and a company
   app.classList.toggle('wide', view === 'secretariado' || view === 'painel');
-  const tab = view === 'ficha' ? 'trabalhadores' : view === 'fichaepi' ? 'armazem' : view === 'cliente' || view === 'precos' ? 'clientes' : view;
+  const tab = view === 'ficha' ? 'trabalhadores' : view === 'fichaepi' ? 'armazem' : view === 'cliente' || view === 'precos' ? 'clientes' : view === 'area' ? 'obras' : view;
   nav.querySelectorAll('button[data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === tab));
   const cur = nav.querySelector(`button[data-view="${tab}"]`);
   nav.querySelector('button[data-more]').classList.toggle('on', !!cur && cur.parentElement.id === 'more');
   window.scrollTo(0, 0);
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
-     ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients, cliente: viewClient, precos: viewPrices, empresa: viewCompanyRules, inicio: viewHome,
+     ficha: viewWorker, obras: viewSites, area: viewArea, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients, cliente: viewClient, precos: viewPrices, empresa: viewCompanyRules, inicio: viewHome,
      processo: viewProcess, orcamentos: viewEstimates, comercial: viewSales, premios: viewAwards, custos: viewCosts, lmra: viewLmra, emergencia: viewEmergency,
      armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, producao: viewProd, progresso: viewProgress, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
   checkEmergencyBar(); encBadges();
@@ -2117,6 +2126,7 @@ function viewClock() {
       ${state.offline ? `<div class="result warn">${ic('cloud')}<div><b>Sem rede</b>Só podes picar. As picagens ficam guardadas neste telemóvel e são enviadas quando a rede voltar.</div></div>` : ''}
       <div id="clockwarn"></div>
       <div class="pic-site">${siteSelect('site')}</div>
+      <div id="gpsbox"></div>
       ${nfcOk ? `<button class="tapzone" id="nfc" aria-pressed="false"><span class="ring">${ic('tap')}</span><b id="nfclbl">Tocar para ligar o leitor</b>
           <span class="small" id="nfchelp">Depois é só encostar o cartão às costas do telemóvel.</span></button>`
         : `<div class="nonfc">${ic('key')}<span>Este aparelho não lê cartões pelo browser (só o Chrome em Android). Usa o leitor USB ou escreve o número.</span></div>`}
@@ -2138,7 +2148,8 @@ function viewClock() {
     </div><div>
     <div class="sec-h"><h2 class="eyebrow">Últimas picagens nesta obra</h2></div><div id="recent">${skel(3)}</div>
     </div></div>`;
-  bindSiteSelect('site', () => { loadRecent(); loadLive(); tickClock(); });
+  bindSiteSelect('site', () => { loadRecent(); loadLive(); tickClock(); gpsRender(); gpsForSite(); });
+  gpsStart(); gpsRender(); gpsForSite();
   app.querySelectorAll('.dir button').forEach((b) => b.onclick = () => {
     // ALMOÇO keeps the automatic direction (out for who is in, in for who is out) and names the taps as lunch.
     state.lunch = b.dataset.d === 'lunch' ? !state.lunch : false;
@@ -2307,6 +2318,8 @@ async function clock(rawUid, typed, sim) {
     p_event_time: at.toISOString(), p_client_event_id: uuid(), p_device_time: new Date().toISOString() };
   // a simulated tap at an earlier time is sent like a tap kept without signal (the server flags it as late)
   if (sim && sim.at) { ev.p_device_time = at.toISOString(); ev.p_was_offline = true; }
+  // the phone's position at the moment of the tap (the server refuses an entry outside the factory, sql/104)
+  if (!sim) { const g = await gpsNow(); if (g) { ev.p_lat = +g.lat.toFixed(7); ev.p_lng = +g.lng.toFixed(7); ev.p_accuracy_m = Math.round(g.acc); } }
   const word = dir === 'in' ? 'ENTRADA' : 'SAÍDA';   // always the direction that was sent (B1)
   const r = await sendEvent(ev, typed);
   if (seq === state.tapSeq) state.resultId = ev.p_client_event_id;   // the box below now belongs to this tap
@@ -6505,8 +6518,10 @@ function viewSites() {
     ${state.sites.length ? `<div class="list sites">${state.sites.map((s) => `<div class="card${canSiteDetails() ? ' link' : ''}" data-id="${esc(s.id)}" ${canSiteDetails() ? 'role="button" tabindex="0"' : ''}>
       <div class="wk"><span class="av a${s.country === 'ES' ? 7 : s.country === 'FR' ? 3 : 0}" aria-hidden="true">${ic('crane')}</span><div class="grow"><div class="nm">${esc(s.title)}</div>
         <div class="sub">${esc(addr(s))}${s.municipality && s.municipality.toLowerCase() !== addr(s).toLowerCase() ? (addr(s) ? ' · ' : '') + 'concelho ' + esc(s.municipality) : ''}</div></div></div>
-      <div class="tags"><span class="chip code">${esc(s.cost_center_code)}</span>${label[s.status] || chip('', s.status)}${flag(s.country, s.id)}</div>
-      ${canSiteDetails() ? `<p class="site-go"><button class="btn ghost small" data-panel="${esc(s.id)}">${ic('crane')}Abrir no dashboard</button></p>` : ''}</div>`).join('')}</div>`
+      <div class="tags"><span class="chip code">${esc(s.cost_center_code)}</span>${label[s.status] || chip('', s.status)}${flag(s.country, s.id)}${noArea(s) ? chip('bad', 'Sem área da fábrica', 'warn') : ''}</div>
+      ${noArea(s) ? '<p class="small bad-t">As entradas nesta obra são recusadas até a área da fábrica estar desenhada.</p>' : ''}
+      ${canSiteDetails() || canArea() ? `<p class="site-go">${canSiteDetails() ? `<button class="btn ghost small" data-panel="${esc(s.id)}">${ic('crane')}Abrir no dashboard</button>` : ''}
+        ${canArea() ? `<button class="btn ${noArea(s) ? '' : 'ghost '}small" data-area="${esc(s.id)}">${ic('map')}${noArea(s) ? 'Desenhar a área da fábrica' : 'Área da fábrica'}</button>` : ''}</p>` : ''}</div>`).join('')}</div>`
       : `<div class="card">${empty('helmet', 'Ainda não há obras', 'Abre a primeira obra aqui em baixo.')}</div>`}
     ${can('obras.gerir') ? `<details class="fold" ${state.sites.length ? '' : 'open'}><summary><span>+ Abrir obra<span class="sub">Cliente, código e nome</span></span></summary><div>
     <form id="f"><div class="row"><div><label>Cliente *</label><input name="client" required placeholder="ex.: Refinaria de Sines"></div>
@@ -6522,9 +6537,10 @@ function viewSites() {
       <div id="cfgbody">${skel(1)}</div></div>` : ''}`;
   if (canSiteDetails()) app.querySelectorAll('.list .card.link').forEach((c) => {
     const open = () => { state.panelSite = c.dataset.id; go('painel'); };
-    c.onclick = (e) => { if (!e.target.closest('a,select,input')) open(); };
-    c.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } };
+    c.onclick = (e) => { if (!e.target.closest('a,select,input,[data-area]')) open(); };
+    c.onkeydown = (e) => { if (e.target === c && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); open(); } };
   });
+  app.querySelectorAll('[data-area]').forEach((b) => b.onclick = () => { state.areaSite = b.dataset.area; go('area'); });
   if ($('#cfgsite')) { $('#cfgsite').onchange = () => loadSiteDetails($('#cfgsite').value); loadSiteDetails($('#cfgsite').value); }
   if ($('#f')) $('#f').onsubmit = async (e) => {
     e.preventDefault();
@@ -6532,8 +6548,9 @@ function viewSites() {
     const { data, error } = await sb.rpc('mini_open_site', { p_client: f.get('client'), p_title: f.get('title'),
       p_code: f.get('code'), p_address: f.get('addr') || null });
     if (error) return toast(friendly(error));
-    store(SITE_KEY, data); toast('Obra aberta.');
-    await loadBasics(); viewSites();
+    store(SITE_KEY, data); await loadBasics();
+    // the factory area comes before the first entry (sql/104): straight to the map
+    if (canArea()) { toast('Obra aberta. Agora desenha a área da fábrica.'); state.areaSite = data; go('area'); } else { toast('Obra aberta.'); viewSites(); }
   };
 }
 // Who sees the section (the database checks the same): admin and project manager set country and municipality,
@@ -6541,6 +6558,9 @@ function viewSites() {
 const COUNTRY = { PT: 'Portugal', ES: 'Espanha', FR: 'França' };
 const flag = (c, id) => `<span class="chip" data-flag="${esc(id || '')}" title="${esc(COUNTRY[c] || 'Portugal')}">${{ ES: '🇪🇸 ES', FR: '🇫🇷 FR' }[c] || '🇵🇹 PT'}</span>`;
 const canSiteDetails = () => can('obras.ver_detalhes');
+// who draws the factory area (HR by default, sql/104); a site with the GPS rule on and no area refuses entries
+const canArea = () => can('obras.area') || can('obras.gerir');
+const noArea = (s) => s.status === 'execution' && (s.gps_rule || 'block') === 'block' && !s.geofence_polygon && !(s.latitude != null && s.geofence_radius_m);
 const canSetSite = () => can('obras.gerir');
 const canHolidays = () => can('obras.feriados');
 const canSitePd = () => can('obras.descanso_diaria');
@@ -10643,6 +10663,185 @@ function progressBook(X, s) {
   }
   return { wb, name: `folha-producao-${s.site.code}-${s.day}${s.version > 1 ? '-v' + s.version : ''}.xlsx`, msg: 'Excel descarregado.' };
 }
+// ------------------------------------------------------------------ GPS do Picar e área da fábrica (v81, sql/104)
+// Diogo 2026-10-21: every tap must be proven to be made inside the factory. The Picar keeps the phone's GPS on while
+// the screen is open and sends the position WITH each tap (never in between). The site's area is a polygon drawn on
+// the map. The server decides (rule per site): an entry outside, without GPS or too imprecise is refused; an exit
+// never is (safety). Here the encarregado sees, before tapping, whether the phone is inside.
+const Gps = { watch: null, fix: null, err: null, areas: {} };
+const AREA_KEY = 'gestnow-site-area:';
+function gpsStart() {
+  if (!navigator.geolocation) { Gps.err = 'unsupported'; return gpsRender(); }
+  if (Gps.watch != null) return;
+  Gps.watch = navigator.geolocation.watchPosition((p) => {
+    Gps.fix = { lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy, at: Date.now() }; Gps.err = null; gpsRender();
+  }, (e) => { Gps.err = e.code === 1 ? 'denied' : 'unavailable'; gpsRender(); }, { enableHighAccuracy: true, maximumAge: 10000, timeout: 30000 });
+}
+function gpsStop() { if (Gps.watch != null && navigator.geolocation) navigator.geolocation.clearWatch(Gps.watch); Gps.watch = null; }
+// The position for a tap: the one the screen already has (if under 30 s old), or a fresh one (at most 6 s of wait).
+async function gpsNow() {
+  if (Gps.fix && Date.now() - Gps.fix.at < 30000) return Gps.fix;
+  if (!navigator.geolocation) return null;
+  return new Promise((ok) => {
+    navigator.geolocation.getCurrentPosition((p) => { Gps.fix = { lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy, at: Date.now() }; Gps.err = null; ok(Gps.fix); },
+      (e) => { Gps.err = e.code === 1 ? 'denied' : 'unavailable'; ok(null); }, { enableHighAccuracy: true, maximumAge: 10000, timeout: 6000 });
+  });
+}
+// The site's area, kept on the phone so the Picar can show it without network.
+async function gpsArea(siteId, fresh) {
+  if (!siteId) return null;
+  if (Gps.areas[siteId] && !fresh) return Gps.areas[siteId];
+  let a = load(AREA_KEY + siteId, null);
+  if (!state.offline && navigator.onLine !== false) {
+    const { data } = await sb.rpc('mini_site_area', { p_site: siteId }).then((r) => r, () => ({}));
+    if (data) { a = data; store(AREA_KEY + siteId, data); }
+  }
+  Gps.areas[siteId] = a; return a;
+}
+// The same test as the server (private.site_contains): inside the polygon, or within the GPS error (up to 30 m) of its edge.
+function gpsSeg(p, a, b) {
+  const k = Math.cos(p[0] * Math.PI / 180);
+  const ax = (a[1] - p[1]) * 111320 * k; const ay = (a[0] - p[0]) * 110540; const bx = (b[1] - p[1]) * 111320 * k; const by = (b[0] - p[0]) * 110540;
+  const dx = bx - ax; const dy = by - ay; if (!dx && !dy) return Math.hypot(ax, ay);
+  const t = Math.max(0, Math.min(1, -(ax * dx + ay * dy) / (dx * dx + dy * dy)));
+  return Math.hypot(ax + t * dx, ay + t * dy);
+}
+function gpsInside(area, lat, lng, acc) {
+  if (!area) return null;
+  const tol = Math.min(acc || 0, 30); const p = [lat, lng];
+  if (area.polygon && area.polygon.length >= 3) {
+    const poly = area.polygon; let inside = false; let dmin = Infinity;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const [yi, xi] = poly[i]; const [yj, xj] = poly[j];
+      if ((yi > lat) !== (yj > lat) && lng < (xj - xi) * (lat - yi) / (yj - yi) + xi) inside = !inside;
+      dmin = Math.min(dmin, gpsSeg(p, poly[i], poly[j]));
+    }
+    return inside || dmin <= tol;
+  }
+  if (area.lat != null && area.radius) return gpsSeg(p, [+area.lat, +area.lng], [+area.lat, +area.lng]) <= area.radius + tol;
+  return null;
+}
+function gpsRender() {
+  const box = $('#gpsbox'); if (!box) return;
+  const site = currentSite(); const area = site && Gps.areas[site.id];
+  if (area && area.rule === 'off') { box.innerHTML = ''; return; }
+  const block = !area || area.rule !== 'flag';
+  const draw = area && area.can_edit ? `<button class="btn ghost small" data-garea="${esc(site.id)}">${ic('map')}${area.polygon ? 'Ver a área' : 'Desenhar a área'}</button>` : '';
+  let kind; let title; let text;
+  if (Gps.err === 'denied' || Gps.err === 'unsupported') {
+    kind = 'bad'; title = 'Localização desligada';
+    text = 'Liga o GPS do telemóvel e autoriza o GestNow: toca no cadeado ao lado do endereço › Autorizações › Localização › Permitir. Sem GPS as entradas são recusadas.';
+  } else if (!Gps.fix) {
+    kind = 'warn'; title = 'À procura do GPS…'; text = 'Se demorar, vai para o exterior, longe de edifícios e de estruturas metálicas.';
+  } else {
+    const inside = gpsInside(area, Gps.fix.lat, Gps.fix.lng, Gps.fix.acc); const acc = Math.round(Gps.fix.acc);
+    if (acc > 150) { kind = 'warn'; title = `GPS impreciso (±${acc} m)`; text = 'Vai para o exterior, longe de edifícios, e espera uns segundos.'; }
+    else if (inside === null && block) { kind = 'bad'; title = 'Obra sem área da fábrica'; text = 'As entradas são recusadas até os RH desenharem a área em Obras.'; }
+    else if (inside === null) { kind = 'warn'; title = `GPS ligado (±${acc} m)`; text = 'Esta obra ainda não tem a área da fábrica desenhada. A posição fica gravada e o escritório é avisado.'; }
+    else if (inside) { kind = 'ok'; title = `Dentro da fábrica · GPS ±${acc} m`; text = ''; }
+    else { kind = 'bad'; title = 'Fora da área da fábrica'; text = block ? 'As entradas picadas daqui são recusadas. As saídas ficam marcadas.' : 'As picagens daqui ficam marcadas e o escritório é avisado.'; }
+  }
+  box.innerHTML = `<div class="gps ${kind}">${ic(kind === 'ok' ? 'pin' : 'warn')}<span class="grow"><b>${esc(title)}</b>${text ? `<small>${esc(text)}</small>` : ''}</span>${draw}</div>
+    <p class="gps-note">A posição deste telemóvel é gravada só no momento de cada picagem, para provar que foi feita dentro da obra.</p>`;
+  const b = box.querySelector('[data-garea]'); if (b) b.onclick = () => { state.areaSite = b.dataset.garea; go('area'); };
+}
+// Shows the copy kept on the phone at once, then asks for the current area (the office may have just changed it).
+async function gpsForSite() {
+  const s = currentSite(); if (!s) return;
+  if (!Gps.areas[s.id]) { Gps.areas[s.id] = load(AREA_KEY + s.id, null); gpsRender(); }
+  await gpsArea(s.id, true); if ((currentSite() || {}).id === s.id) gpsRender();
+}
+
+// ---- the area editor (Obras › Área da fábrica): tap each corner of the fence on the map, in order.
+const LEAFLET = 'vendor/leaflet-1.9.4.js';
+let leafletLib = null;
+function loadLeaflet() {
+  if (window.L && window.L.map) return Promise.resolve(window.L);
+  if (!leafletLib) {
+    leafletLib = new Promise((resolve, reject) => {
+      if (!document.getElementById('leafcss')) { const l = document.createElement('link'); l.id = 'leafcss'; l.rel = 'stylesheet'; l.href = 'vendor/leaflet-1.9.4.css'; document.head.appendChild(l); }
+      const s = document.createElement('script'); s.src = LEAFLET;
+      s.onload = () => (window.L ? resolve(window.L) : reject(new Error('Leaflet')));
+      s.onerror = () => { s.remove(); leafletLib = null; reject(new Error('load')); };
+      document.head.appendChild(s);
+    });
+  }
+  return leafletLib;
+}
+const RULES = [['block', 'Recusar entradas fora da área', 'Recomendado. A saída nunca é bloqueada, fica só marcada.'],
+  ['flag', 'Só avisar', 'Aceita e avisa o gestor de obra.'], ['off', 'Desligado', 'Não pede GPS nesta obra.']];
+function areaSize(poly) {
+  if (!poly || poly.length < 3) return null;
+  const k = Math.cos(poly[0][0] * Math.PI / 180); const pts = poly.map(([a, b]) => [b * 111320 * k, a * 110540]);
+  let s = 0; let per = 0;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { s += pts[j][0] * pts[i][1] - pts[i][0] * pts[j][1]; per += Math.hypot(pts[i][0] - pts[j][0], pts[i][1] - pts[j][1]); }
+  return { ha: Math.abs(s) / 2 / 10000, km: per / 1000 };
+}
+async function viewArea() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
+  if (!canSiteDetails() && !can('ponto.picar') && !canArea()) return viewClock();   // code guard as well as the database's
+  const id = state.areaSite || (currentSite() || {}).id;
+  if (!id) return go('obras');
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Obras</p><h1>Área da fábrica</h1></div></div><div id="arbody">${skel(2)}</div>`;
+  const a = await gpsArea(id, true);
+  const box = $('#arbody'); if (!box) return;
+  if (!a) { box.innerHTML = `<div class="card"><p>${esc('Sem rede: não consegui abrir a área desta obra.')}</p></div>`; return; }
+  let poly = (a.polygon || []).map((p) => [+p[0], +p[1]]);
+  const edit = a.can_edit;
+  box.innerHTML = `<div class="card ar-card"><p class="ar-site"><b data-nt>${esc(a.code)} · ${esc(a.title)}</b></p>
+      ${edit ? '<p class="small muted">Toca no mapa em cada canto da vedação da fábrica, pela ordem, à volta. Arrasta um canto para o acertar. São precisos pelo menos 3.</p>' : ''}
+      <div class="ar-map" role="application" aria-label="Mapa da área da fábrica"><div id="amap" data-nt></div></div>
+      <p class="small" id="arsize"></p>
+      ${edit ? `<div class="ar-btns"><button class="btn ghost small" id="arundo">Desfazer</button><button class="btn ghost small" id="arclear">Apagar tudo</button>
+        <button class="btn ghost small" id="arme">${ic('pin')}Centrar onde estou</button><button class="btn ghost small" id="arhere">+ Canto onde estou</button></div>
+      <h2>Regra do GPS nesta obra</h2>
+      <div class="ar-rules" role="radiogroup">${RULES.map(([k, t, s]) => `<label class="ar-rule"><input type="radio" name="arr" value="${k}" ${a.rule === k ? 'checked' : ''}><span><b>${esc(t)}</b><small>${esc(s)}</small></span></label>`).join('')}</div>
+      <button class="btn big wide" id="arsave">${ic('ok')}Guardar a área</button>` : `<p class="small muted">Regra: <b>${esc((RULES.find((r) => r[0] === a.rule) || RULES[0])[1])}</b>. Só quem gere as obras muda a área.</p>`}
+      <p class="small muted">Mapa: © OpenStreetMap. Os cantos ficam guardados com a obra; a posição dos telemóveis só se grava em cada picagem.</p></div>`;
+  let L;
+  try { L = await loadLeaflet(); } catch (_) { app.querySelector('.ar-map').innerHTML = `<p class="small">${esc('Não consegui abrir o mapa. Verifica a rede e volta a abrir.')}</p>`; return; }
+  if (!$('#amap')) return;
+  const map = L.map('amap', { zoomControl: true, attributionControl: true });
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+  const shape = L.polygon([], { color: '#4f46e5', weight: 3, fillOpacity: 0.15 }).addTo(map);
+  let pins = []; let me = null;
+  const pinIcon = (i) => L.divIcon({ className: 'ar-pin', html: `<span>${i + 1}</span>`, iconSize: [28, 28], iconAnchor: [14, 14] });
+  const draw = () => {
+    pins.forEach((m) => m.remove()); pins = [];
+    shape.setLatLngs(poly);
+    poly.forEach((p, i) => {
+      const m = L.marker(p, { icon: pinIcon(i), draggable: edit, keyboard: false }).addTo(map);
+      m.on('drag', (e) => { poly[i] = [e.latlng.lat, e.latlng.lng]; shape.setLatLngs(poly); size(); });
+      pins.push(m);
+    });
+    size();
+  };
+  const size = () => { const s = areaSize(poly); $('#arsize').textContent = s ? `${poly.length} cantos · ${s.ha.toLocaleString(LOC, { maximumFractionDigits: 1 })} ha · ${s.km.toLocaleString(LOC, { maximumFractionDigits: 2 })} km de vedação` : (poly.length ? `Faltam ${3 - poly.length} canto(s).` : 'Ainda sem área desenhada.'); };
+  if (poly.length >= 3) map.fitBounds(shape.getBounds(), { padding: [24, 24] });
+  else if (a.lat != null) map.setView([+a.lat, +a.lng], 15);
+  else if (Gps.fix) map.setView([Gps.fix.lat, Gps.fix.lng], 16);
+  else map.setView([39.6, -8.2], 6);
+  draw();
+  if (!edit) return;
+  map.on('click', (e) => { poly.push([e.latlng.lat, e.latlng.lng]); draw(); });
+  $('#arundo').onclick = () => { poly.pop(); draw(); };
+  $('#arclear').onclick = async () => { if (poly.length && !await askSheet('Apagar a área?', '<p>Os cantos todos saem do mapa. Só fica apagado quando guardares.</p>', 'Apagar')) return; poly = []; draw(); };
+  const here = async () => { toast('A ler o GPS…'); const f = await gpsNow(); if (!f) { toast('Sem GPS: liga a localização do telemóvel.'); return null; }
+    if (me) me.remove(); me = L.circle([f.lat, f.lng], { radius: Math.max(f.acc, 5), color: '#0ea5e9', weight: 2, fillOpacity: 0.2 }).addTo(map); return f; };
+  $('#arme').onclick = async () => { const f = await here(); if (f) map.setView([f.lat, f.lng], 17); };
+  $('#arhere').onclick = async () => { const f = await here(); if (!f) return; if (f.acc > 30) toast(`GPS impreciso (±${Math.round(f.acc)} m): espera um pouco e tenta outra vez.`); else { poly.push([f.lat, f.lng]); draw(); map.panTo([f.lat, f.lng]); } };
+  $('#arsave').onclick = async (e) => {
+    const btn = e.currentTarget; const rule = (app.querySelector('input[name=arr]:checked') || {}).value || 'block';
+    if (poly.length && poly.length < 3) return toast('A área precisa de pelo menos 3 cantos.');
+    btn.disabled = true;
+    const { error } = await sb.rpc('mini_site_area_save', { p_site: id, p_polygon: poly.length ? poly.map(([y, x]) => [+y.toFixed(7), +x.toFixed(7)]) : null, p_rule: rule });
+    btn.disabled = false;
+    if (error) return toast(friendly(error));
+    await gpsArea(id, true); loadBasics();
+    toast(poly.length ? 'Área guardada. O Picar desta obra já a usa.' : 'Regra guardada.');
+  };
+}
+
 const canTravel = () => mod('housing') && ['viagens.pedir', 'viagens.aprovar', 'viagens.gerir'].some(can);
 const TV_MODE = { plane: 'Avião', train: 'Comboio', bus: 'Autocarro', other: 'Outro' };
 const TV_STATE = { requested: ['warn', 'Por aprovar'], approved: ['info', 'Aprovada, por marcar'], booked: ['ok', 'Marcada'], done: ['', 'Feita'],
