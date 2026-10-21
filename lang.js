@@ -144,7 +144,7 @@ const I18N = (() => {
   const ready = (async () => {
     if (st.lang === 'pt') { st.dict = st.collect ? {} : null; watch(); return; }
     try {
-      const r = await fetch(`lang/${st.lang}.json?v=76`);
+      const r = await fetch(`lang/${st.lang}.json?v=77`);
       st.dict = r.ok ? await r.json() : {};
     } catch (_) { st.dict = {}; }
     st.pats = compile(st.dict);

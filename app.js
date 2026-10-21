@@ -847,7 +847,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '76';
+const APP_VERSION = '77';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -874,19 +874,19 @@ WIDE.addEventListener('change', () => {
 // «Mais» grouped under headings (founder-approved v48): each screen once, each icon with one meaning. «Processo» left the
 // menu (the «?» button and the search still open it); «Produção» is reached from the Dashboard when this login sees it.
 // v73 (Diogo 2026-10-21): the menu is arranged BY DEPARTMENT; each person sees only the screens their departments give.
-// v76: the founder's department sheet (2026-10-21), group by group and in its order. Frota is its own department; Viagens
-// and Alojamento (not on the sheet) sit with Secretariado; «controlo da app para garantir a ISO 9001» = Processo, in Qualidade.
+// v76: the founder's department sheet (2026-10-21), group by group and in its order. Frota is its own department.
+// v77 (Diogo 2026-10-21): Viagens and Alojamento are run by RH (their costs go to each site); Segurança and Qualidade are
+// one department, QSA (sql/99); «controlo da app para garantir a ISO 9001» = Processo.
 const MENU_GROUPS = [
   ['Administração', ['inicio', 'empresa', 'premios', 'clientes']],
-  ['Secretariado', ['secretariado', 'horas', 'despesas', 'viagens', 'alojamento']],
-  ['Recursos Humanos', ['trabalhadores', 'onbtextos', 'acolhimento']],
+  ['Secretariado', ['secretariado', 'horas', 'despesas']],
+  ['Recursos Humanos', ['trabalhadores', 'onbtextos', 'acolhimento', 'viagens', 'alojamento']],
   ['Frota', ['frota']],
-  ['Segurança', ['seguranca', 'lmra', 'emergencia']],
+  ['QSA · Qualidade, Segurança e Ambiente', ['seguranca', 'lmra', 'emergencia', 'qualidade', 'processo']],
   ['Produção (Obra)', ['painel', 'obras', 'naobra', 'picar', 'andaimes', 'equipa', 'producao']],
   ['Compras e Armazém', ['armazem', 'compras']],
   ['Comercial', ['comercial']],
   ['Orçamentação', ['orcamentos']],
-  ['Qualidade', ['qualidade', 'processo']],
   ['Eu', ['minhas']],
 ];
 // What each screen needs, to place it under the department that gives it (the visibility itself is set in boot).
@@ -1394,8 +1394,8 @@ const KIND_NAMES = { admin: 'administração', hr: 'escritório', hse: 'seguran�
 const KIND_HELP = { hr: 'Trabalha no escritório. Pede sempre o código do telemóvel.', hse: 'Segurança. Pede sempre o código do telemóvel.',
   supervisor: 'Trabalha na obra: só vê as obras onde está. Permissões sensíveis pedem o código do telemóvel.', worker: 'Só vê as próprias horas e diárias.' };
 // A profile is named after the login's departments of that type ("Secretariado", "Armazém"), else the role.
-// The base Segurança, Encarregados and Colaboradores keep the singular role names ("Encarregado").
-const ROLE_KEYS = ['seguranca', 'encarregados', 'colaboradores'];
+// The base Encarregados and Colaboradores keep the singular role names ("Encarregado"); QSA shows its own name (v77).
+const ROLE_KEYS = ['encarregados', 'colaboradores'];
 const roleLabel = (r, me = state.me) => {
   const d = r === 'admin' ? [] : [...new Set(((me && me.depts) || []).filter((x) => x.kind === r)
     .map((x) => (ROLE_KEYS.includes(x.key) ? ROLE_NAMES[r] : x.name)))];
