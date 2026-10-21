@@ -226,6 +226,21 @@ const ERRORS = [
   [/at most 6 tickets per trip/i, 'No máximo 6 bilhetes por viagem.'],
   [/this trip is already closed/i, 'Esta viagem já está fechada.'],
   [/time is not valid/i, 'A hora não é válida.'],
+  [/choose today or one of the 3 days before/i, 'Escolhe hoje ou um dos 3 dias antes.'],
+  [/you are not on this site on this day/i, 'Neste dia não estás nesta obra (sem picagens nem atribuição).'],
+  [/write at least one line/i, 'Escreve pelo menos uma linha.'],
+  [/too many lines/i, 'Linhas a mais: 60 no máximo por dia.'],
+  [/the encarregado already sent this day/i, 'O encarregado já enviou este dia ao gestor de obra. Se algo estiver mal, diz-lhe.'],
+  [/the encarregado already reviewed your sheet/i, 'O encarregado já reviu a tua folha. Se algo estiver mal, diz-lhe: ele corrige.'],
+  [/line (\d+): choose the work/i, 'Linha $1: escolhe o trabalho.'],
+  [/line (\d+): write what was done/i, 'Linha $1: escreve o que foi feito.'],
+  [/line (\d+): the quantity is a number/i, 'Linha $1: a quantidade é um número (ex.: 12 ou 40,5).'],
+  [/^choose the work$/i, 'Escolhe o trabalho.'],
+  [/^write what was done$/i, 'Escreve o que foi feito.'],
+  [/^the quantity is a number$/i, 'A quantidade é um número (ex.: 12 ou 40,5).'],
+  [/this day can no longer be changed/i, 'Este dia já não se pode mudar (mais de 60 dias).'],
+  [/the sheet of this day has no lines/i, 'A folha deste dia não tem linhas.'],
+  [/a sent report is never changed/i, 'Uma folha enviada não muda: corrige o dia e envia outra vez.'],
   [/do the entry inspection with photos first/i, 'Primeiro faz a vistoria de entrada da casa, com fotos de cada divisão.'],
   [/choose the site this house serves/i, 'Escolhe a obra que esta casa serve: os custos vão para essa obra.'],
   [/choose the site this house cost goes to/i, 'Escolhe a obra: cada despesa da casa vai para uma obra.'],
@@ -848,7 +863,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '79';
+const APP_VERSION = '80';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -862,7 +877,7 @@ function tabsFor(role) {
   if (role === 'admin') return isOwner() ? (ownerDesk() ? ['clientes'] : ['clientes', 'inicio', 'horas', 'secretariado']) : ['inicio', 'painel', 'horas', 'secretariado'];
   return TABS[role] || TABS.supervisor;
 }
-const MORE_ORDER = ['inicio', 'empresa', 'onbtextos', 'equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'andaimes', 'processo', 'clientes', 'custos'];
+const MORE_ORDER = ['inicio', 'empresa', 'onbtextos', 'equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'andaimes', 'processo', 'clientes', 'custos', 'progresso'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -884,7 +899,7 @@ const MENU_GROUPS = [
   ['Recursos Humanos', ['trabalhadores', 'onbtextos', 'acolhimento', 'viagens', 'alojamento']],
   ['Frota', ['frota']],
   ['QSA · Qualidade, Segurança e Ambiente', ['seguranca', 'lmra', 'emergencia', 'qualidade', 'processo']],
-  ['Produção (Obra)', ['painel', 'obras', 'naobra', 'picar', 'andaimes', 'equipa', 'producao']],
+  ['Produção (Obra)', ['painel', 'obras', 'naobra', 'picar', 'progresso', 'andaimes', 'equipa', 'producao']],
   ['Compras e Armazém', ['armazem', 'compras']],
   ['Comercial', ['comercial']],
   ['Orçamentação', ['orcamentos']],
@@ -899,7 +914,7 @@ const VIEW_NEEDS = {
   emergencia: () => can('seguranca.emergencia'), acolhimento: () => can('acolhimento.gerir'),
   obras: () => can('obras.gerir') || can('obras.ver_detalhes'), painel: () => canSiteDetails(), naobra: () => canSiteDetails() || can('ponto.picar'),
   equipa: () => canSiteDetails(), picar: () => can('ponto.picar'), horas: () => can('horas.ver') || can('horas.validar_obra'),
-  andaimes: () => canScaffolds(), producao: () => canProd(), armazem: () => canWh(), compras: () => canBuy(), frota: () => canFleet(),
+  andaimes: () => canScaffolds(), producao: () => canProd(), progresso: () => canProgress(), armazem: () => canWh(), compras: () => canBuy(), frota: () => canFleet(),
   orcamentos: () => canEstimates(), qualidade: () => canQuality(), comercial: () => canSales(), premios: () => canAwards(), custos: () => canCosts(),
 };
 // v73 (Diogo 2026-10-21): «o standard da gestão serve para todas as empresas, mas o administrador de cada empresa adapta».
@@ -933,9 +948,10 @@ const ENC_ICONS = {
   trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8 21h8M9 17h6"/>',
   target: '<path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 12h.01M16 8l4-4M17 4h3v3"/>',
   coins: '<path d="M9 9.5c3.3 0 6-1.1 6-2.5S12.3 4.5 9 4.5 3 5.6 3 7s2.7 2.5 6 2.5zM3 7v4c0 1.4 2.7 2.5 6 2.5M3 11v4c0 1.4 2.7 2.5 6 2.5M15 13.5c3.3 0 6-1.1 6-2.5s-2.7-2.5-6-2.5-6 1.1-6 2.5 2.7 2.5 6 2.5zM9 11v4c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5v-4M9 15v4c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5v-4"/>',
+  sheet: '<path d="M9 3h6v3H9zM9 4.5H6v16.5h12V4.5h-3M9 11h6M9 14.5h6M9 18h3"/>',
   medal: '<path d="M12 14a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM9.5 13.3 8 21l4-2 4 2-1.5-7.7M10 9l1.5 1.5L14.5 7.5"/>',
 };
-const MENU_ICON = { painel: 'gauge', producao: 'chart', seguranca: 'hhat', equipa: 'crew', minhas: 'myclock', naobra: 'gate', qualidade: 'medal', clientes: 'firms', comercial: 'target', premios: 'trophy', custos: 'coins' };
+const MENU_ICON = { painel: 'gauge', producao: 'chart', seguranca: 'hhat', equipa: 'crew', minhas: 'myclock', naobra: 'gate', qualidade: 'medal', clientes: 'firms', comercial: 'target', premios: 'trophy', custos: 'coins', progresso: 'sheet' };
 (function encIcons() {
   const ns = 'http://www.w3.org/2000/svg'; const sp = document.createElementNS(ns, 'svg');
   sp.setAttribute('width', '0'); sp.setAttribute('height', '0'); sp.setAttribute('aria-hidden', 'true'); sp.style.position = 'absolute';
@@ -1134,6 +1150,7 @@ async function boot() {
   nav.querySelector('[data-view=comercial]').hidden = worker || state.offline || !canSales();
   nav.querySelector('[data-view=premios]').hidden = worker || state.offline || !canAwards();
   nav.querySelector('[data-view=custos]').hidden = worker || state.offline || !canCosts();
+  nav.querySelector('[data-view=progresso]').hidden = worker || state.offline || !canProgress();
   nav.querySelector('[data-view=equipa]').hidden = me.role !== 'supervisor' || !canSiteDetails();
   nav.querySelector('[data-view=lmra]').hidden = worker || state.offline || !canLmra();
   nav.querySelector('[data-view=emergencia]').hidden = worker || !canEmergency();
@@ -1597,7 +1614,7 @@ function go(view) {
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
      ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients, cliente: viewClient, precos: viewPrices, empresa: viewCompanyRules, inicio: viewHome,
      processo: viewProcess, orcamentos: viewEstimates, comercial: viewSales, premios: viewAwards, custos: viewCosts, lmra: viewLmra, emergencia: viewEmergency,
-     armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, producao: viewProd, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
+     armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, producao: viewProd, progresso: viewProgress, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
   checkEmergencyBar(); encBadges();
 }
 
@@ -1914,6 +1931,7 @@ function viewTeam() {
     <div id="tlist">${skel(4)}</div>
     </div><aside class="enc-side">
     <div class="team-acts"><button class="btn big ghost" id="tval">${ic('ok')}<span>Validar a semana</span></button>
+      ${canProgress() ? `<button class="btn big ghost" id="tprog">${ic('sheet')}<span>Folha de produção</span></button>` : ''}
       ${canLmra() ? `<button class="btn big ghost" id="tlmra">${ic('shield')}LMRA</button>` : ''}${canEmergency() ? `<button class="btn big danger" id="temer">${ic('warn')}Emergência</button>` : ''}
       <button class="btn ghost wide look" id="tlook">${ic('card')}<span><b>O colaborador quer ver as horas</b><small>Ele encosta o cartão dele ao teu telemóvel</small></span></button></div>
     <div id="treq"></div></aside></div>`;
@@ -1921,6 +1939,7 @@ function viewTeam() {
   $('#tpic').onclick = () => go('picar');
   $('#tval').onclick = () => go('horas');
   if ($('#tlmra')) $('#tlmra').onclick = () => go('lmra');
+  if ($('#tprog')) { $('#tprog').onclick = () => go('progresso'); progressBadge(); }
   if ($('#temer')) $('#temer').onclick = () => go('emergencia');
   $('#tlook').onclick = () => cardGlance(currentSite() && currentSite().id);
   loadTeam();
@@ -4347,6 +4366,7 @@ const TOUR_TEXT = {
   obras: 'Obras: as moradas, os horários e as regras de cada obra.',
   processo: 'Processo: o caminho de cada obra, do primeiro contacto ao fecho de contas. Toca num passo e eu explico o que vem antes e depois. O ponto de interrogação em cima diz-te onde estás.',
   clientes: 'Clientes: as empresas que usam a GestNow. Crias, entras numa e voltas.',
+  progresso: 'Folha de produção: cada colaborador envia o que fez no dia, o encarregado corrige, junta tudo e envia ao gestor de obra com o Excel.',
   custos: 'Custos das obras: o que cada obra gastou no mês, por tipo de custo, contra o orçamento. No fim do mês preparas daqui o pacote para o Primavera.',
   premios: 'Prémios e objetivos: os prémios do ano com as regras escritas em janeiro. Qualquer chefe propõe quem merece; a Administração decide.',
   comercial: 'Angariação de clientes: abres o cliente com os dados todos e registas cada contacto. A direção comercial vê a prospeção de toda a gente.',
@@ -4725,7 +4745,7 @@ const MINE_STATE = { registered: 'por validar', supervisor_validated: 'validado 
 // (confirm the week, a document out of date), then one big tile per thing that is theirs. Each tile opens its screen;
 // the phone's back button comes back here. Built for gloves and sunlight: big targets, few words.
 const ME_TABS = {
-  horas: ['clock', 'As minhas horas'], pedidos: ['calendar', 'Pedidos'], diarias: ['card', 'Diárias'], despesas: ['cart', 'Despesas'],
+  horas: ['clock', 'As minhas horas'], progresso: ['sheet', 'Progresso do dia'], pedidos: ['calendar', 'Pedidos'], diarias: ['card', 'Diárias'], despesas: ['cart', 'Despesas'],
   viagens: ['plane', 'Viagens'], dormir: ['home', 'Onde durmo'], andaimes: ['scaffold', 'Posso subir?'], docs: ['doc', 'Os meus documentos'],
   epi: ['shield', 'EPI e ferramentas'], contrato: ['lock', 'O meu contrato'] };
 function viewMine() {
@@ -4827,6 +4847,7 @@ function meTiles(d, s, papers) {
   const c = papers && papers.contract;
   return [
     tile('horas', t.worked ? `${fmtMin(t.worked)} este mês${pend ? ` · ${pend} por validar` : ''}` : 'Semana, mês e cada picagem', '', s.weeks_to_confirm ? String(s.weeks_to_confirm) : ''),
+    tile('progresso', 'O que fizeste, para o encarregado', 'go'),
     tile('pedidos', s.requests_pending ? `${s.requests_pending} à espera de resposta` : 'Férias e faltas', '', s.disputes_open ? String(s.disputes_open) : ''),
     tile('diarias', s.per_diem ? `${euro(s.per_diem.net)} · semana de ${fmtDate(s.per_diem.week_start).slice(0, 5)}` : 'Ainda sem diárias'),
     tile('despesas', s.expenses_pending ? `${s.expenses_pending} por aprovar` : 'Entregar um talão'),
@@ -4859,6 +4880,7 @@ function meScreen(tab) {
       return `<div class="chips" style="margin-bottom:12px">${months.map((m) => `<button class="chip" data-m="${m}" aria-pressed="${m === state.mineMonth}">${esc(mName(m))}</button>`).join('')}</div>
         <div id="meweeks"></div><div class="mine-grid"><div><div id="minepay"></div><div id="mine">${skel(3)}</div></div><div><div id="minesite"></div></div></div>`;
     },
+    progresso: () => '<div id="myprog"></div>',
     pedidos: () => '<div id="minereq"></div>',
     diarias: () => '<div id="pdmine"></div>',
     despesas: () => '<div id="myexp"></div>',
@@ -4877,6 +4899,7 @@ function meScreen(tab) {
     loadMine(); loadMeWeeks();
     state.timer = setInterval(() => { if (state.view === 'minhas' && state.mineTab === 'horas' && document.visibilityState === 'visible') loadMine(true); }, 60000);
   }
+  if (tab === 'progresso') loadMyProgress();
   if (tab === 'pedidos') loadMyRequests();
   if (tab === 'diarias') loadMyPerDiems().then(fallback('#pdmine', 'card', 'Ainda sem diárias', 'As diárias aparecem aqui quando o escritório as emitir, à quinta-feira.'));
   if (tab === 'despesas') loadMyExpenses().then(fallback('#myexp', 'card', 'Sem despesas', 'Quando pagares algo para a obra, entrega aqui o talão.'));
@@ -10313,6 +10336,7 @@ async function loadProd() {
       <div class="fl-n ${sum('blocked') + sum('missing_out') ? 'warn' : ''}"><b>${sum('blocked') + sum('missing_out')}</b><span>alerta(s): bloqueados e saídas em falta</span></div></div>
     <div class="pr-acts">
       ${can('horas.validar_obra') ? `<button class="btn" data-pgo="horas">${ic('clock')}Validar horas</button>` : ''}
+      ${canProgress() ? `<button class="btn ghost" data-pgo="progresso">${ic('sheet')}Folha de produção</button>` : ''}
       ${can('compras.pedir') ? `<button class="btn ghost" data-pgo="compras">${ic('cart')}Pedir compra${myBuys ? ` <small>(${myBuys} à espera)</small>` : ''}</button>` : ''}
       ${can('viagens.pedir') ? `<button class="btn ghost" data-pgo="viagens">${ic('plane')}Pedir viagem${myTrips ? ` <small>(${myTrips} à espera)</small>` : ''}</button>` : ''}
       ${can('obras.gerir') ? `<button class="btn ghost" data-pgo="obras">${ic('crane')}Obras</button>` : ''}
@@ -10344,6 +10368,280 @@ async function loadProd() {
     </article>`; }).join('')}</div>`;
   body.querySelectorAll('[data-panel]').forEach((b) => b.onclick = () => { state.panelSite = b.dataset.panel; go('painel'); });
   body.querySelectorAll('[data-hours]').forEach((b) => b.onclick = () => { store(SITE_KEY, b.dataset.hours); go('horas'); });
+}
+// ------------------------------------------------------------------ Folha de produção diária (v80, sql/103)
+// Diogo 2026-10-21: each worker fills the day's sheet on the phone and sends it to the encarregado; the encarregado
+// sees every sheet of the site in one table, corrects what is wrong (every change logged), and sends it to the gestor
+// de obra. The Excel is built from the copy that was sent, so the encarregado and the gestor open the same file.
+const pgAsk = (title, text, ok) => askSheet(title, `<p>${esc(text)}</p>`, ok);
+const canProgress = () => ['progresso.validar', 'progresso.ver'].some(can);
+const PG_ACTS = ['Ligação de cabo', 'Passagem de cabo', 'Tubing', 'Instrumentos', 'Outro'];
+const PG_UNITS = ['un', 'm', 'kg', 'h'];
+const PG_FIELDS = [['area', 'Área / piso'], ['tag', 'TAG'], ['from', 'From'], ['to', 'To']];
+const pgQty = (l) => l.quantity != null && l.quantity !== '' ? `${String(l.quantity).replace(/\.00$/, '').replace('.', ',')}${l.unit ? ' ' + l.unit : ''}` : '';
+const pgWhere = (l) => PG_FIELDS.filter(([k]) => l[k]).map(([k, h]) => k === 'area' ? l[k] : `${h} ${l[k]}`).join(' · ');
+// One line of the sheet, in a sheet that fits a phone: the work in one tap, then the boxes of the paper form.
+async function pgLineForm(title, l, recent, okLabel) {
+  l = l || {};
+  const acts = [...new Set([...PG_ACTS.slice(0, -1), ...(recent || []).map((r) => r.activity).filter(Boolean), l.activity].filter(Boolean)), 'Outro'];
+  const fd = await askSheet(title, `
+    <label>Trabalho *</label><div class="chips pg-acts" role="radiogroup">${acts.map((a, i) => `<label class="chip"><input type="radio" name="a" value="${esc(a)}" ${i ? '' : 'required'} ${a === (l.activity || '') ? 'checked' : ''}>${esc(a)}</label>`).join('')}</div>
+    <input name="ax" id="pgax" placeholder="Escreve o trabalho" maxlength="60" hidden>
+    <div class="row"><div><label for="pgar">Área / piso</label><input id="pgar" name="area" maxlength="60" value="${esc(l.area || '')}" placeholder="ex.: Piso 2"></div>
+      <div><label for="pgtg">TAG</label><input id="pgtg" name="tag" maxlength="60" value="${esc(l.tag || '')}" placeholder="ex.: JB-101" autocapitalize="characters"></div></div>
+    <div class="row"><div><label for="pgfr">From</label><input id="pgfr" name="from" maxlength="60" value="${esc(l.from || '')}" autocapitalize="characters"></div>
+      <div><label for="pgto">To</label><input id="pgto" name="to" maxlength="60" value="${esc(l.to || '')}" autocapitalize="characters"></div></div>
+    <label for="pgds">Descrição da tarefa / material utilizado / outros *</label><textarea id="pgds" name="description" required minlength="2" maxlength="500" rows="3">${esc(l.description || '')}</textarea>
+    <div class="row"><div><label for="pgq">Quantidade</label><input id="pgq" name="quantity" inputmode="decimal" pattern="[0-9]{1,9}([.,][0-9]{1,2})?" value="${esc(l.quantity != null ? String(l.quantity).replace(/\.00$/, '').replace('.', ',') : '')}" placeholder="ex.: 12"></div>
+      <div><label for="pgu">Unidade</label><select id="pgu" name="unit"><option value="">—</option>${[...new Set([...PG_UNITS, l.unit].filter(Boolean))].map((u) => `<option value="${esc(u)}" ${u === l.unit ? 'selected' : ''}>${esc(u)}</option>`).join('')}</select></div></div>`,
+  okLabel || 'Guardar a linha', (d) => {
+    const x = d.querySelector('#pgax');
+    const sync = () => { const r = d.querySelector('input[name=a]:checked'); x.hidden = !r || r.value !== 'Outro'; x.required = !x.hidden; };
+    d.querySelectorAll('input[name=a]').forEach((r) => r.onchange = () => { sync(); if (!x.hidden) x.focus(); });
+    sync();
+  });
+  if (!fd) return null;
+  const a = fd.get('a') === 'Outro' ? String(fd.get('ax') || '').trim() : String(fd.get('a') || '');
+  if (a.length < 2) { toast('Escolhe o trabalho.'); return null; }
+  const o = { activity: a };
+  for (const k of ['area', 'tag', 'from', 'to', 'description', 'quantity', 'unit']) o[k] = String(fd.get(k) || '').trim();
+  for (const k of ['tag', 'from', 'to']) o[k] = o[k].toUpperCase();
+  return o;
+}
+const pgLineHtml = (l, i, acts) => `<li class="pg-line${l.removed ? ' off' : ''}">
+    <div class="pg-n">${i + 1}</div><div class="grow"><b>${esc(l.activity)}</b>${pgQty(l) ? ` <span class="pg-q" data-nt>${esc(pgQty(l))}</span>` : ''}
+      ${pgWhere(l) ? `<small data-nt>${esc(pgWhere(l))}</small>` : ''}<p data-nt>${esc(l.description)}</p>
+      ${l.who ? `<small class="muted"><span${l.who_nt ? ' data-nt' : ''}>${esc(l.who)}</span>${l.who_note ? `<span data-nt> · </span><span>${esc(l.who_note)}</span>` : ''}</small>` : ''}</div>${acts || ''}</li>`;
+
+// ---- the worker («Eu» › Progresso do dia)
+const PG_DRAFT = 'gestnow-progress-draft';
+const pgDraftKey = (site, day) => `${PG_DRAFT}:${site}:${day}`;
+async function loadMyProgress() {
+  const box = $('#myprog'); if (!box) return;
+  const P = state.myProg || (state.myProg = { day: null, site: null });
+  const { data: d, error } = await sb.rpc('mini_progress_my', { p_day: P.day });
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
+  P.day = d.day; P.data = d;
+  const days = [0, 1, 2, 3].map((k) => { const x = new Date(d.today + 'T12:00:00'); x.setDate(x.getDate() - k); return isoDay(x); });
+  const dayName = (x, k) => k === 0 ? 'Hoje' : k === 1 ? 'Ontem' : new Date(x + 'T12:00:00').toLocaleDateString(LOC, { weekday: 'short', day: '2-digit', month: '2-digit' });
+  const head = `<div class="chips" style="margin-bottom:12px">${days.map((x, k) => `<button class="chip" data-pd="${x}" aria-pressed="${x === d.day}"${k > 1 ? ' data-nt' : ''}>${esc(dayName(x, k))}</button>`).join('')}</div>`;
+  if (!d.sites.length) {
+    box.innerHTML = head + `<div class="card">${empty('helmet', 'Sem obra neste dia', 'A folha de produção é da obra onde picaste ou onde estás atribuído. Fala com o teu encarregado.')}</div>`;
+    box.querySelectorAll('[data-pd]').forEach((b) => b.onclick = () => { P.day = b.dataset.pd; loadMyProgress(); });
+    return;
+  }
+  if (!d.sites.find((s) => s.id === P.site)) P.site = d.sites[0].id;
+  const site = d.sites.find((s) => s.id === P.site); const sh = site.sheet;
+  const key = pgDraftKey(site.id, d.day);
+  let lines = load(key, null);
+  const fromServer = !lines;
+  if (!lines) lines = sh ? sh.lines.map(({ activity, area, tag, from, to, description, quantity, unit }) => ({ activity, area, tag, from, to, description, quantity, unit })) : [];
+  const locked = sh && sh.locked;
+  const pick = d.sites.length > 1 ? `<label for="pgsite">Obra</label><select id="pgsite">${d.sites.map((s) => `<option value="${esc(s.id)}" ${s.id === site.id ? 'selected' : ''}>${esc(s.code)} · ${esc(s.title)}</option>`).join('')}</select>` : '';
+  const status = locked ? `<div class="pg-state ok">${ic('lock')}<span><b>${site.sent_to_manager ? 'O encarregado já enviou o dia ao gestor de obra' : 'O encarregado já reviu a tua folha'}</b>
+        Se algo estiver mal, diz-lhe: ele corrige e fica registado.</span></div>`
+    : sh && sh.sent_at && fromServer ? `<div class="pg-state ok">${ic('ok')}<span><b>Enviada às ${esc(fmtHour(sh.sent_at))}</b>Podes corrigir e enviar outra vez até o encarregado rever.</span></div>`
+    : lines.length ? `<div class="pg-state warn">${ic('warn')}<span><b>Ainda não enviaste</b>Fica guardada neste telemóvel até carregares em «Enviar ao encarregado».</span></div>` : '';
+  box.innerHTML = `${head}<div class="card pg-me">${pick}
+      <p class="small muted" style="margin-top:0">${ic('pin')} <span data-nt>${esc(site.code)} · ${esc(site.title)} · ${esc(fmtDate(d.day))}</span>${site.tapped ? '' : '<span data-nt> · </span><span>ainda sem picagens neste dia</span>'}</p>
+      ${status}
+      ${lines.length ? `<ol class="pg-lines">${lines.map((l, i) => pgLineHtml(l, i, locked ? '' : `<div class="pg-btns">
+          <button class="btn ghost small" data-pe="${i}" aria-label="Corrigir a linha ${i + 1}">Corrigir</button>
+          <button class="btn ghost small" data-pc="${i}" aria-label="Copiar a linha ${i + 1}">Copiar</button>
+          <button class="btn ghost small" data-px="${i}" aria-label="Tirar a linha ${i + 1}">${ic('x')}</button></div>`)).join('')}</ol>`
+        : `<p class="me-big-p">${locked ? 'Sem linhas.' : 'O que fizeste hoje? Uma linha por tarefa: o trabalho, onde, o TAG e quanto.'}</p>`}
+      ${locked ? '' : `<button class="btn ghost wide" id="pgadd">+ Acrescentar linha</button>
+      <label for="pgnote">Observações</label><textarea id="pgnote" maxlength="1000" rows="2" placeholder="ex.: faltou material, esperámos pela licença">${esc((load(key + ':note', null) ?? (sh && sh.note)) || '')}</textarea>
+      <button class="btn big wide me-big" id="pgsend" ${lines.length ? '' : 'disabled'}>${ic('go')}Enviar ao encarregado</button>`}
+    </div>`;
+  box.querySelectorAll('[data-pd]').forEach((b) => b.onclick = () => { P.day = b.dataset.pd; loadMyProgress(); });
+  if ($('#pgsite')) $('#pgsite').onchange = (e) => { P.site = e.target.value; loadMyProgress(); };
+  if (locked) return;
+  const save = (ls) => { store(key, ls); loadMyProgress(); };
+  $('#pgadd').onclick = async () => { const o = await pgLineForm('Nova linha', lines.length ? { activity: lines[lines.length - 1].activity, area: lines[lines.length - 1].area, unit: lines[lines.length - 1].unit } : null, d.recent); if (o) save([...lines, o]); };
+  box.querySelectorAll('[data-pe]').forEach((b) => b.onclick = async () => { const i = +b.dataset.pe; const o = await pgLineForm(`Linha ${i + 1}`, lines[i], d.recent); if (o) { lines[i] = o; save(lines); } });
+  box.querySelectorAll('[data-pc]').forEach((b) => b.onclick = async () => { const i = +b.dataset.pc; const o = await pgLineForm('Nova linha (cópia)', lines[i], d.recent); if (o) save([...lines.slice(0, i + 1), o, ...lines.slice(i + 1)]); });
+  box.querySelectorAll('[data-px]').forEach((b) => b.onclick = () => { const ls = lines.filter((_, k) => k !== +b.dataset.px); save(ls); });
+  $('#pgnote').oninput = (e) => store(key + ':note', e.target.value);
+  $('#pgsend').onclick = async (e) => {
+    const btn = e.currentTarget; btn.disabled = true;
+    const { data: r, error: err } = await sb.rpc('mini_progress_send', { p: { site: site.id, day: d.day, note: $('#pgnote').value, lines } });
+    btn.disabled = false;
+    if (err) return toast(friendly(err));
+    try { localStorage.removeItem(key); localStorage.removeItem(key + ':note'); } catch (_) {}
+    toast(`Enviada ao encarregado: ${r.lines} linha(s).`);
+    loadMyProgress();
+  };
+}
+
+// ---- the encarregado and the gestor de obra (Produção › Folha de produção)
+function viewProgress() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
+  if (!canProgress()) return viewClock();   // code guard as well as the database's
+  const G = state.prog || (state.prog = { day: null });
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Produção (Obra)</p><h1>Folha de produção diária</h1></div></div>
+    <div class="card pg-pick"><div class="row"><div>${siteSelect('pgs')}</div>
+      <div><label for="pgd">Dia</label><input id="pgd" type="date" value="${esc(G.day || isoDay(new Date()))}" max="${esc(isoDay(new Date()))}"></div></div></div>
+    <div id="pgday">${skel(3)}</div><div id="pgsent"></div>`;
+  bindSiteSelect('pgs', loadProgressDay);
+  $('#pgd').onchange = (e) => { G.day = e.target.value || isoDay(new Date()); loadProgressDay(); };
+  loadProgressDay(); loadProgressSent();
+}
+let pgSeq = 0;
+async function loadProgressDay() {
+  const box = $('#pgday'); if (!box) return;
+  const site = currentSite(); const G = state.prog; const day = G.day || isoDay(new Date());
+  if (!site) { box.innerHTML = `<div class="card">${empty('box', 'Sem obras abertas', 'Quando tiveres uma obra, as folhas de produção aparecem aqui.')}</div>`; return; }
+  const seq = ++pgSeq;
+  const { data: d, error } = await sb.rpc('mini_progress_day', { p_site: site.id, p_day: day });
+  if (seq !== pgSeq || !box.isConnected) return;
+  if (error) { box.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
+  G.data = d;
+  const live = d.lines.filter((l) => !l.removed); const off = d.lines.filter((l) => l.removed);
+  const sent = d.team.filter((p) => p.sent); const missing = d.team.filter((p) => !p.sent && p.tapped);
+  const last = d.reports[0];
+  const tl = G.tl ?? (last && last.team_leader) ?? load('gestnow-progress-tl', '');
+  const editsOf = (id) => d.edits.filter((e) => e.line === id);
+  const lineActs = (l) => d.can_edit ? `<div class="pg-btns"><button class="btn ghost small" data-ge="${esc(l.id)}">${l.removed ? 'Repor' : 'Corrigir'}</button>
+      ${l.removed ? '' : `<button class="btn ghost small" data-gx="${esc(l.id)}" aria-label="Tirar a linha">${ic('x')}</button>`}</div>` : '';
+  const shown = (l) => ({ ...l, who: l.by_supervisor ? 'Acrescentada pelo encarregado' : l.author, who_nt: !l.by_supervisor,
+    who_note: l.edited && !l.by_supervisor ? 'corrigida pelo encarregado' : '' });
+  box.innerHTML = `
+    <div class="fl-sum">
+      <div class="fl-n ${missing.length ? 'warn' : 'ok'}"><b>${sent.length}<small>/${d.team.filter((p) => p.tapped || p.sent).length || d.team.length}</small></b><span>enviaram a folha</span></div>
+      <div class="fl-n"><b>${live.length}</b><span>linha(s)</span></div>
+      <div class="fl-n"><b>${esc(fmtMin(d.worked))}</b><span>horas trabalhadas (picagens)</span></div>
+      <div class="fl-n ${last ? 'ok' : ''}"><b>${last ? 'v' + last.version : '—'}</b><span>${last ? (last.received_at ? 'recebida pelo gestor' : 'enviada ao gestor') : 'por enviar ao gestor'}</span></div></div>
+    ${missing.length ? `<div class="pg-state warn">${ic('warn')}<span><b>Ainda não enviaram (${missing.length})</b><span data-nt>${esc(missing.map((p) => p.name).join(', '))}</span></span></div>` : ''}
+    ${last && d.changed_since ? `<div class="pg-state warn">${ic('warn')}<span><b>Mudou depois de enviares a versão ${last.version}</b>Envia outra vez: o gestor recebe a versão corrigida.</span></div>` : ''}
+    <div class="card"><div class="wk"><h2 class="grow" style="margin:0">Linhas do dia</h2>
+        ${d.can_edit ? '<button class="btn small" id="pgnew">+ Linha</button>' : ''}</div>
+      ${live.length ? `<ol class="pg-lines">${live.map((l, i) => pgLineHtml(shown(l), i, lineActs(l)) + (editsOf(l.id).length ? `<li class="pg-log"><small>${editsOf(l.id).map((e) => e.field === 'linha' ? `<span>${esc(e.new === 'reposta' ? 'Linha reposta' : e.new === 'retirada' ? 'Linha tirada' : 'Linha acrescentada pelo encarregado')}</span><span data-nt> · ${esc(e.by)} ${esc(fmtHour(e.at))}</span>`
+          : `<span>${esc(e.field)}</span><span data-nt>: ${esc(e.old ?? '—')} → ${esc(e.new ?? '—')} · ${esc(e.by)} ${esc(fmtHour(e.at))}</span>`).join('<br>')}</small></li>` : '')).join('')}</ol>`
+        : `${empty('doc', 'Ainda sem linhas', 'Cada colaborador envia a sua folha em Eu › Progresso do dia. Também podes acrescentar linhas tu.')}`}
+      ${off.length ? `<details class="pg-off"><summary>Linhas tiradas (${off.length})</summary><ol class="pg-lines">${off.map((l, i) => pgLineHtml(shown(l), i, lineActs(l))).join('')}</ol></details>` : ''}
+    </div>
+    <div class="card"><h2 style="margin-top:0">Cabeçalho da folha</h2>
+      <ul class="fl-papers">
+        <li class="fl-p"><span>Encarregado</span><b data-nt>${esc(d.me || state.me.full_name || '')}</b></li>
+        <li class="fl-p"><span>Executantes</span><b data-nt>${esc(d.executantes.join(', ') || '—')}</b></li>
+        <li class="fl-p"><span>Pessoas por equipa</span><b>${d.people}</b></li>
+        <li class="fl-p"><span>Horas trabalhadas</span><b>${esc(fmtMin(d.worked))}</b></li>
+        ${d.quantities.map((q) => `<li class="fl-p"><span>${esc(q.activity)}</span><b data-nt>${esc(pgQty(q))}${q.per_man_hour != null ? ` · ${esc(String(q.per_man_hour).replace('.', ','))}/h` : ''}</b></li>`).join('')}
+        <li class="fl-p"><span>Nº do projeto (obra)</span><b data-nt>${esc(d.site.code)}</b></li></ul>
+      ${d.can_edit ? `<label for="pgtl">Chefe de equipa</label><input id="pgtl" maxlength="120" value="${esc(tl || '')}" placeholder="Nome do chefe de equipa">
+      <label for="pgob">Observações</label><textarea id="pgob" maxlength="2000" rows="3">${esc(G.ob ?? (last && last.notes) ?? d.team.filter((p) => p.note).map((p) => `${p.name}: ${p.note}`).join('\n'))}</textarea>` : ''}
+      <div class="acts">
+        ${d.can_edit ? `<button class="btn big" id="pgsend" ${live.length ? '' : 'disabled'}>${ic('go')}${!last ? 'Enviar ao gestor de obra' : d.changed_since ? 'Enviar a versão corrigida ao gestor de obra' : 'Enviar outra vez ao gestor de obra'}</button>` : ''}
+        <button class="btn ghost" id="pgxl" ${live.length ? '' : 'disabled'}>${ic('doc')}Ver o Excel</button></div>
+      ${last ? `<p class="small muted"><span>Versão ${last.version} enviada por</span> <span data-nt>${esc(last.sent_by)} · ${esc(fmtTime(last.sent_at))}</span>${last.received_at ? `<span data-nt> · </span><span>recebida por</span> <span data-nt>${esc(last.received_by)} · ${esc(fmtTime(last.received_at))}</span>` : ''}</p>` : ''}
+    </div>`;
+  if ($('#pgtl')) $('#pgtl').oninput = (e) => { G.tl = e.target.value; store('gestnow-progress-tl', e.target.value); };
+  if ($('#pgob')) $('#pgob').oninput = (e) => { G.ob = e.target.value; };
+  const edit = async (l, title) => {
+    const o = await pgLineForm(title, l, d.lines.map((x) => ({ activity: x.activity })));
+    if (!o) return;
+    const { error: err } = await sb.rpc('mini_progress_edit', { p: { ...o, id: l && l.id, site: site.id, day } });
+    if (err) return toast(friendly(err));
+    toast('Linha guardada. A correção fica registada.'); loadProgressDay();
+  };
+  if ($('#pgnew')) $('#pgnew').onclick = () => edit(null, 'Nova linha do encarregado');
+  box.querySelectorAll('[data-ge]').forEach((b) => b.onclick = () => { const l = d.lines.find((x) => x.id === b.dataset.ge); edit(l, l.removed ? 'Repor a linha' : 'Corrigir a linha'); });
+  box.querySelectorAll('[data-gx]').forEach((b) => b.onclick = async () => {
+    const l = d.lines.find((x) => x.id === b.dataset.gx);
+    if (!await pgAsk('Tirar esta linha?', `«${l.description}» de ${l.author}. Fica guardada como tirada e podes repô-la.`, 'Tirar a linha')) return;
+    const { error: err } = await sb.rpc('mini_progress_edit', { p: { id: l.id, remove: true } });
+    if (err) return toast(friendly(err));
+    loadProgressDay();
+  });
+  if ($('#pgsend')) $('#pgsend').onclick = async (e) => {
+    const btn = e.currentTarget;
+    if (missing.length && !await pgAsk('Enviar sem todas as folhas?', `Ainda não enviaram: ${missing.map((p) => p.name).join(', ')}. Podes enviar agora e mandar a versão corrigida depois.`, 'Enviar assim')) return;
+    btn.disabled = true;
+    const { data: r, error: err } = await sb.rpc('mini_progress_report_send', { p_site: site.id, p_day: day, p_team_leader: ($('#pgtl') || {}).value || null, p_notes: ($('#pgob') || {}).value || null });
+    btn.disabled = false;
+    if (err) return toast(friendly(err));
+    G.ob = undefined;
+    toast(r.version === 1 ? 'Enviada ao gestor de obra.' : `Versão ${r.version} enviada ao gestor de obra.`);
+    loadProgressDay(); loadProgressSent();
+  };
+  $('#pgxl').onclick = () => excelExport(async () => ({ ...d, lines: live, version: null, supervisor: d.me || state.me.full_name, team_leader: ($('#pgtl') || {}).value || tl,
+    notes: ($('#pgob') || {}).value || (last && last.notes) }), (X, s) => progressBook(X, s));
+}
+// The encarregado's board: how many sent today's sheet, on the button.
+async function progressBadge() {
+  const b = $('#tprog'); const site = currentSite(); if (!b || !site) return;
+  const { data } = await sb.rpc('mini_progress_sites');
+  const x = data && data.sites.find((y) => y.id === site.id);
+  if (!x || !b.isConnected) return;
+  b.querySelector('span').textContent = x.report_today ? 'Folha de produção · enviada' : `Folha de produção · ${x.sent_today}/${x.tapped_today} hoje`;
+}
+// What was sent: the gestor's inbox (mark received) and the encarregado's record. The last 14 days.
+async function loadProgressSent() {
+  const box = $('#pgsent'); if (!box) return;
+  const to = isoDay(new Date()); const f = new Date(); f.setDate(f.getDate() - 14); const from = isoDay(f);
+  const [{ data, error }, home] = await Promise.all([sb.rpc('mini_progress_reports', { p_from: from, p_to: to }), sb.rpc('mini_progress_sites')]);
+  if (!box.isConnected || error) return;
+  const recv = home.data && home.data.can_receive;
+  const rows = data.filter((r) => r.latest);
+  box.innerHTML = `<h2 class="sec">${recv ? 'Folhas recebidas' : 'Folhas enviadas'} · últimos 14 dias</h2>
+    ${rows.length ? `<div class="list">${rows.map((r) => `<article class="card pg-rep"><div class="wk"><span class="ho-ic">${ic('doc')}</span><div class="grow">
+        <div class="nm"><span data-nt>${esc(r.site)}</span> · ${esc(fmtDate(r.day))}${r.version > 1 ? ` · versão ${r.version}` : ''}</div>
+        <div class="sub">${r.people} pessoa(s) · ${esc(fmtMin(r.worked))} · ${r.lines} linha(s) · enviada por <span data-nt>${esc(r.sent_by)} · ${esc(fmtHour(r.sent_at))}</span></div></div>
+        ${r.received_at ? chip('ok', 'Recebida') : chip('warn', 'Por ver')}</div>
+      <div class="acts"><button class="btn small" data-rx="${esc(r.id)}">${ic('doc')}Excel</button>
+        ${recv && !r.received_at ? `<button class="btn ghost small" data-rr="${esc(r.id)}">${ic('ok')}Marcar recebida</button>` : ''}
+        <button class="btn ghost small" data-ro="${esc(r.site_id)}" data-rd="${esc(r.day)}">Abrir o dia</button></div></article>`).join('')}</div>`
+      : `<div class="card">${empty('doc', 'Nenhuma folha enviada', 'Quando o encarregado enviar o dia, a folha aparece aqui com o Excel.')}</div>`}`;
+  box.querySelectorAll('[data-rx]').forEach((b) => b.onclick = () => excelExport(async () => {
+    const r = await sb.rpc('mini_progress_report', { p_id: b.dataset.rx }); if (r.error) { toast(friendly(r.error)); return null; } return r.data; }, (X, s) => progressBook(X, s)));
+  box.querySelectorAll('[data-rr]').forEach((b) => b.onclick = async () => {
+    const { error: err } = await sb.rpc('mini_progress_received', { p_id: b.dataset.rr });
+    if (err) return toast(friendly(err));
+    toast('Marcada como recebida.'); loadProgressSent(); loadProgressDay();
+  });
+  box.querySelectorAll('[data-ro]').forEach((b) => b.onclick = () => { store(SITE_KEY, b.dataset.ro); state.prog.day = b.dataset.rd; viewProgress(); });
+}
+// The Excel: the day's lines like the paper sheet, the header under them, a summary page and the corrections.
+function progressBook(X, s) {
+  const draft = s.version == null;
+  const doc = xlDoc([], 'Folha de produção diária', `Obra ${s.site.code} · ${s.site.title} · ${fmtDate(s.day)}${draft ? ' · rascunho (ainda não enviada)' : s.version > 1 ? ` · versão ${s.version}` : ''}`, null);
+  const wb = xlBook(X, doc);
+  const t = xlSheet(wb, 'Folha do dia', doc, [{ h: 'Nº', t: 'n', w: 5 }, { h: 'Trabalho', t: 'text', w: 14, max: 24 }, { h: 'Área / piso', t: 'text', w: 11, max: 20 },
+    { h: 'TAG', t: 'text', w: 10, max: 20 }, { h: 'From', t: 'text', w: 9, max: 18 }, { h: 'To', t: 'text', w: 9, max: 18 },
+    { h: 'Descrição da tarefa / material utilizado / outros', t: 'text', w: 30, max: 60 }, { h: 'Quantidade', t: 'h', w: 10 }, { h: 'Unidade', t: 'text', w: 8, al: 'center' },
+    { h: 'Executante', t: 'text', w: 16, max: 30 }, { h: 'Corrigida pelo encarregado', t: 'text', w: 11, al: 'center' }]);
+  let r = t.head + 1; const first = r;
+  s.lines.forEach((l, i) => xlRow(t, r++, [i + 1, l.activity, l.area || '', l.tag || '', l.from || '', l.to || '', l.description,
+    l.quantity != null ? Number(l.quantity) : '', l.unit || '', l.by_supervisor ? 'Encarregado' : l.author, l.edited ? 'Sim' : ''],
+    l.edited ? { cell: { 10: { fill: XL.warnBg, font: { color: { argb: XL.warn } } } } } : {}));
+  xlFit(t, first, Math.max(first, r - 1));
+  r++;
+  const when = s.sent_at ? `enviada a ${new Date(s.sent_at).toLocaleDateString(LOC)} às ${new Date(s.sent_at).toLocaleTimeString(LOC, { hour: '2-digit', minute: '2-digit' })}` : 'ainda não enviada';
+  const head = [
+    ['Data de execução', fmtDate(s.day)], ['Nº do projeto (obra)', `${s.site.code} · ${s.site.title}`],
+    ['Encarregado (nome / validação)', `${s.supervisor || ''} · ${when}${s.version ? ` (versão ${s.version})` : ''}`],
+    ['Chefe de equipa', s.team_leader || ''], ['Executantes', (s.executantes || []).join(', ')],
+    ['Pessoas por equipa', String(s.people)], ['Horas trabalhadas (picagens)', fmtMin(s.worked)],
+    ...(s.quantities || []).map((q) => [`Índice de produtividade · ${q.activity}`, `${pgQty(q)}${q.per_man_hour != null ? ` · ${String(q.per_man_hour).replace('.', ',')} ${q.unit || ''} por homem-hora` : ''}`]),
+    ['Observações', s.notes || '']];
+  for (const [k, v] of head) { xlNote(t.ws, r, `${k}: ${v}`, k === 'Observações' ? {} : { color: { argb: XL.ink } }); r++; }
+  const sm = xlSheet(wb, 'Resumo', doc, [{ h: 'Campo', t: 'text', w: 28, max: 40 }, { h: 'Valor', t: 'text', w: 40, max: 90 }]);
+  let k = sm.head + 1; head.forEach(([a, b]) => xlRow(sm, k++, [a, b]));
+  xlFit(sm, sm.head + 1, k - 1);
+  const ed = (s.edits || []).filter((e) => s.lines.some((l) => l.id === e.line) || e.field === 'linha');
+  if (ed.length) {
+    const c = xlSheet(wb, 'Correções', doc, [{ h: 'Linha', t: 'text', w: 24, max: 50 }, { h: 'Campo', t: 'text', w: 12 }, { h: 'Antes', t: 'text', w: 18, max: 40 },
+      { h: 'Depois', t: 'text', w: 18, max: 40 }, { h: 'Quem', t: 'text', w: 16, max: 30 }, { h: 'Quando', t: 'text', w: 16 }]);
+    let q = c.head + 1;
+    for (const e of ed) {
+      const l = s.lines.find((x) => x.id === e.line);
+      xlRow(c, q++, [l ? l.description : '(linha tirada)', e.field, e.old ?? '', e.new ?? '', e.by, fmtTime(e.at)]);
+    }
+    xlFit(c, c.head + 1, q - 1);
+  }
+  return { wb, name: `folha-producao-${s.site.code}-${s.day}${s.version > 1 ? '-v' + s.version : ''}.xlsx`, msg: 'Excel descarregado.' };
 }
 const canTravel = () => mod('housing') && ['viagens.pedir', 'viagens.aprovar', 'viagens.gerir'].some(can);
 const TV_MODE = { plane: 'Avião', train: 'Comboio', bus: 'Autocarro', other: 'Outro' };
