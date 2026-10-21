@@ -848,7 +848,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '78';
+const APP_VERSION = '79';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -8968,7 +8968,7 @@ async function awLoad() {
     ${open.length ? '<button class="btn big wide" id="awprop">Propor alguém para um prémio</button>' : ''}
     <h2>Os prémios de ${d.year}</h2>
     <p class="small muted">${d.can_manage ? 'Escreve as regras no início do ano e carrega em «Fechar as regras». Depois disso não mudam: o que se promete em janeiro é o que se paga em dezembro.' : 'As regras do ano, tal como a Administração as fechou.'}</p>
-    ${d.can_manage ? `<div class="acts">${d.programs.length ? '' : '<button class="btn" id="awstart">Começar com os 5 prémios-modelo</button>'}<button class="btn ghost" id="awnew">+ Novo prémio</button></div>` : ''}
+    ${d.can_manage ? `<div class="acts aw-acts">${d.programs.length ? '' : '<button class="btn" id="awstart">Usar os 5 modelos</button>'}<button class="btn ghost" id="awnew">+ Novo prémio</button></div>` : ''}
     <div class="stack">${d.programs.length ? d.programs.map(awCard).join('') : `<div class="card">${empty('box', 'Ainda não há prémios neste ano', d.can_manage ? 'Começa com os 5 prémios-modelo e muda as regras e os valores para os da tua empresa.' : 'A Administração ainda não publicou os prémios deste ano.')}</div>`}</div>
     ${d.sales ? `<h2>Angariadores · contado pelos dados</h2>
       <p class="small muted">Clientes que cada pessoa trouxe com orçamento aprovado neste ano: valor e margem (preço menos custo). Ninguém escreve estes números.</p>
@@ -10836,10 +10836,15 @@ async function showNotices() {
   document.body.appendChild(d); d.showModal();
   d.querySelector('#ntx').onclick = () => d.close();
   pushCard(d.querySelector('#pushbox'));
-  const { data, error } = await sb.rpc('mini_notices', { p_limit: 40 });
+  const { data, error } = await sb.rpc('mini_notices', { p_limit: 200 });
   const el = d.querySelector('#ntlist'); if (!el.isConnected) return;
   if (error) { el.innerHTML = errorState(friendly(error)); return; }
-  const items = (data && data.items) || [];
+  // v79: the same notice repeated (same kind, site, person, title) is one line with how many times it happened
+  const items = [];
+  for (const x of (data && data.items) || []) {
+    const g = items.find((y) => y.group && y.group === x.group);
+    if (g) { g.ids.push(x.id); g.n += 1; if (!x.read) g.read = false; } else items.push({ ...x, ids: [x.id], n: 1 });
+  }
   if (!items.length) { el.innerHTML = empty('box', 'Sem avisos', 'Quando houver algo para ti (um documento a caducar, uma semana para confirmar), aparece aqui.'); return; }
   const all = d.querySelector('#ntall');
   if (can('contas.gerir')) el.insertAdjacentHTML('beforebegin', '<p class="small muted"><button class="linkbtn" id="ntjobs">Ver as tarefas automáticas</button> (o que a app faz sozinha, todas as manhãs)</p>');
@@ -10852,14 +10857,14 @@ async function showNotices() {
     all.hidden = !items.some((x) => !x.read);
     const more = !showRead && nRead ? `<p class="small muted nt-more"><button class="linkbtn" id="ntread">Ver os já lidos (${nRead})</button></p>` : '';
     el.innerHTML = (list.length ? `<ul class="nt-list">${list.map(([x, i]) => { const [cls, lab] = NOTICE_SEV[x.severity] || NOTICE_SEV.low;
-      const sub = [x.person, x.site, ago(x.at)].filter(Boolean).map(esc).join(' · ');
+      const sub = [x.person, x.site, x.n > 1 ? t('{x} vezes', x.n) : '', ago(x.at)].filter(Boolean).map(esc).join(' · ');
       return `<li><button class="nt${x.read ? '' : ' unread'} sev-${esc(x.severity || 'low')}" data-i="${i}"><span class="nt-dot" aria-hidden="true"></span>
         <span class="grow"><b>${esc(x.title)}</b><small>${sub}</small></span>${x.severity === 'critical' || x.severity === 'high' ? chip(cls, lab) : ''}</button></li>`; }).join('')}</ul>`
       : empty('box', 'Tudo lido', 'Não tens avisos por ler. Os novos aparecem aqui.')) + more;
     const rb = el.querySelector('#ntread'); if (rb) rb.onclick = () => { showRead = true; render(); };
     el.querySelectorAll('[data-i]').forEach((b) => b.onclick = async () => {
       const x = items[Number(b.dataset.i)];
-      if (!x.read) { sb.rpc('mini_notices_read', { p_ids: [x.id] }).then(() => bellCount()); x.read = true; }
+      if (!x.read) { sb.rpc('mini_notices_read', { p_ids: x.ids.slice(0, 200) }).then(() => bellCount()); x.read = true; }
       const run = noticeRoute(x);
       d.close();
       if (!run()) toast('Aviso marcado como lido.');
