@@ -2190,3 +2190,19 @@ ul.plain { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; } u
 .dlg.langs .lang-c { display: inline-grid; place-items: center; width: 34px; height: 26px; border-radius: 6px; background: var(--surface-2); font-size: 12px; font-weight: 750; letter-spacing: .04em; color: var(--ink-2); }
 /* phone: the top bar has no room; the language is in «A tua conta» (tap your name), on the login card and in the entry steps */
 @media (max-width: 639px) { .top .langbtn { display: none; } }
+
+/* ---------------------------------------------------------------- v76 Comercial · Angariação de clientes */
+.row-b { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.row-b h2, .row-b b { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.sl-year { justify-content: center; margin: 4px 0 12px; } .sl-year b { font-size: var(--t-lg); font-variant-numeric: tabular-nums; }
+.sl-person { display: grid; gap: 6px; }
+.sl-bar { display: grid; grid-template-columns: 8.5em 1fr 2.2em; gap: 8px; align-items: center; font-size: var(--t-sm); }
+.sl-bar b { text-align: right; font-variant-numeric: tabular-nums; }
+.sl-l { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sl-t { height: 10px; border-radius: 5px; background: var(--line); overflow: hidden; }
+.sl-t i { display: block; height: 100%; border-radius: 5px; background: var(--brand-3); }
+.sl-t i.c2 { background: var(--brand-2); } .sl-t i.c3 { background: var(--warn-fill); } .sl-t i.c4 { background: var(--ok-fill); }
+ul.sl-feed li { flex-direction: column; align-items: flex-start; gap: 2px; background: var(--card, #fff); border: var(--bw) solid var(--line); border-radius: var(--r-md, 10px); padding: 10px 12px; }
+ul.sl-feed li[data-open] { cursor: pointer; }
+ul.sl-feed .bad { color: var(--bad); font-weight: 600; }
+ul.sl-ct li { flex-direction: column; align-items: flex-start; gap: 0; }

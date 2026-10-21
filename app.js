@@ -44,6 +44,24 @@ const REASON_PREFIX = {
   'skill_missing:': 'Falta a competência: ',
 };
 const ERRORS = [
+  // Prémios (sql/98)
+  [/rules of this prize are closed/i, 'As regras deste prémio já estão fechadas para o ano.'],
+  [/prize rules are not closed yet/i, 'Ainda não se pode propor: as regras deste prémio não foram fechadas.'],
+  [/choose one person/i, 'Escolhe uma pessoa.'],
+  [/justification too short/i, 'Explica melhor porquê (pelo menos 20 letras).'],
+  [/four eyes: someone else decides/i, 'Quatro olhos: quem propôs ou foi proposto não decide. Decide outra pessoa da Administração.'],
+  [/say why it was refused/i, 'Diz porque recusas.'],
+  [/already has all its winners/i, 'Este prémio já tem todos os vencedores.'],
+  [/this year already has prizes/i, 'Este ano já tem prémios.'],
+  [/already decided/i, 'Esta proposta já foi decidida.'],
+  // Comercial · Angariação (sql/97)
+  [/client already exists in the company/i, 'Este cliente já existe na empresa. Fala com a direção comercial.'],
+  [/client already exists/i, 'Este cliente já existe: procura-o na lista.'],
+  [/client passed to sales management/i, 'Este cliente já tem proposta: passou para a direção comercial.'],
+  [/client name is required/i, 'Escreve o nome da empresa.'],
+  [/contact date must be within the last 90 days/i, 'O dia do contacto tem de ser dos últimos 90 dias.'],
+  [/next step before the contact/i, 'O próximo passo não pode ser antes do contacto.'],
+  [/say why the client was lost/i, 'Diz porque se perdeu o cliente.'],
   // Notificações no telemóvel (sql/84)
   [/wait a minute before another test/i, 'Já enviaste um teste há menos de um minuto. Espera um pouco e tenta outra vez.'],
   [/no phone switched on for this login/i, 'Este telemóvel ainda não tem as notificações ligadas: carrega em «Ligar».'],
@@ -822,13 +840,14 @@ nav.addEventListener('click', (e) => {
   if (b.dataset.action === 'sair') return signOut();
   if (b.dataset.action === 'tour') return startTour();
   if (b.dataset.view === 'orcamentos' && state.orc) { state.orc.id = null; state.orc.mode = 'list'; }   // the menu always opens the list
-  if (b.dataset.view === 'minhas') state.mineTab = 'home';   // «Eu» always opens the home
+  if (b.dataset.view === 'minhas') state.mineTab = 'home';
+  if (b.dataset.view === 'comercial' && state.sales) state.sales.sel = null;   // the menu always opens the list   // «Eu» always opens the home
   go(b.dataset.view);
 });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '75';
+const APP_VERSION = '76';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -842,7 +861,7 @@ function tabsFor(role) {
   if (role === 'admin') return isOwner() ? (ownerDesk() ? ['clientes'] : ['clientes', 'inicio', 'horas', 'secretariado']) : ['inicio', 'painel', 'horas', 'secretariado'];
   return TABS[role] || TABS.supervisor;
 }
-const MORE_ORDER = ['inicio', 'empresa', 'onbtextos', 'equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'andaimes', 'processo', 'clientes'];
+const MORE_ORDER = ['inicio', 'empresa', 'onbtextos', 'equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'andaimes', 'processo', 'clientes'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -855,15 +874,19 @@ WIDE.addEventListener('change', () => {
 // «Mais» grouped under headings (founder-approved v48): each screen once, each icon with one meaning. «Processo» left the
 // menu (the «?» button and the search still open it); «Produção» is reached from the Dashboard when this login sees it.
 // v73 (Diogo 2026-10-21): the menu is arranged BY DEPARTMENT; each person sees only the screens their departments give.
+// v76: the founder's department sheet (2026-10-21), group by group and in its order. Frota is its own department; Viagens
+// and Alojamento (not on the sheet) sit with Secretariado; «controlo da app para garantir a ISO 9001» = Processo, in Qualidade.
 const MENU_GROUPS = [
-  ['Administração', ['inicio', 'empresa', 'processo', 'clientes']],
-  ['Secretariado', ['secretariado', 'despesas', 'viagens', 'alojamento']],
-  ['Recursos Humanos', ['trabalhadores', 'onbtextos']],
-  ['Segurança', ['seguranca', 'lmra', 'emergencia', 'acolhimento']],
-  ['Obra', ['obras', 'painel', 'naobra', 'equipa', 'picar', 'horas', 'andaimes', 'producao']],
-  ['Compras e Armazém', ['armazem', 'compras', 'frota']],
-  ['Comercial', ['orcamentos']],
-  ['Qualidade', ['qualidade']],
+  ['Administração', ['inicio', 'empresa', 'premios', 'clientes']],
+  ['Secretariado', ['secretariado', 'horas', 'despesas', 'viagens', 'alojamento']],
+  ['Recursos Humanos', ['trabalhadores', 'onbtextos', 'acolhimento']],
+  ['Frota', ['frota']],
+  ['Segurança', ['seguranca', 'lmra', 'emergencia']],
+  ['Produção (Obra)', ['painel', 'obras', 'naobra', 'picar', 'andaimes', 'equipa', 'producao']],
+  ['Compras e Armazém', ['armazem', 'compras']],
+  ['Comercial', ['comercial']],
+  ['Orçamentação', ['orcamentos']],
+  ['Qualidade', ['qualidade', 'processo']],
   ['Eu', ['minhas']],
 ];
 // What each screen needs, to place it under the department that gives it (the visibility itself is set in boot).
@@ -876,7 +899,7 @@ const VIEW_NEEDS = {
   obras: () => can('obras.gerir') || can('obras.ver_detalhes'), painel: () => canSiteDetails(), naobra: () => canSiteDetails() || can('ponto.picar'),
   equipa: () => canSiteDetails(), picar: () => can('ponto.picar'), horas: () => can('horas.ver') || can('horas.validar_obra'),
   andaimes: () => canScaffolds(), producao: () => canProd(), armazem: () => canWh(), compras: () => canBuy(), frota: () => canFleet(),
-  orcamentos: () => canEstimates(), qualidade: () => canQuality(),
+  orcamentos: () => canEstimates(), qualidade: () => canQuality(), comercial: () => canSales(), premios: () => canAwards(),
 };
 // v73 (Diogo 2026-10-21): «o standard da gestão serve para todas as empresas, mas o administrador de cada empresa adapta».
 // Administrators (and the owner) see the standard groups. Everyone else sees THEIR departments as the menu headings,
@@ -906,9 +929,11 @@ const ENC_ICONS = {
   myclock: '<path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2.5 21a6.5 6.5 0 0 1 9-6M17 13a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM17 15.5V17l1 1"/>',
   gate: '<path d="M3 21V7M21 21V7M3 10h18M3 15h18M8 10v5M13 10v5M18 10v5M3 7l4-3h10l4 3"/>',
   firms: '<path d="M3 21h18M5 21V8l6-3v16M11 21V3l8 4v14M14 9h2M14 13h2M14 17h2M7 11h1M7 15h1"/>',
+  trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8 21h8M9 17h6"/>',
+  target: '<path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 12h.01M16 8l4-4M17 4h3v3"/>',
   medal: '<path d="M12 14a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM9.5 13.3 8 21l4-2 4 2-1.5-7.7M10 9l1.5 1.5L14.5 7.5"/>',
 };
-const MENU_ICON = { painel: 'gauge', producao: 'chart', seguranca: 'hhat', equipa: 'crew', minhas: 'myclock', naobra: 'gate', qualidade: 'medal', clientes: 'firms' };
+const MENU_ICON = { painel: 'gauge', producao: 'chart', seguranca: 'hhat', equipa: 'crew', minhas: 'myclock', naobra: 'gate', qualidade: 'medal', clientes: 'firms', comercial: 'target', premios: 'trophy' };
 (function encIcons() {
   const ns = 'http://www.w3.org/2000/svg'; const sp = document.createElementNS(ns, 'svg');
   sp.setAttribute('width', '0'); sp.setAttribute('height', '0'); sp.setAttribute('aria-hidden', 'true'); sp.style.position = 'absolute';
@@ -920,15 +945,17 @@ function layoutNav(role) {
   const tabs = document.getElementById('tabs'); const sheet = document.getElementById('more');
   const btn = (v) => nav.querySelector(`button[data-view="${v}"]`);
   const all = [...nav.querySelectorAll('button[data-view]')].map((b) => b.dataset.view);
-  // Out of the menu, still reachable: Processo by «?» and the search; Produção by the Dashboard (only when this login opens it).
-  const off = (v) => v === 'processo' || (v === 'producao' && !btn('painel').hidden) || (ownerDesk() && v !== 'clientes');
+  // Out of the menu, still reachable: Produção by the Dashboard (only when this login opens it). Processo is in Qualidade (v76).
+  const off = (v) => (v === 'producao' && !btn('painel').hidden) || (ownerDesk() && v !== 'clientes');
   state.navDesk = ownerDesk();
   for (const v of all) btn(v).classList.toggle('enc-off', off(v));
   const shown = (v) => !btn(v).hidden && !off(v);
   const base = menuGroups((v) => shown(v));
   const grouped = base.flatMap((g) => g[1]);
   const groups = [...base, ['Outros', all.filter((v) => !grouped.includes(v))]];
-  const first = tabsFor(role).filter((v) => !btn(v).hidden);
+  let first = tabsFor(role).filter((v) => !btn(v).hidden);
+  // a department with none of its profile's usual screens (the angariador): its own screens become the tabs
+  if (!first.length) first = groups.flatMap((g) => g[1]).filter((v) => all.includes(v) && shown(v) && v !== 'minhas').slice(0, 3);
   const moreBtn = nav.querySelector('button[data-more]');
   nav.querySelectorAll('.enc-mh').forEach((h) => h.remove());
   sheet.querySelectorAll('hr').forEach((h) => h.remove());
@@ -938,17 +965,18 @@ function layoutNav(role) {
   const place = isWide() ? (el) => tabs.insertBefore(el, moreBtn) : (el) => sheet.appendChild(el);
   for (const [title, views] of groups) {
     const rest = views.filter((v) => all.includes(v) && !first.includes(v) && shown(v));
-    if (!rest.length) continue;
+    const tour = title === 'Eu';   // the sheet: «Eu · Visita guiada»
+    if (!rest.length && !tour) continue;
     place(head(title)); for (const v of rest) place(btn(v));
+    if (tour) place(nav.querySelector('button[data-action=tour]'));
   }
   for (const v of all) if (!first.includes(v) && !shown(v)) sheet.appendChild(btn(v));   // hidden ones wait in the sheet
-  sheet.appendChild(nav.querySelector('button[data-action=tour]'));
   sheet.appendChild(Object.assign(document.createElement('hr'), {}));
   sheet.appendChild(nav.querySelector('button[data-action=sair]'));
   // Which version this phone is running, so anyone can check that an update arrived.
   const ver = sheet.querySelector('.ver') || Object.assign(document.createElement('p'), { className: 'ver', textContent: 'Versão ' + APP_VERSION });
   sheet.appendChild(ver);
-  if (isWide()) { tabs.insertBefore(nav.querySelector('button[data-action=tour]'), moreBtn); tabs.insertBefore(nav.querySelector('button[data-action=sair]'), moreBtn); }
+  if (isWide()) tabs.insertBefore(nav.querySelector('button[data-action=sair]'), moreBtn);
   encBadges(true);
 }
 function openMore(open) {
@@ -1091,6 +1119,8 @@ async function boot() {
   const worker = me.role === 'worker';
   nav.querySelectorAll('button[data-view]').forEach((b) => { if (b.dataset.view !== 'minhas' && b.dataset.view !== 'secretariado') b.hidden = worker; });
   nav.querySelector('[data-view=minhas]').hidden = !me.collaborator_id;
+  // v76: these six were shown to every office login; now only to whoever has what the screen needs (an angariador has none)
+  for (const v of ['picar', 'naobra', 'horas', 'seguranca', 'trabalhadores', 'obras']) if (!worker) nav.querySelector(`[data-view=${v}]`).hidden = !VIEW_NEEDS[v]();
   nav.querySelector('[data-view=painel]').hidden = worker || !canSiteDetails();
   nav.querySelector('[data-view=acolhimento]').hidden = worker || !can('acolhimento.gerir');
   nav.querySelector('[data-view=empresa]').hidden = worker || state.offline || !canCompanyRules();
@@ -1099,6 +1129,8 @@ async function boot() {
   nav.querySelector('[data-view=inicio]').hidden = worker || state.offline || !canHome();
   nav.querySelector('[data-view=processo]').hidden = worker || state.offline || !canProcess();
   nav.querySelector('[data-view=orcamentos]').hidden = worker || state.offline || !canEstimates();
+  nav.querySelector('[data-view=comercial]').hidden = worker || state.offline || !canSales();
+  nav.querySelector('[data-view=premios]').hidden = worker || state.offline || !canAwards();
   nav.querySelector('[data-view=equipa]').hidden = me.role !== 'supervisor' || !canSiteDetails();
   nav.querySelector('[data-view=lmra]').hidden = worker || state.offline || !canLmra();
   nav.querySelector('[data-view=emergencia]').hidden = worker || !canEmergency();
@@ -1114,6 +1146,8 @@ async function boot() {
   if (me.role === 'supervisor' && !state.booted && state.view === 'picar' && canSiteDetails()) state.view = 'equipa';
   // v48: the office opens on its own first tab (Secretariado for HR), not on Picar, which it rarely uses.
   if (!state.booted && state.view === 'picar' && !tabsFor(me.role).includes('picar')) state.view = tabsFor(me.role)[0];
+  const visible = (v) => { const b = nav.querySelector(`button[data-view="${v}"]`); return !!b && !b.hidden; };
+  if (!state.booted && nav.querySelector(`button[data-view="${state.view}"]`) && !visible(state.view)) state.view = tabsFor(me.role).find(visible) || MENU_GROUPS.flatMap((g) => g[1]).find(visible) || state.view;
   state.booted = true;
   if (state.view === 'minhas' && !me.collaborator_id) state.view = tabsFor(me.role)[0];
   layoutNav(me.role);
@@ -1559,7 +1593,7 @@ function go(view) {
   window.scrollTo(0, 0);
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
      ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients, cliente: viewClient, precos: viewPrices, empresa: viewCompanyRules, inicio: viewHome,
-     processo: viewProcess, orcamentos: viewEstimates, lmra: viewLmra, emergencia: viewEmergency,
+     processo: viewProcess, orcamentos: viewEstimates, comercial: viewSales, premios: viewAwards, lmra: viewLmra, emergencia: viewEmergency,
      armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, producao: viewProd, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
   checkEmergencyBar(); encBadges();
 }
@@ -4310,6 +4344,8 @@ const TOUR_TEXT = {
   obras: 'Obras: as moradas, os horários e as regras de cada obra.',
   processo: 'Processo: o caminho de cada obra, do primeiro contacto ao fecho de contas. Toca num passo e eu explico o que vem antes e depois. O ponto de interrogação em cima diz-te onde estás.',
   clientes: 'Clientes: as empresas que usam a GestNow. Crias, entras numa e voltas.',
+  premios: 'Prémios e objetivos: os prémios do ano com as regras escritas em janeiro. Qualquer chefe propõe quem merece; a Administração decide.',
+  comercial: 'Angariação de clientes: abres o cliente com os dados todos e registas cada contacto. A direção comercial vê a prospeção de toda a gente.',
   orcamentos: 'Orçamentos: um só cálculo de custo e cinco formas de dar o preço ao cliente, de homem-hora a chave na mão. Quem assina segue as regras da tua empresa.',
 };
 async function startTour() {
@@ -8656,8 +8692,344 @@ async function buyReceiveLine(id, left, toStock) {
   toast(data.complete ? 'Recebido. Quem pediu já foi avisado.' : 'Parte recebida. O resto fica à espera.'); loadBuy();
 }
 
+// ------------------------------------------------------------------ Administração · Prémios e objetivos (sql/98)
+// Diogo 2026-10-21: year-end prizes for the angariadores and for anyone who brings value. Rules are written in January and
+// frozen («Fechar as regras»); the angariadores are measured from the data; anyone in an office or site department proposes
+// a person, the Administração decides (never the one who proposed, never the person proposed).
+const canAwards = () => can('premios.gerir') || can('premios.propor');
+const AW_CAT = { obra_margem: 'Obra acabada com margem', cliente_lucro: 'Cliente angariado com bom lucro', meta: 'Meta cumprida',
+  parceria: 'Parceria lucrativa', ideia: 'Ideia que faz crescer a empresa', outro: 'Outro prémio' };
+const AW_ST = { proposta: ['warn', 'À espera de decisão'], aprovada: ['ok', 'Prémio aprovado'], recusada: ['bad', 'Não aprovado'] };
+// what people typed (names, rules, notes) is shown as typed, never run through the dictionary
+const nt = (x) => `<span data-nt>${esc(x)}</span>`;
+const awNum = (v) => Number(v).toLocaleString(LOC, { maximumFractionDigits: 2 });
+const awEur = (v) => Number(v || 0).toLocaleString(LOC, { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+function viewAwards() {
+  if (!state.ready) return boot();
+  if (!canAwards()) return viewClock();
+  if (!state.awards) state.awards = { year: new Date().getFullYear() };
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Administração</p><h1>Prémios e objetivos</h1></div></div><div id="awbody">${skel(3)}</div>`;
+  awLoad();
+}
+async function awLoad() {
+  const A = state.awards; const el = $('#awbody'); if (!el) return;
+  const { data: d, error } = await sb.rpc('mini_awards', { p_year: A.year });
+  if (!el.isConnected) return;
+  if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  A.d = d;
+  const open = d.programs.filter((p) => p.locked && !p.closed);
+  const waiting = d.nominations.filter((n) => n.status === 'proposta').length;
+  el.innerHTML = `<div class="row-b sl-year"><button class="btn ghost" id="awprev" aria-label="Ano anterior">‹</button><b>${d.year}</b>
+      <button class="btn ghost" id="awnext" aria-label="Ano seguinte">›</button></div>
+    ${open.length ? '<button class="btn big wide" id="awprop">Propor alguém para um prémio</button>' : ''}
+    <h2>Os prémios de ${d.year}</h2>
+    <p class="small muted">${d.can_manage ? 'Escreve as regras no início do ano e carrega em «Fechar as regras». Depois disso não mudam: o que se promete em janeiro é o que se paga em dezembro.' : 'As regras do ano, tal como a Administração as fechou.'}</p>
+    ${d.can_manage ? `<div class="acts">${d.programs.length ? '' : '<button class="btn" id="awstart">Começar com os 5 prémios-modelo</button>'}<button class="btn ghost" id="awnew">+ Novo prémio</button></div>` : ''}
+    <div class="stack">${d.programs.length ? d.programs.map(awCard).join('') : `<div class="card">${empty('box', 'Ainda não há prémios neste ano', d.can_manage ? 'Começa com os 5 prémios-modelo e muda as regras e os valores para os da tua empresa.' : 'A Administração ainda não publicou os prémios deste ano.')}</div>`}</div>
+    ${d.sales ? `<h2>Angariadores · contado pelos dados</h2>
+      <p class="small muted">Clientes que cada pessoa trouxe com orçamento aprovado neste ano: valor e margem (preço menos custo). Ninguém escreve estes números.</p>
+      <div class="card"><ul class="plain sl-ct">${d.sales.map((s) => `<li><b data-nt>${esc(s.name)}</b><span class="small">${s.won} cliente(s) ganho(s) · ${awEur(s.value)} · margem ${awEur(s.margin)}${s.margin_pct != null ? ` (${awNum(s.margin_pct)} %)` : ''}</span></li>`).join('') || '<li class="muted">Ainda nenhum cliente angariado ganho neste ano.</li>'}</ul></div>` : ''}
+    <h2>Propostas${waiting && d.can_manage ? ` · ${waiting} à espera` : ''}</h2>
+    <div class="stack">${d.nominations.map(awNomCard).join('') || '<p class="muted">Ainda não há propostas.</p>'}</div>`;
+  $('#awprev').onclick = () => { A.year--; awLoad(); };
+  $('#awnext').onclick = () => { A.year++; awLoad(); };
+  if ($('#awprop')) $('#awprop').onclick = () => awPropose();
+  if ($('#awnew')) $('#awnew').onclick = () => awEdit(null);
+  if ($('#awstart')) $('#awstart').onclick = async () => {
+    const { error: e } = await sb.rpc('mini_award_starter', { p_year: A.year });
+    if (e) return toast(friendly(e)); toast('5 prémios criados como rascunho. Muda as regras e os valores e depois fecha-as.'); awLoad(); };
+  el.querySelectorAll('[data-awed]').forEach((b) => b.onclick = () => awEdit(d.programs.find((p) => p.id === b.dataset.awed)));
+  el.querySelectorAll('[data-awlock]').forEach((b) => b.onclick = () => awLock(d.programs.find((p) => p.id === b.dataset.awlock)));
+  el.querySelectorAll('[data-awkpi]').forEach((b) => b.onclick = () => awKpi(d.programs.find((p) => p.id === b.dataset.awkpi)));
+  el.querySelectorAll('[data-awdec]').forEach((b) => b.onclick = () => awDecide(d.nominations.find((n) => n.id === b.dataset.awdec)));
+}
+function awCard(p) {
+  const d = state.awards.d;
+  const goal = p.target != null ? `${t(p.direction === 'max' ? 'no máximo' : 'pelo menos')} ${awNum(p.target)}${p.target_unit ? ' ' + p.target_unit : ''}` : '';
+  const pct = p.target != null && p.current != null ? (p.direction === 'max' ? (p.current <= p.target ? 100 : Math.max(0, 100 - 100 * (p.current - p.target) / Math.max(1, Math.abs(p.target) || 1))) : Math.min(100, 100 * p.current / (p.target || 1))) : null;
+  return `<article class="card aw-card"><div class="row-b"><span class="small muted">${esc(AW_CAT[p.category] || p.category)}</span>
+      ${p.locked ? chip('ok', 'regras fechadas', 'lock') : chip('warn', 'rascunho')}</div>
+    <h3 data-nt>${esc(p.title)}</h3><p data-nt>${esc(p.rule)}</p>
+    <p class="small"><b>Prémio:</b> ${nt(p.prize)}${p.max_winners ? ` · até ${p.max_winners} vencedor(es)` : ''}</p>
+    ${goal ? `<p class="small"><b>Meta:</b> ${nt(goal)}${p.current != null ? ` · agora: <b>${awNum(p.current)}</b>` : ''}</p>
+      ${pct != null ? `<div class="sl-t" role="img" aria-label="${Math.round(pct)} %"><i class="${p.reached ? 'c4' : 'c3'}" style="width:${Math.round(pct)}%"></i></div>` : ''}
+      ${p.reached != null ? `<div class="tags">${p.reached ? chip('ok', 'meta cumprida', 'ok') : chip('', 'meta ainda não cumprida')}</div>` : ''}` : ''}
+    ${p.approved ? `<p class="small">${p.approved} proposta(s) aprovada(s)</p>` : ''}
+    ${d.can_manage ? `<div class="acts">${!p.locked ? `<button class="btn ghost" data-awed="${esc(p.id)}">Editar</button><button class="btn" data-awlock="${esc(p.id)}">Fechar as regras</button>` : ''}
+      ${p.target != null && !p.closed ? `<button class="btn ghost" data-awkpi="${esc(p.id)}">Atualizar o valor</button>` : ''}</div>` : ''}</article>`;
+}
+function awNomCard(n) {
+  const [k, l] = AW_ST[n.status] || ['', n.status];
+  return `<article class="card"><div class="row-b"><b data-nt>${esc(n.nominee)}</b>${chip(k, l)}</div>
+    <p class="small muted">${nt(n.program)} · ${esc(t('proposto por {x}', ''))}${nt(n.by)}</p><p data-nt>${esc(n.justification)}</p>
+    ${n.client || n.site ? `<p class="small">${n.client ? 'Cliente: ' + nt(n.client) : ''}${n.client && n.site ? ' · ' : ''}${n.site ? 'Obra: ' + nt(n.site) : ''}</p>` : ''}
+    ${n.status !== 'proposta' ? `<p class="small">${esc(t('Decidido por {x}', ''))}${nt(n.decided_by)}${n.amount != null ? ` · ${awEur(n.amount)}` : ''}${n.decision_note ? ` · ${nt(n.decision_note)}` : ''}</p>` : ''}
+    ${n.can_decide ? `<button class="btn wide" data-awdec="${esc(n.id)}">Decidir</button>` : n.status === 'proposta' && state.awards.d.can_manage ? '<p class="small muted">Quem propôs ou foi proposto não decide: outra pessoa da Administração decide.</p>' : ''}</article>`;
+}
+async function awEdit(p) {
+  const v = p || { category: 'meta', direction: 'min' };
+  const fd = await askSheet(p ? 'Editar prémio' : 'Novo prémio', `
+    <label for="wc">Tipo *</label><select id="wc" name="category">${Object.entries(AW_CAT).map(([k, l]) => `<option value="${k}" ${v.category === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>
+    <label for="wt">Nome *</label><input id="wt" name="title" required minlength="3" maxlength="120" value="${esc(v.title || '')}">
+    <label for="wr">Regra: quem ganha e como se mede *</label><textarea id="wr" name="rule" rows="4" required minlength="10" maxlength="2000">${esc(v.rule || '')}</textarea>
+    <h3>Meta (se houver)</h3>
+    <div class="row"><div><label for="wd">Tem de ficar</label><select id="wd" name="direction"><option value="min" ${v.direction !== 'max' ? 'selected' : ''}>pelo menos</option><option value="max" ${v.direction === 'max' ? 'selected' : ''}>no máximo</option></select></div>
+      <div><label for="wg">Valor</label><input id="wg" name="target" type="number" step="0.01" inputmode="decimal" value="${v.target ?? ''}"></div></div>
+    <label for="wu">Medido em</label><input id="wu" name="target_unit" maxlength="30" value="${esc(v.target_unit || '')}" placeholder="ex.: acidentes com baixa, % de margem, horas">
+    <h3>Prémio</h3>
+    <label for="wp">O que se ganha *</label><input id="wp" name="prize" required maxlength="300" value="${esc(v.prize || '')}" placeholder="ex.: 250 € e um dia de férias">
+    <div class="row"><div><label for="wv">Valor por pessoa (€)</label><input id="wv" name="prize_value" type="number" min="0" step="0.01" inputmode="decimal" value="${v.prize_value ?? ''}"></div>
+      <div><label for="wm">Máximo de vencedores</label><input id="wm" name="max_winners" type="number" min="1" step="1" inputmode="numeric" value="${v.max_winners ?? ''}"></div></div>
+    <p class="small muted">Usa valores da tua empresa. Depois de «Fechar as regras», nada disto muda neste ano.</p>`, 'Guardar');
+  if (!fd) return;
+  const q = { year: state.awards.year }; for (const [k, x] of fd.entries()) if (k !== '_v') q[k] = String(x).trim();
+  const { error } = await sb.rpc('mini_award_program_save', { p_id: p ? p.id : null, p: q });
+  if (error) return toast(friendly(error));
+  toast('Prémio guardado.'); awLoad();
+}
+async function awLock(p) {
+  const fd = await askSheet(`Fechar as regras · ${p.title}`, `<p data-nt>${esc(p.rule)}</p><p class="small"><b>Prémio:</b> ${nt(p.prize)}</p>
+    <p>Depois de fechar, a regra, a meta e o prémio ficam assim até ao fim de ${state.awards.year} e toda a gente com acesso aos prémios os vê. Só então se podem propor pessoas.</p>`, 'Fechar as regras');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_award_lock', { p_id: p.id });
+  if (error) return toast(friendly(error));
+  toast('Regras fechadas para o ano.'); awLoad();
+}
+async function awKpi(p) {
+  const fd = await askSheet(`Valor de agora · ${p.title}`, `
+    <label for="kv">Valor *</label><input id="kv" name="v" type="number" step="0.01" inputmode="decimal" required value="${p.current ?? ''}">
+    <label for="kn">De onde vem</label><input id="kn" name="n" maxlength="300" placeholder="ex.: relatório de segurança de setembro">
+    ${(p.log || []).length ? `<h3>Histórico</h3><ul class="plain sl-ct">${p.log.map((l) => `<li><b>${awNum(l.value)}</b><span class="small muted">${esc(fmtDate(String(l.at).slice(0, 10)))} · ${esc(l.by)}${l.note ? ' · ' + esc(l.note) : ''}</span></li>`).join('')}</ul>` : ''}`, 'Guardar');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_award_kpi', { p_id: p.id, p_value: Number(fd.get('v')), p_note: String(fd.get('n') || '').trim() || null });
+  if (error) return toast(friendly(error));
+  toast('Valor guardado.'); awLoad();
+}
+async function awPropose() {
+  const d = state.awards.d; const progs = d.programs.filter((p) => p.locked && !p.closed);
+  const sites = activeSites();
+  const fd = await askSheet('Propor alguém para um prémio', `
+    <label for="np">Prémio *</label><select id="np" name="p" required>${progs.map((p) => `<option value="${esc(p.id)}" data-nt>${esc(p.title)}</option>`).join('')}</select>
+    <label for="nw">Quem *</label><select id="nw" name="w" required><option value="">—</option>${d.people.map((x) => `<option value="${x.collab ? 'c:' + esc(x.collab) : 'u:' + esc(x.user)}" data-nt>${esc(x.name)}</option>`).join('')}</select>
+    <label for="nj">Porquê: o que fez e que resultado trouxe *</label><textarea id="nj" name="j" rows="4" required minlength="20" maxlength="2000" placeholder="ex.: Propôs mudar a ordem da montagem dos andaimes e a paragem acabou 2 dias antes"></textarea>
+    ${sites.length ? `<label for="ns">Obra (se for de uma obra)</label><select id="ns" name="s"><option value="">—</option>${sites.map((s) => `<option value="${esc(s.id)}">Obra ${esc(s.cost_center_code)} · ${esc(s.title)}</option>`).join('')}</select>` : ''}
+    <p class="small muted">A proposta fica com o teu nome e não se apaga. Decide outra pessoa da Administração.</p>`, 'Propor');
+  if (!fd) return;
+  const w = String(fd.get('w') || '');
+  const { error } = await sb.rpc('mini_award_propose', { p_program: fd.get('p'), p_user: w.startsWith('u:') ? w.slice(2) : null, p_collab: w.startsWith('c:') ? w.slice(2) : null,
+    p_justification: String(fd.get('j')).trim(), p_client: null, p_project: fd.get('s') || null });
+  if (error) return toast(friendly(error));
+  toast('Proposta enviada à Administração.'); awLoad();
+}
+async function awDecide(n) {
+  const fd = await askSheet(`Decidir · ${n.nominee}`, `<p class="small muted">${nt(n.program)} · ${nt(n.by)}</p><p data-nt>${esc(n.justification)}</p>
+    <label for="da">Valor do prémio (€)</label><input id="da" name="a" type="number" min="0" step="0.01" inputmode="decimal">
+    <label for="dn">Nota (obrigatória para recusar)</label><input id="dn" name="n" maxlength="500">
+    <div class="acts"><button class="btn ghost" value="nao">Recusar</button></div>`, 'Aprovar');
+  if (!fd) return;
+  const ok = fd.get('_v') !== 'nao';
+  const { error } = await sb.rpc('mini_award_decide', { p_nomination: n.id, p_approve: ok, p_note: String(fd.get('n') || '').trim() || null, p_amount: fd.get('a') ? Number(fd.get('a')) : null });
+  if (error) return toast(friendly(error));
+  toast(ok ? 'Proposta aprovada.' : 'Proposta recusada.'); awLoad();
+}
+// ------------------------------------------------------------------ Comercial · Angariação de clientes (sql/97)
+// Diogo 2026-10-21 (folha dos departamentos): «Angariação de clientes; Abertura de clientes; gráfico para a prospeção de
+// mercado». The angariador opens the client with all its data and records each contact; they see only the clients they
+// brought, and after the proposal the client is the direção comercial's (who brought it stays, for the commission and the
+// year-end prize). The direção comercial sees every client and the prospecting chart.
+const canSales = () => can('comercial.ver') || can('comercial.angariar');
+const SL_STAGE = { prospect: ['', 'Por contactar'], contacto: ['info', 'Em contacto'], proposta: ['warn', 'Proposta'], cliente: ['ok', 'Cliente'], perdido: ['bad', 'Perdido'] };
+const SL_KIND = { visita: 'Visita', chamada: 'Chamada', reuniao: 'Reunião', email: 'Email', feira: 'Feira ou evento', outro: 'Outro' };
+const SL_SECTORS = ['Refinação', 'Petroquímica', 'Química', 'Energia', 'Nuclear', 'Indústria', 'Construção', 'Outro'];
+const slChip = (s) => { const [k, l] = SL_STAGE[s] || ['', s]; return chip(k, l); };
+const todayIso = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+function viewSales() {
+  if (!state.ready) return boot();
+  if (!canSales()) return viewClock();
+  if (!state.sales) state.sales = { tab: 'clientes', stage: 'todas', q: '', sel: null };
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Comercial</p><h1>Angariação de clientes</h1></div></div><div id="slbody">${skel(3)}</div>`;
+  state.sales.sel ? slDetail(state.sales.sel) : slHome();
+}
+async function slHome() {
+  const S = state.sales; const el = $('#slbody'); if (!el) return;
+  const { data: h, error } = await sb.rpc('mini_sales_clients');
+  if (!el.isConnected) return;
+  if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  S.home = h;
+  const tabs = h.all ? [['clientes', 'Clientes'], ['prospecao', 'Prospeção']] : [];
+  if (!h.all) S.tab = 'clientes';
+  el.innerHTML = `${h.can_create ? `<button class="btn big wide" id="slnew">${ic('in')} Abrir cliente novo</button>` : ''}
+    ${h.all ? '' : '<p class="small muted">Vês só os clientes que tu abriste. Depois da proposta, o cliente passa para a direção comercial e continua a contar para ti.</p>'}
+    ${tabs.length ? `<div class="seg" role="tablist">${tabs.map(([k, l]) => `<button role="tab" data-sltab="${k}" aria-selected="${S.tab === k}">${esc(l)}</button>`).join('')}</div>` : ''}
+    <div id="slpane"></div>`;
+  el.querySelectorAll('[data-sltab]').forEach((b) => b.onclick = () => { S.tab = b.dataset.sltab; slHome(); });
+  if ($('#slnew')) $('#slnew').onclick = () => slEdit(null);
+  (S.tab === 'prospecao' ? slBoard : slList)();
+}
+function slList() {
+  const S = state.sales; const h = S.home; const el = $('#slpane'); if (!el) return;
+  const today = todayIso();
+  const counts = Object.fromEntries(Object.keys(SL_STAGE).map((k) => [k, h.clients.filter((c) => c.stage === k).length]));
+  const q = S.q.trim().toLowerCase();
+  const list = h.clients.filter((c) => (S.stage === 'todas' || c.stage === S.stage) && (!q || [c.name, c.city, c.sector, c.tax_id, c.by].some((x) => String(x || '').toLowerCase().includes(q))));
+  el.innerHTML = `<div class="ov-tiles"><div><b>${counts.prospect + counts.contacto}</b><span>em prospeção</span></div>
+      <div><b>${counts.proposta}</b><span>com proposta</span></div><div><b>${counts.cliente}</b><span>clientes ganhos</span></div>
+      <div><b>${h.clients.filter((c) => c.next_on && c.next_on < today && ['prospect', 'contacto'].includes(c.stage)).length}</b><span>contactos em atraso</span></div></div>
+    <input id="slq" type="search" placeholder="Procurar cliente, cidade, NIF…" value="${esc(S.q)}" aria-label="Procurar cliente">
+    <div class="chips" role="radiogroup">${[['todas', 'Todos'], ...Object.entries(SL_STAGE).map(([k, v]) => [k, v[1]])].map(([k, l]) =>
+      `<button class="chip ${S.stage === k ? 'on' : ''}" data-slst="${k}" aria-pressed="${S.stage === k}">${esc(l)}${k !== 'todas' ? ` (${counts[k]})` : ''}</button>`).join('')}</div>
+    <div class="stack" id="sllist">${list.length ? list.map((c) => {
+      const late = c.next_on && c.next_on < today && ['prospect', 'contacto'].includes(c.stage);
+      return `<article class="card ov-card" data-open="${esc(c.id)}" tabindex="0" role="button" aria-label="Abrir ${esc(c.name)}">
+        <div class="row-b"><b data-nt>${esc(c.name)}</b>${slChip(c.stage)}</div>
+        <p class="small muted">${esc([c.sector, c.city].filter(Boolean).join(' · ') || 'Sem setor nem cidade')}${h.all && c.by ? ` · ${esc(t('trouxe: {x}', ''))}${nt(c.by)}` : ''}</p>
+        <div class="tags">${c.locked ? chip('', 'passou para a direção comercial', 'lock') : ''}
+          ${c.next_on ? chip(late ? 'bad' : '', `${t(late ? 'Em atraso: {x}' : 'Próximo: {x}', c.next_step || t('contacto'))} · ${fmtDate(c.next_on)}`, 'calendar') : ''}
+          ${c.activities ? chip('', `${c.activities} contacto(s)`) : chip('warn', 'sem contactos registados')}</div></article>`; }).join('')
+      : `<div class="card">${empty('box', h.clients.length ? 'Nenhum cliente com esse filtro' : 'Ainda não há clientes', h.can_create ? 'Carrega em «Abrir cliente novo» e preenche os dados do cliente.' : '')}</div>`}</div>`;
+  const qi = el.querySelector('#slq'); qi.oninput = () => { S.q = qi.value; const pos = qi.selectionStart; slList(); const n = $('#slq'); n.focus(); n.setSelectionRange(pos, pos); };
+  el.querySelectorAll('[data-slst]').forEach((b) => b.onclick = () => { S.stage = b.dataset.slst; slList(); });
+  el.querySelectorAll('[data-open]').forEach((c) => { const o = () => { S.sel = c.dataset.open; viewSales(); }; c.onclick = o; c.onkeydown = (e) => { if (e.key === 'Enter') o(); }; });
+}
+async function slBoard() {
+  const S = state.sales; const el = $('#slpane'); if (!el) return;
+  S.year = S.year || new Date().getFullYear();
+  el.innerHTML = skel(2);
+  const { data: b, error } = await sb.rpc('mini_sales_board', { p_year: S.year });
+  if (!el.isConnected) return;
+  if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  const max = Math.max(1, ...b.people.map((p) => Math.max(p.created, p.contacts, p.proposals, p.won)));
+  const bar = (n, cls, label) => `<div class="sl-bar"><span class="sl-l">${esc(label)}</span><span class="sl-t"><i class="${cls}" style="width:${Math.round(100 * n / max)}%"></i></span><b>${n}</b></div>`;
+  const eur = (v) => Number(v || 0).toLocaleString(LOC, { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+  el.innerHTML = `<div class="row-b sl-year"><button class="btn ghost" id="slprev" aria-label="Ano anterior">‹</button><b>${b.year}</b>
+      <button class="btn ghost" id="slnext" aria-label="Ano seguinte" ${b.year >= new Date().getFullYear() ? 'disabled' : ''}>›</button></div>
+    <h2>Prospeção de mercado por pessoa</h2>
+    <p class="small muted">Clientes abertos e contactos feitos neste ano; propostas e clientes ganhos de quem os trouxe. Conta para a comissão e o prémio do fim do ano.</p>
+    <div class="stack">${b.people.length ? b.people.map((p) => `<div class="card sl-person"><div class="row-b"><b data-nt>${esc(p.name)}</b>
+        ${p.late ? chip('bad', `${p.late} em atraso`) : ''}</div>
+        ${bar(p.created, 'c1', 'Clientes abertos')}${bar(p.contacts, 'c2', 'Contactos')}${bar(p.proposals, 'c3', 'Com proposta')}${bar(p.won, 'c4', 'Ganhos')}
+        <p class="small muted">Valor ganho no ano: <b>${eur(p.won_value)}</b>${p.lost ? ` · ${p.lost} perdido(s)` : ''}</p></div>`).join('')
+      : `<div class="card">${empty('box', 'Ainda não há prospeção registada', 'Aparece aqui quando alguém abrir clientes e registar contactos.')}</div>`}</div>
+    <h2>Últimos contactos</h2>
+    <ul class="plain sl-feed">${b.recent.map((r) => `<li data-open="${esc(r.client_id)}" tabindex="0" role="button"><b data-nt>${esc(r.client)}</b>
+      <span class="small muted">${esc(fmtDate(r.on))} · ${esc(t(SL_KIND[r.kind] || r.kind))} · ${nt(r.by)}</span><span data-nt>${esc(r.note)}</span></li>`).join('') || '<li class="muted">Nada ainda.</li>'}</ul>`;
+  el.querySelector('#slprev').onclick = () => { S.year--; slBoard(); };
+  el.querySelector('#slnext').onclick = () => { S.year++; slBoard(); };
+  el.querySelectorAll('[data-open]').forEach((c) => c.onclick = () => { S.sel = c.dataset.open; viewSales(); });
+}
+async function slDetail(id) {
+  const S = state.sales; const el = $('#slbody'); if (!el) return;
+  const { data: c, error } = await sb.rpc('mini_sales_client', { p_client: id });
+  if (!el.isConnected) return;
+  if (error) { S.sel = null; el.innerHTML = `<p>${esc(friendly(error))}</p><button class="btn ghost" id="slback">‹ Voltar</button>`; $('#slback').onclick = () => viewSales(); return; }
+  const today = todayIso();
+  const est = { draft: 'em preparação', review: 'à espera de assinatura', approved: 'aprovado', rejected: 'recusado' };
+  el.innerHTML = `<button class="btn ghost" id="slback">‹ Todos os clientes</button>
+    <div class="card"><div class="row-b"><h2 data-nt>${esc(c.name)}</h2>${slChip(c.stage)}</div>
+      <p class="small muted">${esc([c.sector, c.city, c.country].filter(Boolean).join(' · '))}${c.tax_id ? ` · NIF ${esc(c.tax_id)}` : ''}</p>
+      <p class="small">Trouxe: <b data-nt>${esc(c.by || '—')}</b> · aberto a ${esc(fmtDate(String(c.created_at).slice(0, 10)))}</p>
+      ${c.address ? `<p class="small" data-nt>${esc(c.address)}</p>` : ''}${c.website ? `<p class="small" data-nt>${esc(c.website)}</p>` : ''}
+      ${c.notes ? `<p data-nt>${esc(c.notes)}</p>` : ''}${c.stage === 'perdido' && c.lost_reason ? `<p class="small">Porque se perdeu: ${nt(c.lost_reason)}</p>` : ''}
+      ${!c.can_edit && c.mine ? `<div class="status-hero info">${ic('lock')}<div><b>Passou para a direção comercial</b><span>Já há proposta. Continua a contar para ti, mas só a direção comercial muda este cliente.</span></div></div>` : ''}
+      <div class="acts">${c.can_edit ? '<button class="btn ghost" id="sled">Editar os dados</button>' : ''}
+        ${c.can_stage_all || (c.can_edit && ['prospect', 'contacto'].includes(c.stage)) ? '<button class="btn ghost" id="slstage">Mudar a fase</button>' : ''}
+        ${c.can_stage_all && can('orcamentos.gerir') ? '<button class="btn ghost" id="slest">Fazer orçamento</button>' : ''}</div></div>
+    <h2>Contactos no cliente</h2>
+    <div class="card"><ul class="plain sl-ct">${c.contacts.map((k) => `<li data-nt><b>${esc(k.name)}</b>${k.role ? ` · ${esc(k.role)}` : ''}<br><span class="small">${[k.phone, k.email].filter(Boolean).map(esc).join(' · ')}</span></li>`).join('') || '<li class="muted">Nenhum contacto.</li>'}</ul>
+      ${c.can_edit ? '<button class="btn ghost wide" id="slct">+ Pessoa de contacto</button>' : ''}</div>
+    <h2>Prospeção</h2>
+    ${c.can_log ? '<button class="btn big wide" id="slact">Registar contacto</button>' : ''}
+    <ul class="plain sl-feed">${c.activities.map((a) => `<li><b>${esc(SL_KIND[a.kind] || a.kind)} · ${esc(fmtDate(a.on))}</b>
+      <span class="small muted" data-nt>${esc(a.by)}</span><span data-nt>${esc(a.note)}</span>
+      ${a.next_on ? `<span class="small ${a.next_on < today ? 'bad' : ''}">${esc(t('Próximo passo: {x} · {x}', a.next_step || t('contacto'), fmtDate(a.next_on)))}</span>` : ''}</li>`).join('') || '<li class="muted">Ainda não há contactos registados.</li>'}</ul>
+    ${c.estimates ? `<h2>Orçamentos</h2><ul class="plain">${c.estimates.map((e) => `<li>N.º ${e.number}${e.version > 1 ? ` v${e.version}` : ''} · ${nt(e.title)} · ${esc(est[e.status] || e.status)}</li>`).join('') || '<li class="muted">Nenhum.</li>'}</ul>` : ''}`;
+  $('#slback').onclick = () => { S.sel = null; viewSales(); };
+  if ($('#sled')) $('#sled').onclick = () => slEdit(c);
+  if ($('#slct')) $('#slct').onclick = () => slContact(c);
+  if ($('#slact')) $('#slact').onclick = () => slActivity(c);
+  if ($('#slstage')) $('#slstage').onclick = () => slStage(c);
+  if ($('#slest')) $('#slest').onclick = () => { openEstimates(); };
+}
+async function slEdit(c) {
+  const v = c || { country: 'PT' };
+  const fd = await askSheet(c ? `Editar ${c.name}` : 'Abrir cliente novo', `
+    <label for="sn">Nome da empresa *</label><input id="sn" name="name" required maxlength="255" value="${esc(v.name || '')}" placeholder="ex.: Refinaria do Norte, S.A.">
+    <p class="small bad" id="sdup" hidden></p>
+    <div class="row"><div><label for="st">NIF</label><input id="st" name="tax_id" maxlength="32" value="${esc(v.tax_id || '')}" autocapitalize="characters"></div>
+      <div><label for="sc">País</label><input id="sc" name="country" maxlength="2" value="${esc(v.country || 'PT')}" autocapitalize="characters"></div></div>
+    <div class="row"><div><label for="ss">Setor</label><select id="ss" name="sector"><option value="">—</option>${SL_SECTORS.map((s) => `<option ${v.sector === s ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select></div>
+      <div><label for="sy">Cidade</label><input id="sy" name="city" maxlength="80" value="${esc(v.city || '')}"></div></div>
+    <label for="sa">Morada</label><input id="sa" name="address" maxlength="300" value="${esc(v.address || '')}">
+    <label for="sw">Site</label><input id="sw" name="website" maxlength="200" value="${esc(v.website || '')}" placeholder="ex.: www.empresa.pt">
+    ${c ? '' : `<h3>Pessoa de contacto</h3>
+    <div class="row"><div><label for="kn">Nome</label><input id="kn" name="contact_name" maxlength="120"></div>
+      <div><label for="kr">Função</label><input id="kr" name="contact_role" maxlength="80" placeholder="ex.: Diretor de manutenção"></div></div>
+    <div class="row"><div><label for="kp">Telefone</label><input id="kp" name="contact_phone" type="tel" maxlength="20"></div>
+      <div><label for="ke">Email</label><input id="ke" name="contact_email" type="email" maxlength="200"></div></div>`}
+    <label for="so">Notas</label><textarea id="so" name="notes" rows="3" maxlength="2000" placeholder="O que fazem, que paragens têm, quem decide…">${esc(v.notes || '')}</textarea>`,
+  c ? 'Guardar' : 'Abrir cliente', (d) => {
+    const warn = d.querySelector('#sdup');
+    const check = async () => {
+      const name = d.querySelector('#sn').value.trim(); const tax = d.querySelector('#st').value.trim();
+      if (name.length < 3 && tax.length < 5) { warn.hidden = true; return; }
+      const { data } = await sb.rpc('mini_sales_check', { p_name: name, p_tax_id: tax || null, p_except: c ? c.id : null });
+      warn.hidden = !(data && data.exists);
+      warn.textContent = data && data.exists ? (data.id ? 'Este cliente já existe: procura-o na lista.' : 'Este cliente já existe na empresa. Fala com a direção comercial.') : '';
+    };
+    d.querySelector('#sn').onblur = check; d.querySelector('#st').onblur = check;
+  });
+  if (!fd) return;
+  const p = {}; for (const [k, x] of fd.entries()) if (k !== '_v') p[k] = String(x).trim();
+  const { data, error } = await sb.rpc('mini_sales_client_save', { p_client: c ? c.id : null, p });
+  if (error) return toast(friendly(error));
+  toast(c ? 'Cliente guardado.' : 'Cliente aberto. Regista o primeiro contacto.');
+  state.sales.sel = data; viewSales();
+}
+async function slContact(c) {
+  const fd = await askSheet('Pessoa de contacto', `
+    <label for="kn">Nome *</label><input id="kn" name="name" required maxlength="120">
+    <label for="kr">Função</label><input id="kr" name="role" maxlength="80">
+    <div class="row"><div><label for="kp">Telefone</label><input id="kp" name="phone" type="tel" maxlength="20"></div>
+      <div><label for="ke">Email</label><input id="ke" name="email" type="email" maxlength="200"></div></div>`, 'Guardar');
+  if (!fd) return;
+  const p = {}; for (const [k, x] of fd.entries()) if (k !== '_v') p[k] = String(x).trim();
+  const { error } = await sb.rpc('mini_sales_contact_add', { p_client: c.id, p });
+  if (error) return toast(friendly(error));
+  toast('Contacto guardado.'); slDetail(c.id);
+}
+async function slActivity(c) {
+  const today = todayIso();
+  const fd = await askSheet(`Registar contacto · ${c.name}`, `
+    <label>Como foi *</label><div class="chips" role="radiogroup">${Object.entries(SL_KIND).map(([k, l], i) => `<label class="chip"><input type="radio" name="kind" value="${k}" ${i ? '' : 'required checked'}>${esc(l)}</label>`).join('')}</div>
+    <label for="ad">Dia *</label><input id="ad" name="on" type="date" required value="${today}" max="${today}">
+    <label for="an">O que se falou *</label><textarea id="an" name="note" rows="3" required minlength="3" maxlength="2000" placeholder="ex.: Reunião com o diretor de manutenção, paragem prevista em março"></textarea>
+    <h3>Próximo passo</h3>
+    <div class="row"><div><label for="as">O quê</label><input id="as" name="next" maxlength="300" placeholder="ex.: Enviar apresentação"></div>
+      <div><label for="aq">Até quando</label><input id="aq" name="next_on" type="date" min="${today}"></div></div>
+    <p class="small muted">O registo fica com o teu nome e não se apaga: é o histórico da prospeção.</p>`, 'Registar');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_sales_activity_add', { p_client: c.id, p_kind: fd.get('kind'), p_on: fd.get('on'), p_note: String(fd.get('note')).trim(),
+    p_next_step: String(fd.get('next') || '').trim() || null, p_next_on: fd.get('next_on') || null });
+  if (error) return toast(friendly(error));
+  toast('Contacto registado.'); slDetail(c.id);
+}
+async function slStage(c) {
+  const opts = Object.entries(SL_STAGE).filter(([k]) => c.can_stage_all || ['prospect', 'contacto', 'perdido'].includes(k));
+  const fd = await askSheet(`Fase de ${c.name}`, `
+    <div class="chips" role="radiogroup">${opts.map(([k, v]) => `<label class="chip"><input type="radio" name="s" value="${k}" ${c.stage === k ? 'checked' : ''} required>${esc(v[1])}</label>`).join('')}</div>
+    <div id="slr" hidden><label for="sr">Porque se perdeu *</label><input id="sr" name="r" maxlength="300" placeholder="ex.: Preço, escolheram outro, adiaram a obra"></div>
+    <p class="small muted">Com um orçamento à espera de assinatura o cliente passa sozinho a «Proposta»; com um orçamento aprovado ou uma obra, a «Cliente».</p>`, 'Guardar', (d) => {
+    const r = d.querySelector('#slr'); const i = d.querySelector('#sr');
+    const sync = () => { const lost = (d.querySelector('input[name=s]:checked') || {}).value === 'perdido'; r.hidden = !lost; i.required = lost; };
+    d.querySelectorAll('input[name=s]').forEach((x) => x.onchange = sync); sync();
+  });
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_sales_stage', { p_client: c.id, p_stage: fd.get('s'), p_reason: String(fd.get('r') || '').trim() || null });
+  if (error) return toast(friendly(error));
+  toast('Fase guardada.'); slDetail(c.id);
+}
 // ============================================================================ Frota (v39)
-// The RH runs the fleet: papers and dates per vehicle (insurance, IPO, IUC, service, rental contract), who has it now,
+// Its own department since v76 (Diogo 2026-10-21); it runs the fleet: papers and dates per vehicle (insurance, IPO, IUC, service, rental contract), who has it now,
 // hand-over and return with km. The database decides the traffic light and what blocks a hand-over (sql/67).
 const canFleet = () => mod('fleet') && ['frota.ver', 'frota.entregar', 'frota.gerir'].some(can);
 const FL_LIGHT = { verde: ['ok', 'Em ordem'], amarelo: ['warn', 'Atenção'], vermelho: ['bad', 'Não pode circular'] };
