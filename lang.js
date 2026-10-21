@@ -46,6 +46,7 @@ const I18N = (() => {
     }
     return pats.sort((a, b) => b.lit.length - a.lit.length);   // the most specific first
   }
+  const memo = new Map();   // text → translation (or null): a screen that refreshes asks the same texts again
   const fill = (v, vals) => { let i = 0; return v.replace(/\{(x|\d)\}/g, (_, d) => (d === 'x' ? vals[i++] : vals[+d - 1]) ?? ''); };
   // One text → its translation, or null. The pieces a pattern catches are translated too («falta a saída» inside a line).
   function find(core, depth = 0) {
@@ -61,6 +62,9 @@ const I18N = (() => {
     // «Passo 2 de 6 ·», «A obra inteira,»: the same text with its punctuation at the edges
     const e = /^([\s·•|,;:–—-]*)([\s\S]*?)([\s·•|,;:–—.-]*)$/.exec(core);
     if (e && (e[1] || e[3]) && e[2] && e[2] !== core) { const x = find(e[2], depth + 1); if (x != null) return e[1] + x + e[3]; }
+    // «Horas (3)»: a count after the text
+    const c = /^([\s\S]*?\p{L}[\s\S]*?)(\s*\(\d+\))$/u.exec(core);
+    if (c) { const x = find(c[1], depth + 1); if (x != null) return x + c[2]; }
     // «Entrada · 12:53», «Ficha … em falta · Acolhimento … em falta»: each part on its own (names and numbers stay)
     if (core.includes(' · ')) {
       let any = false;
@@ -73,7 +77,8 @@ const I18N = (() => {
     if (st.lang === 'pt' && !st.collect) return s;
     const str = String(s ?? ''); const core = str.trim();
     if (!core || !/\p{L}{2}/u.test(core) || st.made.has(core)) return s;
-    const out = find(core);
+    let out = memo.get(core);
+    if (out === undefined) { out = find(core); if (memo.size > 20000) memo.clear(); memo.set(core, out); }
     if (out == null) { if (st.collect && !st.missing.has(core)) st.missing.set(core, (st.view || '') + ''); return s; }
     st.made.add(out.trim());
     return str.replace(core, out);
@@ -139,7 +144,7 @@ const I18N = (() => {
   const ready = (async () => {
     if (st.lang === 'pt') { st.dict = st.collect ? {} : null; watch(); return; }
     try {
-      const r = await fetch(`lang/${st.lang}.json?v=74`);
+      const r = await fetch(`lang/${st.lang}.json?v=75`);
       st.dict = r.ok ? await r.json() : {};
     } catch (_) { st.dict = {}; }
     st.pats = compile(st.dict);
@@ -149,7 +154,8 @@ const I18N = (() => {
   function set(code, save) {
     if (!known(code)) return;
     try { localStorage.setItem(LANG_KEY, code); } catch (_) {}
-    Promise.resolve(save && save(code)).catch(() => {}).finally(() => location.reload());
+    // a slow network never holds the change: the account is told within 2.5 s or on the next login
+    Promise.race([Promise.resolve(save && save(code)), new Promise((r) => setTimeout(r, 2500))]).catch(() => {}).finally(() => location.reload());
   }
   // The account's language (from the database) wins over this phone's when they differ, once per login.
   function adopt(code) {
