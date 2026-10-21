@@ -90,6 +90,42 @@ const I18N = (() => {
     if (st.lang !== 'pt' || st.collect) st.made.add(out.trim());
     return out;
   }
+  // ---- plurals (v79): the code writes «2 dia(s)», «1 pessoa(s)», «3 picagem(ns) guardada(s)»; the screen shows «2 dias»,
+  // «1 pessoa», «3 picagens guardadas». Each marked word agrees with the last number before it in the same text, else
+  // with the last number just before the text on screen («<b>2</b><span>obra(s) a decorrer</span>»), else plural.
+  // «(a)» is gender, never touched. Unknown endings stay as written.
+  const PL = /(\d[\d\u00a0\u202f .,]*\d|\d)|(\p{L}+)\((s|es|ns|m|aram|ões)\)/gu;
+  const lastNum = (x) => { const m = String(x || '').match(/\d[\d\u00a0\u202f .,]*\d|\d/g); return m ? Number(m[m.length - 1].replace(/[^\d]/g, '')) : null; };
+  function form(w, end, one) {
+    if (one) return w;
+    switch (end) {
+      case 's': return w + 's';
+      case 'es': return w === 'mês' ? 'meses' : w + 'es';
+      case 'ns': return w.endsWith('m') ? w.slice(0, -1) + 'ns' : w + 'ns';
+      case 'm': return w + 'm';
+      case 'aram': return w.endsWith('ou') ? w.slice(0, -2) + 'aram' : w + 'aram';
+      case 'ões': return w.endsWith('ão') ? w.slice(0, -2) + 'ões' : w + 'ões';
+    }
+    return w;
+  }
+  const singular = (n) => n != null && (n === 1 || (st.lang === 'fr' && n === 0));
+  function plural(s, ctx) {
+    if (!s || s.indexOf('(') < 0 || !/\p{L}\((s|es|ns|m|aram|ões)\)/u.test(s)) return s;
+    let n = null; let first = true;
+    return s.replace(PL, (all, num, w, end) => {
+      if (num) { n = Number(num.replace(/[^\d]/g, '')); first = false; return all; }
+      if (first && n == null) { n = ctx ? ctx() : null; first = false; }
+      return form(w, end, singular(n));
+    });
+  }
+  // the number on screen just before a text node: its earlier siblings, else its parent's earlier siblings
+  function before(node) {
+    for (let e = node, k = 0; e && k < 2; e = e.parentElement, k++) {
+      let txt = ''; for (let p = e.previousSibling; p; p = p.previousSibling) txt = (p.textContent || '') + txt;
+      const n = lastNum(txt); if (n != null) return n;
+    }
+    return null;
+  }
   // ---- the screen
   const SKIP = new Set(['SCRIPT', 'STYLE', 'CODE', 'TEXTAREA', 'NOSCRIPT', 'svg', 'SVG']);
   const ATTRS = ['placeholder', 'aria-label', 'title', 'alt'];
@@ -98,7 +134,7 @@ const I18N = (() => {
   function doText(n) {
     const prev = seen.get(n);
     if (prev && n.data === prev.out) return;
-    const src = n.data; const out = tr(src);
+    const src = n.data; const out = plural(tr(src), () => before(n));
     seen.set(n, { src, out });
     if (out !== src) n.data = out;
   }
@@ -107,7 +143,7 @@ const I18N = (() => {
       const v = el.getAttribute(a); if (!v) continue;
       const k = 'i18n' + a.replace(/-./g, (m) => m[1].toUpperCase());
       if (el[k] === v) continue;
-      const out = tr(v); el[k] = out; if (out !== v) el.setAttribute(a, out);
+      const out = plural(tr(v)); el[k] = out; if (out !== v) el.setAttribute(a, out);
     }
     if (el.tagName === 'INPUT' && (el.type === 'submit' || el.type === 'button') && el.value) { const out = tr(el.value); if (out !== el.value) el.value = out; }
   }
@@ -121,7 +157,7 @@ const I18N = (() => {
   }
   let obs = null;
   function watch() {
-    if (obs || (st.lang === 'pt' && !st.collect)) return;
+    if (obs) return;
     obs = new MutationObserver((list) => {
       for (const m of list) {
         if (m.type === 'characterData') { if (!skipEl(m.target.parentElement)) doText(m.target); }
@@ -135,7 +171,7 @@ const I18N = (() => {
   // Native boxes (confirm, alert, prompt) are not on the page: translate them line by line.
   for (const f of ['confirm', 'alert', 'prompt']) {
     const orig = window[f];
-    window[f] = function (msg, ...rest) { return orig.call(window, String(msg ?? '').split('\n').map((l) => tr(l)).join('\n'), ...rest); };
+    window[f] = function (msg, ...rest) { return orig.call(window, String(msg ?? '').split('\n').map((l) => plural(tr(l))).join('\n'), ...rest); };
   }
   st.lang = pick();
   const meta = LANGS.find((l) => l.code === st.lang);
@@ -144,7 +180,7 @@ const I18N = (() => {
   const ready = (async () => {
     if (st.lang === 'pt') { st.dict = st.collect ? {} : null; watch(); return; }
     try {
-      const r = await fetch(`lang/${st.lang}.json?v=78`);
+      const r = await fetch(`lang/${st.lang}.json?v=79`);
       st.dict = r.ok ? await r.json() : {};
     } catch (_) { st.dict = {}; }
     st.pats = compile(st.dict);
@@ -163,6 +199,6 @@ const I18N = (() => {
     try { if (sessionStorage.getItem('gestnow.lang.adopted') === code) return false; sessionStorage.setItem('gestnow.lang.adopted', code); localStorage.setItem(LANG_KEY, code); } catch (_) { return false; }
     location.reload(); return true;
   }
-  return { ready, tr, t, set, adopt, get lang() { return st.lang; }, missing: () => [...st.missing.keys()], st };
+  return { ready, tr, t, plural, set, adopt, get lang() { return st.lang; }, missing: () => [...st.missing.keys()], st };
 })();
 const t = I18N.t;
