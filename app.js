@@ -679,9 +679,9 @@ const pad2 = (n) => String(n).padStart(2, '0');
 // The site's date ("2026-10-16") and "date + time" for a datetime-local field, of a real moment.
 const localDay = (iso, tz) => { const p = tzParts(new Date(iso).getTime(), tz || DEFAULT_TZ); return `${p.year}-${pad2(p.month)}-${pad2(p.day)}`; };
 const localInput = (iso, tz) => { const p = tzParts(new Date(iso).getTime(), tz || DEFAULT_TZ); return `${p.year}-${pad2(p.month)}-${pad2(p.day)}T${pad2(p.hour % 24)}:${pad2(p.minute)}`; };
-const fmtTime = (iso, tz) => new Date(iso).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: tz || DEFAULT_TZ });
-const fmtDate = (d) => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
-const fmtHour = (iso, tz) => iso ? new Date(iso).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit', timeZone: tz || DEFAULT_TZ }) : '';
+const fmtTime = (iso, tz) => new Date(iso).toLocaleString(LOC, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: tz || DEFAULT_TZ });
+const fmtDate = (d) => d ? new Date(d + 'T12:00:00').toLocaleDateString(LOC, { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+const fmtHour = (iso, tz) => iso ? new Date(iso).toLocaleTimeString(LOC, { hour: '2-digit', minute: '2-digit', timeZone: tz || DEFAULT_TZ }) : '';
 // Every problem the hours engine can flag, in plain words. A shift still open today is not an error yet.
 const ANOMALY = { double_in: 'duas entradas seguidas', out_without_in: 'saída sem entrada', missing_out: 'falta a saída',
   open_shift: 'ainda sem saída' };
@@ -828,7 +828,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '73';
+const APP_VERSION = '74';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -1030,6 +1030,7 @@ state.clockOffset = (load(CLOCK_KEY, null) || {}).off || 0;
 boot();
 
 async function boot() {
+  await I18N.ready;
   stopNfc(); clearInterval(state.timer); clearInterval(state.tick); hideFlash(); openMore(false);
   state.ready = false; state.offline = false; nav.hidden = true; document.getElementById('whoami').hidden = true;
   document.getElementById('sol').hidden = true; document.getElementById('search').hidden = true; document.getElementById('help').hidden = true; document.getElementById('bell').hidden = true; if (Live) Live.stop(); closePalette(); signedOut(true); showNet();
@@ -1038,6 +1039,14 @@ async function boot() {
   let session = null; let sErr = null;
   try { const r = await sb.auth.getSession(); session = r.data.session; sErr = r.error; } catch (e) { sErr = e; }
   if (!session) return (sErr && isNetErr(sErr)) || (navigator.onLine === false && storedSessionExists()) ? showNetworkError() : showLogin();
+  // v74: the account's language wins over this phone's (once per login); a first choice made on this phone goes to the account.
+  if (state.langFor !== session.user.id) {
+    state.langFor = session.user.id;
+    try {
+      const { data: ul, error: le } = await sb.rpc('mini_my_language');
+      if (!le && ul) { if (I18N.adopt(ul)) return; } else if (!le && I18N.lang !== 'pt') sb.rpc('mini_set_my_language', { p_code: I18N.lang }).then(() => {}, () => {});
+    } catch (_) { /* no network: this phone's language */ }
+  }
   let me = null; let error = null;
   try {
     ({ data: me, error } = await core().from('app_users')
@@ -1175,7 +1184,7 @@ function authScreen(inner) {
         <div class="ok-pill">${ic('ok')}<div><b>Entrada registada</b><small>07:58 · Obra Exemplo</small></div></div>
       </div>`;
   const feat = (i, b, t) => `<li><span class="fi">${ic(i)}</span><div><b>${b}</b><small>${t}</small></div></li>`;
-  app.innerHTML = `<div class="auth">
+  app.innerHTML = `<div class="auth"><div class="auth-lang">${langBtn('authlang')}</div>
     <aside class="auth-hero">
       <div class="logo-big">${LOGO('lgA')}<div><b>GestNow</b><span>Gestão de obra industrial</span></div></div>
       <div class="auth-pitch">
@@ -1195,6 +1204,7 @@ function authScreen(inner) {
       <div class="auth-low"><p class="trust">${ic('shield')}<span>Dados alojados na UE</span><span>RGPD</span><span>Verificação em 2 passos</span></p>
       <p class="foot"><i class="${online ? '' : 'off'}"></i>${online ? 'Ligado à rede' : 'Sem rede'}</p></div>
     </section></div>`;
+  $('#authlang').onclick = chooseLanguage;
 }
 
 const AUTH_LOST = /permission denied|JWT|not authenticated|401/i;
@@ -1213,7 +1223,7 @@ async function checkSession() {
 // «Sair»: every session of this login ends on the server (scope global, the default), and the personal copies go.
 async function signOut() {
   await pushForget();
-  if (Live) Live.stop(); stopNfc(); state.ready = false; nav.hidden = true; forgetPersonal();
+  if (Live) Live.stop(); stopNfc(); state.ready = false; state.langFor = null; nav.hidden = true; forgetPersonal();
   try { await sb.auth.signOut({ scope: 'global' }); } catch (_) { /* no network: the local copy is gone anyway */ }
 }
 
@@ -1396,16 +1406,37 @@ async function accountSheet() {
   const d = document.createElement('dialog'); d.className = 'dlg acct';
   d.innerHTML = `<div class="nt-head"><h2>A tua conta</h2><button class="iconbtn" id="acx" aria-label="Fechar">${ic('x')}</button></div>
     <div class="acct-who">${avatar(p ? p.full_name : me.email)}<div class="grow"><b>${esc(p ? p.full_name : me.email)}</b><small>${esc(roleLabel(me.role))}${p ? ' · ' + esc(me.email) : ''}</small></div></div>
-    <div class="acts">${many ? `<button class="btn wide" id="acsw">${ic('users')} Mudar de perfil</button>` : ''}
+    <div class="acts"><button class="btn wide" id="aclang">${ic('globe')} Língua · <span data-nt>${esc((LANGS.find((l) => l.code === I18N.lang) || {}).name || '')}</span></button>
+      ${many ? `<button class="btn wide" id="acsw">${ic('users')} Mudar de perfil</button>` : ''}
       <button class="btn big danger-ghost" id="acout">${ic('out')} Sair da app</button></div>
     <p class="small muted">Ao sair, este telemóvel deixa de receber os avisos desta conta. As picagens guardadas sem rede não se perdem.</p>`;
   d.addEventListener('close', () => d.remove()); d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
   document.body.appendChild(d); d.showModal();
   d.querySelector('#acx').onclick = () => d.close();
+  d.querySelector('#aclang').onclick = () => { d.close(); chooseLanguage(); };
   if (many) d.querySelector('#acsw').onclick = () => { d.close(); switchProfile(); };
   d.querySelector('#acout').onclick = async (e) => { e.currentTarget.disabled = true; e.currentTarget.textContent = 'A sair…'; d.close(); await signOut(); };
 }
 document.getElementById('whoami').addEventListener('click', accountSheet);
+// v74 · the language of the app: in the top bar, on the login card and in the entry steps. Kept on this phone and on the account.
+const langBtn = (id) => `<button class="langbtn" type="button" id="${id}" aria-label="Língua · Language" data-nt>${ic('globe')}<span>${esc(I18N.lang.toUpperCase())}</span></button>`;
+function chooseLanguage() {
+  const d = document.createElement('dialog'); d.className = 'dlg langs';
+  d.innerHTML = `<div class="nt-head"><h2>Língua</h2><button class="iconbtn" id="lgx" aria-label="Fechar">${ic('x')}</button></div>
+    <div class="lang-list" data-nt>${LANGS.map((l) => `<button type="button" class="lang-row${l.code === I18N.lang ? ' on' : ''}" data-code="${l.code}" lang="${l.loc}">
+      <span class="lang-c">${esc(l.code.toUpperCase())}</span><b class="grow">${esc(l.name)}</b>${l.code === I18N.lang ? ic('ok') : ''}</button>`).join('')}</div>
+    <p class="small muted">Os ecrãs do trabalhador e do encarregado estão traduzidos. Os vídeos, as regras e o contrato da empresa ficam na língua da empresa.</p>`;
+  d.addEventListener('close', () => d.remove()); d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
+  document.body.appendChild(d); d.showModal();
+  d.querySelector('#lgx').onclick = () => d.close();
+  d.querySelectorAll('.lang-row').forEach((b) => { b.onclick = () => {
+    const code = b.dataset.code; if (code === I18N.lang) return d.close();
+    d.querySelectorAll('.lang-row').forEach((x) => { x.disabled = true; });
+    I18N.set(code, state.langFor ? (c) => sb.rpc('mini_set_my_language', { p_code: c }) : null);
+  }; });
+}
+document.getElementById('lang').addEventListener('click', chooseLanguage);
+document.getElementById('langc').textContent = I18N.lang.toUpperCase();
 function showWho() {
   const me = state.me; const p = me.collaborator_id && state.people.find((x) => x.id === me.collaborator_id);
   const el = document.getElementById('whoami');
@@ -1544,7 +1575,7 @@ async function viewHome() {
   const { data, error } = await sb.rpc('mini_company_home');
   const box = $('#home'); if (!box || !box.isConnected || state.view !== 'inicio') return;
   if (error) { box.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
-  const n = (v) => Number(v || 0).toLocaleString('pt-PT');
+  const n = (v) => Number(v || 0).toLocaleString(LOC);
   const W = data.waiting || {};
   const items = [
     ['to_validate', 'clock', 'dia(s) por validar na obra', 'O encarregado valida em Horas.', 'horas', 'warn', can('horas.validar_obra')],
@@ -1599,17 +1630,17 @@ async function viewClients() {
   loadBusiness(); loadClients();
 }
 // Money and billing units (sql/92). Prices are indicative (negocio/pacotes.md), without VAT; nothing is charged yet.
-const cts = (c) => (Number(c || 0) / 100).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR', minimumFractionDigits: Number(c) % 100 ? 2 : 0, maximumFractionDigits: 2 });
+const cts = (c) => (Number(c || 0) / 100).toLocaleString(LOC, { style: 'currency', currency: 'EUR', minimumFractionDigits: Number(c) % 100 ? 2 : 0, maximumFractionDigits: 2 });
 const PER = { active_worker: ['pessoa ativa', 'pessoas ativas'], active_scaffold: ['andaime montado', 'andaimes montados'], vehicle: ['viatura', 'viaturas'], site: ['obra', 'obras'], company: ['empresa', 'empresa'] };
 const perUnit = (u) => (PER[u] || ['', ''])[0];
-const unitQty = (u, q) => u === 'company' ? '' : `${Number(q || 0).toLocaleString('pt-PT')} ${(PER[u] || ['', ''])[Number(q) === 1 ? 0 : 1]}`;
+const unitQty = (u, q) => u === 'company' ? '' : `${Number(q || 0).toLocaleString(LOC)} ${(PER[u] || ['', ''])[Number(q) === 1 ? 0 : 1]}`;
 // The business at a glance: real clients only. What sells is what tells you where to push.
 async function loadBusiness() {
   const el = $('#biz'); if (!el) return;
   const { data: b, error } = await sb.rpc('platform_business');
   if (!el.isConnected) return;
   if (error) { el.innerHTML = `<p class="small muted">${esc(friendly(error))}</p>`; return; }
-  const n = (v) => Number(v || 0).toLocaleString('pt-PT');
+  const n = (v) => Number(v || 0).toLocaleString(LOC);
   const sold = b.extras.filter((x) => Number(x.clients)).length;
   el.innerHTML = `<div class="ov-tiles biz-tiles"><div><b>${n(b.clients)}</b><span>cliente(s)${b.test ? ` · ${n(b.test)} de teste` : ''}</span></div>
       <div><b>${n(b.active_workers)}</b><span>pessoas ativas este mês</span></div>
@@ -1659,7 +1690,7 @@ async function loadClients() {
   const { data, error } = await sb.rpc('platform_overview');
   if (!el.isConnected) return;
   if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
-  const n = (v) => Number(v || 0).toLocaleString('pt-PT');
+  const n = (v) => Number(v || 0).toLocaleString(LOC);
   const q = $('#clq'); const tst = $('#cltest');
   const draw = () => {
     const words = q.value.trim().toLowerCase();
@@ -1685,7 +1716,7 @@ async function viewClient() {
   const [{ data: c, error }, { data: bill }] = await Promise.all([sb.rpc('platform_client', { p_tenant: state.clientId }), sb.rpc('platform_client_bill', { p_tenant: state.clientId })]);
   const box = $('#cli'); if (!box || !box.isConnected || state.view !== 'cliente') return;
   if (error) { box.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
-  const n = (v) => Number(v || 0).toLocaleString('pt-PT');
+  const n = (v) => Number(v || 0).toLocaleString(LOC);
   const [k, t] = c.test ? ['warn', 'Empresa de teste'] : (ACC_STATE[c.status] || ['info', c.status || 'Sem plano']);
   box.innerHTML = `<button class="btn ghost small home-back" id="cback">‹ Os meus clientes</button>
     <div class="ph"><div><p class="ph-k">Cliente</p><h1>${esc(c.name)}</h1><p class="small muted">${esc(c.demo ? 'Empresa fictícia' : 'NIF ' + c.tax_id)} · cliente desde ${esc(fmtDate(c.created_at.slice(0, 10)))}</p></div>${chip(k, t)}</div>
@@ -1834,7 +1865,7 @@ const TEAM_FILTERS = [['all', 'Todos'], ['in', 'Dentro'], ['absent', 'Em falta']
 function viewTeam() {
   if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canSiteDetails()) return viewClock();   // code guard as well as the database's
-  const today = new Date().toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long' });
+  const today = new Date().toLocaleDateString(LOC, { weekday: 'long', day: 'numeric', month: 'long' });
   state.teamFilter = state.teamFilter || 'all';
   app.innerHTML = `<div class="enc-board"><div class="enc-main">
     <div class="ph"><div><p class="ph-k">${esc(today)}</p><h1>A minha equipa</h1></div></div>
@@ -2089,7 +2120,7 @@ function tickClock() {
   const site = currentSite(); const tz = site ? siteTz(site.id) : DEFAULT_TZ; const p = tzParts(serverNow().getTime(), tz);
   el.innerHTML = `${pad2(p.hour % 24)}:${pad2(p.minute)}<small>:${pad2(p.second)}</small>`;
   const d = $('#clkday');
-  if (d) d.textContent = serverNow().toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long', timeZone: tz }) + ' · ' + tzName(tz);
+  if (d) d.textContent = serverNow().toLocaleDateString(LOC, { weekday: 'long', day: 'numeric', month: 'long', timeZone: tz }) + ' · ' + tzName(tz);
 }
 // Automatic by default: the server knows if the person is inside. A forced ENTRADA or SAÍDA is for the next tap only.
 function renderDir() {
@@ -2412,7 +2443,7 @@ function logTap(kind, title, text, seq) {
 }
 function renderTapLog() {
   const el = $('#taplog'); if (!el) return;
-  el.innerHTML = state.tapLog.length ? `<div class="sec-h"><h2 class="eyebrow">Neste telemóvel · últimas ${state.tapLog.length}</h2></div>` + state.tapLog.map((x) => `<div class="tl ${x.kind}">${ic(RESULT_ICON[x.kind] || 'warn')}<span class="tnum enc-tl-t">${esc(x.at.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }))}</span>
+  el.innerHTML = state.tapLog.length ? `<div class="sec-h"><h2 class="eyebrow">Neste telemóvel · últimas ${state.tapLog.length}</h2></div>` + state.tapLog.map((x) => `<div class="tl ${x.kind}">${ic(RESULT_ICON[x.kind] || 'warn')}<span class="tnum enc-tl-t">${esc(x.at.toLocaleTimeString(LOC, { hour: '2-digit', minute: '2-digit' }))}</span>
     <span class="enc-tl-x"><b>${esc(x.title)}</b> ${esc(x.text || '')}${x.note ? ` <span class="small">${esc(x.note)}</span>` : ''}</span></div>`).join('') : '';
 }
 // The big box still shows a tap that was waiting for the network: replace "NÃO VERIFICADA" with the server's verdict.
@@ -2569,7 +2600,7 @@ function renderOnSite() {
       <div class="kpi ok"><b>${o.count}</b><span>na obra</span></div>
       <div class="kpi info"><b>${o.partial ? '–' : n('pause')}</b><span>em pausa</span></div>
       <div class="kpi ${n('miss') ? 'warn' : ''}"><b>${o.partial ? '–' : n('miss')}</b><span>falta saída</span></div></div>
-    <p class="small muted"><span class="big-count" style="font-size:20px">${o.count}</span> pessoa(s) em <b>${esc(site.title)}</b> · atualizado ${esc(new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }))}</p>
+    <p class="small muted"><span class="big-count" style="font-size:20px">${o.count}</span> pessoa(s) em <b>${esc(site.title)}</b> · atualizado ${esc(new Date().toLocaleTimeString(LOC, { hour: '2-digit', minute: '2-digit' }))}</p>
     <div class="chips noprint" role="group" aria-label="Filtrar">${filt.map(([k, t]) => `<button class="chip ${k === 'miss' ? 'warn' : ''}" data-f="${k}" aria-pressed="${f === k}">${esc(t)}</button>`).join('')}</div>
     ${shown.length ? `<div class="list">${shown.map((p) => {
       const sub = p.st === 'in' ? `entrou ${fmtHour(p.since, tz)} · há ${fmtMin(Math.max(0, Math.round((Date.now() - new Date(p.since).getTime()) / 60000)))}`
@@ -2949,7 +2980,7 @@ const ONB_STEP_TX = { safety_videos: 'Acolhimento de segurança', personal_data:
   contract_signed: 'Contrato', rate_accepted: 'Condições (valor hora)' };
 function onbFacts(steps) {
   if (!steps || !steps.length) return '';
-  const day = (t) => (t ? new Date(t).toLocaleDateString('pt-PT') : '');
+  const day = (t) => (t ? new Date(t).toLocaleDateString(LOC) : '');
   const paper = steps.filter((x) => x.method === 'paper');
   if (!paper.length) return '';   // done in the app: the «Entrada na empresa» card above (loadOnbCard) shows it
   const note = (paper.find((x) => x.statement) || {}).statement;
@@ -3153,13 +3184,14 @@ function onbShell(ob, inner) {
   state.onb = ob; nav.hidden = true; signedOut(false); document.body.classList.add('onboarding');
   const at = ONB_AT[ob.status] ?? 0;
   app.innerHTML = `<div class="onb">
-    <div class="onb-top"><span class="onb-logo">${LOGO('lgO')}<b>GestNow</b></span><span class="grow"></span><button class="btn ghost small" id="onbout">${ic('out')}Sair</button></div>
+    <div class="onb-top"><span class="onb-logo">${LOGO('lgO')}<b>GestNow</b></span><span class="grow"></span>${langBtn('onblang')}<button class="btn ghost small" id="onbout">${ic('out')}Sair</button></div>
     <div class="onb-hello"><p class="ph-k">${esc(ob.company || '')}</p><h1>Bem-vindo, ${esc(String(ob.name || '').split(' ')[0])}</h1>
       <p class="muted">Antes de começares a trabalhar connosco, há ${ONB_STEPS.length} passos. Cada um abre quando o anterior estiver feito.</p></div>
     <ol class="onb-steps">${ONB_STEPS.map((s, i) => `<li class="${i < at ? 'done' : i === at ? 'now' : ''}"><span>${i < at ? ic('ok') : i + 1}</span><b>${esc(s)}</b></li>`).join('')}</ol>
     <p class="onb-now">Passo ${Math.min(at + 1, ONB_STEPS.length)} de ${ONB_STEPS.length} · <b>${esc(ONB_STEPS[Math.min(at, ONB_STEPS.length - 1)])}</b></p>
     <div id="onbbody">${inner}</div></div>`;
   $('#onbout').onclick = () => { document.body.classList.remove('onboarding'); signOut(); };
+  $('#onblang').onclick = chooseLanguage;
 }
 async function showOnboarding(ob) {
   if (!ob) { const r = await sb.rpc('mini_onboarding'); if (r.error) return showMessage('Sem ligação', friendly(r.error), true); ob = r.data; }
@@ -3283,7 +3315,7 @@ function onbQuiz(x, n, total, wrong) {
 const onbOpts = (map, cur, empty = 'Escolhe…') => `<option value="">${esc(empty)}</option>` + (Array.isArray(map) ? map.map((k) => [k, k]) : Object.entries(map))
   .map(([k, t]) => `<option value="${esc(k)}" ${String(k) === String(cur ?? '') ? 'selected' : ''}>${esc(t)}</option>`).join('');
 const CONTRACT_TYPES = { permanent: 'Sem termo (efetivo)', fixed_term: 'A termo certo', unfixed_term: 'A termo incerto', temporary: 'Temporário', other: 'Outro' };
-const eur = (n) => n === null || n === undefined ? '—' : Number(n).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' });
+const eur = (n) => n === null || n === undefined ? '—' : Number(n).toLocaleString(LOC, { style: 'currency', currency: 'EUR' });
 const nissFmt = (v) => String(v || '').replace(/\D/g, '').slice(0, 11);
 const ibanFmt = (v) => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 34).replace(/(.{4})/g, '$1 ').trim();
 // The same checks as the server (private.niss_ok / iban_ok), so a typo shows at once and not only after sending.
@@ -3312,7 +3344,7 @@ async function onbPassport(ob) {
     'Assinaste o contrato. Falta só o RH confirmar que está tudo certo. Depois a app abre e podes começar.', me);
   return showOnboarding();
 }
-const onbNote = (me) => me.note ? `<div class="onb-note">${ic('voice')}<div><b>Mensagem do RH</b><p>${esc(me.note.text)}</p><small>${esc(new Date(me.note.at).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' }))}</small></div></div>` : '';
+const onbNote = (me) => me.note ? `<div class="onb-note">${ic('voice')}<div><b>Mensagem do RH</b><p>${esc(me.note.text)}</p><small>${esc(new Date(me.note.at).toLocaleString(LOC, { dateStyle: 'short', timeStyle: 'short' }))}</small></div></div>` : '';
 function onbWait(ob, title, text, me) {
   onbShell(ob, `${onbNote(me)}<div class="card onb-wait">${ic('clock')}<h2>${esc(title)}</h2><p>${esc(text)}</p>
     <p class="small muted">${ic('ok')} Já feito: ${Math.min(ONB_AT[me.status] ?? 0, ONB_STEPS.length)} de ${ONB_STEPS.length} passos.</p>
@@ -3542,11 +3574,11 @@ async function renderMyPapers(el) {
   const k = data.contract; const r = data.rules; const a = data.rates;
   if (!k && !a) { el.innerHTML = `<div class="card">${empty('doc', data.paper ? 'O teu contrato está em papel' : 'Ainda sem contrato na app', data.paper ? 'Assinaste em papel no escritório. Pede uma cópia ao RH.' : 'Quando assinares um contrato na app, fica aqui.')}</div>`; return; }
   el.innerHTML = `${a ? `<div class="card"><h2 style="margin-top:0">Valor hora</h2><div class="onb-rate"><div><span>Hora normal</span><b>${esc(eur(a.base_hourly_rate))}</b></div>
-      <div><span>Hora extra</span><b>${esc(eur(a.overtime_hourly_rate))}</b></div></div><p class="small muted">Aceite em ${esc(new Date(a.accepted_at).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' }))}.</p></div>` : ''}
+      <div><span>Hora extra</span><b>${esc(eur(a.overtime_hourly_rate))}</b></div></div><p class="small muted">Aceite em ${esc(new Date(a.accepted_at).toLocaleString(LOC, { dateStyle: 'short', timeStyle: 'short' }))}.</p></div>` : ''}
     ${k ? `<div class="card"><h2 style="margin-top:0">Contrato</h2><div class="onb-facts"><div><span>Tipo</span><b>${esc(CONTRACT_TYPES[k.type] || k.type || '—')}</b></div>
         <div><span>Começou</span><b>${esc(fmtDate(k.start))}</b></div>${k.end ? `<div><span>Termina</span><b>${esc(fmtDate(k.end))}</b></div>` : ''}<div><span>Função</span><b>${esc(k.job_title || '—')}</b></div></div>
       <details class="fold"><summary>Ler o contrato</summary><div class="onb-paper">${paras(k.body)}</div></details>
-      <p class="small muted">Assinado por ${esc(k.signed_name || '')} em ${esc(new Date(k.signed_at).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' }))}. Impressão digital: <code class="sha">${esc(String(k.sha256 || '').slice(0, 16))}…</code></p>
+      <p class="small muted">Assinado por ${esc(k.signed_name || '')} em ${esc(new Date(k.signed_at).toLocaleString(LOC, { dateStyle: 'short', timeStyle: 'short' }))}. Impressão digital: <code class="sha">${esc(String(k.sha256 || '').slice(0, 16))}…</code></p>
       ${k.signature_svg ? `<img class="sig-img" alt="A tua assinatura" src="data:image/svg+xml;utf8,${encodeURIComponent(k.signature_svg)}">` : ''}</div>` : ''}
     ${r ? `<div class="card"><h2 style="margin-top:0">${esc(r.title)} <span class="small muted">versão ${r.version}</span></h2><details class="fold"><summary>Ler</summary><div class="onb-paper">${paras(r.body)}</div></details></div>` : ''}`;
 }
@@ -3567,11 +3599,11 @@ async function loadOnbCard(id) {
   const dd = p.data;
   box.innerHTML = `<div class="card onb-hr"><div class="sec-h" style="margin-top:0"><h2>Entrada na empresa</h2>${st === 'active' ? chip('ok', 'concluída', 'ok') : chip('warn', ONB_LABEL[st] || st, 'clock')}</div>
     <ol class="onb-tl">${ST.map((s, i) => { const x = p.steps[s]; return `<li class="${x ? 'done' : ''}"><span>${x ? ic('ok') : i + 1}</span><b>${STT[i]}</b>
-      <small>${x ? esc(new Date(x.at).toLocaleDateString('pt-PT')) + (x.paper ? ' · ' + chip('warn', 'verificado em papel') : ' · na app') : ''}</small></li>`; }).join('')}</ol>
+      <small>${x ? esc(new Date(x.at).toLocaleDateString(LOC)) + (x.paper ? ' · ' + chip('warn', 'verificado em papel') : ' · na app') : ''}</small></li>`; }).join('')}</ol>
     ${rateOpen ? `<div class="onb-rate-hr"><h3>Valor hora</h3>${p.rates && p.rates.base ? `<p class="small">Hora normal ${esc(eur(p.rates.base))} · extra ${esc(eur(p.rates.overtime))} · ${chip('warn', 'a pessoa ainda não aceitou', 'clock')}</p>`
       : `<p class="small">${chip('warn', 'falta indicar', 'warn')} A pessoa confirma este valor logo a seguir ao acolhimento, antes de preencher a ficha.</p>`}
       <div class="onb-go"><button class="btn ${p.rates && p.rates.base ? 'ghost' : ''}" id="orate">${ic('calc')}${p.rates && p.rates.base ? 'Mudar o valor hora' : 'Indicar o valor hora combinado'}</button></div></div>` : ''}
-    ${p.accepted ? `<p class="small">Valor hora aceite: ${esc(eur(p.accepted.base))} · extra ${esc(eur(p.accepted.overtime))} · ${chip('ok', 'aceite em ' + new Date(p.accepted.at).toLocaleDateString('pt-PT'), 'ok')}</p>` : ''}
+    ${p.accepted ? `<p class="small">Valor hora aceite: ${esc(eur(p.accepted.base))} · extra ${esc(eur(p.accepted.overtime))} · ${chip('ok', 'aceite em ' + new Date(p.accepted.at).toLocaleDateString(LOC), 'ok')}</p>` : ''}
     ${st === 'pending_data' ? `<p class="small muted">${ic('clock')} A pessoa está a preencher a ficha no telemóvel. Quando enviar, aparece aqui para aprovares.</p>` : ''}
     ${dd && st !== 'pending_video' ? `<details class="fold" ${st === 'pending_hr_validation' ? 'open' : ''}><summary>Dados que a pessoa preencheu</summary><div><dl class="kv">
       ${[['Nascimento', dd.birth_date && fmtDate(dd.birth_date)], ['Nacionalidade', COUNTRIES[dd.nationality] || dd.nationality], ['Documento', [ID_TYPES[dd.id_type], dd.id_number].filter(Boolean).join(' nº ')],
@@ -3590,14 +3622,14 @@ async function loadOnbCard(id) {
       ${toCheck.length ? `<p class="small muted">Confirma primeiro ${pl(toCheck.length, 'documento', 'documentos')}.</p>` : ''}` : ''}
     ${st === 'pending_contract' && !(k && k.status === 'issued') ? `<div class="onb-go"><button class="btn big" id="oissue">${ic('doc')}Preparar o contrato</button></div>` : ''}
     ${k ? `<h3>Contrato</h3><p class="small">${esc(CONTRACT_TYPES[k.type] || '')} · início ${esc(fmtDate(k.start))}${k.end ? ' · fim ' + esc(fmtDate(k.end)) : ''} · ${esc(String(k.weekly_hours))} h/semana · ${esc(k.job_title || '')}
-      · ${k.status === 'signed' ? chip('ok', 'assinado em ' + new Date(k.signed_at).toLocaleDateString('pt-PT'), 'ok') : chip('warn', 'à espera da assinatura', 'clock')}</p>
-      ${k.hr_checked_at ? `<p class="small">${chip('ok', 'validado pelo RH em ' + new Date(k.hr_checked_at).toLocaleDateString('pt-PT'), 'ok')}</p>` : ''}
+      · ${k.status === 'signed' ? chip('ok', 'assinado em ' + new Date(k.signed_at).toLocaleDateString(LOC), 'ok') : chip('warn', 'à espera da assinatura', 'clock')}</p>
+      ${k.hr_checked_at ? `<p class="small">${chip('ok', 'validado pelo RH em ' + new Date(k.hr_checked_at).toLocaleDateString(LOC), 'ok')}</p>` : ''}
       <details class="fold"><summary>Ler o contrato</summary><div class="onb-paper">${paras(k.body)}</div>
         ${k.signature_svg ? `<p class="small muted">Assinado por ${esc(k.signed_name)}:</p><img class="sig-img" alt="Assinatura" src="data:image/svg+xml;utf8,${encodeURIComponent(k.signature_svg)}">` : ''}
         <p class="small muted">Impressão digital do texto: <code class="sha">${esc(k.sha256)}</code></p></div></details>` : ''}
     ${st === 'pending_contract_validation' ? `<p class="small">${ic('doc')} Abre «Ler o contrato» e confirma a assinatura e os termos. Se estiver certo, a app abre para a pessoa.</p>
       <div class="onb-go"><button class="btn ghost" id="okno">Recusar e refazer</button><button class="btn" id="okyes">${ic('ok')}Contrato certo: validar</button></div>` : ''}
-    ${p.notes && p.notes.length ? `<details class="fold"><summary>Mensagens à pessoa (${p.notes.length})</summary><div>${p.notes.map((n) => `<p class="small"><b>${esc(new Date(n.at).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' }))}</b> ${esc(n.text)}</p>`).join('')}</div></details>` : ''}</div>`;
+    ${p.notes && p.notes.length ? `<details class="fold"><summary>Mensagens à pessoa (${p.notes.length})</summary><div>${p.notes.map((n) => `<p class="small"><b>${esc(new Date(n.at).toLocaleString(LOC, { dateStyle: 'short', timeStyle: 'short' }))}</b> ${esc(n.text)}</p>`).join('')}</div></details>` : ''}</div>`;
   box.querySelectorAll('[data-verify]').forEach((b) => b.onclick = async () => {
     b.disabled = true; const { error: e } = await sb.rpc('mini_onb_verify_document', { p_doc: b.dataset.verify });
     if (e) { b.disabled = false; return toast(friendly(e)); } toast('Documento confirmado.'); loadOnbCard(id);
@@ -4396,7 +4428,7 @@ function viewHours() {
   if (!state.weekStart) state.weekStart = monday(new Date());
   const from = state.weekStart; const to = new Date(from); to.setDate(to.getDate() + 6);
   const site = currentSite(); const tz = site ? siteTz(site.id) : DEFAULT_TZ;
-  const short = (d) => d.toLocaleDateString('pt-PT', { day: 'numeric', month: 'short' });
+  const short = (d) => d.toLocaleDateString(LOC, { day: 'numeric', month: 'short' });
   const thisWeek = isoDay(from) === isoDay(monday(new Date()));
   app.innerHTML = `<div class="ph"><div><p class="ph-k">Horas da obra</p><h1>Mapa de horas</h1></div></div>
     <div class="toolbar noprint"><div class="tb-site">${siteSelect('site')}</div>
@@ -4465,7 +4497,7 @@ function setWorker(id, name) {
 // Status chips: the same words and colours on every screen.
 const DAY_STATUS = { registered: chip('reg', 'por validar'), supervisor_validated: chip('val', 'validado', 'ok'),
   hr_validated: chip('apr', 'aprovado', 'ok'), sent_to_payroll: chip('fech', 'fechado') };
-const dayLabel = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('pt-PT', { weekday: 'short', day: '2-digit', month: '2-digit' });
+const dayLabel = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString(LOC, { weekday: 'short', day: '2-digit', month: '2-digit' });
 // One day of one person: date, periods on one line (wrapping only between periods), hours on the right, status.
 function periodsOf(r, periods, tz) {
   const list = periodList(periods);
@@ -4731,7 +4763,7 @@ function meHero(d, s) {
       ${pd ? `<span class="me-pd">${ic('card')}Diária ${esc(euro(pd.net))} <small>· semana de ${esc(fmtDate(pd.week_start).slice(0, 5))}</small></span>` : ''}</div>
   </section>`;
 }
-const weekLabel = (w) => `${fmtDate(w.week_start).slice(0, 5)} a ${fmtDate(w.week_end).slice(0, 5)}`;
+const weekLabel = (w) => `${fmtDate(w.week_start).slice(0, 5)} – ${fmtDate(w.week_end).slice(0, 5)}`;
 // What needs the worker now, at the top, in big: the week to confirm (art. 202.º CT), documents out of date.
 function meActions(s) {
   const out = [];
@@ -4763,7 +4795,7 @@ function meTiles(d, s, papers) {
     tile('andaimes', 'Vê antes de subir', 'go'),
     tile('docs', docSub, dd.expired || dd.missing ? 'bad' : dd.expiring ? 'warn' : 'ok'),
     tile('epi', `${ppe.count || 0} EPI · ${tools.count || 0} ferramenta(s)`, ppe.due || tools.overdue ? 'warn' : ''),
-    papers ? tile('contrato', c && c.signed_at ? `Assinado a ${new Date(c.signed_at).toLocaleDateString('pt-PT')}` : c ? 'Por assinar' : 'Regras e valor à hora', c && !c.signed_at ? 'warn' : '') : '',
+    papers ? tile('contrato', c && c.signed_at ? `Assinado a ${new Date(c.signed_at).toLocaleDateString(LOC)}` : c ? 'Por assinar' : 'Regras e valor à hora', c && !c.signed_at ? 'warn' : '') : '',
   ].join('');
 }
 async function meConfirmWeek(week, label, after) {
@@ -4783,7 +4815,7 @@ function meScreen(tab) {
   const body = {
     horas: () => {
       const months = [0, 1, 2].map((k) => { const x = new Date(); x.setDate(15); x.setMonth(x.getMonth() - k); return isoDay(x).slice(0, 7); });
-      const mName = (ym) => new Date(ym + '-15T12:00:00').toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' });
+      const mName = (ym) => new Date(ym + '-15T12:00:00').toLocaleDateString(LOC, { month: 'long', year: 'numeric' });
       return `<div class="chips" style="margin-bottom:12px">${months.map((m) => `<button class="chip" data-m="${m}" aria-pressed="${m === state.mineMonth}">${esc(mName(m))}</button>`).join('')}</div>
         <div id="meweeks"></div><div class="mine-grid"><div><div id="minepay"></div><div id="mine">${skel(3)}</div></div><div><div id="minesite"></div></div></div>`;
     },
@@ -4822,7 +4854,7 @@ async function loadMeWeeks() {
   if (!box.isConnected || error || !data) return;
   const rows = data.filter((w) => w.days > 0);
   if (!rows.length) { box.innerHTML = ''; return; }
-  const st = (w) => w.state === 'confirmed' ? chip('val', 'confirmada ' + new Date(w.confirmed_at).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' }), 'ok')
+  const st = (w) => w.state === 'confirmed' ? chip('val', 'confirmada ' + new Date(w.confirmed_at).toLocaleDateString(LOC, { day: '2-digit', month: '2-digit' }), 'ok')
     : w.state === 'changed' ? chip('warn', 'mudou depois de confirmares', 'warn') : w.open_disputes ? chip('reg', 'reclamação aberta', 'clock')
     : w.can_confirm ? chip('anom', 'por confirmar') : chip('', 'em curso');
   box.innerHTML = `<div class="card me-weeks"><div class="sec-h" style="margin-top:0"><h2>Confirmar as semanas</h2></div>
@@ -4873,9 +4905,9 @@ async function loadMyDocs() {
   box.innerHTML = `<div class="card me-docs">${need.map(line).join('') || '<p class="small muted">A empresa ainda não pediu documentos.</p>'}</div>
     ${opt.length ? `<div class="card me-docs"><h3 style="margin-top:0">Outras formações</h3>${opt.map(line).join('')}</div>` : ''}
     <div class="card me-docs"><div class="me-doc ${card.active ? 'ok' : 'bad'}"><span class="me-dot ${card.active ? 'ok' : 'bad'}"></span><div class="grow"><b>O meu cartão</b>
-      <small>${card.active ? 'Ativo' + (card.until ? ' até ' + esc(new Date(card.until).toLocaleDateString('pt-PT')) : '') : 'Sem cartão ativo: pede ao escritório'}</small></div></div></div>
+      <small>${card.active ? 'Ativo' + (card.until ? ' até ' + esc(new Date(card.until).toLocaleDateString(LOC)) : '') : 'Sem cartão ativo: pede ao escritório'}</small></div></div></div>
     <p class="small muted">Um documento a vencer? Leva o novo ao escritório antes da data: eles juntam-no à tua ficha.</p>`;
-  if (old) box.insertAdjacentHTML('afterbegin', `<div class="card me-offline">${ic('warn')}<span>Sem rede. Mostro o que tinhas a ${esc(new Date(old.at).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }))}.</span></div>`);
+  if (old) box.insertAdjacentHTML('afterbegin', `<div class="card me-offline">${ic('warn')}<span>Sem rede. Mostro o que tinhas a ${esc(new Date(old.at).toLocaleString(LOC, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }))}.</span></div>`);
   box.querySelectorAll('[data-open]').forEach((b) => b.onclick = () => openDocFile(b.dataset.open, 'documentos', { keep: true, title: b.dataset.t }));
 }
 // My PPE and workwear: what, size, since when, when to change it. And my sizes.
@@ -4888,9 +4920,9 @@ async function loadMyKit() {
   const st = (x) => x.state === 'overdue' ? chip('bad', 'trocar já', 'warn') : x.state === 'soon' ? chip('warn', 'trocar até ' + fmtDate(x.replace_by).slice(0, 5)) : chip('val', 'em uso', 'ok');
   box.innerHTML = `<div class="card"><h2 style="margin-top:0">Os meus EPI</h2>
     ${data.ppe.length ? data.ppe.map((x) => `<div class="me-kit"><div class="grow"><b>${esc(x.name)}${x.size ? ` <span class="chip code">${esc(x.size)}</span>` : ''}</b>
-      <small>Recebido a ${esc(new Date(x.since).toLocaleDateString('pt-PT'))}${x.replace_by ? ' · trocar até ' + esc(fmtDate(x.replace_by)) : ''}</small></div>${st(x)}</div>`).join('')
+      <small>Recebido a ${esc(new Date(x.since).toLocaleDateString(LOC))}${x.replace_by ? ' · trocar até ' + esc(fmtDate(x.replace_by)) : ''}</small></div>${st(x)}</div>`).join('')
       : '<p class="small muted">Ainda não tens EPI em teu nome.</p>'}
-    ${data.returned.length ? more('Já devolvidos', data.returned.map((x) => `<p class="small">${esc(x.name)} · ${esc(new Date(x.to).toLocaleDateString('pt-PT'))}${x.why ? ' · ' + esc(x.why) : ''}</p>`).join('')) : ''}</div>
+    ${data.returned.length ? more('Já devolvidos', data.returned.map((x) => `<p class="small">${esc(x.name)} · ${esc(new Date(x.to).toLocaleDateString(LOC))}${x.why ? ' · ' + esc(x.why) : ''}</p>`).join('')) : ''}</div>
     <div class="card"><h3 style="margin-top:0">Os meus tamanhos</h3><div class="me-sizes">${Object.entries(SZ).map(([k, v]) => `<div><small>${v}</small><b>${esc(sz[k] || '–')}</b></div>`).join('')}</div>
       <p class="small muted">Tamanho errado? Diz no armazém.</p></div>`;
 }
@@ -4939,7 +4971,7 @@ async function loadMine(quiet) {
 // What I will earn: only when the company switches it on. Gross, indicative, with the sums shown.
 function minePay(d) {
   const p = d.pay; if (!p) return '';
-  const mName = new Date(d.from + 'T12:00:00').toLocaleDateString('pt-PT', { month: 'long' });
+  const mName = new Date(d.from + 'T12:00:00').toLocaleDateString(LOC, { month: 'long' });
   if (p.state === 'no_rate') return `<div class="card pay"><h2 style="margin-top:0">Quanto vou ganhar</h2><p class="small muted">A empresa ainda não registou o teu valor à hora. Pede ao escritório.</p></div>`;
   const row = (label, v, sub) => Number(v) ? `<div class="pay-r"><span>${esc(label)}${sub ? `<small>${esc(sub)}</small>` : ''}</span><b>${esc(euro(v))}</b></div>` : '';
   const conf = Number(p.total) ? Math.round((Number(p.confirmed) / Number(p.total)) * 100) : 0;
@@ -4977,7 +5009,7 @@ async function mineDay(day) {
     sb.rpc('mini_my_day_more', { p_day: day }), sb.rpc('mini_my_day_disputes', { p_day: day })]);
   if (error || e2) return toast(friendly(error || e2));
   const r = ((state.mineData && state.mineData.days) || []).find((x) => x.date === day);
-  const who = (x) => `${esc(x.by || 'Escritório')} · ${esc(new Date(x.when).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }))}`;
+  const who = (x) => `${esc(x.by || 'Escritório')} · ${esc(new Date(x.when).toLocaleString(LOC, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }))}`;
   const gone = [...(more.cancelled || []).map((e) => `<li class="me-void"><span class="t"><s>${esc(fmtHour(e.at, e.tz))}</s></span>
       <span><s>${e.dir === 'in' ? 'Entrada' : 'Saída'} · ${esc(e.code)}</s>${chip('anom', 'cancelada')}<small class="warn-t">${ic('x')}«${esc(e.why || '')}» · ${who(e)}</small></span></li>`),
     ...(more.moved || []).map((e) => `<li class="me-void"><span class="t"><s>${esc(fmtHour(e.from, e.tz))}</s></span>
@@ -4990,7 +5022,7 @@ async function mineDay(day) {
     ${gone.length ? `<h3>Canceladas ou mudadas</h3><ol class="taps me-gone">${gone.join('')}</ol>` : ''}
     ${r ? `<h3>Validação</h3><ol class="steps"><li class="on"><b>Registado</b><small>pelas picagens do cartão</small></li>
       ${d.log.map((l) => `<li class="on ${l.to === 'registered' ? 'back' : ''}"><b>${esc(l.to === 'registered' ? 'Devolvido para corrigir' : MINE_STATE[l.to] || l.to)}</b>
-        <small>${esc(l.by || '')} · ${esc(new Date(l.at).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }))}</small>
+        <small>${esc(l.by || '')} · ${esc(new Date(l.at).toLocaleString(LOC, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }))}</small>
         ${l.note ? `<small class="note-t">«${esc(l.note)}»</small>` : ''}</li>`).join('')}
       ${r.status === 'registered' ? '<li><b>À espera do encarregado</b></li>' : ''}</ol>` : ''}
     ${more.closed ? '<p class="small muted">Este mês já está fechado. Se achas que está mal, fala com o escritório.</p>' : ''}
@@ -5014,7 +5046,7 @@ const ABS_KIND = { vacation: 'Férias', medical_appointment: 'Consulta médica',
 const dispLine = (x) => `<div class="req ${x.status}"><div class="req-h"><b>${esc(DISPUTE_REASON[x.reason] || x.reason)}</b>${x.day ? `<span class="small muted">${esc(dayLabel(x.day))}</span>` : ''}
     ${x.status === 'open' ? chip('reg', 'à espera de resposta', 'clock') : x.status === 'fixed' ? chip('val', 'corrigido', 'ok') : chip('', 'mantido')}</div>
   ${x.note ? `<p class="small">«${esc(x.note)}»</p>` : ''}${x.answer ? `<p class="small ans">${ic('user')}<span><b>${esc(x.by || 'Resposta')}:</b> ${esc(x.answer)}</span></p>` : ''}</div>`;
-const absWhen = (a) => a.from === a.to ? `${fmtDate(a.from)}${a.minutes ? ` · ${fmtMin(a.minutes)}` : ''}` : `${fmtDate(a.from)} a ${fmtDate(a.to)}`;
+const absWhen = (a) => a.from === a.to ? `${fmtDate(a.from)}${a.minutes ? ` · ${fmtMin(a.minutes)}` : ''}` : `${fmtDate(a.from)} – ${fmtDate(a.to)}`;
 function absSteps(a) {
   const st = a.status;
   const sup = a.sup_ok === true ? `<li class="on"><b>Encarregado: de acordo</b>${a.sup_note ? `<small>«${esc(a.sup_note)}»</small>` : ''}</li>`
@@ -5023,7 +5055,7 @@ function absSteps(a) {
   const off = st === 'approved' ? `<li class="on"><b>Escritório: aprovado</b>${a.decision_note ? `<small>«${esc(a.decision_note)}»</small>` : ''}</li>`
     : st === 'rejected' && a.sup_ok !== false ? `<li class="on back"><b>Escritório: recusado</b>${a.decision_note ? `<small>«${esc(a.decision_note)}»</small>` : ''}</li>`
     : st === 'requested' && a.sup_ok ? '<li><b>À espera do escritório</b></li>' : st === 'cancelled' ? '<li class="on"><b>Cancelado por ti</b></li>' : '';
-  return `<ol class="steps"><li class="on"><b>Pedido enviado</b><small>${esc(new Date(a.at).toLocaleDateString('pt-PT'))}</small></li>${sup}${off}</ol>`;
+  return `<ol class="steps"><li class="on"><b>Pedido enviado</b><small>${esc(new Date(a.at).toLocaleDateString(LOC))}</small></li>${sup}${off}</ol>`;
 }
 const ABS_CHIP = { requested: chip('reg', 'pendente', 'clock'), approved: chip('val', 'aprovado', 'ok'), rejected: chip('anom', 'recusado'), cancelled: chip('', 'cancelado') };
 // The worker's requests: holiday balance, ask for holidays / an absence / leaving early, and the answers.
@@ -5043,7 +5075,7 @@ async function loadMyRequests() {
     ${d.disputes.length ? `<h3>As minhas reclamações</h3>${d.disputes.map(dispLine).join('')}` : ''}<div id="glances"></div></div>`;
   sb.rpc('mini_my_glances').then(({ data: gl }) => { const el = $('#glances'); if (!el || !gl || !gl.length) return;
     el.innerHTML = `<details class="req"><summary><span class="req-h"><b>Quem viu as minhas horas pelo cartão</b><span class="small muted">${gl.length}</span></span></summary>
-      ${gl.map((x) => `<p class="small">${esc(x.by || '')} · ${esc(new Date(x.at).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }))}</p>`).join('')}</details>`; });
+      ${gl.map((x) => `<p class="small">${esc(x.by || '')} · ${esc(new Date(x.at).toLocaleString(LOC, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }))}</p>`).join('')}</details>`; });
   if (d.absences.length) sb.rpc('mini_absence_files', { p_ids: d.absences.map((a) => a.id) }).then(({ data: files }) => {
     box.querySelectorAll('[data-att]').forEach((el) => {
       const f = files && files[el.dataset.att];
@@ -5138,7 +5170,7 @@ async function loadPerDiems() {
   const box = $('#pdbody'); if (!box) return;
   if (!state.pdWeek) state.pdWeek = monday(new Date());
   const week = isoDay(state.pdWeek); const end = new Date(state.pdWeek); end.setDate(end.getDate() + 6);
-  const short = (d) => d.toLocaleDateString('pt-PT', { day: 'numeric', month: 'short' });
+  const short = (d) => d.toLocaleDateString(LOC, { day: 'numeric', month: 'short' });
   const thu = new Date(state.pdWeek); thu.setDate(thu.getDate() + 3);
   const future = state.pdWeek > new Date();
   box.innerHTML = `<div class="row" style="margin:4px 0;flex-wrap:nowrap;align-items:center">
@@ -5166,7 +5198,7 @@ async function loadPerDiems() {
       ${r.problem ? `<div class="tags">${chip(r.problem === 'site_without_amount' ? 'warn' : '', PD_PROBLEM[r.problem] || r.problem)}</div>`
         : `<div class="per small">${(r.days || []).length} dia(s) × ${esc(euro(r.unit_amount))} = ${esc(euro(r.gross_amount))}${Number(r.deduction_amount) ? ` − ${esc(euro(r.deduction_amount))} de faltas` : ''}
           <br><span class="muted">${esc(pdDays(r.days))}</span></div>
-        <div class="tags">${r.issued ? chip('ok', 'emitida para pagamento ' + new Date(r.issued_at).toLocaleDateString('pt-PT'), 'ok') : ''}
+        <div class="tags">${r.issued ? chip('ok', 'emitida para pagamento ' + new Date(r.issued_at).toLocaleDateString(LOC), 'ok') : ''}
           ${!r.issued && Number(r.pending_deduction) > Number(r.deduction_amount) ? chip('warn', `${euro(Number(r.pending_deduction) - Number(r.deduction_amount))} a descontar fica para depois`) : ''}</div>`}</div>`).join('')}
     <div class="acts">${todo.length ? `<button class="btn big acc" id="pdissue">${ic('ok')}Emitir para pagamento</button>` : ''}
       <button class="btn ghost wide" id="pdxl">Excel das diárias da semana</button></div>
@@ -5287,10 +5319,10 @@ async function loadMyPerDiems() {
   const NOTE_ICON = { issued: 'ok', to_deduct: 'warn', excused: 'ok', deducted_week: 'warn', deducted_salary: 'warn' };
   box.innerHTML = `<div class="card"><h2 style="margin-top:0">As minhas diárias</h2>
     ${d.notices.slice(0, fresh.length || 3).map((n) => `<div class="note pd ${n.new ? 'new' : ''}">${ic(NOTE_ICON[n.kind] || 'clock')}<span>${esc(n.title)}
-      <span class="small muted">· ${esc(new Date(n.at).toLocaleDateString('pt-PT'))}</span>${n.new ? ' ' + chip('info', 'novo') : ''}</span></div>`).join('')}
+      <span class="small muted">· ${esc(new Date(n.at).toLocaleDateString(LOC))}</span>${n.new ? ' ' + chip('info', 'novo') : ''}</span></div>`).join('')}
     ${d.weeks.slice(0, 4).map((w) => `<div class="day"><div class="day-h"><span class="d">Semana de ${esc(fmtDate(w.week_start).slice(0, 5))}</span>
         <span class="chip code">${esc(w.site)}</span><span class="hrs">${esc(euro(w.net))}</span></div>
-      <div class="per small">${w.days.length} dia(s) × ${esc(euro(w.unit))}${Number(w.deduction) ? ` − ${esc(euro(w.deduction))} de faltas` : ''} · emitida para pagamento ${esc(new Date(w.issued_at).toLocaleDateString('pt-PT'))}</div></div>`).join('')}
+      <div class="per small">${w.days.length} dia(s) × ${esc(euro(w.unit))}${Number(w.deduction) ? ` − ${esc(euro(w.deduction))} de faltas` : ''} · emitida para pagamento ${esc(new Date(w.issued_at).toLocaleDateString(LOC))}</div></div>`).join('')}
     ${d.cases.length ? `<h3>Dias com desconto ou por decidir</h3>${d.cases.map((c) => `<div class="day"><div class="day-h"><span class="d">${esc(dayLabel(c.day))}</span>
         <span class="small">${esc(pdKind(c))}</span><span class="hrs">${esc(euro(c.amount))}</span></div>
       <div class="tags">${c.status === 'to_decide' ? chip('warn', 'o encarregado vai decidir') : PD_CASE[c.status] || ''}${c.settled ? chip('', 'descontado: ' + c.settled) : ''}</div>
@@ -5843,7 +5875,7 @@ function encOfficeFlow(data) {
   const other = (state.encOfficeWait || []).filter((m) => m !== state.officeMonth);
   const otherMonth = other.length ? other.sort()[0] : null;
   if (!data.length && !otherMonth) { box.innerHTML = ''; return; }
-  box.innerHTML = `${otherMonth ? `<button class="enc-al info" id="encother">${ic('clock')}<span><b>${other.length} dia(s) de ${esc(new Date(otherMonth + '-15T12:00:00').toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' }))} à tua espera</b>Validados na obra, ainda por aprovar.</span>${ic('go')}</button>` : ''}${data.length ? `${encFlow(data, 'office')}
+  box.innerHTML = `${otherMonth ? `<button class="enc-al info" id="encother">${ic('clock')}<span><b>${other.length} dia(s) de ${esc(new Date(otherMonth + '-15T12:00:00').toLocaleDateString(LOC, { month: 'long', year: 'numeric' }))} à tua espera</b>Validados na obra, ainda por aprovar.</span>${ic('go')}</button>` : ''}${data.length ? `${encFlow(data, 'office')}
     <details class="fold enc-sites"><summary><span>Por obra<span class="sub">${Object.keys(sites).length} obra(s): quem já enviou, quem falta</span></span></summary>
     <div class="enc-sitetab" role="table">
       <div class="enc-sr enc-sh" role="row"><span role="columnheader">Obra</span><span role="columnheader">Na obra</span><span role="columnheader">À tua espera</span><span role="columnheader">Aprovados</span><span role="columnheader">Fechados</span></div>
@@ -6018,7 +6050,7 @@ const exportedBy = () => { const me = state.me || {}; const p = me.collaborator_
 function periodLabel(from, to) {
   const [y, m] = from.split('-').map(Number);
   const whole = from.endsWith('-01') && to === monthRange(from.slice(0, 7)).to;
-  const name = new Date(y, m - 1, 15).toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' });
+  const name = new Date(y, m - 1, 15).toLocaleDateString(LOC, { month: 'long', year: 'numeric' });
   return `${whole ? name + ' (' : ''}${fmtDate(from)} a ${fmtDate(to)}${whole ? ')' : ''}`;
 }
 function xlBook(X, doc) {
@@ -6146,7 +6178,7 @@ function xlDoc(rowsOrgs, title, scope, provisional) {
   const now = new Date();
   return { company: orgs.length > 3 ? orgs.slice(0, 3).join(' · ') + ` e mais ${orgs.length - 3}` : orgs.join(' · ') || 'GestNow',
     title, scope, provisional,
-    generated: `Gerado em ${now.toLocaleDateString('pt-PT')} às ${now.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}`
+    generated: `Gerado em ${now.toLocaleDateString(LOC)} às ${now.toLocaleTimeString(LOC, { hour: '2-digit', minute: '2-digit' })}`
       + `${exportedBy() ? ' por ' + exportedBy() : ''} · GestNow` };
 }
 
@@ -6632,7 +6664,7 @@ async function loadSitePanel(id, editing) {
       <h3>Formações obrigatórias</h3><div class="tags">${(d.mandatory || []).map((m) => chip('', m)).join('') || '<span class="muted">nenhuma</span>'}</div>
       ${d.extra_requirements ? `<h3>Requisitos adicionais</h3><p style="margin-top:0">${esc(d.extra_requirements)}</p>` : ''}
       ${d.platform ? `<h3>Plataforma</h3><p style="margin:0">${esc(d.platform)}</p>` : ''}</div>
-    ${h ? `<div class="card"><h2 style="margin-top:0">Horas de ${esc(new Date(h.from + 'T12:00:00').toLocaleDateString('pt-PT', { month: 'long' }))}</h2>
+    ${h ? `<div class="card"><h2 style="margin-top:0">Horas de ${esc(new Date(h.from + 'T12:00:00').toLocaleDateString(LOC, { month: 'long' }))}</h2>
       <dl class="kv"><div><dt>Trabalhadas</dt><dd>${fmtHours(h.worked)}</dd></div><div><dt>Extra</dt><dd>${fmtHours(h.overtime)}</dd></div>
         <div><dt>Noturnas</dt><dd>${fmtHours(h.night)}</dd></div><div><dt>Pessoas</dt><dd>${h.people}</dd></div></dl>
       <h3>Dias</h3><div class="tags">${chip(h.registered ? 'warn' : '', `${h.registered} por validar na obra`)}${chip('', `${h.site_validated} por aprovar`)}${chip('ok', `${h.approved} aprovados`)}</div></div>` : ''}
@@ -6879,9 +6911,9 @@ const EST_FORMS = {
   cp: { n: 'Custo + margem', risk: 5, what: 'Livro aberto: o cliente paga o custo real que provarmos e uma margem fixa por cima.',
     bill: 'Custos reais registados (horas picadas, faturas) e a margem acordada.', use: 'Clientes que exigem ver os custos, contratos-quadro longos.' },
 };
-const eur2 = (v) => Number(v || 0).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
-const eur0 = (v) => Math.round(Number(v || 0)).toLocaleString('pt-PT') + ' €';
-const nPt = (v, d = 0) => Number(v || 0).toLocaleString('pt-PT', { maximumFractionDigits: d });
+const eur2 = (v) => Number(v || 0).toLocaleString(LOC, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+const eur0 = (v) => Math.round(Number(v || 0)).toLocaleString(LOC) + ' €';
+const nPt = (v, d = 0) => Number(v || 0).toLocaleString(LOC, { maximumFractionDigits: d });
 const estNo = (e) => `ORC-${String(e.number).padStart(4, '0')}${e.version > 1 ? ' v' + e.version : ''}`;
 function orcState() { return state.orc || (state.orc = { id: null, mode: 'list', face: null }); }
 function openEstimates() { const st = orcState(); st.id = null; st.mode = 'list'; go('orcamentos'); }
@@ -7491,7 +7523,7 @@ async function loadEmergency() {
         <span class="small" id="nfchelp">${state.nfc ? 'Cada pessoa encosta o cartão ao chegar ao ponto.' : 'Depois cada pessoa encosta o cartão.'}</span></button>` : ''}
       <form class="manual" id="emanual"><input id="euid" autocomplete="off" autocapitalize="characters" placeholder="Número do cartão"><button class="btn ghost">Picar</button></form>
       <div id="result" aria-live="polite">${lastRes}</div>
-      ${cached ? `<div class="result warn">${ic('cloud')}<div><b>Sem rede</b>Lista de ${esc(new Date(cached).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }))}. As picagens ficam guardadas e vão quando a rede voltar.</div></div>` : ''}
+      ${cached ? `<div class="result warn">${ic('cloud')}<div><b>Sem rede</b>Lista de ${esc(new Date(cached).toLocaleTimeString(LOC, { hour: '2-digit', minute: '2-digit' }))}. As picagens ficam guardadas e vão quando a rede voltar.</div></div>` : ''}
       ${pending ? `<p class="small">${ic('cloud')} ${pending} picagem(ns) à espera de rede neste telemóvel.</p>` : ''}
     </section>
     ${missing.length ? `<div class="sec-h"><h2 class="eyebrow" style="color:var(--bad)">Em falta (${missing.length})</h2></div>
@@ -8675,13 +8707,13 @@ async function loadFleet() {
 function flCard(v) {
   const s = v.state; const [lk, ll] = FL_LIGHT[s.light] || ['', s.light];
   const rental = v.ownership !== 'owned';
-  const srv = s.service === 'sem_data' ? 'sem data' : [v.service_km ? `aos ${Number(v.service_km).toLocaleString('pt-PT')} km${s.km_left != null ? ` (faltam ${Number(s.km_left).toLocaleString('pt-PT')})` : ''}` : '', v.service_date ? `até ${fmtDate(v.service_date)}` : ''].filter(Boolean).join(' · ');
+  const srv = s.service === 'sem_data' ? 'sem data' : [v.service_km ? `aos ${Number(v.service_km).toLocaleString(LOC)} km${s.km_left != null ? ` (faltam ${Number(s.km_left).toLocaleString(LOC)})` : ''}` : '', v.service_date ? `até ${fmtDate(v.service_date)}` : ''].filter(Boolean).join(' · ');
   const who = v.trip ? `Com <b>${esc(v.trip.driver)}</b> desde ${esc(fmtTime(v.trip.since))}${v.trip.site ? ' · Obra ' + esc(v.trip.site) : ''}`
     : v.status === 'maintenance' ? 'Na oficina' : v.status === 'blocked' ? 'Bloqueada' : 'Livre' + (v.site ? ' · Obra ' + esc(v.site) : '');
   const H = state.fleet.home;
   return `<article class="card fl-car ${s.light}" data-id="${esc(v.id)}">
     <div class="wk"><span class="fl-plate">${esc(v.plate)}</span><div class="grow"><div class="nm">${esc(v.model || 'Viatura')}${rental ? ` <small class="muted">· ${esc(FL_OWN[v.ownership])}</small>` : ''}</div>
-      <div class="sub">${who} · ${Number(v.km).toLocaleString('pt-PT')} km</div></div>${chip(lk, ll)}</div>
+      <div class="sub">${who} · ${Number(v.km).toLocaleString(LOC)} km</div></div>${chip(lk, ll)}</div>
     <ul class="fl-papers">
       ${flPaper('Seguro', s.insurance, flDue(v.insurance_due))}
       ${flPaper('Inspeção (IPO)', s.ipo, flDue(v.ipo_due))}
@@ -8689,7 +8721,7 @@ function flCard(v) {
       ${flPaper('Revisão', s.service, srv)}
       ${rental ? flPaper('Contrato de aluguer', s.rental, flDue(v.rental_end), v.rental_company ? `<small>${esc(v.rental_company)}${v.rental_ref ? ' · ' + esc(v.rental_ref) : ''}</small>` : '') : ''}
       ${rental && s.rental_km_left != null ? `<li class="fl-p ${s.rental_km_left < 0 ? 'bad' : s.light === 'amarelo' && s.rental_km_left <= Math.max(1000, (v.rental_km_limit || 0) / 10) ? 'warn' : 'ok'}"><span>Km do contrato</span><b>${s.rental_km_left < 0
-        ? `${Number(-s.rental_km_left).toLocaleString('pt-PT')} km a mais${s.over_cost ? ' ≈ ' + esc(eur2(s.over_cost)) : ''}` : `faltam ${Number(s.rental_km_left).toLocaleString('pt-PT')} km`}</b></li>` : ''}
+        ? `${Number(-s.rental_km_left).toLocaleString(LOC)} km a mais${s.over_cost ? ' ≈ ' + esc(eur2(s.over_cost)) : ''}` : `faltam ${Number(s.rental_km_left).toLocaleString(LOC)} km`}</b></li>` : ''}
     </ul>
     <div class="acts">
       ${H.can_hand && v.trip ? `<button class="btn small" data-ret="${esc(v.id)}">Receber viatura</button>` : ''}
@@ -8803,7 +8835,7 @@ async function flHandover(id) {
 }
 async function flReturn(id) {
   const v = state.fleet.cur && state.fleet.cur.id === id ? state.fleet.cur : state.fleet.home.vehicles.find((x) => x.id === id);
-  const fd = await askSheet(`Receber ${v.plate}`, `<p>Estava com <b>${esc(v.trip.driver)}</b> desde ${esc(fmtTime(v.trip.since))} (${Number(v.trip.km).toLocaleString('pt-PT')} km).</p>
+  const fd = await askSheet(`Receber ${v.plate}`, `<p>Estava com <b>${esc(v.trip.driver)}</b> desde ${esc(fmtTime(v.trip.since))} (${Number(v.trip.km).toLocaleString(LOC)} km).</p>
     <label for="rk">Km agora *</label><input id="rk" name="km" type="number" required min="${Number(v.trip.km)}" step="1" inputmode="numeric">
     <label class="check"><input type="checkbox" name="dmg" id="rdmg"> Tem danos ou avaria</label>
     <label for="rn">Nota</label><textarea id="rn" name="n" rows="2" maxlength="500" placeholder="ex.: risco na porta lateral; luz do óleo acesa"></textarea>
@@ -8835,16 +8867,16 @@ async function flDetail(id) {
       ${['maintenance', 'blocked'].includes(v.status) ? '<button class="btn ghost small" id="flok">Voltar a disponível</button>' : ''}
       ${v.status !== 'in_use' ? `<button class="btn ghost small" id="flar">${v.ownership === 'owned' ? 'Arquivar (vendida)' : 'Devolvida ao aluguer'}</button>` : ''}</div>` : ''}
     ${v.insurer || v.policy ? `<p class="small">Seguro: ${esc(v.insurer || '')}${v.policy ? ' · apólice ' + esc(v.policy) : ''}</p>` : ''}
-    ${v.ownership !== 'owned' && v.rental_monthly ? `<p class="small">Renda: ${esc(eur2(v.rental_monthly))}/mês${v.rental_km_limit ? ` · limite ${Number(v.rental_km_limit).toLocaleString('pt-PT')} km` : ''}${v.over_rate ? ` · ${esc(eur2(v.over_rate))}/km a mais` : ''}</p>` : ''}
+    ${v.ownership !== 'owned' && v.rental_monthly ? `<p class="small">Renda: ${esc(eur2(v.rental_monthly))}/mês${v.rental_km_limit ? ` · limite ${Number(v.rental_km_limit).toLocaleString(LOC)} km` : ''}${v.over_rate ? ` · ${esc(eur2(v.over_rate))}/km a mais` : ''}</p>` : ''}
     ${v.notes ? `<p class="small" style="white-space:pre-line">${esc(v.notes)}</p>` : ''}
     ${H.can_manage && v.month_cost != null ? `<p class="small">Custos este mês: <b>${esc(eur2(v.month_cost))}</b></p>` : ''}
     <h2 class="sec">Quem a levou</h2>
     ${v.trips.length ? `<ul class="fl-hist">${v.trips.map((t) => `<li><b>${esc(t.driver)}</b> · ${esc(fmtTime(t.from))}${t.to ? ' → ' + esc(fmtTime(t.to)) : ' · ainda com ela'}
-      <small>${Number(t.km_from).toLocaleString('pt-PT')}${t.km_to != null ? ' → ' + Number(t.km_to).toLocaleString('pt-PT') + ' km' : ' km'}${t.site ? ' · Obra ' + esc(t.site) : ''}${t.purpose ? ' · ' + esc(t.purpose) : ''}</small>
+      <small>${Number(t.km_from).toLocaleString(LOC)}${t.km_to != null ? ' → ' + Number(t.km_to).toLocaleString(LOC) + ' km' : ' km'}${t.site ? ' · Obra ' + esc(t.site) : ''}${t.purpose ? ' · ' + esc(t.purpose) : ''}</small>
       ${t.damage ? `<small class="by-no">Dano: ${esc(t.note || '')}</small>` : t.note ? `<small>«${esc(t.note)}»</small>` : ''}</li>`).join('')}</ul>` : '<p class="small muted">Ainda ninguém a levou.</p>'}
     <h2 class="sec">Revisões e reparações</h2>
     ${v.maintenance.length ? `<ul class="fl-hist">${v.maintenance.map((m) => `<li><b>${esc(fmtDate(m.on))}</b> · ${esc(m.desc)}
-      <small>${Number(m.km).toLocaleString('pt-PT')} km${H.can_manage ? ' · ' + esc(eur2(m.cost)) : ''}${m.next_km ? ' · próxima aos ' + Number(m.next_km).toLocaleString('pt-PT') + ' km' : ''}${m.next_date ? ' · até ' + esc(fmtDate(m.next_date)) : ''}</small></li>`).join('')}</ul>` : '<p class="small muted">Sem registos.</p>'}
+      <small>${Number(m.km).toLocaleString(LOC)} km${H.can_manage ? ' · ' + esc(eur2(m.cost)) : ''}${m.next_km ? ' · próxima aos ' + Number(m.next_km).toLocaleString(LOC) + ' km' : ''}${m.next_date ? ' · até ' + esc(fmtDate(m.next_date)) : ''}</small></li>`).join('')}</ul>` : '<p class="small muted">Sem registos.</p>'}
     ${H.can_manage ? `<h2 class="sec">Custos</h2>${v.costs.length ? `<ul class="fl-hist">${v.costs.map((k) => `<li><b>${esc(FL_COST[k.kind] || k.kind)}</b> · ${esc(eur2(k.amount))}
       <small>${esc(fmtDate(k.on))}${k.ref && !/^maintenance:/.test(k.ref) ? ' · ' + esc(k.ref) : ''}${k.site ? ' · Obra ' + esc(k.site) : ''}${k.driver ? ' · ' + esc(k.driver) : ''}</small></li>`).join('')}</ul>` : '<p class="small muted">Sem custos.</p>'}` : ''}`;
   body.querySelectorAll('[data-give]').forEach((b) => b.onclick = async () => { await loadFleetHome(); flHandover(id); });
@@ -8868,7 +8900,7 @@ async function flStatus(v, st, title, ph) {
   if (st === 'returned') { state.fleet.sel = null; loadFleet(); } else flDetail(v.id);
 }
 async function flMaintenance(v) {
-  const fd = await askSheet('Revisão ou reparação', `<p><b>${esc(v.plate)}</b> · ${Number(v.km).toLocaleString('pt-PT')} km</p>
+  const fd = await askSheet('Revisão ou reparação', `<p><b>${esc(v.plate)}</b> · ${Number(v.km).toLocaleString(LOC)} km</p>
     <div class="row"><div><label for="md">Data *</label><input id="md" name="on" type="date" required max="${esc(isoDay(new Date()))}" value="${esc(isoDay(new Date()))}"></div>
       <div><label for="mk">Km *</label><input id="mk" name="km" type="number" required min="0" step="1" inputmode="numeric" value="${Number(v.km)}"></div></div>
     <label for="mx">O que se fez *</label><input id="mx" name="desc" required minlength="3" maxlength="300" placeholder="ex.: revisão dos 60 000 km, óleo e filtros">
@@ -9706,7 +9738,7 @@ const TV_LABELS = ['Ida', 'Volta', 'Ida e volta', 'Cartão de embarque', 'Outro'
 const tvWhen = (iso) => {
   if (!iso) return '';
   const h = fmtHour(iso, 'Europe/Lisbon');
-  const d = new Date(iso).toLocaleDateString('pt-PT', { weekday: 'short', day: '2-digit', month: '2-digit', timeZone: 'Europe/Lisbon' });
+  const d = new Date(iso).toLocaleDateString(LOC, { weekday: 'short', day: '2-digit', month: '2-digit', timeZone: 'Europe/Lisbon' });
   return h === '00:00' ? d : `${d} às ${h}`;
 };
 const tvDay = (iso) => iso ? new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Europe/Lisbon' }) : '';

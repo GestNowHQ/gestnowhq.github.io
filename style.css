@@ -2170,3 +2170,23 @@ ul.plain { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; } u
 .acc-row:last-child { border-bottom: 0; }
 .acc-row small { display: block; color: var(--ink-2); font-size: var(--t-xs); overflow-wrap: anywhere; }
 .acc-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+
+/* v74 · language: a small globe + code in the top bar, on the login screen and in the entry steps; a sheet with the list */
+.langbtn { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; height: 36px; padding: 0 10px 0 8px; border: 0; border-radius: 999px;
+  background: rgba(255,255,255,.08); color: var(--top-ink-2); font: inherit; font-size: 12.5px; font-weight: 700; letter-spacing: .04em; cursor: pointer; }
+.langbtn .i { width: 18px; height: 18px; }
+.langbtn:hover { background: rgba(255,255,255,.16); color: var(--top-ink); }
+.auth { position: relative; }
+.auth-lang { position: absolute; z-index: 3; top: max(14px, env(safe-area-inset-top)); right: 14px; }
+.auth-lang .langbtn { color: rgba(255,255,255,.86); background: rgba(255,255,255,.10); box-shadow: inset 0 0 0 1px rgba(255,255,255,.16); }
+@media (min-width: 1000px) { .auth-lang { top: 24px; right: 28px; } .auth-lang .langbtn { color: var(--ink-2); background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); } }
+.onb-top .langbtn { color: var(--ink-2); background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); }
+.dlg.langs .lang-list { display: grid; gap: 8px; margin: 8px 0 14px; }
+.dlg.langs .lang-row { display: flex; align-items: center; gap: 12px; min-height: 54px; padding: 8px 14px; border: 1px solid var(--line); border-radius: var(--r-md);
+  background: var(--surface); color: var(--ink); font: inherit; font-size: 16px; text-align: left; cursor: pointer; }
+.dlg.langs .lang-row:hover { border-color: var(--brand); }
+.dlg.langs .lang-row.on { border-color: var(--brand); background: var(--brand-soft); }
+.dlg.langs .lang-row .i { width: 20px; height: 20px; color: var(--brand); }
+.dlg.langs .lang-c { display: inline-grid; place-items: center; width: 34px; height: 26px; border-radius: 6px; background: var(--surface-2); font-size: 12px; font-weight: 750; letter-spacing: .04em; color: var(--ink-2); }
+/* phone: the top bar has no room; the language is in «A tua conta» (tap your name), on the login card and in the entry steps */
+@media (max-width: 639px) { .top .langbtn { display: none; } }
