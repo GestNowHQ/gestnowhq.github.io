@@ -2,8 +2,8 @@
 // Only GET requests to this same site are handled. Supabase (data, login, files) is another site: never touched,
 // never cached. Network first, so a new version arrives as soon as there is network; the copy is only a fallback.
 'use strict';
-const CACHE = 'gestnow-mini-v74';
-const SHELL = ['./', 'index.html', 'lang.js?v=74', 'lang/fr.json?v=74', 'lang/en.json?v=74', 'lang/es.json?v=74', 'lang/ro.json?v=74', 'app.js', 'style.css', 'config.js', 'vendor/supabase-2.117.2.js', 'ui/gnui.js', 'ui/gnui.css', 'vendor/inter-latin-wght.woff2'];
+const CACHE = 'gestnow-mini-v75';
+const SHELL = ['./', 'index.html', 'lang.js?v=75', 'lang/fr.json?v=75', 'lang/en.json?v=75', 'lang/es.json?v=75', 'lang/ro.json?v=75', 'app.js', 'style.css', 'config.js', 'vendor/supabase-2.117.2.js', 'ui/gnui.js', 'ui/gnui.css', 'vendor/inter-latin-wght.woff2'];
 
 self.addEventListener('install', (e) => {
   // cache: 'reload' skips the browser's own 10-minute copy, so a new version never installs old files.
@@ -24,6 +24,11 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;   // Supabase and anything else: straight to the network
+  // v75: the language files carry their version (?v=): the copy on the phone is used at once, no wait for the network
+  if (/\/lang(\.js|\/[a-z]{2}\.json)$/.test(url.pathname) && url.searchParams.get('v')) {
+    e.respondWith(caches.match(req).then((hit) => hit || fetch(req).then((res) => { if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); } return res; })));
+    return;
+  }
   e.respondWith(network(req).then((res) => {
     if (res.ok && res.type === 'basic') { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); }
     return res;
