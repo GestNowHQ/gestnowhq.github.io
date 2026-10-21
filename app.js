@@ -826,7 +826,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '70';
+const APP_VERSION = '71';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -834,7 +834,7 @@ const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['pica
 // Picar stays in the menu (group Obra) for the office, and is the encarregado's tool.
 // v70 (Diogo 2026-10-20): on «Os meus clientes» the owner runs a business, not a site: only «Clientes» shows.
 // The company's screens come back when he opens a company (Início, Horas, Secretaria).
-const PLATFORM_VIEWS = ['clientes', 'cliente'];
+const PLATFORM_VIEWS = ['clientes', 'cliente', 'precos'];
 const ownerDesk = () => isOwner() && PLATFORM_VIEWS.includes(state.view);
 function tabsFor(role) {
   if (role === 'admin') return isOwner() ? (ownerDesk() ? ['clientes'] : ['clientes', 'inicio', 'horas', 'secretariado']) : ['inicio', 'painel', 'horas', 'secretariado'];
@@ -1480,13 +1480,13 @@ function go(view) {
   state.view = view;
   if (state.navDesk !== ownerDesk()) layoutNav(state.me.role);   // owner moved between his clients and a company
   app.classList.toggle('wide', view === 'secretariado' || view === 'painel');
-  const tab = view === 'ficha' ? 'trabalhadores' : view === 'fichaepi' ? 'armazem' : view === 'cliente' ? 'clientes' : view;
+  const tab = view === 'ficha' ? 'trabalhadores' : view === 'fichaepi' ? 'armazem' : view === 'cliente' || view === 'precos' ? 'clientes' : view;
   nav.querySelectorAll('button[data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === tab));
   const cur = nav.querySelector(`button[data-view="${tab}"]`);
   nav.querySelector('button[data-more]').classList.toggle('on', !!cur && cur.parentElement.id === 'more');
   window.scrollTo(0, 0);
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
-     ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients, cliente: viewClient, inicio: viewHome,
+     ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients, cliente: viewClient, precos: viewPrices, inicio: viewHome,
      processo: viewProcess, orcamentos: viewEstimates, lmra: viewLmra, emergencia: viewEmergency,
      armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, producao: viewProd, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
   checkEmergencyBar(); encBadges();
@@ -1574,9 +1574,42 @@ async function loadBusiness() {
       <div><b>${n(b.active_workers)}</b><span>pessoas ativas este mês</span></div>
       <div class="biz-money"><b>${esc(cts(b.monthly))}</b><span>receita estimada por mês</span></div>
       <div><b>${n(sold)}/${n(b.extras.length)}</b><span>extras vendidos</span></div></div>
+    <button class="card biz-link" id="bprices">${ic('calc')}<span class="grow"><b>Tabela de preços</b><small>Muda o preço do pack standard e de cada extra</small></span>${ic('go')}</button>
     <details class="fold biz-sell"><summary><span>O que se vende<span class="sub">Pack standard ${esc(cts(b.standard_monthly))}/mês · extras ${esc(cts(b.monthly - b.standard_monthly))}/mês</span></span></summary>
       <ul class="plain biz-list">${b.extras.map((x) => `<li><span class="grow">${esc(x.label)}</span><small>${n(x.clients)} cliente(s)</small><b>${esc(cts(x.monthly))}</b></li>`).join('')}</ul>
-      <p class="small muted">Preços indicativos, sem IVA. Ainda não se cobra nada: é a estimativa com os preços de hoje.</p></details>`;
+      <p class="small muted">Preços sem IVA. Ainda não se cobra nada: é a estimativa com os preços de hoje.</p></details>`;
+  $('#bprices').onclick = () => go('precos');
+}
+// The owner's price list (sql/93): one price per item, for every client, from the moment it is saved.
+async function viewPrices() {
+  if (!state.ready) return boot();
+  if (!isOwner()) return go('clientes');
+  app.innerHTML = `<button class="btn ghost small home-back" id="pback">‹ Os meus clientes</button>
+    <div class="ph"><div><p class="ph-k">GestNow · só tu vês</p><h1>Tabela de preços</h1></div></div>
+    <p class="small muted">Preços por mês, sem IVA. Um preço novo vale para todos os clientes a partir do momento em que o gravas.</p>
+    <div id="plist">${skel(3)}</div>`;
+  $('#pback').onclick = () => go('clientes');
+  const el = $('#plist');
+  const { data, error } = await sb.rpc('platform_prices');
+  if (!el.isConnected || state.view !== 'precos') return;
+  if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  el.innerHTML = `<div class="card price-rows">${data.map((p) => `<button class="price-row" data-price="${esc(p.code)}">
+      <span class="grow"><b>${esc(p.label)}</b><small>${p.code === 'standard' ? 'Incluído em todos os clientes' : 'Extra pago à parte'}${Number(p.min) ? ` · mínimo ${esc(cts(p.min))}` : ''}</small></span>
+      <span class="price-v"><b>${esc(cts(p.price))}</b><small>por ${esc(perUnit(p.unit))}</small></span>${ic('go')}</button>`).join('')}</div>`;
+  el.querySelectorAll('[data-price]').forEach((b) => b.onclick = async () => {
+    const p = data.find((x) => x.code === b.dataset.price);
+    const val = (c) => (Number(c) / 100).toFixed(2);
+    const fd = await askSheet(p.label, `
+      <label for="pp">Preço por ${esc(perUnit(p.unit))} (€ por mês)</label><input id="pp" name="price" inputmode="decimal" required value="${val(p.price)}" pattern="[0-9]+([.,][0-9]{1,2})?">
+      <label for="pm">Mínimo por mês (€)</label><input id="pm" name="min" inputmode="decimal" value="${val(p.min)}" pattern="[0-9]+([.,][0-9]{1,2})?">
+      <p class="small muted">0 = sem mínimo. Vale para todos os clientes a partir de agora.</p>`, 'Gravar');
+    if (!fd) return;
+    const c = (v) => Math.round(Number(String(v || '0').replace(',', '.')) * 100);
+    const { data: r, error: e } = await sb.rpc('platform_set_price', { p_code: p.code, p_price_cents: c(fd.get('price')), p_min_cents: c(fd.get('min')) });
+    if (e) return toast(friendly(e));
+    toast(r.changed ? `${p.label}: preço gravado.` : 'O preço já era este.');
+    viewPrices();
+  });
 }
 // Level 1 for the owner (sql/91): a plain list of client companies, account data only. Tap = the client's card.
 const ACC_STATE = { active: ['ok', 'Ativo'], trialing: ['info', 'Em experiência'], past_due: ['warn', 'Pagamento em atraso'], canceled: ['bad', 'Cancelado'], unpaid: ['bad', 'Suspenso'] };
