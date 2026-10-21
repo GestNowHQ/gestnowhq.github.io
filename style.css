@@ -2206,3 +2206,36 @@ ul.sl-feed li { flex-direction: column; align-items: flex-start; gap: 2px; backg
 ul.sl-feed li[data-open] { cursor: pointer; }
 ul.sl-feed .bad { color: var(--bad); font-weight: 600; }
 ul.sl-ct li { flex-direction: column; align-items: flex-start; gap: 0; }
+
+/* v78 · Custos das obras (sql/100) */
+.ct-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 12px 0; }
+.ct-kpi { display: flex; flex-direction: column; gap: 2px; padding: 14px; margin: 0; }
+.ct-kpi b { font-size: 1.6rem; line-height: 1.15; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.ct-kpi.ct-warn { background: var(--warn-bg); color: var(--warn); }
+.ct-h { margin-top: 0; font-size: var(--t-md, 1rem); }
+.ct-bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--line); margin: 10px 0 6px; gap: 2px; }
+.ct-bar i { display: block; height: 100%; min-width: 3px; }
+.ct-labour { background: #4f46e5; } .ct-per_diems { background: #0ea5a4; } .ct-housing { background: #f59e0b; } .ct-travel { background: #ec4899; }
+.ct-fleet { background: #64748b; } .ct-tools { background: #8b5cf6; } .ct-ppe { background: #22c55e; } .ct-materials { background: #a16207; }
+.ct-scaffolds { background: #0284c7; } .ct-expenses { background: #ef4444; } .ct-subcontract { background: #14b8a6; } .ct-other { background: #9ca3af; }
+ul.ct-legend { margin: 8px 0 0; padding: 0; }
+ul.ct-legend li { display: grid; grid-template-columns: 12px 1fr auto 44px; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+ul.ct-legend li:last-child { border-bottom: 0; }
+ul.ct-legend b { font-variant-numeric: tabular-nums; } ul.ct-legend .small { text-align: right; }
+.ct-dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+button.ct-site { display: block; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; border: 1px solid var(--line); }
+button.ct-site:hover { border-color: var(--brand-3); }
+button.ct-site .row-b b { font-variant-numeric: tabular-nums; }
+.ct-erp h3 { display: flex; align-items: center; gap: 8px; margin: 0; }
+.ct-erp .btn { margin-top: 8px; }
+ul.ct-list { padding-left: 18px; margin: 6px 0 10px; } ul.ct-list li { margin: 4px 0; }
+.ct-checks { margin-top: 12px; padding: 12px; border-radius: 12px; background: var(--warn-bg); color: var(--warn); }
+.ct-checks h4 { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; }
+.ct-checks li { display: flex; flex-direction: column; align-items: flex-start; text-align: left; padding: 4px 0; }
+.ct-ok { display: flex; align-items: center; gap: 6px; margin-top: 12px; color: var(--ok); font-weight: 600; }
+.ct-days { display: flex; align-items: flex-end; gap: 2px; height: 110px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.ct-days i { flex: 1; background: var(--brand-2); border-radius: 3px 3px 0 0; min-width: 2px; }
+ul.ct-miss li { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.ct-codes { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; align-items: center; }
+.ct-codes label { margin: 0; }
+@media (max-width: 380px) { .ct-codes { grid-template-columns: 1fr; } }

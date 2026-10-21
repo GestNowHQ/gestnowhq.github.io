@@ -454,6 +454,7 @@ const ERRORS = [
   [/more than 7 days old/i, 'Picagem guardada há mais de 7 dias: acrescenta-a como picagem esquecida, com o motivo.'],
   [/each type needs its own code/i, 'Dois tipos de hora têm o mesmo código do Primavera. Cada tipo precisa do seu código.'],
   [/invalid Primavera code/i, 'Um código do Primavera só pode ter letras, números, ponto, traço ou _ (até 10).'],
+  [/unknown cost category/i, 'Esse tipo de custo não existe.'],
   [/invalid time padding/i, 'Escolhe zeros ou espaços para encher o tempo.'],
   [/this field is required/i, 'O funcionário, a data, o código e o tempo têm de ter tamanho maior que 0.'],
   [/two fields overlap/i, 'Dois campos ocupam as mesmas colunas do ficheiro. Acerta as posições.'],
@@ -847,7 +848,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '77';
+const APP_VERSION = '78';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -861,7 +862,7 @@ function tabsFor(role) {
   if (role === 'admin') return isOwner() ? (ownerDesk() ? ['clientes'] : ['clientes', 'inicio', 'horas', 'secretariado']) : ['inicio', 'painel', 'horas', 'secretariado'];
   return TABS[role] || TABS.supervisor;
 }
-const MORE_ORDER = ['inicio', 'empresa', 'onbtextos', 'equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'andaimes', 'processo', 'clientes'];
+const MORE_ORDER = ['inicio', 'empresa', 'onbtextos', 'equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'andaimes', 'processo', 'clientes', 'custos'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -879,7 +880,7 @@ WIDE.addEventListener('change', () => {
 // one department, QSA (sql/99); «controlo da app para garantir a ISO 9001» = Processo.
 const MENU_GROUPS = [
   ['Administração', ['inicio', 'empresa', 'premios', 'clientes']],
-  ['Secretariado', ['secretariado', 'horas', 'despesas']],
+  ['Secretariado', ['secretariado', 'horas', 'despesas', 'custos']],
   ['Recursos Humanos', ['trabalhadores', 'onbtextos', 'acolhimento', 'viagens', 'alojamento']],
   ['Frota', ['frota']],
   ['QSA · Qualidade, Segurança e Ambiente', ['seguranca', 'lmra', 'emergencia', 'qualidade', 'processo']],
@@ -899,7 +900,7 @@ const VIEW_NEEDS = {
   obras: () => can('obras.gerir') || can('obras.ver_detalhes'), painel: () => canSiteDetails(), naobra: () => canSiteDetails() || can('ponto.picar'),
   equipa: () => canSiteDetails(), picar: () => can('ponto.picar'), horas: () => can('horas.ver') || can('horas.validar_obra'),
   andaimes: () => canScaffolds(), producao: () => canProd(), armazem: () => canWh(), compras: () => canBuy(), frota: () => canFleet(),
-  orcamentos: () => canEstimates(), qualidade: () => canQuality(), comercial: () => canSales(), premios: () => canAwards(),
+  orcamentos: () => canEstimates(), qualidade: () => canQuality(), comercial: () => canSales(), premios: () => canAwards(), custos: () => canCosts(),
 };
 // v73 (Diogo 2026-10-21): «o standard da gestão serve para todas as empresas, mas o administrador de cada empresa adapta».
 // Administrators (and the owner) see the standard groups. Everyone else sees THEIR departments as the menu headings,
@@ -931,9 +932,10 @@ const ENC_ICONS = {
   firms: '<path d="M3 21h18M5 21V8l6-3v16M11 21V3l8 4v14M14 9h2M14 13h2M14 17h2M7 11h1M7 15h1"/>',
   trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8 21h8M9 17h6"/>',
   target: '<path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 12h.01M16 8l4-4M17 4h3v3"/>',
+  coins: '<path d="M9 9.5c3.3 0 6-1.1 6-2.5S12.3 4.5 9 4.5 3 5.6 3 7s2.7 2.5 6 2.5zM3 7v4c0 1.4 2.7 2.5 6 2.5M3 11v4c0 1.4 2.7 2.5 6 2.5M15 13.5c3.3 0 6-1.1 6-2.5s-2.7-2.5-6-2.5-6 1.1-6 2.5 2.7 2.5 6 2.5zM9 11v4c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5v-4M9 15v4c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5v-4"/>',
   medal: '<path d="M12 14a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM9.5 13.3 8 21l4-2 4 2-1.5-7.7M10 9l1.5 1.5L14.5 7.5"/>',
 };
-const MENU_ICON = { painel: 'gauge', producao: 'chart', seguranca: 'hhat', equipa: 'crew', minhas: 'myclock', naobra: 'gate', qualidade: 'medal', clientes: 'firms', comercial: 'target', premios: 'trophy' };
+const MENU_ICON = { painel: 'gauge', producao: 'chart', seguranca: 'hhat', equipa: 'crew', minhas: 'myclock', naobra: 'gate', qualidade: 'medal', clientes: 'firms', comercial: 'target', premios: 'trophy', custos: 'coins' };
 (function encIcons() {
   const ns = 'http://www.w3.org/2000/svg'; const sp = document.createElementNS(ns, 'svg');
   sp.setAttribute('width', '0'); sp.setAttribute('height', '0'); sp.setAttribute('aria-hidden', 'true'); sp.style.position = 'absolute';
@@ -1131,6 +1133,7 @@ async function boot() {
   nav.querySelector('[data-view=orcamentos]').hidden = worker || state.offline || !canEstimates();
   nav.querySelector('[data-view=comercial]').hidden = worker || state.offline || !canSales();
   nav.querySelector('[data-view=premios]').hidden = worker || state.offline || !canAwards();
+  nav.querySelector('[data-view=custos]').hidden = worker || state.offline || !canCosts();
   nav.querySelector('[data-view=equipa]').hidden = me.role !== 'supervisor' || !canSiteDetails();
   nav.querySelector('[data-view=lmra]').hidden = worker || state.offline || !canLmra();
   nav.querySelector('[data-view=emergencia]').hidden = worker || !canEmergency();
@@ -1593,7 +1596,7 @@ function go(view) {
   window.scrollTo(0, 0);
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
      ficha: viewWorker, obras: viewSites, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients, cliente: viewClient, precos: viewPrices, empresa: viewCompanyRules, inicio: viewHome,
-     processo: viewProcess, orcamentos: viewEstimates, comercial: viewSales, premios: viewAwards, lmra: viewLmra, emergencia: viewEmergency,
+     processo: viewProcess, orcamentos: viewEstimates, comercial: viewSales, premios: viewAwards, custos: viewCosts, lmra: viewLmra, emergencia: viewEmergency,
      armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, producao: viewProd, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
   checkEmergencyBar(); encBadges();
 }
@@ -4344,6 +4347,7 @@ const TOUR_TEXT = {
   obras: 'Obras: as moradas, os horários e as regras de cada obra.',
   processo: 'Processo: o caminho de cada obra, do primeiro contacto ao fecho de contas. Toca num passo e eu explico o que vem antes e depois. O ponto de interrogação em cima diz-te onde estás.',
   clientes: 'Clientes: as empresas que usam a GestNow. Crias, entras numa e voltas.',
+  custos: 'Custos das obras: o que cada obra gastou no mês, por tipo de custo, contra o orçamento. No fim do mês preparas daqui o pacote para o Primavera.',
   premios: 'Prémios e objetivos: os prémios do ano com as regras escritas em janeiro. Qualquer chefe propõe quem merece; a Administração decide.',
   comercial: 'Angariação de clientes: abres o cliente com os dados todos e registas cada contacto. A direção comercial vê a prospeção de toda a gente.',
   orcamentos: 'Orçamentos: um só cálculo de custo e cinco formas de dar o preço ao cliente, de homem-hora a chave na mão. Quem assina segue as regras da tua empresa.',
@@ -8704,6 +8708,246 @@ const AW_ST = { proposta: ['warn', 'À espera de decisão'], aprovada: ['ok', 'P
 const nt = (x) => `<span data-nt>${esc(x)}</span>`;
 const awNum = (v) => Number(v).toLocaleString(LOC, { maximumFractionDigits: 2 });
 const awEur = (v) => Number(v || 0).toLocaleString(LOC, { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+// ------------------------------------------------------------------ Custos das obras (v78, sql/100)
+// Diogo 2026-10-21: every cost goes to its site; the office follows them through the month and, at month end,
+// prepares the package for Primavera (where the invoicing and the accounts are). Labour is the hours at each person's
+// rate (estimated until the month is sent to payroll); expenses without VAT; a cost without a price is listed apart.
+const canCosts = () => can('custos.ver');
+const canCostExport = () => can('custos.exportar');
+const CT_CAT = { labour: 'Mão de obra', per_diems: 'Ajudas de custo', housing: 'Alojamento', travel: 'Viagens', fleet: 'Frota', tools: 'Ferramentas',
+  ppe: 'EPI', materials: 'Materiais', scaffolds: 'Andaimes', expenses: 'Despesas', subcontract: 'Subempreitadas', other: 'Outros' };
+const CT_FLAG = { over: ['bad', 'acima do orçamento'], drift: ['bad', 'vai passar o orçamento'], watch: ['warn', 'perto do limite'],
+  ok: ['ok', 'dentro do orçamento'], no_budget: ['', 'sem orçamento'], no_end_date: ['', 'sem data de fim'] };
+const ctMonthName = (ym) => new Date(ym + '-15T12:00:00').toLocaleDateString(LOC, { month: 'long', year: 'numeric' });
+const ctBar = (by, total) => total > 0 ? `<div class="ct-bar" data-nt role="img" aria-label="${esc(Object.entries(by).filter(([, v]) => v > 0).map(([k, v]) => `${t(CT_CAT[k] || k)} ${eur0(v)}`).join(', '))}">${
+  Object.keys(CT_CAT).filter((k) => by[k] > 0).map((k) => `<i class="ct-${k}" style="width:${(100 * by[k] / total).toFixed(2)}%"></i>`).join('')}</div>` : '';
+function viewCosts() {
+  if (!state.ready) return boot();
+  if (!canCosts()) return viewClock();
+  if (!state.costs) state.costs = { ym: isoDay(new Date()).slice(0, 7) };
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Secretariado</p><h1>Custos das obras</h1></div></div><div id="ctbody">${skel(3)}</div>`;
+  ctLoad();
+}
+async function ctLoad() {
+  const C = state.costs; const el = $('#ctbody'); if (!el) return;
+  const { from, to } = monthRange(C.ym);
+  const { data: d, error } = await sb.rpc('mini_site_cost_period', { p_from: from, p_to: to });
+  if (!el.isConnected) return;
+  if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  C.d = d;
+  const cur = C.ym === isoDay(new Date()).slice(0, 7);
+  const cats = Object.keys(CT_CAT).filter((k) => d.by_category[k] > 0).sort((a, b) => d.by_category[b] - d.by_category[a]);
+  el.innerHTML = `<div class="row-b sl-year"><button class="btn ghost" id="ctprev" aria-label="Mês anterior">‹</button><b data-nt>${esc(ctMonthName(C.ym))}</b>
+      <button class="btn ghost" id="ctnext" aria-label="Mês seguinte" ${cur ? 'disabled' : ''}>›</button></div>
+    <div class="ct-kpis">
+      <div class="card ct-kpi"><span class="small muted">${cur ? 'Gasto este mês até hoje' : 'Gasto no mês'}</span><b>${eur0(d.total)}</b>
+        ${d.estimated > 0 ? `<span class="small">${esc(t('dos quais {x} estimados', eur0(d.estimated)))}</span>` : ''}</div>
+      <div class="card ct-kpi"><span class="small muted">Obras com custos</span><b>${d.sites.filter((s) => s.total > 0).length}</b>
+        <span class="small">${esc(t('{x} ativas', d.sites.length))}</span></div>
+      ${d.missing ? `<div class="card ct-kpi ct-warn"><span class="small">Custos sem preço</span><b>${d.missing}</b><span class="small">não entram na soma</span></div>` : ''}
+    </div>
+    ${d.total > 0 ? `<div class="card"><h2 class="ct-h">Por tipo de custo</h2>${ctBar(d.by_category, d.total)}
+      <ul class="plain ct-legend">${cats.map((k) => `<li><i class="ct-dot ct-${k}"></i><span>${esc(CT_CAT[k])}</span><b>${eur0(d.by_category[k])}</b><span class="small muted">${Math.round(100 * d.by_category[k] / d.total)} %</span></li>`).join('')}</ul></div>` : ''}
+    <h2>Obras</h2>
+    <p class="small muted">Cada custo está na obra onde aconteceu: horas, ajudas de custo, alojamento, viagens, frota, ferramentas, material e despesas. Toca numa obra para ver o detalhe.</p>
+    <div class="stack">${d.sites.map(ctSiteCard).join('') || `<div class="card">${empty('box', 'Sem obras neste mês', 'Quando houver horas ou despesas numa obra, aparecem aqui.')}</div>`}</div>
+    <h2>Fim do mês</h2>
+    <div class="card ct-erp">
+      <div class="row-b"><h3>${ic('doc')} Pacote para o Primavera</h3></div>
+      <p>Junta num só Excel tudo o que o mês deixou em cada obra, já separado pelo sítio onde entra no Primavera:</p>
+      <ul class="small ct-list"><li><b>Recursos Humanos:</b> horas de cada pessoa em cada obra (o Primavera reparte o salário pelas obras), ajudas de custo e quilómetros em carro próprio.</li>
+        <li><b>Compras:</b> despesas, hotéis, bilhetes, portagens e encomendas, com o fornecedor, o NIF e o número do documento.</li>
+        <li><b>Contabilidade:</b> custos internos sem fatura (carrinhas da empresa, material do armazém, ferramentas, camas nas casas da empresa).</li>
+        <li><b>Faturação:</b> rascunho do que faturar a cada cliente (autos aprovados ou horas × preço da obra). A fatura é emitida no Primavera.</li>
+        <li><b>Controlo:</b> o total de cada obra por tipo de custo, para conferir, e a lista do que falta para entrar sem correções.</li></ul>
+      <p class="small muted">A mão de obra em euros não vai para a contabilidade (o salário real está no Primavera) e as despesas com fatura entram como documento do fornecedor: assim nada fica contado duas vezes.</p>
+      ${canCostExport() ? `<button class="btn big wide" id="ctpack">${esc(t('Preparar o pacote de {x}', ctMonthName(C.ym)))}</button>
+        <button class="btn ghost wide" id="ctrp">Ficheiro do Relógio de Ponto (horas extra)</button>
+        <div id="ctchecks"></div>` : '<p class="small">Quem prepara o pacote é o Secretariado ou o Financeiro.</p>'}
+    </div>
+    <div class="card ct-erp">
+      <div class="row-b"><h3>${ic('globe')} Ligação ao Primavera</h3><span id="ctlinkst"></span></div>
+      <p>Diz ao GestNow como é o Primavera da tua empresa: o código da empresa e a conta de cada tipo de custo. Com isto o pacote sai com os códigos certos.</p>
+      <p class="small muted">Hoje a passagem é feita pelo pacote do mês. A ligação direta (um pequeno programa no servidor do Primavera, instalado pelo parceiro Primavera da empresa) envia tudo sozinha e devolve os números das faturas, sem importações à mão.</p>
+      ${canCostExport() ? '<button class="btn wide" id="ctlink">Abrir a ligação ao Primavera</button>' : ''}
+    </div>`;
+  $('#ctprev').onclick = () => { C.ym = ctShift(C.ym, -1); ctLoad(); };
+  $('#ctnext').onclick = () => { if (!cur) { C.ym = ctShift(C.ym, 1); ctLoad(); } };
+  el.querySelectorAll('[data-ctsite]').forEach((b) => b.onclick = () => ctSite(d.sites.find((s) => s.site_id === b.dataset.ctsite)));
+  if ($('#ctpack')) $('#ctpack').onclick = () => ctPack(from, to);
+  if ($('#ctrp')) $('#ctrp').onclick = () => downloadPrimavera(from, to);
+  if ($('#ctlink')) { $('#ctlink').onclick = () => ctLink(); ctLinkStatus(); }
+}
+const ctShift = (ym, n) => { const [y, m] = ym.split('-').map(Number); const x = new Date(Date.UTC(y, m - 1 + n, 1)); return x.toISOString().slice(0, 7); };
+function ctSiteCard(s) {
+  const [k, l] = CT_FLAG[s.flag] || ['', s.flag];
+  return `<button class="card ct-site" data-ctsite="${esc(s.site_id)}">
+    <div class="row-b"><span><b data-nt>${esc(s.code)}</b> <span data-nt>${esc(s.title)}</span></span><b>${eur0(s.total)}</b></div>
+    ${s.client ? `<span class="small muted" data-nt>${esc(s.client)}</span>` : ''}
+    ${ctBar(s.by_category, s.total)}
+    <div class="tags">${chip(k, l)}${s.budget ? chip('', t('{x} do orçamento gasto', `${Math.round(s.pct_used || 0)} %`)) : ''}${s.estimated > 0 ? chip('', t('{x} estimado', eur0(s.estimated))) : ''}${s.missing ? chip('warn', t('{x} sem preço', s.missing), 'warn') : ''}</div>
+  </button>`;
+}
+async function ctSite(s) {
+  const C = state.costs; const { from, to } = monthRange(C.ym);
+  const box = document.createElement('dialog'); box.className = 'dlg';
+  box.innerHTML = `<form method="dialog"><h2><span data-nt>${esc(s.code)} · ${esc(s.title)}</span></h2>
+    <div id="ctsd">${skel(3)}</div><div class="acts"><button class="btn ghost wide" value="cancel">Fechar</button></div></form>`;
+  document.body.appendChild(box); box.addEventListener('close', () => box.remove());
+  box.addEventListener('click', (e) => { if (e.target === box) box.close(); }); box.showModal();
+  const [{ data: days, error: e1 }, { data: live, error: e2 }] = await Promise.all([
+    sb.rpc('mini_site_cost_days', { p_site: s.site_id, p_from: from, p_to: to }), sb.rpc('mini_site_cost_live', { p_site: s.site_id })]);
+  const el = box.querySelector('#ctsd'); if (!el) return;
+  if (e1 || e2) { el.innerHTML = `<p>${esc(friendly(e1 || e2))}</p>`; return; }
+  const max = Math.max(1, ...days.days.map((x) => x.total));
+  const cats = Object.keys(CT_CAT).filter((k) => days.totals[k] > 0).sort((a, b) => days.totals[b] - days.totals[a]);
+  const b = live.budget; const [fk, fl] = CT_FLAG[live.flag] || ['', live.flag];
+  el.innerHTML = `<div class="ct-kpis">
+      <div class="card ct-kpi"><span class="small muted" data-nt>${esc(ctMonthName(C.ym))}</span><b>${eur0(days.total)}</b></div>
+      <div class="card ct-kpi"><span class="small muted">Desde o início da obra</span><b>${eur0(live.totals.to_date)}</b>${b ? `<span class="small">${esc(t('orçamento {x}', eur0(b.amount)))}</span>` : ''}</div></div>
+    <div class="tags">${chip(fk, fl)}${live.projected != null && b ? chip(live.projected_pct > 100 ? 'bad' : '', t('no fim: {x}', `${eur0(live.projected)} (${Math.round(live.projected_pct)} %)`)) : ''}
+      ${live.labour.hours_to_date ? chip('', t('{x} horas na obra', String(live.labour.hours_to_date).replace('.', ','))) : ''}</div>
+    <h3>Dia a dia</h3>
+    <div class="ct-days" role="img" aria-label="${esc(t('Custo por dia em {x}', ctMonthName(C.ym)))}">${days.days.map((x) => `<i style="height:${Math.max(x.total > 0 ? 3 : 0, Math.round(100 * x.total / max))}%" title="${esc(fmtDate(x.day))}: ${esc(eur0(x.total))}"></i>`).join('')}</div>
+    <div class="row-b small muted"><span>${esc(fmtDate(days.from))}</span><span>${esc(fmtDate(days.to))}</span></div>
+    <h3>Por tipo de custo</h3>
+    <ul class="plain ct-legend">${cats.map((k) => `<li><i class="ct-dot ct-${k}"></i><span>${esc(CT_CAT[k])}</span><b>${eur0(days.totals[k])}</b><span class="small muted">${Math.round(100 * days.totals[k] / (days.total || 1))} %</span></li>`).join('') || '<li class="muted">Sem custos neste mês.</li>'}</ul>
+    ${live.missing_rates.count ? `<h3>Sem preço (não entram na soma)</h3><ul class="plain ct-miss">${live.missing_rates.items.slice(0, 20).map((m) => `<li><span>${esc(CT_CAT[m.category] || m.category)}</span><span class="small" data-nt>${esc(m.label || '')}</span><span class="small muted">${esc(fmtDate(m.day))}</span></li>`).join('')}</ul>
+      <p class="small muted">Põe o valor à hora na ficha da pessoa, o custo por km na viatura ou o preço no artigo do armazém, e a soma corrige-se sozinha.</p>` : ''}
+    ${live.waiting && live.waiting.client_person_hours > 0 ? `<p class="small">${esc(t('Esperas causadas pelo cliente: {x} horas-homem', live.waiting.client_person_hours))}${live.waiting.recoverable_value ? ` · ${esc(t('a recuperar {x}', eur0(live.waiting.recoverable_value)))}` : ''}</p>` : ''}
+    <p class="small muted">A mão de obra é estimada (horas × valor à hora da pessoa) até o mês seguir para os salários.</p>`;
+}
+const CT_CHECK = {
+  site_no_erp_ref: 'Obras sem código do Primavera (ficha da obra)', worker_no_number: 'Pessoas sem Nº de trabalhador',
+  hours_not_validated: 'Horas ainda por validar', overtime_open: 'Horas extra por decidir', expense_pending: 'Despesas por aprovar',
+  doc_no_nif: 'Documentos sem NIF do fornecedor', doc_no_number: 'Documentos sem número', client_no_nif: 'Clientes sem NIF',
+  client_no_po: 'Obras sem o nº de encomenda (PO) que o cliente exige', sale_no_price: 'Horas sem preço de venda na obra',
+  missing_rate: 'Custos sem preço', category_no_account: 'Tipos de custo sem conta do Primavera',
+};
+async function ctPack(from, to) {
+  const box = $('#ctchecks');
+  await excelExport(async () => {
+    const { data, error } = await sb.rpc('mini_erp_pack', { p_from: from, p_to: to });
+    if (error) { toast(friendly(error)); return null; }
+    if (box && box.isConnected) box.innerHTML = data.checks.length ? `<div class="ct-checks"><h4>${ic('warn')} ${esc(t('{x} coisa(s) a corrigir antes de importar', data.checks.reduce((a, c) => a + c.count, 0)))}</h4>
+      <ul class="plain">${data.checks.map((c) => `<li><b><span>${esc(CT_CHECK[c.code] || c.code)}</span> (${c.count})</b><span class="small" data-nt>${esc((c.examples || []).join(' · '))}</span></li>`).join('')}</ul>
+      <p class="small muted">O pacote já saiu com estas linhas marcadas. Corrige e prepara outra vez: cada pacote fica registado.</p></div>`
+      : `<p class="ct-ok">${ic('ok')} Tudo completo para importar.</p>`;
+    return data;
+  }, (X, d) => ctPackBook(X, d));
+}
+function ctPackBook(X, d) {
+  const wb = new X.Workbook(); wb.creator = 'GestNow'; wb.created = new Date();
+  const hdr = (ws, cols) => {
+    ws.columns = cols.map(([h, k, w, f]) => ({ header: h, key: k, width: w || 14, style: f ? { numFmt: f } : {} }));
+    const r = ws.getRow(1); r.font = { bold: true, color: { argb: XL.white }, name: XFONT }; r.fill = xlFill('FF4F46E5'); r.height = 20;
+    ws.views = [{ state: 'frozen', ySplit: 1 }]; ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: cols.length } };
+  };
+  const add = (ws, rows) => rows.forEach((x) => ws.addRow(Object.fromEntries(Object.entries(x).map(([k, v]) => [k, typeof v === 'string' ? xs(v) : v]))));
+  const day = (s) => s ? xlDate(s) : null;
+  const per = `${fmtDate(d.from)} a ${fmtDate(d.to)}`;
+  // Leia-me
+  const r0 = wb.addWorksheet('Leia-me');
+  r0.columns = [{ width: 30 }, { width: 90 }];
+  [['Pacote para o Primavera', ''], ['Empresa', `${d.company.name || ''} · NIF ${d.company.nif || ''}`], ['Empresa no Primavera', d.company.primavera_company || '(por definir em Ligação ao Primavera)'],
+   ['Período', per], ['Feito em', new Date(d.made_at).toLocaleString(LOC)], ['Feito por', exportedBy()], ['', ''],
+   ['Folha', 'Onde entra no Primavera'],
+   ['Controlo por obra', 'Não se importa: serve para conferir o total de cada obra depois de tudo entrar.'],
+   ['RH horas por obra', 'Recursos Humanos: repartição do custo de cada trabalhador pelas obras (centros de custo), pelas horas.'],
+   ['RH ajudas de custo', 'Recursos Humanos › Alterações Mensais: remuneração «ajudas de custo» por pessoa, com a obra.'],
+   ['RH km carro próprio', 'Recursos Humanos: pagamento de quilómetros em viatura própria, com a obra.'],
+   ['Compras documentos', 'Compras (ou Contas Correntes): um documento por linha, do fornecedor, com o código da obra. O IVA é o do documento.'],
+   ['Contabilidade interna', 'Contabilidade analítica / centros de custo: custos sem fatura (não têm IVA nem fornecedor).'],
+   ['Faturar rascunho', 'Vendas: base para a fatura de cada cliente (série de rascunho). A fatura é emitida no Primavera.'],
+   ['A corrigir', 'O que falta para entrar sem correções à mão.'],
+   ['', ''], ['Regra', 'A mão de obra em euros não vai para a contabilidade: o custo real do salário está no Primavera. Assim nada é contado duas vezes.']]
+    .forEach(([a, b], i) => { const row = r0.addRow([a, b]); if (i === 0) row.font = { bold: true, size: 14, name: XFONT }; else if (i === 7) row.font = { bold: true, name: XFONT }; });
+  // Controlo
+  const cats = Object.keys(CT_CAT);
+  const c1 = wb.addWorksheet('Controlo por obra');
+  hdr(c1, [['Obra', 'site', 12], ['Nome', 'title', 30], ['Centro de custo', 'cc', 14], ['Cliente', 'client', 24], ...cats.map((k) => [CT_CAT[k], k, 13, XF.eur]),
+    ['Total', 'total', 14, XF.eur], ['Dos quais estimados', 'est', 14, XF.eur], ['Sem preço', 'miss', 10, XF.n]]);
+  add(c1, d.control.map((x) => ({ site: x.site, title: x.title, cc: x.cost_centre, client: x.client || '', ...Object.fromEntries(cats.map((k) => [k, x.by_category[k] || 0])),
+    total: x.total, est: x.estimated, miss: x.missing })));
+  const tot = c1.addRow({ site: 'Total', ...Object.fromEntries(cats.map((k) => [k, d.control.reduce((a, x) => a + (x.by_category[k] || 0), 0)])),
+    total: d.control.reduce((a, x) => a + x.total, 0), est: d.control.reduce((a, x) => a + x.estimated, 0), miss: d.control.reduce((a, x) => a + x.missing, 0) });
+  tot.font = { bold: true, name: XFONT };
+  // RH
+  const h1 = wb.addWorksheet('RH horas por obra');
+  hdr(h1, [['Nº trabalhador', 'number', 14, XF.text], ['Nome', 'name', 28], ['Obra', 'site', 12], ['Centro de custo', 'cc', 14], ['Dias', 'days', 7, XF.n],
+    ['Horas normais', 'normal', 12, XF.h], ['Horas extra aprovadas', 'ot', 12, XF.h], ['Horas extra por decidir', 'oto', 12, XF.h], ['Horas noturnas', 'night', 12, XF.h],
+    ['Descanso', 'rest', 10, XF.h], ['Feriado', 'hol', 10, XF.h], ['Total horas', 'total', 11, XF.h], ['% das horas da pessoa', 'pct', 12, '0.0'], ['Validado', 'val', 10]]);
+  add(h1, d.rh_hours.map((x) => ({ number: x.number || '', name: x.name, site: x.site, cc: x.cost_centre, days: x.days, normal: x.normal_h, ot: x.overtime_h, oto: x.overtime_open_h,
+    night: x.night_h, rest: x.rest_h, hol: x.holiday_h, total: x.total_h, pct: x.pct_of_person, val: x.validated ? 'sim' : 'NÃO' })));
+  const h2 = wb.addWorksheet('RH ajudas de custo');
+  hdr(h2, [['Nº trabalhador', 'number', 14, XF.text], ['Nome', 'name', 28], ['Obra', 'site', 12], ['Centro de custo', 'cc', 14], ['Dias', 'days', 7, XF.n], ['Valor', 'amount', 12, XF.eur], ['Estado', 'state', 12]]);
+  add(h2, d.rh_allowances.map((x) => ({ number: x.number || '', name: x.name, site: x.site, cc: x.cost_centre, days: x.days, amount: x.amount, state: x.state === 'issued' ? 'emitidas' : 'calculadas' })));
+  const h3 = wb.addWorksheet('RH km carro próprio');
+  hdr(h3, [['Nº trabalhador', 'number', 14, XF.text], ['Nome', 'name', 28], ['Obra', 'site', 12], ['Centro de custo', 'cc', 14], ['Data', 'date', 12, XF.date], ['Percurso', 'route', 28], ['Km', 'km', 8, '0'], ['€/km', 'rate', 8, '0.00'], ['Valor', 'amount', 12, XF.eur]]);
+  add(h3, d.rh_km.map((x) => ({ number: x.number || '', name: x.name, site: x.site, cc: x.cost_centre, date: day(x.date), route: x.route, km: x.km, rate: x.rate, amount: x.amount })));
+  // Compras
+  const KIND = { expense: 'Despesa', hotel: 'Hotel', ticket: 'Bilhete', house: 'Casa', vehicle: 'Viatura', purchase: 'Encomenda' };
+  const p1 = wb.addWorksheet('Compras documentos');
+  hdr(p1, [['Obra', 'site', 12], ['Centro de custo', 'cc', 14], ['Data', 'date', 12, XF.date], ['Tipo', 'kind', 11], ['Fornecedor', 'sup', 24], ['NIF fornecedor', 'nif', 14, XF.text],
+    ['Nº documento', 'doc', 16, XF.text], ['Descrição', 'desc', 30], ['Conta Primavera', 'acc', 12, XF.text], ['Valor com IVA', 'gross', 13, XF.eur], ['IVA', 'vat', 11, XF.eur],
+    ['Sem IVA', 'net', 13, XF.eur], ['Pagamento', 'pay', 14], ['Pessoa', 'person', 22], ['Estado', 'state', 12]]);
+  const PAY = { out_of_pocket: 'pago pela pessoa', corporate_card: 'cartão da empresa', direct_billing: 'faturado à empresa' };
+  add(p1, d.purchases.map((x) => ({ site: x.site, cc: x.cost_centre, date: day(x.date), kind: KIND[x.kind] || x.kind, sup: x.supplier || '', nif: x.supplier_nif || '',
+    doc: x.doc_number || '', desc: x.description || '', acc: x.account || '', gross: x.gross, vat: x.vat, net: x.net, pay: PAY[x.payment] || '', person: x.person || '',
+    state: x.state === 'submitted' ? 'POR APROVAR' : x.state })));
+  // Contabilidade
+  const SRC = { vehicle_trips: 'Km das viaturas da empresa', tool_hire: 'Aluguer interno de ferramentas', tool_hire_open: 'Ferramentas ainda na obra',
+    stock_issue: 'Saídas do armazém', stock_return: 'Devoluções ao armazém', scaffold_day: 'Andaimes (dias montados)', housing_stays: 'Camas nas casas da empresa', ledger: 'Outros custos registados' };
+  const a1 = wb.addWorksheet('Contabilidade interna');
+  hdr(a1, [['Obra', 'site', 12], ['Centro de custo', 'cc', 14], ['Tipo de custo', 'cat', 16], ['Conta Primavera', 'acc', 12, XF.text], ['Origem', 'src', 30],
+    ['Quantidade', 'qty', 11, '0.00'], ['Unidade', 'unit', 9], ['Valor', 'amount', 13, XF.eur], ['Estimado', 'est', 9], ['Período', 'per', 22]]);
+  add(a1, d.internal.map((x) => ({ site: x.site, cc: x.cost_centre, cat: CT_CAT[x.category] || x.category, acc: x.account || '', src: SRC[x.source] || SRC[x.source.replace(/^(scaffold|tool)_.*/, '$1_day')] || x.source,
+    qty: x.quantity, unit: x.unit, amount: x.amount, est: x.estimated ? 'sim' : '', per })));
+  // Faturar
+  const s1 = wb.addWorksheet('Faturar rascunho');
+  hdr(s1, [['Obra', 'site', 12], ['Código obra Primavera', 'sref', 14, XF.text], ['Cliente', 'client', 26], ['NIF cliente', 'nif', 13, XF.text], ['Código cliente Primavera', 'cref', 14, XF.text],
+    ['Nº encomenda (PO)', 'po', 16, XF.text], ['Base', 'basis', 10], ['Descrição', 'desc', 44], ['Quantidade', 'qty', 11, '0.00'], ['Unidade', 'unit', 8], ['Preço', 'price', 11, XF.eur],
+    ['Valor', 'amount', 13, XF.eur], ['Retenção %', 'ret', 10, '0.0'], ['Aceitação do cliente', 'acc', 18]]);
+  add(s1, d.sales.map((x) => ({ site: x.site, sref: x.site_ref || '', client: x.client || '', nif: x.client_nif || '', cref: x.client_ref || '', po: x.po || '',
+    basis: x.basis === 'measurement' ? 'auto' : 'horas', desc: x.description, qty: x.quantity, unit: x.unit, price: x.price, amount: x.amount, ret: x.retention_pct, acc: x.acceptance || '' })));
+  // A corrigir
+  const k1 = wb.addWorksheet('A corrigir');
+  hdr(k1, [['O que falta', 'what', 50], ['Quantos', 'n', 9, XF.n], ['Exemplos', 'ex', 80]]);
+  add(k1, d.checks.map((c) => ({ what: CT_CHECK[c.code] || c.code, n: c.count, ex: (c.examples || []).join(' · ') })));
+  if (!d.checks.length) k1.addRow({ what: 'Nada a corrigir: tudo completo para importar.' });
+  if (d.missing_rates.length) {
+    k1.addRow({}); k1.addRow({ what: 'Custos sem preço (não entram nas somas)' }).font = { bold: true, name: XFONT };
+    add(k1, d.missing_rates.map((m) => ({ what: `${m.site} · ${CT_CAT[m.category] || m.category}`, n: m.quantity, ex: `${m.label || ''} · ${fmtDate(m.date)}` })));
+  }
+  const ym = d.from.slice(0, 7);
+  return { wb, name: `GestNow-Primavera-${ym}.xlsx`, msg: d.checks.length ? t('Pacote pronto, com {x} coisa(s) a corrigir.', d.checks.reduce((a, c) => a + c.count, 0)) : 'Pacote pronto: tudo completo para importar.' };
+}
+async function ctLinkStatus() {
+  const { data } = await sb.rpc('mini_erp_link'); const el = $('#ctlinkst'); if (!data || !el) return;
+  el.innerHTML = data.delivery === 'direct' ? chip('ok', 'ligado', 'ok') : data.direct_requested_at ? chip('warn', 'ligação direta pedida') : chip('', 'por ficheiro');
+}
+async function ctLink() {
+  const { data: d, error } = await sb.rpc('mini_erp_link'); if (error) return toast(friendly(error));
+  const fd = await askSheet('Ligação ao Primavera', `
+    <p><b>Para que serve:</b> o GestNow recolhe o que acontece nas obras; o Primavera fatura, paga os salários e faz a contabilidade. Esta ligação diz ao GestNow como o Primavera da tua empresa está organizado, para tudo entrar à primeira.</p>
+    <p class="small">Estado: ${d.delivery === 'direct' ? '<b>ligação direta ativa</b>' : d.direct_requested_at ? `<b>ligação direta pedida</b> em ${esc(fmtDate(d.direct_requested_at.slice(0, 10)))}. Enquanto não estiver ativa, usa o pacote do mês.` : '<b>por ficheiro</b> (o pacote do mês).'}</p>
+    <label for="lc">Código da empresa no Primavera</label><input id="lc" name="company_code" maxlength="20" value="${esc(d.company_code || '')}" placeholder="ex.: EMPRESA1" autocomplete="off">
+    <h3>Conta do Primavera para cada tipo de custo</h3>
+    <p class="small muted">A conta ou centro de custo onde cada tipo entra (analítica, classe 9). Pede-as ao contabilista. Vazio = sem conta.</p>
+    <div class="ct-codes">${d.categories.map((k) => `<label for="lk-${k}">${esc(CT_CAT[k] || k)}</label><input id="lk-${k}" name="code:${k}" maxlength="20" value="${esc(d.codes[k] || '')}" autocomplete="off">`).join('')}</div>
+    <label for="ln">Contacto do parceiro Primavera (opcional)</label><input id="ln" name="contact_note" maxlength="300" value="${esc(d.contact_note || '')}" placeholder="ex.: nome da empresa parceira e telefone">
+    ${d.delivery !== 'direct' ? `<label class="check"><input type="checkbox" name="request_direct" ${d.direct_requested_at ? 'checked disabled' : ''}> Pedir a ligação direta ao GestNow</label>
+      <p class="small muted">A ligação direta precisa do parceiro Primavera da tua empresa para instalar um pequeno programa no servidor do Primavera. O GestNow trata do resto e avisa quando estiver ativa.</p>` : ''}
+    ${d.packs.length ? `<h3>Últimos pacotes</h3><ul class="plain ct-miss">${d.packs.map((p) => `<li><span>${esc(fmtDate(p.from))} a ${esc(fmtDate(p.to))}</span><span class="small"><span data-nt>${eur0(p.total)}</span>${p.checks ? ' · <span>' + esc(t('{x} a corrigir', p.checks)) + '</span>' : ''}</span><span class="small muted" data-nt>${esc(p.by || '')}</span></li>`).join('')}</ul>` : ''}`, 'Guardar');
+  if (!fd) return;
+  const p = { codes: {} };
+  for (const [k, v] of fd.entries()) { if (k.startsWith('code:')) p.codes[k.slice(5)] = String(v).trim(); else if (k === 'request_direct') p.request_direct = true; else if (k !== '_v') p[k] = String(v).trim(); }
+  const { error: e } = await sb.rpc('mini_erp_link', { p });
+  if (e) return toast(friendly(e));
+  toast(p.request_direct && !d.direct_requested_at ? 'Guardado. Pedido de ligação direta registado.' : 'Ligação ao Primavera guardada.');
+  ctLinkStatus();
+}
+
 function viewAwards() {
   if (!state.ready) return boot();
   if (!canAwards()) return viewClock();
