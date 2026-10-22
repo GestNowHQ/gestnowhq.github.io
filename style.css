@@ -2337,3 +2337,32 @@ ul.ct-miss li { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; p
 .mt-fams { display: grid; gap: 8px; margin-top: 8px; }
 .mt-reps .wk { padding: 8px 0; border-top: 1px solid var(--line, rgba(127,127,127,.18)); }
 .mt-reps .wk:first-of-type { border-top: 0; }
+/* Malões (v86) */
+.mc-top { display: grid; gap: 8px; margin: 4px 0 12px; }
+.mc-row { display: block; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.mc-row.warn { border-left: 3px solid var(--warn, #d97706); }
+.mc-row .wk, .mc-h { align-items: flex-start; }
+.mc-ic { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: color-mix(in srgb, var(--accent, #4f46e5) 12%, transparent); color: var(--accent, #4f46e5); }
+.mc-ic .i { width: 22px; height: 22px; }
+.mc-h { display: flex; gap: 12px; }
+.mc-h h2 small { font-size: .7em; color: var(--muted, #6b7280); font-weight: 600; }
+.mc-who { margin: 12px 0; padding: 12px; border-radius: 14px; background: color-mix(in srgb, var(--accent, #4f46e5) 6%, transparent); }
+.mc-who .tapzone { margin: 0 0 8px; }
+.mc-person { margin-top: 10px; padding: 12px; border-radius: 12px; background: var(--card, #fff); border: 1px solid var(--line, rgba(127,127,127,.25)); }
+.mc-person h4 { margin: 12px 0 4px; font-size: 14px; }
+.mc-list, .mc-pick { list-style: none; margin: 6px 0 0; padding: 0; }
+.mc-list li, .mc-pick li { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 8px 0; border-top: 1px solid var(--line, rgba(127,127,127,.18)); font-size: 14px; }
+.mc-list li:first-child, .mc-pick li:first-child { border-top: 0; }
+.mc-list .grow, .mc-pick .grow { flex: 1 1 160px; min-width: 0; }
+.mc-list .sub { display: block; font-size: 12px; color: var(--muted, #6b7280); }
+.mc-list .sub.t-bad { color: var(--bad, #dc2626); }
+.mc-pick .chk { display: flex; align-items: center; gap: 8px; flex: 1 1 auto; margin: 0; }
+.mc-pick .chk.small { flex: 0 0 auto; font-size: 13px; }
+.mc-x { min-width: 36px; padding: 4px 8px; }
+.mc-acts { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 6px; }
+.mc-ev { margin: 10px 0; font-size: 13px; }
+.mc-ev ul { margin: 6px 0 0; padding-left: 18px; }
+.mc-ev li { margin: 4px 0; }
+.mc-person .btn.wide { margin-top: 8px; }
+.mt-tabs { overflow-x: auto; scrollbar-width: none; }
+@media (max-width: 480px) { .mt-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; overflow: visible; } .mt-tabs button { padding-left: 6px; padding-right: 6px; } }

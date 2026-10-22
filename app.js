@@ -66,6 +66,27 @@ const ERRORS = [
   [/write the message \(3 to 500/i, 'Escreve a mensagem (3 a 500 letras).'],
   [/too many messages today/i, 'Já mandaste 20 avisos hoje.'],
   [/the meeting must be in the next 14 days/i, 'A reunião tem de ser nos próximos 14 dias.'],
+  // Malões (sql/110)
+  [/case not found/i, 'Malão não encontrado.'],
+  [/card not known/i, 'Não conheço este cartão: está registado a alguém da empresa?'],
+  [/this is a person's card, not a sticker/i, 'Isso é o cartão de uma pessoa, não o autocolante do malão.'],
+  [/only the warehouse makes a case for the company warehouse/i, 'Só o armazém cria malões do armazém. Aqui crias o malão desta obra.'],
+  [/name the case/i, 'Dá um nome ao malão (2 a 80 letras).'],
+  [/choose who answers for the case/i, 'Escolhe quem é o responsável do malão.'],
+  [/too many cases today/i, 'Já criaste 30 malões hoje.'],
+  [/this case is closed/i, 'Este malão está fechado.'],
+  [/this case is in the warehouse: hand tools out at the warehouse window/i, 'Este malão está no armazém: as ferramentas saem pelo «Entregar».'],
+  [/this case is already on a site/i, 'Este malão já está numa obra.'],
+  [/this case is already in the warehouse/i, 'Este malão já está no armazém.'],
+  [/this tool is not inside the case/i, 'Essa ferramenta não está dentro do malão.'],
+  [/this tool is not in this case/i, 'Essa ferramenta não é deste malão.'],
+  [/this tool is not on this site/i, 'Essa ferramenta não está nesta obra.'],
+  [/tool (\S+) is not on this site/i, 'A $1 não está nesta obra.'],
+  [/tool (\S+) is not in the warehouse/i, 'A $1 não está disponível no armazém.'],
+  [/tool (\S+) is reported damaged or missing/i, 'A $1 está reportada como avariada ou em falta: o armazém tem de a ver primeiro.'],
+  [/tools still with people: (.*)$/i, 'Ainda há ferramentas com pessoas: $1. Devolvam ao malão primeiro.'],
+  [/the case still has tools/i, 'O malão ainda tem ferramentas: tira-as primeiro.'],
+  [/too many lines \((\d+) at most\)/i, 'Linhas a mais: $1 no máximo.'],
   // Material da obra (sql/109)
   [/choose what you need/i, 'Escolhe ou escreve o que precisas.'],
   [/too many lines \(30 at most\)/i, 'Linhas a mais: 30 no máximo por pedido.'],
@@ -378,7 +399,7 @@ const ERRORS = [
   [/tool (\S+) is not available/i, 'A ferramenta $1 não está disponível (emprestada, em reparação ou abatida).'],
   [/the tool is lent: get it back first/i, 'Esta ferramenta está emprestada. Recebe-a de volta primeiro.'],
   [/this tool is not lent to anyone/i, 'Esta ferramenta não está emprestada a ninguém.'],
-  [/this tag is already used/i, 'Já existe uma ferramenta com este número.'],
+  [/this tag is already used/i, 'Esta etiqueta já está a ser usada (noutra ferramenta ou noutro malão).'],
   [/this item already exists/i, 'Este artigo já existe. Edita-o em vez de criar outro.'],
   [/a failed inspection is cleared only by a new inspection/i, 'Chumbou na inspeção: só volta a sair com uma inspeção nova aprovada.'],
   [/say what happened \(5 letters/i, 'Escreve o que aconteceu (5 letras ou mais).'],
@@ -922,7 +943,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '85';
+const APP_VERSION = '86';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['reunioes', 'emergencia', 'lmra', 'seguranca'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -8286,7 +8307,7 @@ const canSiteMaterial = () => mod('warehouse') && ['armazem.ver', 'armazem.entre
 const REQ_ST = { pending: ['warn', 'à espera do armazém'], approved: ['warn', 'à espera do armazém'], prepared: ['info', 'pronto para levantar'],
   delivered: ['ok', 'entregue'], rejected: ['bad', 'recusado'], cancelled: ['', 'cancelado'] };
 const CAL_ST = { due_soon: ['warn', 'calibração a vencer'], expired: ['bad', 'calibração vencida'], failed: ['bad', 'calibração reprovada'] };
-const MAT_TABS = [['ferramentas', 'Ferramentas'], ['epi', 'EPI'], ['material', 'Material'], ['pedidos', 'Pedidos']];
+const MAT_TABS = [['ferramentas', 'Ferramentas'], ['maloes', 'Malões'], ['epi', 'EPI'], ['material', 'Material'], ['pedidos', 'Pedidos']];
 function viewSiteMaterial() {
   if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canSiteMaterial()) return viewClock();   // code guard as well as the database's
@@ -8297,7 +8318,7 @@ function viewSiteMaterial() {
     <div class="seg mt-tabs" role="tablist" id="mttabs">${MAT_TABS.map(([k, l]) => `<button role="tab" data-mt="${k}" aria-selected="${M.tab === k}">${esc(l)}</button>`).join('')}</div>
     <div id="mtbody">${skel(3)}</div>`;
   bindSiteSelect('mts', loadSiteMaterial);
-  $('#mttabs').querySelectorAll('[data-mt]').forEach((b) => b.onclick = () => { M.tab = b.dataset.mt; matTabs(); matBody(); });
+  $('#mttabs').querySelectorAll('[data-mt]').forEach((b) => b.onclick = () => { M.tab = b.dataset.mt; stopNfc(); matTabs(); matBody(); });
   loadSiteMaterial();
 }
 function matTabs() {
@@ -8341,14 +8362,16 @@ function matBody() {
   if (M.tab === 'ferramentas') {
     box.innerHTML = d.tools.length ? `<div class="list">${d.tools.map((t) => `<article class="card mt-tool ${t.late ? 'bad' : ''}">
         <div class="wk"><div class="grow"><div class="nm">${esc(t.name)} <b>${esc(t.tag)}</b></div>
-          <div class="sub">${esc(t.person)} · desde ${esc(fmtTime(t.since, tz))}</div>
-          <div class="sub">${t.due ? (t.late ? `<b class="t-bad">devia ter voltado a ${esc(fmtTime(t.due, tz))}</b>` : `volta até ${esc(fmtTime(t.due, tz))}`) : ''}
+          <div class="sub">${t.in_case ? `Dentro do malão ${esc(t.case)}` : `${esc(t.person)} · desde ${esc(fmtTime(t.since, tz))}${t.case ? ` · do malão ${esc(t.case.split(' · ')[0])}` : ''}`}</div>
+          <div class="sub">${t.due && !t.in_case ? (t.late ? `<b class="t-bad">devia ter voltado a ${esc(fmtTime(t.due, tz))}</b>` : `volta até ${esc(fmtTime(t.due, tz))}`) : ''}
             ${t.cal_due && CAL_ST[t.cal] ? ` · calibração até ${esc(fmtDate(t.cal_due))}` : ''}</div></div>
-          <div class="mt-chips">${t.late ? chip('bad', 'atrasada') : chip('info', 'emprestada')}${CAL_ST[t.cal] ? chip(CAL_ST[t.cal][0], CAL_ST[t.cal][1]) : ''}</div></div>
+          <div class="mt-chips">${t.late ? chip('bad', 'atrasada') : t.in_case ? chip('ok', 'no malão') : chip('info', 'emprestada')}${CAL_ST[t.cal] ? chip(CAL_ST[t.cal][0], CAL_ST[t.cal][1]) : ''}</div></div>
         ${t.report ? `<p class="small mt-rep">${ic('warn')}<span>Reportada como <b>${t.report.kind === 'missing' ? 'desaparecida' : 'avariada'}</b> a ${esc(fmtTime(t.report.at, tz))}: «${esc(t.report.note)}». O armazém já sabe.</span></p>`
           : `<div class="acts"><button class="btn ghost small" data-rep="${esc(t.custody)}" data-tag="${esc(t.tag)}">Desapareceu ou avariou</button></div>`}</article>`).join('')}</div>`
       : `<div class="card">${empty('box', 'Nenhuma ferramenta nesta obra', 'Quando o armazém entregar uma ferramenta com o custo para esta obra, aparece aqui com quem a tem.')}</div>`;
     box.querySelectorAll('[data-rep]').forEach((b) => b.onclick = () => matToolReport(b.dataset.rep, b.dataset.tag));
+  } else if (M.tab === 'maloes') {
+    matCases(box);
   } else if (M.tab === 'epi') {
     const req = d.ppe_required;
     box.innerHTML = `<section class="card mt-req"><div class="wk"><div class="grow"><b>EPI obrigatório nesta obra</b>
@@ -8471,6 +8494,254 @@ async function matPpeRules() {
   toast('EPI obrigatório guardado.'); loadSiteMaterial();
 }
 
+// ---- Malões (sql/110): a tool case with an NFC sticker. From the warehouse (sent to a site with whoever answers for it)
+// or made on the site (a room, a container). On the site the phone stays open on the case: each person taps the card,
+// ticks what they take or bring back, and the custody passes to them and back. Damaged on return = the warehouse is told
+// and nobody can take it. Counting ticks what is seen; what should be inside and is not becomes "missing".
+const CASE_ST = { in: ['ok', 'no malão'], out: ['info', 'fora'], warehouse: ['', 'no armazém'], held: ['warn', 'no armazém, parada'] };
+const CASE_EV = { created: 'Criado', edited: 'Alterado', tag: 'Etiqueta registada', put: 'Arrumada', removed: 'Tirada do malão', take: 'Levou',
+  return: 'Devolveu', sent: 'Enviado para a obra', back: 'Voltou ao armazém', check: 'Conferido', keeper: 'Novo responsável', closed: 'Fechado' };
+async function matCases(box) {
+  const M = state.mat; const site = M.site;
+  box.innerHTML = skel(2);
+  const { data: d, error } = await sb.rpc('mini_cases', { p_site: site.id });
+  if (!box.isConnected || state.mat.tab !== 'maloes') return;
+  if (error) { box.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
+  M.cases = d;
+  box.innerHTML = `<div class="mc-top">${'NDEFReader' in window ? `<button class="btn big wide" id="mcread">${ic('tap')}Encostar a etiqueta do malão</button>` : ''}
+      ${d.can_make ? '<button class="btn ghost" id="mcnew">+ Malão desta obra</button>' : ''}</div>
+    ${d.cases.length ? `<div class="list">${d.cases.map(caseRow).join('')}</div>`
+      : `<div class="card">${empty('box', 'Sem malões nesta obra', 'Um malão é uma mala ou uma sala com ferramentas. Leva um autocolante NFC: cada pessoa pica o cartão quando tira ou devolve. O armazém envia malões; aqui podes criar o da obra.')}</div>`}`;
+  box.querySelectorAll('[data-case]').forEach((b) => b.onclick = () => caseOpen(b.dataset.case));
+  if ($('#mcread')) $('#mcread').onclick = () => wtReadTag(caseScanOpen);
+  if ($('#mcnew')) $('#mcnew').onclick = () => caseEdit(null, site.id);
+}
+function caseRow(c) {
+  return `<button class="card mc-row ${c.n_late || c.n_rep ? 'warn' : ''}" data-case="${esc(c.id)}"><div class="wk"><span class="mc-ic">${ic('box')}</span><div class="grow">
+      <div class="nm">${esc(c.name)} <b>${esc(c.code)}</b></div>
+      <div class="sub">${c.site_code ? `Obra ${esc(c.site_code)} · ${esc(c.keeper_name || '')}` : 'No armazém'}${c.place ? ' · ' + esc(c.place) : ''}</div>
+      <div class="mt-chips">${chip('ok', `${c.n_in} dentro`)}${c.n_out ? chip('info', `${c.n_out} fora`) : ''}${c.n_late ? chip('bad', `${c.n_late} atrasada(s)`) : ''}
+        ${c.n_rep ? chip('warn', `${c.n_rep} reportada(s)`) : ''}${c.tag ? '' : chip('warn', 'sem etiqueta')}</div></div></div></button>`;
+}
+async function caseScanOpen(uid) {
+  const { data, error } = await sb.rpc('mini_case_scan', { p_ref: uid });
+  if (error) return toast(friendly(error));
+  if (data.type === 'case') return caseOpen(data.id);
+  if (data.type === 'tool' && data.case) return caseOpen(data.case);
+  toast(data.type === 'person' ? `É o cartão de ${data.name}. Abre primeiro o malão (encosta a etiqueta dele).` : 'Esta etiqueta não é de nenhum malão.');
+}
+async function caseRefresh() {
+  if (state.view === 'material' && state.mat && state.mat.tab === 'maloes') { const b = $('#mtbody'); if (b) matCases(b); }
+  else if (state.view === 'material') loadSiteMaterial();
+  else if (state.view === 'armazem' && state.wh && state.wh.tab === 'maloes') whCases();
+}
+// The case, open on the phone. While it is open the phone listens: a card = that person (take / return),
+// a tool's tag = tick that tool, the case's own sticker = nothing to do.
+async function caseOpen(id) {
+  stopNfc();
+  const { data: c, error } = await sb.rpc('mini_case_get', { p_case: id });
+  if (error) return toast(friendly(error));
+  const d = document.createElement('dialog'); d.className = 'dlg mc-dlg';
+  const nfcOk = 'NDEFReader' in window; let ctrl = null; let who = null; let pick = new Set(); let back = new Set(); let bad = new Set();
+  const tz = c.tz;
+  const toolLi = (t) => `<li class="mc-t ${t.state}"><span class="grow"><b>${esc(t.tag_code)}</b> ${esc(t.name)}
+      ${t.state === 'out' ? `<span class="sub">com ${esc(t.person)} desde ${esc(fmtTime(t.since, tz))}${t.late ? ' · <b class="t-bad">devia ter voltado</b>' : ''}</span>` : ''}
+      ${t.report ? `<span class="sub t-bad">${t.report.kind === 'missing' ? 'em falta' : 'avariada'}: «${esc(t.report.note)}»</span>` : ''}</span>
+      ${chip(...(t.late ? ['bad', 'atrasada'] : CASE_ST[t.state] || ['', t.state]))}${CAL_ST[t.cal] ? chip(CAL_ST[t.cal][0], CAL_ST[t.cal][1]) : ''}
+      ${c.may_edit && c.active ? `<button type="button" class="btn ghost small mc-x" data-rm="${esc(t.id)}" aria-label="Tirar do malão">×</button>` : ''}</li>`;
+  const nIn = c.tools.filter((t) => t.state === 'in').length; const nOut = c.tools.filter((t) => t.state === 'out').length;
+  d.innerHTML = `<form method="dialog">
+    <div class="mc-h"><span class="mc-ic">${ic('box')}</span><div class="grow"><h2>${esc(c.name)} <small>${esc(c.code)}</small></h2>
+      <p class="small muted">${c.site_code ? `Obra ${esc(c.site_code)} · responsável <b>${esc(c.keeper_name || '')}</b>` : 'No armazém da empresa'}${c.place ? ' · ' + esc(c.place) : ''}</p></div></div>
+    <div class="mt-chips">${chip('ok', `${nIn} dentro`)}${nOut ? chip('info', `${nOut} fora`) : ''}${c.tag ? chip('', 'etiqueta NFC ✓') : chip('warn', 'sem etiqueta')}</div>
+    ${c.can_hand ? `<section class="mc-who" id="mcwho">
+      ${nfcOk ? `<div class="tapzone reading"><span class="ring">${ic('tap')}</span><b>Encosta o cartão de quem tira ou devolve</b><span class="small">às costas deste telemóvel</span></div>` : ''}
+      <div class="manual"><input id="mcuid" autocomplete="off" autocapitalize="characters" placeholder="Ou escreve o número do cartão"><button class="btn ghost" type="button" id="mcgo">Ler</button></div>
+      <div id="mcp" aria-live="polite"></div></section>` : c.site ? '' : '<p class="small muted">No armazém, as ferramentas saem pelo «Entregar». Para mandar o malão inteiro para uma obra, carrega em «Enviar para obra».</p>'}
+    <h3>Ferramentas (${c.tools.length})</h3>
+    ${c.tools.length ? `<ul class="mc-list">${c.tools.map(toolLi).join('')}</ul>` : '<p class="small muted">Ainda vazio. Carrega em «Pôr ferramentas».</p>'}
+    <div class="mc-acts">${c.may_edit && c.active ? `<button type="button" class="btn ghost small" id="mcput">+ Pôr ferramentas</button>
+      <button type="button" class="btn ghost small" id="mctag">${ic('tap')}${c.tag ? 'Trocar etiqueta' : 'Registar etiqueta'}</button>
+      ${nIn ? '<button type="button" class="btn ghost small" id="mcchk">Conferir</button>' : ''}
+      <button type="button" class="btn ghost small" id="mced">Editar</button>` : ''}
+      ${c.can_send && c.active ? (c.site ? '<button type="button" class="btn ghost small" id="mcback">Receber no armazém</button>' : '<button type="button" class="btn small" id="mcsend">Enviar para obra</button>') : ''}
+      ${c.may_edit && c.active && !c.tools.length ? '<button type="button" class="btn ghost small" id="mcclose">Fechar malão</button>' : ''}</div>
+    ${c.events && c.events.length ? `<details class="mc-ev"><summary>Histórico</summary><ul>${c.events.map((e) => `<li><span class="muted small">${esc(fmtTime(e.at, tz))}</span>
+      ${esc(CASE_EV[e.kind] || e.kind)}${e.tool ? ' ' + esc(e.tool) : ''}${e.person ? ' · ' + esc(e.person) : ''}${e.note ? ` · <span class="muted">${esc(e.note)}</span>` : ''}${e.typed ? ' · <span class="t-bad">número escrito</span>' : ''}
+      <span class="muted small">(${esc(e.by || '')})</span></li>`).join('')}</ul></details>` : ''}
+    <div class="acts"><button class="btn big" value="ok">Fechar</button></div></form>`;
+  document.body.appendChild(d); d.showModal();
+  const panel = d.querySelector('#mcp');
+  const drawPerson = () => {
+    if (!who) { panel.innerHTML = ''; return; }
+    const may = who.may.filter((t) => t.ok); const no = who.may.filter((t) => !t.ok);
+    panel.innerHTML = `<div class="mc-person"><div class="wk">${avatar(who.name)}<div class="grow"><b>${esc(who.name)}</b>
+        <div class="sub">${who.holding.length ? `tem ${who.holding.length} ferramenta(s) deste malão` : 'não tem nada deste malão'}</div></div>
+        <button type="button" class="btn ghost small" id="mcnot">Outra pessoa</button></div>
+      ${who.holding.length ? `<h4>Devolver</h4><ul class="mc-pick">${who.holding.map((t) => `<li><label class="chk"><input type="checkbox" data-back="${esc(t.id)}" ${back.has(t.id) ? 'checked' : ''}>
+          <span class="grow"><b>${esc(t.tag_code)}</b> ${esc(t.name)}${t.late ? ' · <b class="t-bad">atrasada</b>' : ''}</span></label>
+          <label class="chk small"><input type="checkbox" data-bad="${esc(t.id)}" ${bad.has(t.id) ? 'checked' : ''}> avariada</label></li>`).join('')}</ul>
+        <div id="mcbadn" ${bad.size ? '' : 'hidden'}><label for="mcbn">O que aconteceu? *</label><input id="mcbn" maxlength="300" placeholder="ex.: bucha partida, cabo cortado"></div>
+        <button type="button" class="btn wide" id="mcret" ${back.size ? '' : 'disabled'}>${ic('in')}Devolver ${back.size || ''} ao malão</button>` : ''}
+      ${may.length || no.length ? `<h4>Levar</h4><ul class="mc-pick">${may.map((t) => `<li><label class="chk"><input type="checkbox" data-take="${esc(t.id)}" ${pick.has(t.id) ? 'checked' : ''}>
+          <span class="grow"><b>${esc(t.tag_code)}</b> ${esc(t.name)}</span></label></li>`).join('')}
+          ${no.map((t) => `<li class="muted"><span class="grow"><b>${esc(t.tag_code)}</b> ${esc(t.name)}</span>${chip('bad', t.why || 'não pode')}</li>`).join('')}</ul>
+        <button type="button" class="btn wide" id="mctake" ${pick.size ? '' : 'disabled'}>${ic('out')}Levar ${pick.size || ''}</button>
+        <p class="small muted">Volta ao malão até às 20h. Fica em nome de ${esc(who.name.split(' ')[0])} até devolver.</p>` : '<p class="small muted">Nada dentro do malão para levar.</p>'}</div>`;
+    panel.querySelectorAll('[data-take]').forEach((x) => x.onchange = () => { x.checked ? pick.add(x.dataset.take) : pick.delete(x.dataset.take); drawPerson(); });
+    panel.querySelectorAll('[data-back]').forEach((x) => x.onchange = () => { x.checked ? back.add(x.dataset.back) : back.delete(x.dataset.back); drawPerson(); });
+    panel.querySelectorAll('[data-bad]').forEach((x) => x.onchange = () => { if (x.checked) { bad.add(x.dataset.bad); back.add(x.dataset.bad); } else bad.delete(x.dataset.bad); drawPerson(); });
+    panel.querySelector('#mcnot').onclick = () => { who = null; drawPerson(); };
+    if (panel.querySelector('#mctake')) panel.querySelector('#mctake').onclick = async () => {
+      const { data: r, error: e } = await sb.rpc('mini_case_take', { p_case: c.id, p_uid: who.uid, p_tools: [...pick], p_typed: who.typed });
+      if (e) { beep(false); return toast(friendly(e)); }
+      beep(true); showFlash('ok', 'LEVOU', `${r.name}: ${r.n} ferramenta(s). Volta até às 20h.`); d.close(); caseOpen(c.id); };
+    if (panel.querySelector('#mcret')) panel.querySelector('#mcret').onclick = async () => {
+      const note = (panel.querySelector('#mcbn') || {}).value || '';
+      if (bad.size && note.trim().length < 5) return toast('Escreve o que aconteceu (5 letras ou mais).');
+      const { data: r, error: e } = await sb.rpc('mini_case_return', { p_case: c.id, p_uid: who.uid, p_tools: [...back], p_damaged: [...bad], p_note: note.trim() || null, p_typed: who.typed });
+      if (e) { beep(false); return toast(friendly(e)); }
+      beep(true); showFlash(bad.size ? 'warn' : 'ok', 'DEVOLVIDO', `${r.n} ferramenta(s) no malão.${bad.size ? ' O armazém foi avisado da avaria.' : ''}`); d.close(); caseOpen(c.id); };
+  };
+  let last = { uid: '', at: 0 };
+  const onTap = async (raw, typed) => {
+    const uid = normUid(raw); if (!uid) return;
+    if (uid === last.uid && Date.now() - last.at < 3000) return; last = { uid, at: Date.now() };
+    const { data: s, error: e } = await sb.rpc('mini_case_scan', { p_ref: uid });
+    if (e) { beep(false); return toast(friendly(e)); }
+    if (s.type === 'person') {
+      const { data: p, error: e2 } = await sb.rpc('mini_case_person', { p_case: c.id, p_uid: uid });
+      if (e2) { beep(false); return toast(friendly(e2)); }
+      beep(true); who = { ...p, uid, typed: !!typed }; pick = new Set(); back = new Set(); bad = new Set(); drawPerson(); panel.scrollIntoView({ block: 'nearest' });
+    } else if (s.type === 'tool' && who) {
+      if (who.holding.some((t) => t.id === s.id)) back.add(s.id); else if (who.may.some((t) => t.id === s.id && t.ok)) pick.add(s.id); else return toast(`${s.tag_code}: não é deste malão ou não pode sair.`);
+      beep(true); drawPerson();
+    } else if (s.type === 'case') { if (s.id !== c.id) { d.close(); caseOpen(s.id); } }
+    else { beep(false); toast(s.type === 'tool' ? 'Encosta primeiro o cartão da pessoa.' : 'Não conheço este cartão. Está registado a alguém?'); }
+  };
+  if (c.can_hand) {
+    if (nfcOk) (async () => { try { ctrl = new AbortController(); const r = new NDEFReader(); await r.scan({ signal: ctrl.signal }); r.onreading = (ev) => onTap(ev.serialNumber); }
+      catch (err) { toast(err.name === 'NotAllowedError' ? 'Dá permissão ao NFC no Chrome.' : 'O leitor não ligou: escreve o número do cartão.'); } })();
+    const typed = typedWatch(d.querySelector('#mcuid'));
+    d.querySelector('#mcgo').onclick = () => { const i = d.querySelector('#mcuid'); onTap(i.value, typed()); i.value = ''; };
+    d.querySelector('#mcuid').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); d.querySelector('#mcgo').click(); } };
+  }
+  const reopen = () => { d.close(); caseOpen(c.id); };
+  const btn = (sel, fn) => { const b = d.querySelector(sel); if (b) b.onclick = fn; };
+  btn('#mcput', () => casePut(c, reopen));
+  btn('#mctag', () => wtReadTag(async (uid) => { const { data: r, error: e } = await sb.rpc('mini_case_tag', { p_case: c.id, p_code: uid });
+    if (e) return toast(friendly(e)); beep(true); toast(r.again ? 'Esta etiqueta já era deste malão.' : 'Etiqueta registada. Agora basta encostá-la para abrir o malão.'); reopen(); }));
+  btn('#mcchk', () => { d.close(); caseCheck(c); });
+  btn('#mced', () => { d.close(); caseEdit(c, c.site); });
+  btn('#mcsend', () => { d.close(); caseSend(c); });
+  btn('#mcback', async () => {
+    const fd = await askSheet(`Receber o ${c.code} no armazém`, `<p class="small muted">O que está dentro volta ao armazém. As avariadas vão para reparação. Se alguém ainda tem uma ferramenta deste malão, tem de a devolver primeiro.</p>
+      <label for="mcbk">Nota</label><input id="mcbk" name="n" maxlength="300" placeholder="ex.: fim da paragem">`, 'Receber');
+    if (!fd) return;
+    const { data: r, error: e } = await sb.rpc('mini_case_back', { p_case: c.id, p_note: String(fd.get('n') || '').trim() || null });
+    if (e) return toast(friendly(e)); toast(`Recebido: ${r.n} ferramenta(s) no armazém.`); reopen(); });
+  btn('#mcclose', async () => {
+    const fd = await askSheet(`Fechar o ${c.code}`, '<label for="mccl">Porquê? *</label><input id="mccl" name="n" required minlength="3" maxlength="300" placeholder="ex.: mala partida, já não se usa">', 'Fechar malão');
+    if (!fd) return;
+    const { error: e } = await sb.rpc('mini_case_close', { p_case: c.id, p_note: String(fd.get('n')).trim() });
+    if (e) return toast(friendly(e)); toast('Malão fechado.'); d.close(); });
+  d.querySelectorAll('[data-rm]').forEach((b) => b.onclick = async () => {
+    const t = c.tools.find((x) => x.id === b.dataset.rm);
+    const fd = await askSheet(`Tirar ${t.tag_code} do malão`, '<p class="small muted">A ferramenta deixa de ser deste malão. Fica com quem a tem agora.</p><label for="mcrm">Porquê?</label><input id="mcrm" name="n" maxlength="300">', 'Tirar');
+    if (!fd) return;
+    const { error: e } = await sb.rpc('mini_case_remove', { p_case: c.id, p_tool: t.id, p_note: String(fd.get('n') || '').trim() || null });
+    if (e) return toast(friendly(e)); reopen(); });
+  d.addEventListener('close', () => { if (ctrl) ctrl.abort(); d.remove(); caseRefresh(); });
+}
+async function caseEdit(c, site) {
+  const team = c && c.team ? c.team : site ? ((state.mat && state.mat.data && state.mat.data.team) || []) : [];
+  const fd = await askSheet(c ? `Editar ${c.code}` : site ? 'Novo malão da obra' : 'Novo malão do armazém', `
+    <label for="cen">Nome *</label><input id="cen" name="name" required minlength="2" maxlength="80" value="${esc(c ? c.name : '')}" placeholder="ex.: Malão de aperto, Sala das ferramentas">
+    <label for="cep">Onde está</label><input id="cep" name="place" maxlength="120" value="${esc(c ? c.place || '' : '')}" placeholder="ex.: contentor 2, prateleira A">
+    ${site ? `<label for="cek">Responsável</label><select id="cek" name="keeper">${c ? '' : '<option value="">Eu</option>'}${team.map((p) => `<option value="${esc(p.id)}" ${c && c.keeper === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}
+        ${c && !team.some((p) => p.id === c.keeper) ? `<option value="${esc(c.keeper)}" selected>${esc(c.keeper_name || '')}</option>` : ''}</select>
+      <p class="small muted">Quem responde pelo malão na obra. O que está dentro fica em nome dele.</p>` : ''}
+    ${c ? '' : '<p class="small muted">Depois cola o autocolante NFC no malão e carrega em «Registar etiqueta».</p>'}`, c ? 'Guardar' : 'Criar');
+  if (!fd) return c ? caseOpen(c.id) : null;
+  const p = { name: String(fd.get('name')).trim(), place: String(fd.get('place') || '').trim() || null, keeper: fd.get('keeper') || null };
+  if (c) p.id = c.id; else if (site) p.site = site;
+  const { data: r, error } = await sb.rpc('mini_case_save', { p });
+  if (error) return toast(friendly(error));
+  toast(c ? 'Guardado.' : `Malão ${r.code} criado.`); caseOpen(r.id);
+}
+async function casePut(c, after) {
+  const cand = c.candidates || [];
+  if (!cand.length) return toast(c.site ? 'Não há ferramentas desta obra fora deste malão.' : 'Não há ferramentas disponíveis no armazém.');
+  const fd = await askSheet(`Pôr no ${c.code}`, `<p class="small muted">${c.site ? 'Ferramentas que estão nesta obra. Passam a ficar em nome do responsável do malão.' : 'Ferramentas disponíveis no armazém.'}</p>
+    <div class="mt-fams">${cand.map((t) => `<label class="chk"><input type="checkbox" name="t" value="${esc(t.id)}"> <b>${esc(t.tag_code)}</b> ${esc(t.name)}
+      ${t.person ? `<span class="muted small">· ${esc(t.person)}</span>` : ''}${t.other_case ? `<span class="muted small">· sai do ${esc(t.other_case)}</span>` : ''}</label>`).join('')}</div>`, 'Pôr no malão');
+  if (!fd) return;
+  const ids = fd.getAll('t'); if (!ids.length) return toast('Escolhe as ferramentas.');
+  const { data: r, error } = await sb.rpc('mini_case_put', { p_case: c.id, p_tools: ids });
+  if (error) return toast(friendly(error));
+  toast(`${r.n} ferramenta(s) no malão.`); after();
+}
+// Counting: tick or tap each tool you see inside. What is missing goes to the warehouse as a report.
+async function caseCheck(c) {
+  const inside = c.tools.filter((t) => t.state === 'in'); const seen = new Set(); let ctrl = null;
+  const fd = await askSheet(`Conferir ${c.code}`, `<p class="small muted">Marca o que vês dentro (ou encosta a etiqueta de cada ferramenta). O que faltar fica reportado ao armazém.</p>
+    <div class="mt-fams" id="ccl">${inside.map((t) => `<label class="chk"><input type="checkbox" name="s" value="${esc(t.id)}"> <b>${esc(t.tag_code)}</b> ${esc(t.name)}</label>`).join('')}</div>
+    <label for="ccn">Nota</label><input id="ccn" name="n" maxlength="300">`, 'Terminar contagem', (dlg) => {
+    if ('NDEFReader' in window) (async () => { try { ctrl = new AbortController(); const r = new NDEFReader(); await r.scan({ signal: ctrl.signal });
+      r.onreading = async (ev) => { const { data: s } = await sb.rpc('mini_case_scan', { p_ref: normUid(ev.serialNumber) });
+        const box = s && s.type === 'tool' && dlg.querySelector(`input[value="${s.id}"]`); if (box) { box.checked = true; beep(true); } else beep(false); }; } catch (_) { /* ticking still works */ } })();
+    dlg.addEventListener('close', () => { if (ctrl) ctrl.abort(); });
+  });
+  if (ctrl) ctrl.abort();
+  if (!fd) return caseOpen(c.id);
+  fd.getAll('s').forEach((x) => seen.add(x));
+  const { data: r, error } = await sb.rpc('mini_case_check', { p_case: c.id, p_seen: [...seen], p_note: String(fd.get('n') || '').trim() || null });
+  if (error) return toast(friendly(error));
+  if (r.missing.length) { beep(false); showFlash('bad', 'FALTA', `${r.missing.map((m) => m.tag_code).join(', ')}. O armazém foi avisado.`); }
+  else { beep(true); showFlash('ok', 'TUDO CERTO', `${r.seen} de ${r.expected} no malão.`); }
+  caseOpen(c.id);
+}
+// Send a warehouse case to a site: choose the site, then whoever answers for it taps the card at the window.
+async function caseSend(c) {
+  const fd = await askSheet(`Enviar ${c.code} para obra`, `<label for="csw">Obra *</label><select id="csw" name="s" required>${wtSiteOpts(null)}</select>
+    <label for="csu">Volta até</label><input id="csu" name="u" type="date" min="${esc(isoDay(new Date()))}">
+    <p class="small muted">A seguir o responsável do malão na obra encosta o cartão para assinar. Ferramentas paradas ou com calibração vencida ficam no armazém.</p>`, 'Seguinte');
+  if (!fd) return caseOpen(c.id);
+  const site = fd.get('s'); const until = fd.get('u') || null;
+  const d = document.createElement('dialog'); d.className = 'dlg'; let ctrl = null;
+  d.innerHTML = `<form method="dialog"><h2>Quem fica responsável?</h2><p class="small muted">Encosta o cartão do chefe de equipa ou do encarregado que leva o ${esc(c.code)}.</p>
+    ${'NDEFReader' in window ? `<div class="tapzone reading"><span class="ring">${ic('tap')}</span><b>Encoste o cartão</b></div>` : ''}
+    <div class="manual"><input id="csid" autocomplete="off" autocapitalize="characters" placeholder="Número do cartão"><button class="btn ghost" type="button" id="csgo">Assinar</button></div>
+    <div class="acts"><button class="btn ghost" value="x">Cancelar</button></div></form>`;
+  document.body.appendChild(d); d.showModal();
+  const sign = async (raw, typed) => { const uid = normUid(raw); if (!uid) return;
+    const { data: r, error } = await sb.rpc('mini_case_send', { p_case: c.id, p_site: site, p_uid: uid, p_hold_until: until, p_typed: !!typed });
+    if (error) { beep(false); return toast(friendly(error)); }
+    beep(true); d.close();
+    showFlash('ok', 'ENVIADO', `${r.n} ferramenta(s) em nome de ${r.keeper}.${r.skipped.length ? ` Ficaram: ${r.skipped.map((x) => x.tag_code + ' (' + x.why + ')').join(', ')}.` : ''}`); };
+  if ('NDEFReader' in window) (async () => { try { ctrl = new AbortController(); const r = new NDEFReader(); await r.scan({ signal: ctrl.signal }); r.onreading = (ev) => sign(ev.serialNumber); } catch (_) { /* typed */ } })();
+  const typed = typedWatch(d.querySelector('#csid'));
+  d.querySelector('#csgo').onclick = () => sign(d.querySelector('#csid').value, typed());
+  d.addEventListener('close', () => { if (ctrl) ctrl.abort(); d.remove(); caseRefresh(); });
+}
+// Armazém › Malões: every case, in the warehouse and on the sites
+async function whCases() {
+  const body = $('#whbody'); if (!body) return;
+  body.innerHTML = skel(2);
+  const { data: d, error } = await sb.rpc('mini_cases', { p_site: null });
+  if (!body.isConnected) return;
+  if (error) { body.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
+  const home = d.cases.filter((c) => !c.site); const out = d.cases.filter((c) => c.site);
+  body.innerHTML = `<div class="mc-top">${'NDEFReader' in window ? `<button class="btn ghost" id="mcread">${ic('tap')}Encostar etiqueta</button>` : ''}
+      ${d.can_make ? '<button class="btn" id="mcnew">+ Malão</button>' : ''}</div>
+    <p class="small muted">Um malão leva um autocolante NFC (custa cêntimos). Em mala de metal usa o autocolante «anti-metal», senão não lê.</p>
+    <h3>No armazém (${home.length})</h3>${home.length ? `<div class="list">${home.map(caseRow).join('')}</div>` : '<p class="small muted">Nenhum.</p>'}
+    <h3>Nas obras (${out.length})</h3>${out.length ? `<div class="list">${out.map(caseRow).join('')}</div>` : '<p class="small muted">Nenhum.</p>'}`;
+  body.querySelectorAll('[data-case]').forEach((b) => b.onclick = () => caseOpen(b.dataset.case));
+  if ($('#mcread')) $('#mcread').onclick = () => wtReadTag(caseScanOpen);
+  if ($('#mcnew')) $('#mcnew').onclick = () => caseEdit(null, null);
+}
+
 // ---- Armazém › Pedidos das obras: prepare, deliver at the window (the person signs with the card), refuse
 async function whSiteRequests() {
   const W = state.wh; const body = $('#whbody'); if (!body) return;
@@ -8542,7 +8813,7 @@ async function loadWarehouse() {
   const W = state.wh; W.home = h;
   if (!W.wid || !h.warehouses.find((w) => w.id === W.wid)) W.wid = h.central;
   if (!W.tab) W.tab = h.can_issue ? 'entregar' : 'stock';
-  const tabs = [h.can_issue && ['entregar', 'Entregar'], ['stock', 'Stock'], ['ferramentas', 'Ferramentas'], (h.can_issue || h.can_manage) && ['obras', 'Das obras']].filter(Boolean);
+  const tabs = [h.can_issue && ['entregar', 'Entregar'], ['stock', 'Stock'], ['ferramentas', 'Ferramentas'], (h.can_issue || h.can_manage) && ['obras', 'Das obras'], (h.can_issue || h.can_manage) && ['maloes', 'Malões']].filter(Boolean);
   top.innerHTML = `<div class="kpis k4 wh-kpis">
       <button class="kpi ${h.low ? 'warn' : ''}" data-tab="stock"><b>${h.low}</b><span>artigos no mínimo</span></button>
       <button class="kpi ${h.tools_late ? 'warn' : ''}" data-tab="ferramentas"><b>${h.tools_out}${h.tools_late ? `<small> · ${h.tools_late} atrasadas</small>` : ''}</b><span>ferramentas fora</span></button>
@@ -8555,7 +8826,7 @@ async function loadWarehouse() {
   top.querySelectorAll('button.kpi[data-tab]').forEach((b) => b.onclick = () => { W.tab = b.dataset.tab; stopNfc(); loadWarehouse(); });
   if ($('#whsel')) $('#whsel').onchange = (e) => { W.wid = e.target.value; W.cart = []; loadWarehouse(); };
   if ($('#whadd')) $('#whadd').onclick = addWarehouse;
-  ({ entregar: whIssue, stock: whStock, ferramentas: whTools, obras: whSiteRequests }[W.tab] || whStock)();
+  ({ entregar: whIssue, stock: whStock, ferramentas: whTools, obras: whSiteRequests, maloes: whCases }[W.tab] || whStock)();
 }
 async function addWarehouse() {
   const sites = activeSites();
