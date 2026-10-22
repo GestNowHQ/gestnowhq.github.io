@@ -48,6 +48,28 @@ const REASON_PREFIX = {
   'skill_missing:': 'Falta a competência: ',
 };
 const ERRORS = [
+  // Reuniões de segurança (sql/107)
+  [/the meeting is run by a person of the team/i, 'A reunião é aberta por quem a dá: esta conta não tem ficha de trabalhador.'],
+  [/choose the kind of meeting/i, 'Escolhe o tipo de reunião.'],
+  [/this site is not open/i, 'Esta obra não está aberta.'],
+  [/this meeting is from another shift/i, 'Esta reunião é de outro turno: começa uma nova.'],
+  [/this meeting is already closed/i, 'Esta reunião já foi fechada.'],
+  [/only who ran the meeting/i, 'Só quem deu a reunião a pode fechar.'],
+  [/the minutes need the topics and a text/i, 'Faltam os temas ou o resumo (mínimo 20 letras).'],
+  [/nobody signed the attendance/i, 'Ninguém picou a presença.'],
+  [/HR already decided this missed meeting/i, 'Os RH já decidiram esta falta.'],
+  [/this missed meeting does not count already/i, 'Esta falta já não conta.'],
+  [/choose the day off the site/i, 'Escolhe o dia fora da obra (de hoje até 30 dias).'],
+  [/already off the site on that day/i, 'Esta pessoa já está fora da obra nesse dia.'],
+  [/a day off the site is only for a red card/i, 'O dia fora da obra é só para o cartão vermelho.'],
+  [/write the decision note/i, 'Escreve a nota da decisão (mínimo 10 letras).'],
+  [/write the message \(3 to 500/i, 'Escreve a mensagem (3 a 500 letras).'],
+  [/too many messages today/i, 'Já mandaste 20 avisos hoje.'],
+  [/the meeting must be in the next 14 days/i, 'A reunião tem de ser nos próximos 14 dias.'],
+  [/write your explanation/i, 'Escreve a tua explicação (mínimo 5 letras).'],
+  [/attendance closed/i, 'A reunião já fechou: já não se pica a presença.'],
+  [/say why \(5\+ characters\)/i, 'Diz porquê (mínimo 5 letras).'],
+  [/this person is not active/i, 'Esta pessoa não está ativa.'],
   // Folha de horas (sql/106)
   [/records hours with the card/i, 'A tua empresa regista as horas com o cartão.'],
   [/that day has not come yet/i, 'Esse dia ainda não chegou.'],
@@ -886,9 +908,9 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '83';
+const APP_VERSION = '84';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
-  hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
+  hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['reunioes', 'emergencia', 'lmra', 'seguranca'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
 // v67 pyramid (Diogo 2026-10-20): the GestNow owner starts on his clients; an admin starts on the dashboard, not on Picar.
 // Picar stays in the menu (group Obra) for the office, and is the encarregado's tool.
@@ -900,7 +922,7 @@ function tabsFor(role) {
   if (role === 'admin') return isOwner() ? (ownerDesk() ? ['clientes'] : ['clientes', 'inicio', 'horas', 'secretariado']) : ['inicio', 'painel', 'horas', 'secretariado'];
   return TABS[role] || TABS.supervisor;
 }
-const MORE_ORDER = ['inicio', 'empresa', 'onbtextos', 'equipa', 'picar', 'emergencia', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'andaimes', 'processo', 'clientes', 'custos', 'progresso'];
+const MORE_ORDER = ['inicio', 'empresa', 'onbtextos', 'equipa', 'picar', 'emergencia', 'reunioes', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'andaimes', 'processo', 'clientes', 'custos', 'progresso'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -921,7 +943,7 @@ const MENU_GROUPS = [
   ['Secretariado', ['secretariado', 'horas', 'despesas', 'custos']],
   ['Recursos Humanos', ['trabalhadores', 'onbtextos', 'acolhimento', 'viagens', 'alojamento']],
   ['Frota', ['frota']],
-  ['QSA · Qualidade, Segurança e Ambiente', ['seguranca', 'lmra', 'emergencia', 'qualidade', 'processo']],
+  ['QSA · Qualidade, Segurança e Ambiente', ['seguranca', 'reunioes', 'lmra', 'emergencia', 'qualidade', 'processo']],
   ['Produção (Obra)', ['painel', 'obras', 'naobra', 'picar', 'progresso', 'andaimes', 'equipa', 'producao']],
   ['Compras e Armazém', ['armazem', 'compras']],
   ['Comercial', ['comercial']],
@@ -933,7 +955,7 @@ const VIEW_NEEDS = {
   inicio: () => canHome(), empresa: () => canCompanyRules(), processo: () => canProcess(),
   secretariado: () => canOffice(), despesas: () => canExpenses(), viagens: () => canTravel(), alojamento: () => canHousing(),
   trabalhadores: () => can('pessoas.ver') || can('pessoas.gerir'), onbtextos: () => canPeople(),
-  seguranca: () => ['seguranca.lmra', 'seguranca.parar_obra', 'seguranca.emergencia'].some(can), lmra: () => canLmra(),
+  seguranca: () => ['seguranca.lmra', 'seguranca.parar_obra', 'seguranca.emergencia'].some(can), lmra: () => canLmra(), reunioes: () => canMeet(),
   emergencia: () => can('seguranca.emergencia'), acolhimento: () => can('acolhimento.gerir'),
   obras: () => can('obras.gerir') || can('obras.ver_detalhes') || can('obras.area'), painel: () => canSiteDetails(), naobra: () => canSiteDetails() || can('ponto.picar'),
   equipa: () => canSiteDetails(), picar: () => can('ponto.picar'), horas: () => can('horas.ver') || can('horas.validar_obra'),
@@ -1176,6 +1198,7 @@ async function boot() {
   nav.querySelector('[data-view=progresso]').hidden = worker || state.offline || !canProgress();
   nav.querySelector('[data-view=equipa]').hidden = me.role !== 'supervisor' || !canSiteDetails();
   nav.querySelector('[data-view=lmra]').hidden = worker || state.offline || !canLmra();
+  nav.querySelector('[data-view=reunioes]').hidden = worker || state.offline || !canMeet();
   nav.querySelector('[data-view=emergencia]').hidden = worker || !canEmergency();
   nav.querySelector('[data-view=armazem]').hidden = worker || state.offline || !canWh();
   nav.querySelector('[data-view=compras]').hidden = worker || state.offline || !canBuy();
@@ -1638,7 +1661,7 @@ function go(view) {
   window.scrollTo(0, 0);
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
      ficha: viewWorker, obras: viewSites, area: viewArea, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients, cliente: viewClient, precos: viewPrices, empresa: viewCompanyRules, inicio: viewHome,
-     processo: viewProcess, orcamentos: viewEstimates, comercial: viewSales, premios: viewAwards, custos: viewCosts, lmra: viewLmra, emergencia: viewEmergency,
+     processo: viewProcess, orcamentos: viewEstimates, comercial: viewSales, premios: viewAwards, custos: viewCosts, lmra: viewLmra, reunioes: viewMeetings, emergencia: viewEmergency,
      armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, producao: viewProd, progresso: viewProgress, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
   checkEmergencyBar(); encBadges();
 }
@@ -1957,6 +1980,8 @@ function viewTeam() {
     </div><aside class="enc-side">
     <div class="team-acts"><button class="btn big ghost" id="tval">${ic('ok')}<span>Validar a semana</span></button>
       ${canProgress() ? `<button class="btn big ghost" id="tprog">${ic('sheet')}<span>Folha de produção</span></button>` : ''}
+      ${can('equipa.avisar') ? `<button class="btn big ghost" id="tnote">${ic('bell')}<span>Mandar aviso à equipa</span></button>` : ''}
+      ${canMeet() && can('seguranca.reuniao') ? `<button class="btn big ghost" id="tmeet">${ic('team')}Reunião de segurança</button>` : ''}
       ${canLmra() ? `<button class="btn big ghost" id="tlmra">${ic('shield')}LMRA</button>` : ''}${canEmergency() ? `<button class="btn big danger" id="temer">${ic('warn')}Emergência</button>` : ''}
       <button class="btn ghost wide look" id="tlook">${ic('card')}<span><b>O colaborador quer ver as horas</b><small>Ele encosta o cartão dele ao teu telemóvel</small></span></button></div>
     <div id="treq"></div></aside></div>`;
@@ -1964,6 +1989,8 @@ function viewTeam() {
   $('#tpic').onclick = () => go('picar');
   $('#tval').onclick = () => go('horas');
   if ($('#tlmra')) $('#tlmra').onclick = () => go('lmra');
+  if ($('#tmeet')) $('#tmeet').onclick = () => go('reunioes');
+  if ($('#tnote')) $('#tnote').onclick = () => teamNotice(currentSite(), 'notice');
   if ($('#tprog')) { $('#tprog').onclick = () => go('progresso'); progressBadge(); }
   if ($('#temer')) $('#temer').onclick = () => go('emergencia');
   $('#tlook').onclick = () => cardGlance(currentSite() && currentSite().id);
@@ -2384,7 +2411,7 @@ function typedWatch(input) {
   });
   return () => { const reader = !pasted && n >= 6 && (last - first) / (n - 1) < 40; n = 0; pasted = false; return !reader; };
 }
-const TYPED_RPC = { clock_event: 'mini_clock_typed', mini_lmra_sign: 'mini_lmra_sign_typed', mini_muster_scan: 'mini_muster_scan_typed', mini_wh_issue: 'mini_wh_issue_typed' };
+const TYPED_RPC = { clock_event: 'mini_clock_typed', mini_lmra_sign: 'mini_lmra_sign_typed', mini_meeting_sign: 'mini_meeting_sign_typed', mini_muster_scan: 'mini_muster_scan_typed', mini_wh_issue: 'mini_wh_issue_typed' };
 async function rpcCard(fn, args, typed) {
   if (!typed) return sb.rpc(fn, args);
   const r = await sb.rpc(TYPED_RPC[fn], args);
@@ -4780,7 +4807,7 @@ const MINE_STATE = { registered: 'por validar', supervisor_validated: 'validado 
 const ME_TABS = {
   folha: ['sheet', 'Folha de horas'], horas: ['clock', 'As minhas horas'], progresso: ['sheet', 'Progresso do dia'], pedidos: ['calendar', 'Pedidos'], diarias: ['card', 'Diárias'], despesas: ['cart', 'Despesas'],
   viagens: ['plane', 'Viagens'], dormir: ['home', 'Onde durmo'], andaimes: ['scaffold', 'Posso subir?'], docs: ['doc', 'Os meus documentos'],
-  epi: ['shield', 'EPI e ferramentas'], contrato: ['lock', 'O meu contrato'] };
+  epi: ['shield', 'EPI e ferramentas'], reunioes: ['team', 'Reuniões de segurança'], contrato: ['lock', 'O meu contrato'] };
 function viewMine() {
   if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!state.me.collaborator_id) return go(tabsFor(state.me.role)[0]);
@@ -4806,21 +4833,29 @@ window.addEventListener('popstate', () => {
 });
 async function loadMeHome(quiet) {
   const ym = isoDay(new Date()).slice(0, 7);
-  const [home, sum, papers, tm] = await Promise.all([sb.rpc('mini_my_home', { p_month: ym + '-01' }), sb.rpc('mini_my_summary'),
+  const [home, sum, papers, tm, mt, nt] = await Promise.all([sb.rpc('mini_my_home', { p_month: ym + '-01' }), sb.rpc('mini_my_summary'),
     state.mePapers === false ? Promise.resolve({ error: true }) : sb.rpc('mini_my_papers').then((r) => r, () => ({ error: true })),
-    sb.rpc('mini_time_mode').then((r) => r, () => ({}))]);
+    sb.rpc('mini_time_mode').then((r) => r, () => ({})), sb.rpc('mini_my_meetings').then((r) => r, () => ({})), sb.rpc('mini_my_team_messages').then((r) => r, () => ({}))]);
   if (tm && tm.data) state.timeMode = tm.data.mode;   // card or sheet (sql/106)
+  state.meMeet = mt && mt.data ? mt.data : null;   // safety meetings (sql/107)
+  state.meNotes = nt && nt.data ? nt.data : [];   // notices from the site (sql/108)
   const hero = $('#mehero'); if (!hero || (state.mineTab || 'home') !== 'home') return;
   if (home.error) { hero.innerHTML = `<div class="card">${esc(friendly(home.error))}</div>`; return; }
   if (papers.error) state.mePapers = false;   // the function is not there yet (sql/80): no tile
   const d = home.data; const s = sum.data || null; state.mineData = d;
-  hero.innerHTML = meHero(d, s);
+  hero.innerHTML = meHero(d, s); state.meSum = s;
   if (quiet && $('#metiles').dataset.on) return;
   $('#meact').innerHTML = s ? meActions(s) : '';
   $('#metiles').innerHTML = meTiles(d, s, papers.error ? null : papers.data);
   $('#metiles').dataset.on = '1';
   app.querySelectorAll('[data-me]').forEach((b) => b.onclick = () => meOpen(b.dataset.me));
   app.querySelectorAll('[data-confirm]').forEach((b) => b.onclick = () => meConfirmWeek(b.dataset.confirm, b.dataset.label, () => loadMeHome()));
+  app.querySelectorAll('[data-gotit]').forEach((b) => b.onclick = async () => {
+    b.disabled = true; const { error } = await sb.rpc('mini_my_team_read', { p_message: b.dataset.gotit });
+    if (error) { b.disabled = false; return toast(friendly(error)); }
+    const m = (state.meNotes || []).find((x) => x.id === b.dataset.gotit); if (m) m.read = new Date().toISOString();
+    $('#meact').innerHTML = meActions(state.meSum || {}); loadMeHome();
+  });
 }
 // The week as a ring: hours so far against the contract's week.
 function meRing(done, target) {
@@ -4863,6 +4898,7 @@ const weekLabel = (w) => `${fmtDate(w.week_start).slice(0, 5)} – ${fmtDate(w.w
 // What needs the worker now, at the top, in big: the week to confirm (art. 202.º CT), documents out of date.
 function meActions(s) {
   const out = [];
+  const notes = meNotices(); if (notes) out.push(notes);
   if (state.timeMode === 'sheet') out.push(`<button class="me-do" data-me="folha"><span class="me-dot"></span><div class="grow"><b>Escrever as horas</b>
       <small>Entrada, almoço e saída. O encarregado confirma.</small></div>${ic('go')}</button>`);
   for (const w of (s.weeks || []).filter((x) => x.can_confirm).slice(0, 2)) {
@@ -4870,6 +4906,10 @@ function meActions(s) {
       <small>${esc(weekLabel(w))} · ${esc(fmtMin(w.worked))} · até ${esc(fmtDate(w.due_by).slice(0, 5))}</small></div>
       <button class="btn me-big" data-confirm="${esc(w.week_start)}" data-label="${esc(weekLabel(w))}">${ic('ok')}Confirmo</button></div>`);
   }
+  const mm = state.meMeet;
+  const toRead = mm ? (mm.to_read || []).length + (mm.missed || []).filter((f) => !f.read && f.meeting && !(mm.to_read || []).some((t) => t.id === f.meeting)).length : 0;
+  if (toRead) out.push(`<button class="me-do bad" data-me="reunioes"><span class="me-dot bad"></span><div class="grow"><b>Lê o resumo da reunião de segurança</b>
+      <small>Não estiveste na reunião. Lê o que foi dito e confirma.</small></div>${ic('go')}</button>`);
   const dd = s.docs || {};
   if (dd.expired || dd.missing) out.push(`<button class="me-do bad" data-me="docs"><span class="me-dot bad"></span><div class="grow"><b>${dd.expired ? (dd.expired === 1 ? '1 documento caducado' : `${dd.expired} documentos caducados`) : dd.missing === 1 ? '1 documento em falta' : `${dd.missing} documentos em falta`}</b>
       <small>Sem isto podes não entrar na obra. Fala com o escritório.</small></div>${ic('go')}</button>`);
@@ -4895,6 +4935,8 @@ function meTiles(d, s, papers) {
     tile('andaimes', 'Vê antes de subir', 'go'),
     tile('docs', docSub, dd.expired || dd.missing ? 'bad' : dd.expiring ? 'warn' : 'ok'),
     tile('epi', `${ppe.count || 0} EPI · ${tools.count || 0} ferramenta(s)`, ppe.due || tools.overdue ? 'warn' : ''),
+    state.meMeet ? (() => { const mm = state.meMeet; const open = (mm.missed || []).filter((f) => f.status === 'counted' && !f.decision).length;
+      return tile('reunioes', open ? `${open} falta(s) para os RH decidirem` : `${(mm.attended || []).length} reunião(ões) este ano`, open ? 'warn' : '', (mm.to_read || []).length ? String((mm.to_read || []).length) : ''); })() : '',
     papers ? tile('contrato', c && c.signed_at ? `Assinado a ${new Date(c.signed_at).toLocaleDateString(LOC)}` : c ? 'Por assinar' : 'Regras e valor à hora', c && !c.signed_at ? 'warn' : '') : '',
   ].join('');
 }
@@ -4984,6 +5026,7 @@ function meScreen(tab) {
     andaimes: () => '<div id="myclimb"></div>',
     docs: () => '<div id="mydocs"></div>',
     epi: () => '<div id="mykit"></div><div id="mytools"></div>',
+    reunioes: () => '<div id="mymeet"></div>',
     contrato: () => '<div id="mypapers"></div>',
   }[tab]();
   app.innerHTML = `<div class="me-screen">${head}${body}</div>`;
@@ -5004,6 +5047,7 @@ function meScreen(tab) {
   if (tab === 'andaimes') loadMyClimb();
   if (tab === 'docs') loadMyDocs();
   if (tab === 'epi') { loadMyKit(); loadMyTools(); }
+  if (tab === 'reunioes') loadMyMeetings();
   if (tab === 'contrato') loadMyPapers();
 }
 // The weeks and their visa: confirmed, changed after, to confirm (with the date the law asks for).
@@ -7676,6 +7720,378 @@ async function liftStop(id) {
   const { error } = await sb.rpc('mini_stop_work_lift', { p_stop: id, p_reason: String(fd.get('r')).trim() });
   if (error) return toast(friendly(error));
   toast('Paragem levantada. Façam um LMRA novo antes de recomeçar.'); loadLmra();
+}
+
+// ------------------------------------------------------------------ Reuniões de segurança (sql/107): the toolbox talk at the start of work
+// Whoever runs it (QSA or the encarregado) opens it on a site, each worker taps their card on that phone, and the phone
+// can listen: it writes down what is said and ticks the topics. Closing it validates and seals the minutes (they never
+// change). The server then crosses the meeting with the entry taps: whoever was inside and did not sign gets a missed
+// meeting (1.ª repreensão, 2.ª cartão amarelo, 3.ª cartão vermelho); the app only proposes, HR decide after hearing them.
+const canMeet = () => mod('safety') && (can('seguranca.reuniao') || can('seguranca.faltas'));
+const MEET_KIND = { toolbox: 'Toolbox · início do trabalho', safety_meeting: 'Reunião de segurança', training: 'Formação' };
+const SANCTION = { repreensao: 'Repreensão', amarelo: 'Cartão amarelo', vermelho: 'Cartão vermelho' };
+// The usual topics of a toolbox talk and the words that give them away in what was said.
+const MEET_TOPICS = [
+  ['EPI', ['epi', 'capacete', 'luva', 'óculos', 'oculos', 'bota', 'colete', 'protetor', 'protector', 'máscara', 'mascara', 'auricular']],
+  ['Trabalhos em altura', ['altura', 'arnês', 'arnes', 'andaime', 'escada', 'queda', 'linha de vida', 'plataforma']],
+  ['Espaços confinados', ['confinado', 'tanque', 'vaso', 'atmosfera', 'oxigénio', 'oxigenio', 'boca de visita']],
+  ['Licenças de trabalho', ['licença', 'licenca', 'permissão', 'permissao', 'permit', 'autorização', 'autorizacao']],
+  ['Bloqueio e consignação', ['consignação', 'consignacao', 'bloqueio', 'loto', 'cadeado', 'isolamento', 'isolar']],
+  ['Trabalhos a quente', ['quente', 'soldadura', 'soldar', 'rebarbadora', 'faísca', 'faisca', 'maçarico', 'macarico', 'fogo']],
+  ['Movimentação de cargas', ['carga', 'grua', 'linga', 'içar', 'icar', 'elevação', 'elevacao', 'empilhador', 'guindaste']],
+  ['Produtos químicos e gases', ['químico', 'quimico', 'ficha de segurança', 'derrame', 'ácido', 'acido', 'h2s', 'gás', 'gas ', 'detetor', 'detector']],
+  ['Emergência e ponto de encontro', ['emergência', 'emergencia', 'evacuação', 'evacuacao', 'ponto de encontro', 'alarme', 'extintor', 'sirene']],
+  ['Ordem e limpeza', ['arrumação', 'arrumacao', 'limpeza', 'arrumar', 'tropeçar', 'tropecar', 'resíduo', 'residuo', 'lixo']],
+  ['Ferramentas e equipamentos', ['ferramenta', 'equipamento', 'inspeção', 'inspecao', 'cabo elétrico', 'extensão', 'extensao', 'máquina', 'maquina']],
+  ['Meteorologia', ['vento', 'chuva', 'calor', 'frio', 'trovoada', 'tempestade', 'hidratar', 'água', 'agua']],
+  ['Incidentes e lições aprendidas', ['incidente', 'acidente', 'quase acidente', 'lição', 'licao', 'aconteceu']],
+  ['Riscos e tarefas do dia', ['risco', 'perigo', 'tarefa', 'hoje vamos', 'cuidado']],
+];
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const meetKey = (id) => 'gn.meet.' + id;
+const meetDraft = (id) => { try { return JSON.parse(localStorage.getItem(meetKey(id)) || 'null') || { text: '', topics: [], auto: [] }; } catch (_) { return { text: '', topics: [], auto: [] }; } };
+const meetSave = (id, d) => { try { localStorage.setItem(meetKey(id), JSON.stringify(d)); } catch (_) {} };
+const meetForget = (id) => { try { localStorage.removeItem(meetKey(id)); } catch (_) {} };
+const meetFold = (s) => String(s || '').toLowerCase();
+const meetFound = (text) => MEET_TOPICS.filter(([, words]) => words.some((w) => meetFold(text).includes(w))).map(([t]) => t);
+// «Resumo por tópicos»: for each topic, the sentences in which it was said (the person who ran it corrects the text).
+function meetSummary(text, topics) {
+  const sentences = String(text || '').split(/(?<=[.!?])\s+|\n+/).map((s) => s.trim()).filter((s) => s.length > 3);
+  const lines = topics.map((t) => {
+    const words = (MEET_TOPICS.find((x) => x[0] === t) || [t, [meetFold(t)]])[1];
+    const said = sentences.filter((s) => words.some((w) => meetFold(s).includes(w))).slice(0, 3).map((s) => s.length > 220 ? s.slice(0, 217) + '…' : s);
+    return `• ${t}${said.length ? ': ' + said.join(' ') : ''}`;
+  });
+  return `Temas falados:\n${lines.join('\n')}`;
+}
+function viewMeetings() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
+  if (!canMeet()) return viewClock();   // code guard as well as the database's
+  if (!state.meetMonth) state.meetMonth = isoDay(new Date()).slice(0, 7);
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Toolbox, reuniões e formações</p><h1>Reuniões de segurança</h1></div></div>
+    <p class="muted lead">Abre a reunião, cada pessoa encosta o cartão a este telemóvel, e no fim fechas com os temas. Quem entrou na obra e não esteve na reunião aparece como falta.</p>
+    <div class="team-site">${siteSelect('msite')}</div>
+    <div id="mcases"></div><div id="mbody">${skel(3)}</div>`;
+  bindSiteSelect('msite', loadMeetings);
+  loadMeetings();
+  state.timer = setInterval(() => { if (state.view === 'reunioes' && !state.nfc && !state.meetLive && document.visibilityState === 'visible') loadMeetings(true); }, 60000);
+}
+async function loadMeetings(quiet) {
+  const el = $('#mbody'); const site = currentSite(); if (!el) return;
+  if (can('seguranca.faltas')) loadMeetingCases();
+  if (!site) { el.innerHTML = `<div class="card">${empty('helmet', 'Sem obras abertas', 'Abre uma obra em Obras.')}</div>`; return; }
+  const { data: d, error } = await sb.rpc('mini_meetings', { p_site: site.id, p_month: state.meetMonth + '-01' });
+  if (!el.isConnected) return;
+  if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  if (quiet && state.meetLive) return;
+  state.meet = d; const tz = d.tz;
+  const mine = (d.open || []).find((m) => m.mine);
+  const others = (d.open || []).filter((m) => !m.mine);
+  const without = d.inside_without || [];
+  const months = [0, 1, 2].map((k) => { const x = new Date(); x.setDate(15); x.setMonth(x.getMonth() - k); return isoDay(x).slice(0, 7); });
+  const mName = (ym) => new Date(ym + '-15T12:00:00').toLocaleDateString(LOC, { month: 'long', year: 'numeric' });
+  const misses = (d.misses || []);
+  el.innerHTML = `<div class="kpis team-kpis">
+      <div class="kpi"><b>${d.entered_today}</b><span>entraram hoje</span></div>
+      <div class="kpi ${d.signed_today ? 'ok' : ''}"><b>${d.signed_today}</b><span>na reunião hoje</span></div>
+      <div class="kpi ${without.length ? 'warn' : 'ok'}"><b>${without.length}</b><span>na obra sem reunião</span></div></div>
+    ${without.length ? `<p class="small muted">${ic('warn')} Na obra sem reunião hoje: <span data-nt>${esc(without.join(', '))}</span>.</p>` : ''}
+    ${mine ? meetLiveCard(mine, tz) : d.can_run ? `<button class="btn big" id="mnew">${ic('team')}Começar reunião</button>
+      <button class="btn ghost wide" id="mwarn">${ic('bell')}Avisar a reunião de amanhã</button>`
+      : d.no_card_person && can('seguranca.reuniao') ? `<p class="small muted">${ic('warn')} Esta conta não tem ficha de trabalhador: a reunião é aberta por quem a dá (técnico de segurança ou encarregado).</p>` : ''}
+    ${others.map((m) => `<div class="alert info">${ic('team')}<div class="grow"><b>Reunião a decorrer</b><span><span data-nt>${esc(m.by || '')}</span> · desde as ${esc(fmtHour(m.started, tz))} · ${m.attendance.length} presente(s)</span></div></div>`).join('')}
+    <div class="sec-h"><h2 class="eyebrow">Faltas às reuniões (últimos 60 dias)</h2></div>
+    ${misses.length ? `<div class="list">${misses.map((f) => meetMissCard(f, tz, can('seguranca.reuniao'))).join('')}</div>`
+      : `<div class="card">${empty('check', 'Sem faltas', 'Quem entra na obra e não está na reunião aparece aqui.')}</div>`}
+    <div class="sec-h"><h2 class="eyebrow">Pasta de segurança da obra</h2></div>
+    <div class="chips" style="margin-bottom:10px">${months.map((m) => `<button class="chip" data-mm="${m}" aria-pressed="${m === state.meetMonth}">${esc(mName(m))}</button>`).join('')}</div>
+    ${d.meetings.length ? `<div class="list">${d.meetings.map((m) => `<button class="card mt-row" data-doc="${esc(m.id)}">
+        <span class="lm-dot">${ic('doc')}</span><div class="grow"><div class="nm">${esc(m.title || MEET_KIND[m.kind] || '')}</div>
+        <div class="sub" data-nt>${esc(fmtDate(isoDay(new Date(m.started))))} · ${esc(fmtHour(m.started, tz))}${m.ended ? '–' + esc(fmtHour(m.ended, tz)) : ''} · ${esc(m.by || '')}</div>
+        <div class="sub" data-nt>${esc((m.topics || []).join(' · '))}</div></div>${chip('ok', m.people + ' presente(s)', 'ok')}</button>`).join('')}</div>`
+      : `<div class="card">${empty('doc', 'Sem reuniões neste mês', 'As reuniões fechadas ficam aqui, seladas, com as presenças.')}</div>`}`;
+  if ($('#mnew')) $('#mnew').onclick = () => meetStart(site);
+  if ($('#mwarn')) $('#mwarn').onclick = () => teamNotice(site, 'meeting');
+  if (mine) meetBindLive(mine, site);
+  el.querySelectorAll('[data-mm]').forEach((b) => b.onclick = () => { state.meetMonth = b.dataset.mm; loadMeetings(); });
+  el.querySelectorAll('[data-doc]').forEach((b) => b.onclick = () => meetDoc(b.dataset.doc));
+  el.querySelectorAll('[data-justify]').forEach((b) => b.onclick = () => meetJustify(b.dataset.justify, b.dataset.name));
+}
+function meetMissCard(f, tz, canJustify) {
+  const lvl = f.status === 'counted' ? `${f.level}.ª falta` : 'não conta';
+  const prop = f.decision ? `${SANCTION[f.sanction] || ''} aplicado${f.off_day ? ' · fora da obra a ' + fmtDate(f.off_day).slice(0, 5) : ''}`
+    : f.status === 'counted' ? `proposta: ${SANCTION[f.proposed] || ''}` : (f.justify_note || 'justificada');
+  return `<article class="card mt-miss ${f.status === 'counted' ? (f.level >= 3 ? 'bad' : 'warn') : ''}">
+    <div class="wk"><div class="grow"><div class="nm" data-nt>${esc(f.name)}</div>
+      <div class="sub"><span data-nt>${esc(fmtDate(f.day))}</span>${f.entered ? ' · entrou às ' + esc(fmtHour(f.entered, tz)) : ''}</div></div>
+      ${f.status === 'counted' ? chip(f.level >= 3 ? 'bad' : 'warn', lvl) : chip('', lvl)}</div>
+    <p class="small" style="margin:6px 0 0">${esc(prop)}</p>
+    ${f.worker_note ? `<p class="small muted" style="margin:6px 0 0">${ic('doc')} Explicação: <span data-nt>${esc(f.worker_note)}</span></p>` : ''}
+    <p class="small muted" style="margin:4px 0 0">${f.read ? `${ic('ok')} Leu o resumo da reunião` : 'Ainda não leu o resumo'}</p>
+    ${canJustify && f.status === 'counted' && !f.decision ? `<button class="btn ghost small" data-justify="${esc(f.id)}" data-name="${esc(f.name)}">Justificar</button>` : ''}</article>`;
+}
+function meetLiveCard(m, tz) {
+  const dr = meetDraft(m.id);
+  const picked = new Set([...(dr.topics || []), ...(dr.auto || [])]);
+  return `<section class="card mt-live" id="mlive">
+    <div class="mt-live-h"><span class="live"><i></i>a decorrer · desde as ${esc(fmtHour(m.started, tz))}</span>${chip('ok', m.attendance.length + ' presente(s)', 'ok')}</div>
+    <h2 class="mt-live-t">${esc(m.title || MEET_KIND[m.kind] || '')}</h2>${m.title ? `<p class="small muted">${esc(MEET_KIND[m.kind] || '')}</p>` : ''}
+    <button class="btn big" id="msign">${ic('card')}Picar presenças</button>
+    ${m.attendance.length ? `<p class="small muted" data-nt>${esc(m.attendance.map((a) => a.name).join(', '))}</p>` : ''}
+    <div class="sec-h"><h3 class="eyebrow">O que foi falado</h3></div>
+    ${SR ? `<button class="btn ghost" id="mlisten" type="button">${ic('mic')}<span>Ouvir a reunião</span></button>
+      <p class="small muted">O telemóvel escreve o que ouve, com o serviço de voz do Chrome (Google). A GestNow não guarda o áudio, só o texto que validares. Avisa as pessoas de que estás a ouvir.</p>`
+      : '<p class="small muted">Este telemóvel não transcreve a voz: escreve um resumo curto.</p>'}
+    <label for="mtext">Texto da reunião</label><textarea id="mtext" rows="6" maxlength="20000" placeholder="O que foi dito: riscos do dia, EPI, licenças…">${esc(dr.text || '')}</textarea>
+    <label>Temas *</label><div class="chips mt-topics" id="mtopics">${MEET_TOPICS.map(([t]) => `<button type="button" class="chip" data-topic="${esc(t)}" aria-pressed="${picked.has(t)}">${esc(t)}</button>`).join('')}</div>
+    <button class="btn big" id="mclose">${ic('lock')}Terminar e selar a ata</button>
+  </section>`;
+}
+function meetBindLive(m, site) {
+  const box = $('#mlive'); if (!box) return;
+  const text = box.querySelector('#mtext'); const tbox = box.querySelector('#mtopics');
+  const save = () => { const d = meetDraft(m.id); d.text = text.value; d.topics = [...tbox.querySelectorAll('[aria-pressed=true]')].map((b) => b.dataset.topic); meetSave(m.id, d); };
+  const auto = () => { for (const t of meetFound(text.value)) { const b = tbox.querySelector(`[data-topic="${CSS.escape(t)}"]`); if (b) b.setAttribute('aria-pressed', 'true'); } save(); };
+  text.oninput = () => { save(); clearTimeout(state.meetT); state.meetT = setTimeout(auto, 800); };
+  tbox.querySelectorAll('[data-topic]').forEach((b) => b.onclick = () => { b.setAttribute('aria-pressed', String(b.getAttribute('aria-pressed') !== 'true')); save(); });
+  box.querySelector('#msign').onclick = () => { meetStopListen(); meetSign(m.id); };
+  box.querySelector('#mclose').onclick = () => { meetStopListen(); meetClose(m, site); };
+  const lb = box.querySelector('#mlisten');
+  if (lb) {
+    const paint = () => { lb.classList.toggle('on', !!state.meetLive); lb.querySelector('span').textContent = state.meetLive ? 'A ouvir… toca para parar' : 'Ouvir a reunião'; };
+    lb.onclick = () => { if (state.meetLive) meetStopListen(); else meetListen(text, auto, paint); paint(); };
+    paint();
+  }
+}
+function meetListen(text, auto, paint) {
+  try {
+    const rec = new SR(); rec.lang = 'pt-PT'; rec.continuous = true; rec.interimResults = false;
+    rec.onresult = (ev) => {
+      for (let i = ev.resultIndex; i < ev.results.length; i++) if (ev.results[i].isFinal) {
+        const s = ev.results[i][0].transcript.trim(); if (!s) continue;
+        text.value = (text.value ? text.value.replace(/\s*$/, '') + '\n' : '') + s.charAt(0).toUpperCase() + s.slice(1) + (/[.!?]$/.test(s) ? '' : '.');
+      }
+      text.scrollTop = text.scrollHeight; auto();
+    };
+    // Chrome stops after a silence: start again while the person has not stopped it
+    rec.onend = () => { if (state.meetLive === rec && text.isConnected) { try { rec.start(); } catch (_) { state.meetLive = null; paint(); } } };
+    rec.onerror = (e) => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { state.meetLive = null; paint(); toast('Dá permissão ao microfone no Chrome.'); } };
+    state.meetLive = rec; rec.start();
+  } catch (_) { state.meetLive = null; toast('Este telemóvel não consegue ouvir: escreve o resumo.'); }
+}
+function meetStopListen() { const r = state.meetLive; state.meetLive = null; if (r) { try { r.stop(); } catch (_) {} } }
+async function meetStart(site) {
+  const fd = await askSheet('Começar reunião', `<label for="mk">Que reunião?</label>
+    <select id="mk" name="k">${Object.entries(MEET_KIND).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join('')}</select>
+    <label for="mt">Título (opcional)</label><input id="mt" name="t" maxlength="120" placeholder="ex.: Arranque da paragem da unidade 3">
+    <p class="small muted">A toolbox e a reunião de segurança são obrigatórias: quem entrar na obra e não picar a presença conta como falta. A formação não conta faltas.</p>`, 'Começar');
+  if (!fd) return;
+  let pos = null;
+  try { pos = await new Promise((ok) => { if (!navigator.geolocation) return ok(null); navigator.geolocation.getCurrentPosition((p) => ok(p.coords), () => ok(null), { timeout: 4000, maximumAge: 300000 }); }); } catch (_) { pos = null; }
+  const { data: id, error } = await sb.rpc('mini_meeting_open', { p_site: site.id, p_kind: fd.get('k'), p_title: String(fd.get('t') || '').trim() || null,
+    p_lat: pos ? +pos.latitude.toFixed(6) : null, p_lng: pos ? +pos.longitude.toFixed(6) : null });
+  if (error) return toast(friendly(error));
+  await loadMeetings(); meetSign(id);
+}
+// Attendance: the same card reading as the LMRA (the card, or its number typed, which is marked as typed).
+function meetSign(id) {
+  stopNfc(); const nfcOk = 'NDEFReader' in window;
+  const d = document.createElement('dialog'); d.className = 'dlg';
+  d.innerHTML = `<form method="dialog"><h2>Picar presenças</h2><p class="small muted">Cada pessoa encosta o cartão. Fica a declaração «estive presente na reunião», com a hora do servidor.</p>
+    ${nfcOk ? `<button class="tapzone reading" type="button" id="snfc"><span class="ring">${ic('tap')}</span><b>Encoste o cartão</b></button>` : ''}
+    <div class="manual"><input id="suid" autocomplete="off" autocapitalize="characters" placeholder="Número do cartão"><button class="btn ghost" type="button" id="sgo">Picar</button></div>
+    <div id="sres" aria-live="polite"></div><ul class="lm-signed" id="slist"></ul>
+    <div class="acts"><button class="btn big" value="ok">Terminar</button></div></form>`;
+  document.body.appendChild(d); d.showModal();
+  const res = d.querySelector('#sres'); const list = d.querySelector('#slist'); let last = { uid: '', at: 0 }; let ctrl = null;
+  const sign = async (raw, typed) => {
+    const uid = normUid(raw); if (!uid) return;
+    if (uid === last.uid && Date.now() - last.at < 3000) return; last = { uid, at: Date.now() };
+    const { data, error } = await rpcCard('mini_meeting_sign', { p_meeting: id, p_uid: uid }, typed);
+    if (error) { beep(false); res.innerHTML = `<div class="result bad">${ic('x')}<div><b>Não picou</b>${esc(friendly(error))}</div></div>`; return; }
+    beep(true);
+    res.innerHTML = `<div class="result ok">${ic('ok')}<div><b data-nt>${esc(data.name)}</b>${data.again ? 'Já estava na lista.' : 'Presente.'}</div></div>`;
+    if (!data.again) list.insertAdjacentHTML('afterbegin', `<li>${ic('ok')}<span data-nt>${esc(data.name)}</span></li>`);
+  };
+  if (nfcOk) (async () => {
+    try { ctrl = new AbortController(); const r = new NDEFReader(); await r.scan({ signal: ctrl.signal });
+      r.onreading = (ev) => sign(ev.serialNumber); r.onreadingerror = () => { beep(false); res.innerHTML = `<div class="result bad">${ic('x')}<div><b>NÃO LIDO</b>Encosta outra vez, devagar.</div></div>`; };
+    } catch (err) { res.innerHTML = `<div class="result warn">${ic('warn')}<div><b>O leitor não ligou</b>${esc(err.name === 'NotAllowedError' ? 'Dá permissão ao NFC no Chrome.' : 'Escreve o número do cartão.')}</div></div>`; }
+  })();
+  const typedNow = typedWatch(d.querySelector('#suid'));
+  d.querySelector('#sgo').onclick = () => { const i = d.querySelector('#suid'); sign(i.value, typedNow()); i.value = ''; i.focus(); };
+  d.querySelector('#suid').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); d.querySelector('#sgo').click(); } };
+  d.addEventListener('close', () => { if (ctrl) ctrl.abort(); d.remove(); if (state.view === 'reunioes') loadMeetings(); });
+}
+async function meetClose(m, site) {
+  const box = $('#mlive'); const dr = meetDraft(m.id);
+  const text = box ? box.querySelector('#mtext').value : dr.text;
+  const topics = box ? [...box.querySelectorAll('#mtopics [aria-pressed=true]')].map((b) => b.dataset.topic) : dr.topics;
+  if (!topics.length) return toast('Escolhe os temas falados.');
+  if (!m.attendance.length) return toast('Ninguém picou a presença.');
+  const fd = await askSheet('Terminar e selar a ata', `<p class="small muted">Lê e corrige. Depois de selada, a ata não muda (uma correção é uma nova versão). As faltas são cruzadas com as entradas de hoje.</p>
+    <p class="small"><b>${m.attendance.length}</b> presentes · <span data-nt>${esc(topics.join(' · '))}</span></p>
+    <label for="mmin">Resumo por tópicos *</label><textarea id="mmin" name="min" rows="10" required minlength="20" maxlength="20000">${esc(meetSummary(text, topics))}</textarea>`, 'Selar a ata');
+  if (!fd) return;
+  const { data, error } = await sb.rpc('mini_meeting_close', { p_meeting: m.id, p_topics: topics, p_minutes: String(fd.get('min')).trim() });
+  if (error) return toast(friendly(error));
+  meetForget(m.id); beep(true);
+  showFlash('ok', 'ATA SELADA', data.missed ? `${data.people} presente(s). ${data.missed} pessoa(s) entraram e não estiveram: segurança, encarregado e RH avisados.` : `${data.people} presente(s). Ninguém faltou.`);
+  loadMeetings();
+}
+async function meetJustify(id, name) {
+  const fd = await askSheet(`Justificar a falta de ${name}`, `<p class="small muted">A falta deixa de contar para a repreensão e os cartões. Fica registado com o teu nome.</p>
+    <label for="mj">Porquê? *</label><textarea id="mj" name="r" required minlength="5" maxlength="500" placeholder="ex.: estava a receber material no portão, com autorização"></textarea>`, 'Justificar');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_meeting_miss_justify', { p_miss: id, p_reason: String(fd.get('r')).trim() });
+  if (error) return toast(friendly(error));
+  toast('Justificada. Não conta.'); loadMeetings();
+}
+// HR: the missed meetings to decide. The app proposes by the count; HR hear the worker and decide.
+async function loadMeetingCases() {
+  const el = $('#mcases'); if (!el) return;
+  const { data, error } = await sb.rpc('mini_meeting_cases');
+  if (!el.isConnected || error) { if (el.isConnected) el.innerHTML = ''; return; }
+  const open = data.filter((c) => !c.decision && c.status === 'counted'); const done = data.filter((c) => c.decision);
+  el.innerHTML = `<div class="sec-h"><h2 class="eyebrow">Faltas para decidir (RH)</h2></div>
+    ${open.length ? `<div class="list">${open.map((c) => `<article class="card mt-miss ${c.level >= 3 ? 'bad' : 'warn'}">
+      <div class="wk"><div class="grow"><div class="nm" data-nt>${esc(c.name)}</div><div class="sub"><span data-nt>${esc(c.code)} · ${esc(fmtDate(c.day))} · </span>${c.level}.ª falta em 12 meses</div></div>
+        ${chip(c.level >= 3 ? 'bad' : 'warn', SANCTION[c.proposed] || '')}</div>
+      ${c.worker_note ? `<p class="small" style="margin:6px 0 0">${ic('doc')} Explicação do trabalhador: <span data-nt>${esc(c.worker_note)}</span></p>` : '<p class="small muted" style="margin:6px 0 0">Sem explicação do trabalhador ainda.</p>'}
+      <button class="btn small" data-decide="${esc(c.id)}">Decidir</button></article>`).join('')}</div>`
+      : `<div class="card">${empty('check', 'Nada para decidir', 'As faltas às reuniões aparecem aqui com a sanção proposta.')}</div>`}
+    ${done.length ? `<details class="card"><summary>Decididas nos últimos 60 dias (${done.length})</summary><ul class="plain">${done.map((c) => `<li><span data-nt>${esc(c.name)} · ${esc(fmtDate(c.day))} · </span>${esc(SANCTION[c.sanction] || '')}${c.off_day ? '<span> · fora da obra a </span><span data-nt>' + esc(fmtDate(c.off_day).slice(0, 5)) + '</span>' : ''}<span data-nt> · ${esc(c.decided_by || '')}</span></li>`).join('')}</ul></details>` : ''}`;
+  el.querySelectorAll('[data-decide]').forEach((b) => b.onclick = () => meetDecide(data.find((c) => c.id === b.dataset.decide)));
+}
+async function meetDecide(c) {
+  const red = c.proposed === 'vermelho'; const tz = c.tz || DEFAULT_TZ;
+  const tomorrow = isoDay(new Date(Date.now() + 864e5));
+  const fd = await askSheet(`${SANCTION[c.proposed]}: ${c.name}`, `
+    <p class="small muted">${c.level}.ª falta à reunião de segurança em 12 meses (${esc(fmtDate(c.day))}). A lei pede que o trabalhador seja ouvido antes de qualquer sanção (Código do Trabalho, art. 329.º). Confirma com o advogado o procedimento da empresa.</p>
+    ${c.worker_note ? `<p class="small">Explicação: <span data-nt>${esc(c.worker_note)}</span></p>` : ''}
+    <div class="chips" role="radiogroup"><label class="chip"><input type="radio" name="a" value="1" required checked>Aplicar ${esc(SANCTION[c.proposed])}</label>
+      <label class="chip"><input type="radio" name="a" value="0">Não aplicar (não conta)</label></div>
+    ${red ? `<div id="mdoff"><label for="mdd">Dia fora da obra *</label><input id="mdd" name="off" type="date" min="${esc(isoDay(new Date()))}" value="${esc(tomorrow)}">
+      <p class="small muted">Nesse dia a entrada é recusada no Picar (hora da obra, ${esc(tzName(tz))}).</p></div>` : ''}
+    <label for="mdn">Nota da decisão *</label><textarea id="mdn" name="n" required minlength="10" maxlength="1000" placeholder="ex.: ouvido o trabalhador a 23/10, sem justificação"></textarea>`, 'Guardar decisão', (dlg) => {
+    const off = dlg.querySelector('#mdoff'); if (!off) return;
+    dlg.querySelectorAll('[name=a]').forEach((r) => r.onchange = () => { off.hidden = dlg.querySelector('[name=a]:checked').value !== '1'; });
+  });
+  if (!fd) return;
+  const apply = fd.get('a') === '1';
+  const { data, error } = await sb.rpc('mini_meeting_decide', { p_miss: c.id, p_apply: apply, p_note: String(fd.get('n')).trim(),
+    p_off_day: apply && red ? fd.get('off') : null });
+  if (error) return toast(friendly(error));
+  toast(!data.applied ? 'Não aplicado: a falta deixa de contar.' : data.off_day ? `${SANCTION[data.sanction]} aplicado: fora da obra a ${fmtDate(data.off_day).slice(0, 5)}.` : `${SANCTION[data.sanction]} aplicado.`);
+  loadMeetings();
+}
+// The minutes of one meeting: who ran it, the topics, the summary, who was there, and the seal.
+async function meetDoc(id, opts = {}) {
+  const { data: m, error } = await sb.rpc('mini_meeting_get', { p_meeting: id });
+  if (error) return toast(friendly(error));
+  const tz = m.tz || DEFAULT_TZ;
+  const d = document.createElement('dialog'); d.className = 'dlg q-book mt-doc';
+  d.innerHTML = `<div class="mt-paper"><p class="ph-k">${esc(MEET_KIND[m.kind] || '')}${m.version > 1 ? ` · versão ${m.version}` : ''}</p>
+    <h2>${esc(m.title || 'Ata da reunião de segurança')}</h2>
+    <p class="small"><span data-nt>${esc(m.code)} · ${esc(m.site_title)}<br>${esc(fmtDate(isoDay(new Date(m.started))))} · ${esc(fmtHour(m.started, tz))}${m.ended ? '–' + esc(fmtHour(m.ended, tz)) : ''} · </span>dada por <span data-nt>${esc(m.by || '')}</span></p>
+    <div class="chips" style="margin:8px 0">${(m.topics || []).map((t) => chip('', t)).join('')}</div>
+    <div class="mt-min" data-nt>${esc(m.minutes || '')}</div>
+    <h3 class="eyebrow">Presenças (${m.attendance.length})</h3>
+    <ol class="mt-att">${m.attendance.map((a) => `<li><span data-nt>${esc(a.name)}</span><small><span data-nt>${esc(fmtHour(a.at, tz))} · </span>${a.typed ? 'número escrito à mão' : 'cartão'}</small></li>`).join('')}</ol>
+    ${m.staff && m.missed.length ? `<h3 class="eyebrow">Entraram e não estiveram (${m.missed.length})</h3><ul class="plain">${m.missed.map((x) => `<li><span data-nt>${esc(x.name)} · </span>${x.status === 'counted' ? x.level + '.ª falta' : 'justificada'}</li>`).join('')}</ul>` : ''}
+    ${m.sha ? `<p class="small muted mt-seal">${ic('lock')} <span>Selada a ${esc(fmtTime(m.sealed, tz))}</span> · <span>impressão digital SHA-256</span> <code data-nt>${esc(m.sha.slice(0, 16))}…</code><br><b>${m.intact ? 'Intacta: ninguém mexeu' : 'NÃO CONFERE: avisa a segurança'}</b></p>` : ''}</div>
+    <div class="acts">${opts.read ? `<button class="btn big" data-read>${ic('ok')}Li e percebi</button>` : ''}
+      <button class="btn ghost" data-print>${ic('doc')}Imprimir ou PDF</button><button class="btn ghost" data-x>Fechar</button></div>`;
+  document.body.appendChild(d); d.showModal();
+  d.addEventListener('close', () => d.remove());
+  d.querySelector('[data-x]').onclick = () => d.close(); d.querySelector('[data-print]').onclick = () => window.print();
+  if (opts.read) d.querySelector('[data-read]').onclick = async () => {
+    const { error: e2 } = await sb.rpc('mini_my_meeting_read', { p_meeting: id });
+    if (e2) return toast(friendly(e2));
+    d.close(); toast('Obrigado. Fica registado que leste.'); if (opts.after) opts.after();
+  };
+}
+// ---- the worker's side: what they attended, what they missed, and what they still have to read
+async function loadMyMeetings() {
+  const box = $('#mymeet'); if (!box) return;
+  box.innerHTML = skel(3);
+  const { data, error } = await sb.rpc('mini_my_meetings');
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = `<div class="card">${esc(friendly(error))}</div>`; return; }
+  const toRead = data.to_read || []; const missed = data.missed || []; const att = data.attended || [];
+  const unread = missed.filter((f) => !f.read && f.meeting);
+  box.innerHTML = `${toRead.concat(unread.filter((f) => !toRead.some((t) => t.id === f.meeting)).map((f) => ({ id: f.meeting, code: f.code, at: f.day + 'T08:00:00', topics: [] }))).map((t) => `
+      <div class="me-do bad"><span class="me-dot bad"></span><div class="grow"><b>Lê o resumo da reunião de segurança</b>
+        <small>Não estiveste na reunião de <span data-nt>${esc(fmtDate(isoDay(new Date(t.at))))} (${esc(t.code)})</span>. Lê e confirma.</small></div>
+        <button class="btn me-big" data-read="${esc(t.id)}">${ic('doc')}Ler</button></div>`).join('')}
+    ${missed.length ? `<div class="sec-h"><h2 class="eyebrow">As minhas faltas</h2></div><div class="list">${missed.map((f) => `<article class="card mt-miss ${f.status === 'counted' ? (f.level >= 3 ? 'bad' : 'warn') : ''}">
+        <div class="wk"><div class="grow"><div class="nm" data-nt>${esc(fmtDate(f.day))} · ${esc(f.code)}</div>
+          <div class="sub">${f.status === 'counted' ? (f.decision ? `${esc(SANCTION[f.sanction] || '')}${f.off_day ? ' · fora da obra a ' + esc(fmtDate(f.off_day).slice(0, 5)) : ''}` : `${f.level}.ª falta · proposta: ${esc(SANCTION[f.proposed] || '')} · os RH decidem`) : 'Justificada: não conta'}</div></div>
+          ${f.status === 'counted' ? chip(f.level >= 3 ? 'bad' : 'warn', f.level + '.ª') : chip('ok', 'não conta', 'ok')}</div>
+        ${f.worker_note ? `<p class="small muted" style="margin:6px 0 0">A tua explicação: <span data-nt>${esc(f.worker_note)}</span></p>` : ''}
+        ${f.status === 'counted' && !f.decision ? `<button class="btn ghost small" data-explain="${esc(f.id)}">${f.worker_note ? 'Mudar a explicação' : 'Explicar porque faltei'}</button>` : ''}</article>`).join('')}</div>` : ''}
+    <div class="sec-h"><h2 class="eyebrow">Reuniões em que estive</h2></div>
+    ${att.length ? `<div class="list">${att.map((m) => `<button class="card mt-row" data-doc="${esc(m.id)}"><span class="lm-dot">${ic('ok')}</span><div class="grow">
+        <div class="nm">${esc(m.title || MEET_KIND[m.kind] || '')}</div><div class="sub" data-nt>${esc(fmtDate(isoDay(new Date(m.at))))} · ${esc(m.code)} · ${esc(m.by || '')}</div>
+        <div class="sub" data-nt>${esc((m.topics || []).join(' · '))}</div></div></button>`).join('')}</div>`
+      : `<div class="card">${empty('doc', 'Ainda sem reuniões', 'Quando picares a presença numa reunião de segurança, ela fica aqui com o resumo.')}</div>`}`;
+  box.querySelectorAll('[data-read]').forEach((b) => b.onclick = () => meetDoc(b.dataset.read, { read: true, after: loadMyMeetings }));
+  box.querySelectorAll('[data-doc]').forEach((b) => b.onclick = () => meetDoc(b.dataset.doc));
+  box.querySelectorAll('[data-explain]').forEach((b) => b.onclick = async () => {
+    const f = missed.find((x) => x.id === b.dataset.explain);
+    const fd = await askSheet('Porque faltei à reunião', `<p class="small muted">Os RH leem a tua explicação antes de decidir. Escreve a verdade, com pormenores (quem te mandou, onde estavas).</p>
+      <textarea name="t" required minlength="5" maxlength="1000">${esc(f.worker_note || '')}</textarea>`, 'Enviar');
+    if (!fd) return;
+    const { error: e2 } = await sb.rpc('mini_my_meeting_explain', { p_miss: f.id, p_text: String(fd.get('t')).trim() });
+    if (e2) return toast(friendly(e2));
+    toast('Enviado aos RH.'); loadMyMeetings();
+  });
+}
+
+// ------------------------------------------------------------------ Avisos à equipa (sql/108)
+// The encarregado (or QSA) tells the people of one site something, from the app: a notice, an alert, or the safety
+// meeting of tomorrow with the time and the place. People with the app get it in the bell and on the phone; the sender
+// sees who has no app (to tell them in person) and who already tapped «Recebi».
+const canNotice = () => can('equipa.avisar') || can('seguranca.reuniao');
+const NOTICE_KIND = { notice: 'Aviso', alert: 'Alerta', meeting: 'Reunião de segurança' };
+async function teamNotice(site, kind) {
+  if (!site) return toast('Escolhe a obra primeiro.');
+  const tz = siteTz(site.id);
+  const tomorrow = isoDay(new Date(Date.now() + 864e5));
+  const { data: au, error } = await sb.rpc('mini_team_audience', { p_site: site.id, p_day: kind === 'meeting' ? tomorrow : null });
+  if (error) return toast(friendly(error));
+  const kinds = kind === 'meeting' ? ['meeting'] : ['notice', 'alert'].filter(() => au.can_notice);
+  const fd = await askSheet(kind === 'meeting' ? 'Avisar a reunião de segurança' : 'Mandar aviso à equipa', `
+    <p class="small muted" data-nt>${esc(site.code || '')} · ${esc(site.title || '')}</p>
+    ${kinds.length > 1 ? `<div class="chips" role="radiogroup">${kinds.map((k, i) => `<label class="chip"><input type="radio" name="k" value="${k}" ${i ? '' : 'checked'} required>${esc(NOTICE_KIND[k])}</label>`).join('')}</div>
+      <p class="small muted">Um alerta é para algo que muda o trabalho agora (vento, obra parada, perigo). Toca no telemóvel na hora.</p>` : `<input type="hidden" name="k" value="${kinds[0] || 'notice'}">`}
+    ${kind === 'meeting' ? `<div class="row"><div><label for="nd">Dia</label><input id="nd" name="d" type="date" required min="${esc(isoDay(new Date()))}" value="${esc(tomorrow)}"></div>
+      <div><label for="nt">Hora</label><input id="nt" name="t" type="time" required value="07:30"></div></div>
+      <label for="np">Onde</label><input id="np" name="p" maxlength="120" placeholder="ex.: contentor da segurança, portão 2">` : ''}
+    <label for="nb">Mensagem *</label><textarea id="nb" name="b" required minlength="3" maxlength="500" placeholder="${kind === 'meeting' ? 'ex.: Toolbox de arranque. Tragam o arnês.' : 'ex.: Amanhã entrada às 7h00 no portão 2.'}">${kind === 'meeting' ? 'Reunião de segurança antes de começar o trabalho. É obrigatória.' : ''}</textarea>
+    <p class="small"><b>${au.with_app.length}</b> recebem na app${au.with_app.length ? ': <span data-nt>' + esc(au.with_app.join(', ')) + '</span>' : ''}.</p>
+    ${au.without_app.length ? `<p class="small muted">${ic('warn')} Sem a app (diz-lhes pessoalmente): <span data-nt>${esc(au.without_app.join(', '))}</span>.</p>` : ''}
+    <div id="nsent"></div>`, 'Enviar', async (dlg) => {
+      const { data: sent } = await sb.rpc('mini_team_sent', { p_site: site.id });
+      const box = dlg.querySelector('#nsent'); if (!box || !sent || !sent.length) return;
+      box.innerHTML = `<h3 class="eyebrow">Últimos avisos desta obra</h3><ul class="plain">${sent.slice(0, 6).map((m) => `<li><b>${esc(NOTICE_KIND[m.kind])}</b><span data-nt> · ${esc(fmtTime(m.at, tz))} · ${esc(m.body.length > 70 ? m.body.slice(0, 67) + '…' : m.body)}</span>
+        <br><small class="muted">${m.read} de ${m.total - m.no_app.length} leram${m.unread.length ? '<span> · ainda não leram: </span><span data-nt>' + esc(m.unread.join(', ')) + '</span>' : ''}</small></li>`).join('')}</ul>`;
+    });
+  if (!fd) return;
+  const k = fd.get('k');
+  const at = k === 'meeting' ? zonedToUtc(`${fd.get('d')}T${fd.get('t')}`, tz) : null;
+  const { data: r, error: e2 } = await sb.rpc('mini_team_send', { p_site: site.id, p_kind: k, p_body: String(fd.get('b')).trim(),
+    p_meeting_at: at, p_place: k === 'meeting' ? String(fd.get('p') || '').trim() || null : null });
+  if (e2) return toast(friendly(e2));
+  toast(`Enviado a ${r.sent} pessoa(s).${r.without_app ? ` ${r.without_app} sem app: avisa-as pessoalmente.` : ''}`);
+}
+// The worker: messages not yet confirmed, at the top of «Eu»
+function meNotices() {
+  const list = (state.meNotes || []).filter((m) => !m.read);
+  return list.slice(0, 3).map((m) => `<div class="me-do ${m.kind === 'alert' ? 'bad' : ''}"><span class="me-dot ${m.kind === 'alert' ? 'bad' : ''}"></span><div class="grow">
+      <b>${m.kind === 'meeting' ? 'Reunião de segurança: ' + esc(fmtDate(isoDay(new Date(m.meeting_at))).slice(0, 5)) + ' às ' + esc(fmtHour(m.meeting_at, m.tz)) : esc(NOTICE_KIND[m.kind])}</b>
+      <small><span data-nt>${esc(m.body)}</span>${m.place ? ' · <span data-nt>' + esc(m.place) + '</span>' : ''} · <span data-nt>${esc(m.code)} · ${esc(m.by || '')}</span></small></div>
+      <button class="btn me-big" data-gotit="${esc(m.id)}">${ic('ok')}Recebi</button></div>`).join('');
 }
 
 // ------------------------------------------------------------------ Emergência (sql/64): counting people at the assembly points

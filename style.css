@@ -2292,3 +2292,25 @@ ul.ct-miss li { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; p
 .sh-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 0; border-top: 1px solid var(--line); font-size: var(--t-md); }
 .sh-row .grow { font-variant-numeric: tabular-nums; font-weight: 650; }
 .sh-day > .btn { margin-top: 8px; min-height: 48px; }
+/* Reuniões de segurança (v84) */
+.mt-live { border: 2px solid var(--brand, #4f46e5); }
+.mt-live .wk { align-items: center; gap: 10px; margin-bottom: 12px; }
+.mt-live > .btn.big { width: 100%; }
+.mt-live textarea { min-height: 120px; }
+#mlisten.on { background: var(--bad-bg); color: var(--bad); border-color: var(--bad); }
+#mlisten.on .i { animation: mtpulse 1.2s ease-in-out infinite; }
+@keyframes mtpulse { 50% { transform: scale(1.2); } }
+@media (prefers-reduced-motion: reduce) { #mlisten.on .i { animation: none; } }
+.mt-topics { margin: 6px 0 14px; }
+.mt-row { display: flex; gap: 12px; align-items: center; text-align: left; width: 100%; font: inherit; color: inherit; cursor: pointer; }
+.mt-miss.warn { border-left: 4px solid var(--warn); }
+.mt-miss.bad { border-left: 4px solid var(--bad); }
+.mt-miss .btn { margin-top: 10px; }
+.mt-min { white-space: pre-wrap; line-height: 1.55; margin: 10px 0 16px; }
+.mt-att { padding-left: 22px; margin: 6px 0 14px; }
+.mt-att li { margin: 4px 0; } .mt-att small { color: var(--muted); margin-left: 8px; }
+.mt-seal code { font-size: .85em; }
+.mt-live-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mt-live-t { margin: 10px 0 12px; font-size: 1.25rem; }
+.mt-topics { gap: 6px; }
+.mt-topics .chip { font-size: .85rem; padding: 6px 11px; min-height: 36px; }
