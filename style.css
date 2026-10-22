@@ -2314,3 +2314,26 @@ ul.ct-miss li { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; p
 .mt-live-t { margin: 10px 0 12px; font-size: 1.25rem; }
 .mt-topics { gap: 6px; }
 .mt-topics .chip { font-size: .85rem; padding: 6px 11px; min-height: 36px; }
+/* Material da obra (v85) */
+.mt-tabs button { white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.mt-n { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; font-size: 11px; font-weight: 700; background: var(--warn, #d97706); color: #fff; }
+#mtask { margin: 12px 0; }
+.mt-kpis .kpi small { font-size: 13px; font-weight: 600; color: var(--bad, #dc2626); }
+.mt-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.mt-tool .wk { align-items: flex-start; }
+.mt-tool.bad { border-left: 3px solid var(--bad, #dc2626); }
+.mt-person.warn { border-left: 3px solid var(--warn, #d97706); }
+.mt-rep { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0 0; padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, var(--warn, #d97706) 10%, transparent); }
+.mt-rep .i { flex: none; width: 18px; height: 18px; }
+.mt-ppe, .mt-mat, .mt-lines { list-style: none; margin: 8px 0 0; padding: 0; }
+.mt-ppe li, .mt-mat li, .mt-lines li { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-top: 1px solid var(--line, rgba(127,127,127,.18)); font-size: 14px; }
+.mt-ppe li:first-child, .mt-mat li:first-child, .mt-lines li:first-child { border-top: 0; }
+.mt-mat .grow small { font-size: 12px; }
+.mt-eur { min-width: 76px; text-align: right; font-variant-numeric: tabular-nums; color: var(--muted, #6b7280); }
+.mt-rq.info { border-left: 3px solid var(--accent, #4f46e5); }
+.mt-line { display: grid; gap: 6px; padding: 10px; margin-bottom: 8px; border: 1px solid var(--line, rgba(127,127,127,.25)); border-radius: 12px; }
+.mt-line select, .mt-line input { margin: 0; }
+.mt-line2 { display: grid; grid-template-columns: 84px 1fr auto; gap: 6px; align-items: center; }
+.mt-fams { display: grid; gap: 8px; margin-top: 8px; }
+.mt-reps .wk { padding: 8px 0; border-top: 1px solid var(--line, rgba(127,127,127,.18)); }
+.mt-reps .wk:first-of-type { border-top: 0; }

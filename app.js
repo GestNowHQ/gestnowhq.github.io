@@ -66,6 +66,20 @@ const ERRORS = [
   [/write the message \(3 to 500/i, 'Escreve a mensagem (3 a 500 letras).'],
   [/too many messages today/i, 'Já mandaste 20 avisos hoje.'],
   [/the meeting must be in the next 14 days/i, 'A reunião tem de ser nos próximos 14 dias.'],
+  // Material da obra (sql/109)
+  [/choose what you need/i, 'Escolhe ou escreve o que precisas.'],
+  [/too many lines \(30 at most\)/i, 'Linhas a mais: 30 no máximo por pedido.'],
+  [/say why \(3\+ characters\)/i, 'Diz porquê (mínimo 3 letras).'],
+  [/this person is not in the team of the site/i, 'Essa pessoa não está na equipa desta obra.'],
+  [/too many requests today/i, 'Já fizeste 20 pedidos hoje.'],
+  [/this request can no longer be cancelled/i, 'Este pedido já não se pode cancelar (já foi entregue ou fechado).'],
+  [/you cannot handle your own request/i, 'É um pedido teu: outra pessoa do armazém trata.'],
+  [/this request is already closed/i, 'Este pedido já está fechado.'],
+  [/this tool was already returned/i, 'Esta ferramenta já foi devolvida.'],
+  [/choose missing or damaged/i, 'Escolhe: desapareceu ou avariou.'],
+  [/say what happened/i, 'Escreve o que aconteceu (5 letras ou mais).'],
+  [/already reported: the warehouse has it/i, 'Já foi reportada: o armazém já sabe.'],
+  [/say what was done/i, 'Escreve o que se fez (5 letras ou mais).'],
   [/write your explanation/i, 'Escreve a tua explicação (mínimo 5 letras).'],
   [/attendance closed/i, 'A reunião já fechou: já não se pica a presença.'],
   [/say why \(5\+ characters\)/i, 'Diz porquê (mínimo 5 letras).'],
@@ -908,7 +922,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '84';
+const APP_VERSION = '85';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['reunioes', 'emergencia', 'lmra', 'seguranca'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -922,7 +936,7 @@ function tabsFor(role) {
   if (role === 'admin') return isOwner() ? (ownerDesk() ? ['clientes'] : ['clientes', 'inicio', 'horas', 'secretariado']) : ['inicio', 'painel', 'horas', 'secretariado'];
   return TABS[role] || TABS.supervisor;
 }
-const MORE_ORDER = ['inicio', 'empresa', 'onbtextos', 'equipa', 'picar', 'emergencia', 'reunioes', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'andaimes', 'processo', 'clientes', 'custos', 'progresso'];
+const MORE_ORDER = ['inicio', 'empresa', 'onbtextos', 'equipa', 'material', 'picar', 'emergencia', 'reunioes', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'andaimes', 'processo', 'clientes', 'custos', 'progresso'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -944,7 +958,7 @@ const MENU_GROUPS = [
   ['Recursos Humanos', ['trabalhadores', 'onbtextos', 'acolhimento', 'viagens', 'alojamento']],
   ['Frota', ['frota']],
   ['QSA · Qualidade, Segurança e Ambiente', ['seguranca', 'reunioes', 'lmra', 'emergencia', 'qualidade', 'processo']],
-  ['Produção (Obra)', ['painel', 'obras', 'naobra', 'picar', 'progresso', 'andaimes', 'equipa', 'producao']],
+  ['Produção (Obra)', ['painel', 'obras', 'naobra', 'picar', 'progresso', 'material', 'andaimes', 'equipa', 'producao']],
   ['Compras e Armazém', ['armazem', 'compras']],
   ['Comercial', ['comercial']],
   ['Orçamentação', ['orcamentos']],
@@ -959,7 +973,7 @@ const VIEW_NEEDS = {
   emergencia: () => can('seguranca.emergencia'), acolhimento: () => can('acolhimento.gerir'),
   obras: () => can('obras.gerir') || can('obras.ver_detalhes') || can('obras.area'), painel: () => canSiteDetails(), naobra: () => canSiteDetails() || can('ponto.picar'),
   equipa: () => canSiteDetails(), picar: () => can('ponto.picar'), horas: () => can('horas.ver') || can('horas.validar_obra'),
-  andaimes: () => canScaffolds(), producao: () => canProd(), progresso: () => canProgress(), armazem: () => canWh(), compras: () => canBuy(), frota: () => canFleet(),
+  andaimes: () => canScaffolds(), producao: () => canProd(), progresso: () => canProgress(), material: () => canSiteMaterial(), armazem: () => canWh(), compras: () => canBuy(), frota: () => canFleet(),
   orcamentos: () => canEstimates(), qualidade: () => canQuality(), comercial: () => canSales(), premios: () => canAwards(), custos: () => canCosts(),
 };
 // v73 (Diogo 2026-10-21): «o standard da gestão serve para todas as empresas, mas o administrador de cada empresa adapta».
@@ -1199,6 +1213,7 @@ async function boot() {
   nav.querySelector('[data-view=equipa]').hidden = me.role !== 'supervisor' || !canSiteDetails();
   nav.querySelector('[data-view=lmra]').hidden = worker || state.offline || !canLmra();
   nav.querySelector('[data-view=reunioes]').hidden = worker || state.offline || !canMeet();
+  nav.querySelector('[data-view=material]').hidden = worker || state.offline || !canSiteMaterial();
   nav.querySelector('[data-view=emergencia]').hidden = worker || !canEmergency();
   nav.querySelector('[data-view=armazem]').hidden = worker || state.offline || !canWh();
   nav.querySelector('[data-view=compras]').hidden = worker || state.offline || !canBuy();
@@ -1661,7 +1676,7 @@ function go(view) {
   window.scrollTo(0, 0);
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
      ficha: viewWorker, obras: viewSites, area: viewArea, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients, cliente: viewClient, precos: viewPrices, empresa: viewCompanyRules, inicio: viewHome,
-     processo: viewProcess, orcamentos: viewEstimates, comercial: viewSales, premios: viewAwards, custos: viewCosts, lmra: viewLmra, reunioes: viewMeetings, emergencia: viewEmergency,
+     processo: viewProcess, orcamentos: viewEstimates, comercial: viewSales, premios: viewAwards, custos: viewCosts, lmra: viewLmra, reunioes: viewMeetings, material: viewSiteMaterial, emergencia: viewEmergency,
      armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, producao: viewProd, progresso: viewProgress, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
   checkEmergencyBar(); encBadges();
 }
@@ -1980,6 +1995,7 @@ function viewTeam() {
     </div><aside class="enc-side">
     <div class="team-acts"><button class="btn big ghost" id="tval">${ic('ok')}<span>Validar a semana</span></button>
       ${canProgress() ? `<button class="btn big ghost" id="tprog">${ic('sheet')}<span>Folha de produção</span></button>` : ''}
+      ${canSiteMaterial() ? `<button class="btn big ghost" id="tmat">${ic('box')}<span>Material da obra</span></button>` : ''}
       ${can('equipa.avisar') ? `<button class="btn big ghost" id="tnote">${ic('bell')}<span>Mandar aviso à equipa</span></button>` : ''}
       ${canMeet() && can('seguranca.reuniao') ? `<button class="btn big ghost" id="tmeet">${ic('team')}Reunião de segurança</button>` : ''}
       ${canLmra() ? `<button class="btn big ghost" id="tlmra">${ic('shield')}LMRA</button>` : ''}${canEmergency() ? `<button class="btn big danger" id="temer">${ic('warn')}Emergência</button>` : ''}
@@ -1990,6 +2006,7 @@ function viewTeam() {
   $('#tval').onclick = () => go('horas');
   if ($('#tlmra')) $('#tlmra').onclick = () => go('lmra');
   if ($('#tmeet')) $('#tmeet').onclick = () => go('reunioes');
+  if ($('#tmat')) $('#tmat').onclick = () => go('material');
   if ($('#tnote')) $('#tnote').onclick = () => teamNotice(currentSite(), 'notice');
   if ($('#tprog')) { $('#tprog').onclick = () => go('progresso'); progressBadge(); }
   if ($('#temer')) $('#temer').onclick = () => go('emergencia');
@@ -8261,6 +8278,245 @@ async function checkEmergencyBar() {
 }
 setInterval(() => { if (document.visibilityState === 'visible') checkEmergencyBar(); }, 20000);
 
+// ------------------------------------------------------------------ Material da obra (sql/109)
+// One site: the tools out on it (who, back by when, calibration), the team's PPE against what the site requires, the
+// material issued this month and the site's own stock, and the requests to the warehouse. The encarregado asks here;
+// the warehouse prepares and delivers at the window with the card of whoever receives (Armazém › Pedidos das obras).
+const canSiteMaterial = () => mod('warehouse') && ['armazem.ver', 'armazem.entregar', 'compras.pedir'].some(can);
+const REQ_ST = { pending: ['warn', 'à espera do armazém'], approved: ['warn', 'à espera do armazém'], prepared: ['info', 'pronto para levantar'],
+  delivered: ['ok', 'entregue'], rejected: ['bad', 'recusado'], cancelled: ['', 'cancelado'] };
+const CAL_ST = { due_soon: ['warn', 'calibração a vencer'], expired: ['bad', 'calibração vencida'], failed: ['bad', 'calibração reprovada'] };
+const MAT_TABS = [['ferramentas', 'Ferramentas'], ['epi', 'EPI'], ['material', 'Material'], ['pedidos', 'Pedidos']];
+function viewSiteMaterial() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
+  if (!canSiteMaterial()) return viewClock();   // code guard as well as the database's
+  const M = state.mat || (state.mat = { tab: 'ferramentas' });
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Ferramentas, EPI e material desta obra</p><h1>Material da obra</h1></div></div>
+    <div class="team-site">${siteSelect('mts')}</div>
+    <div id="mtkpis">${skel(1)}</div>
+    <div class="seg mt-tabs" role="tablist" id="mttabs">${MAT_TABS.map(([k, l]) => `<button role="tab" data-mt="${k}" aria-selected="${M.tab === k}">${esc(l)}</button>`).join('')}</div>
+    <div id="mtbody">${skel(3)}</div>`;
+  bindSiteSelect('mts', loadSiteMaterial);
+  $('#mttabs').querySelectorAll('[data-mt]').forEach((b) => b.onclick = () => { M.tab = b.dataset.mt; matTabs(); matBody(); });
+  loadSiteMaterial();
+}
+function matTabs() {
+  const M = state.mat; const d = M.data;
+  document.querySelectorAll('#mttabs [data-mt]').forEach((b) => {
+    b.setAttribute('aria-selected', String(b.dataset.mt === M.tab));
+    const n = !d ? 0 : b.dataset.mt === 'ferramentas' ? d.tools.filter((t) => t.late || CAL_ST[t.cal]).length
+      : b.dataset.mt === 'epi' ? d.team.filter((p) => p.missing.length || p.ppe.some((a) => a.late)).length
+        : b.dataset.mt === 'pedidos' ? d.requests.filter((r) => r.status === 'prepared').length : 0;
+    const l = MAT_TABS.find(([k]) => k === b.dataset.mt)[1];
+    b.innerHTML = `${esc(l)}${n ? `<span class="mt-n">${n}</span>` : ''}`;
+  });
+}
+let matSeq = 0;
+async function loadSiteMaterial() {
+  const box = $('#mtbody'); if (!box) return;
+  const site = currentSite();
+  if (!site) { box.innerHTML = `<div class="card">${empty('box', 'Sem obras abertas', 'Quando tiveres uma obra, o material dela aparece aqui.')}</div>`; $('#mtkpis').innerHTML = ''; return; }
+  const seq = ++matSeq;
+  const { data: d, error } = await sb.rpc('mini_site_material', { p_site: site.id });
+  if (seq !== matSeq || !box.isConnected) return;
+  if (error) { box.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
+  const M = state.mat; M.data = d; M.site = site;
+  const late = d.tools.filter((t) => t.late).length;
+  const ppeBad = d.team.filter((p) => p.missing.length || p.ppe.some((a) => a.late)).length;
+  const cost = d.issued.reduce((s, x) => s + Number(x.cost || 0), 0);
+  const open = d.requests.filter((r) => ['pending', 'approved', 'prepared'].includes(r.status)).length;
+  $('#mtkpis').innerHTML = `<div class="kpis k4 mt-kpis">
+    <button class="kpi ${late ? 'bad' : ''}" data-go="ferramentas"><b>${d.tools.length}${late ? `<small> · ${late} atrasada(s)</small>` : ''}</b><span>ferramentas na obra</span></button>
+    <button class="kpi ${ppeBad ? 'warn' : ''}" data-go="epi"><b>${ppeBad}</b><span>pessoas com EPI em falta</span></button>
+    <button class="kpi" data-go="material"><b>${esc(eur2(cost))}</b><span>material este mês</span></button>
+    <button class="kpi ${open ? 'info' : ''}" data-go="pedidos"><b>${open}</b><span>pedidos em curso</span></button></div>
+    ${d.can_ask ? `<button class="btn big wide" id="mtask">${ic('box')}Pedir ao armazém</button>` : ''}`;
+  $('#mtkpis').querySelectorAll('[data-go]').forEach((b) => b.onclick = () => { M.tab = b.dataset.go; matTabs(); matBody(); });
+  if ($('#mtask')) $('#mtask').onclick = () => matRequest({});
+  matTabs(); matBody();
+}
+function matBody() {
+  const M = state.mat; const d = M.data; const box = $('#mtbody'); if (!box || !d) return;
+  const tz = siteTz(M.site.id);
+  if (M.tab === 'ferramentas') {
+    box.innerHTML = d.tools.length ? `<div class="list">${d.tools.map((t) => `<article class="card mt-tool ${t.late ? 'bad' : ''}">
+        <div class="wk"><div class="grow"><div class="nm">${esc(t.name)} <b>${esc(t.tag)}</b></div>
+          <div class="sub">${esc(t.person)} · desde ${esc(fmtTime(t.since, tz))}</div>
+          <div class="sub">${t.due ? (t.late ? `<b class="t-bad">devia ter voltado a ${esc(fmtTime(t.due, tz))}</b>` : `volta até ${esc(fmtTime(t.due, tz))}`) : ''}
+            ${t.cal_due && CAL_ST[t.cal] ? ` · calibração até ${esc(fmtDate(t.cal_due))}` : ''}</div></div>
+          <div class="mt-chips">${t.late ? chip('bad', 'atrasada') : chip('info', 'emprestada')}${CAL_ST[t.cal] ? chip(CAL_ST[t.cal][0], CAL_ST[t.cal][1]) : ''}</div></div>
+        ${t.report ? `<p class="small mt-rep">${ic('warn')}<span>Reportada como <b>${t.report.kind === 'missing' ? 'desaparecida' : 'avariada'}</b> a ${esc(fmtTime(t.report.at, tz))}: «${esc(t.report.note)}». O armazém já sabe.</span></p>`
+          : `<div class="acts"><button class="btn ghost small" data-rep="${esc(t.custody)}" data-tag="${esc(t.tag)}">Desapareceu ou avariou</button></div>`}</article>`).join('')}</div>`
+      : `<div class="card">${empty('box', 'Nenhuma ferramenta nesta obra', 'Quando o armazém entregar uma ferramenta com o custo para esta obra, aparece aqui com quem a tem.')}</div>`;
+    box.querySelectorAll('[data-rep]').forEach((b) => b.onclick = () => matToolReport(b.dataset.rep, b.dataset.tag));
+  } else if (M.tab === 'epi') {
+    const req = d.ppe_required;
+    box.innerHTML = `<section class="card mt-req"><div class="wk"><div class="grow"><b>EPI obrigatório nesta obra</b>
+        <div class="sub">${req.length ? req.map((f) => esc(f)).join(' · ') : 'Ainda não definido. Sem isto, a app não sabe o que falta a cada pessoa.'}</div></div>
+        ${d.can_ppe_rules ? `<button class="btn ghost small" id="mtrules">${req.length ? 'Mudar' : 'Definir'}</button>` : ''}</div>
+        ${!req.length && !d.can_ppe_rules ? '<p class="small muted" style="margin:6px 0 0">Quem define é a QSA ou o armazém.</p>' : ''}</section>
+      ${d.team.length ? `<div class="list">${d.team.map((p) => { const bad = p.ppe.filter((a) => a.late); const soon = p.ppe.filter((a) => !a.late && a.due);
+        return `<article class="card mt-person ${p.missing.length || bad.length ? 'warn' : ''}"><div class="wk">${avatar(p.name)}<div class="grow"><div class="nm">${esc(p.name)}</div>
+          <div class="sub">${p.ppe.length ? `${p.ppe.length} EPI entregue(s)` : 'Sem EPI entregue'}</div>
+          <div class="mt-chips">${p.missing.length ? chip('bad', `falta: ${p.missing.join(', ')}`) : bad.length ? chip('bad', 'trocar já') : soon.length ? chip('warn', 'trocar em breve') : req.length ? chip('ok', 'completo') : ''}</div></div></div>
+          ${p.ppe.length ? `<ul class="mt-ppe">${p.ppe.map((a) => `<li><span class="grow">${esc(a.name)}${a.size ? ` <span class="muted">${esc(a.size)}</span>` : ''}</span>
+            ${a.replace_after ? (a.late ? chip('bad', 'trocar já') : a.due ? chip('warn', 'trocar a ' + fmtDate(a.replace_after)) : `<span class="small muted">até ${esc(fmtDate(a.replace_after))}</span>`) : ''}</li>`).join('')}</ul>` : ''}
+          ${d.can_ask && (p.missing.length || bad.length) ? `<div class="acts"><button class="btn ghost small" data-ppe="${esc(p.id)}">Pedir o EPI em falta</button></div>` : ''}</article>`; }).join('')}</div>`
+        : `<div class="card">${empty('team', 'Ninguém atribuído a esta obra hoje', 'As pessoas da equipa aparecem aqui com o EPI que têm.')}</div>`}`;
+    if ($('#mtrules')) $('#mtrules').onclick = matPpeRules;
+    box.querySelectorAll('[data-ppe]').forEach((b) => b.onclick = () => {
+      const p = d.team.find((x) => x.id === b.dataset.ppe);
+      const lines = [...p.missing, ...p.ppe.filter((a) => a.late).map((a) => a.name)].map((f) => {
+        const it = d.catalogue.find((x) => x.family === f && x.qty > 0) || d.catalogue.find((x) => x.family === f);
+        return { item: it ? it.id : '', desc: it ? '' : f, qty: 1, for: p.id };
+      });
+      matRequest({ lines, note: `EPI para ${p.name}` });
+    });
+  } else if (M.tab === 'material') {
+    box.innerHTML = `<section class="card"><h2 style="margin-top:0">Entregue a esta obra este mês</h2>
+        ${d.issued.length ? `<ul class="mt-mat">${d.issued.map((x) => `<li><span class="grow">${esc(x.name)}<small class="muted"> · ${esc(WH_CAT[x.category] || '')}</small></span>
+          <b>${Number(x.qty)} ${esc(x.unit)}</b><span class="mt-eur">${esc(eur2(x.cost))}</span></li>`).join('')}</ul>
+          <p class="small muted">Saídas do armazém com o custo para esta obra, menos as devoluções.</p>` : '<p class="small muted">Ainda nada este mês.</p>'}</section>
+      <section class="card"><h2 style="margin-top:0">Stock no armazém da obra</h2>
+        ${d.site_stock.length ? `<ul class="mt-mat">${d.site_stock.map((x) => `<li><span class="grow">${esc(x.name)}<small class="muted"> · ${esc(x.warehouse)}</small></span>
+          <b>${Number(x.qty)} ${esc(x.unit)}</b>${x.low ? chip('warn', 'no mínimo') : ''}</li>`).join('')}</ul>`
+          : '<p class="small muted">Esta obra não tem armazém próprio (contentor ou carrinha). O armazém cria um em Armazém › «+ Armazém».</p>'}</section>`;
+  } else {
+    const rs = d.requests;
+    box.innerHTML = `${rs.length ? `<div class="list">${rs.map((r) => matReqCard(r, tz, r.mine && ['pending', 'approved', 'prepared'].includes(r.status) && !r.lines.some((l) => l.delivered)
+        ? `<button class="btn ghost small" data-cx="${esc(r.id)}">Cancelar pedido</button>` : '')).join('')}</div>`
+      : `<div class="card">${empty('box', 'Sem pedidos ao armazém', d.can_ask ? 'Carrega em «Pedir ao armazém»: escolhes do catálogo ou escreves o que precisas.' : '')}</div>`}
+      ${d.buys.length ? `<section class="card"><h2 style="margin-top:0">Compras para esta obra</h2><ul class="mt-mat">${d.buys.map((q) => `<li><span class="grow">${esc(q.desc)}<small class="muted"> · ${esc(q.by || '')}</small></span>
+          <b>${Number(q.qty)}</b>${chip((BUY_ST[q.status] || [''])[0], (BUY_ST[q.status] || ['', q.status])[1])}</li>`).join('')}</ul>
+          <p class="small muted">O que não há no armazém pede-se em Compras.</p></section>` : ''}`;
+    box.querySelectorAll('[data-cx]').forEach((b) => b.onclick = () => matCancel(b.dataset.cx));
+  }
+}
+function matReqCard(r, tz, acts = '', wh = false) {
+  const [k, l] = REQ_ST[r.status] || ['', r.status];
+  return `<article class="card mt-rq ${r.status === 'prepared' ? 'info' : ''}"><div class="wk"><div class="grow">
+      <div class="nm">${wh ? `Obra ${esc(r.site)} · ` : ''}${r.lines.length} linha(s)${r.priority !== 'normal' ? ' · <b class="t-bad">urgente</b>' : ''}</div>
+      <div class="sub">${esc(r.by || '')} · ${esc(fmtTime(r.at, tz))}${r.needed_by ? ` · preciso até <b>${esc(fmtDate(r.needed_by))}</b>` : ''}</div></div>${chip(k, l)}</div>
+    <ul class="mt-lines">${r.lines.map((x) => `<li><span class="grow">${esc(x.desc)}${x.for ? ` <span class="muted">· para ${esc(x.for)}</span>` : ''}</span>
+      <b>${Number(x.qty)} ${esc(x.unit)}</b>${x.delivered ? chip('ok', 'entregue') : wh && x.item && Number(x.stock) < Number(x.qty) ? chip('bad', `stock ${Number(x.stock)}`) : wh && !x.item ? chip('warn', 'fora do catálogo') : ''}</li>`).join('')}</ul>
+    ${r.note ? `<p class="small" style="margin:6px 0 0">«${esc(r.note)}»</p>` : ''}
+    ${r.early_ppe ? '<p class="small muted" style="margin:6px 0 0">Há EPI pedido antes do tempo de troca: ao entregar, o armazém escreve o motivo.</p>' : ''}
+    ${r.close_note ? `<p class="small ${r.status === 'rejected' ? 'by-no' : 'muted'}" style="margin:6px 0 0">${r.status === 'rejected' ? 'Armazém' : r.status === 'cancelled' ? 'Cancelado' : 'Nota do armazém'}: «${esc(r.close_note)}»</p>` : ''}
+    ${acts ? `<div class="acts">${acts}</div>` : ''}</article>`;
+}
+// Ask the warehouse: lines from the catalogue (what is in stock shows how many) or written by hand, each for the
+// encarregado or for one person of the team (PPE goes to the person, who signs for it at the window).
+async function matRequest(pre) {
+  const M = state.mat; const d = M.data; const site = M.site;
+  const cat = d.catalogue; const team = d.team;
+  let lines = (pre.lines && pre.lines.length ? pre.lines : [{ item: '', desc: '', qty: 1, for: '' }]).map((x) => ({ ...x }));
+  const opt = (sel) => `<option value="">— Escrevo o que é —</option>${cat.map((x) => `<option value="${esc(x.id)}" ${sel === x.id ? 'selected' : ''}>${esc(x.name)} (${x.qty > 0 ? 'há ' + Number(x.qty) : 'sem stock'})</option>`).join('')}`;
+  const who = (sel) => `<option value="">Para mim / a obra</option>${team.map((p) => `<option value="${esc(p.id)}" ${sel === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}`;
+  const row = (x, i) => `<div class="mt-line" data-i="${i}">
+      ${cat.length ? `<select data-k="item" aria-label="Artigo">${opt(x.item)}</select>` : ''}
+      <input data-k="desc" maxlength="200" placeholder="ex.: fita sinalizadora, discos de 125" value="${esc(x.desc || '')}" ${x.item ? 'hidden' : ''} aria-label="O que é">
+      <div class="mt-line2"><input data-k="qty" type="number" min="0.001" step="any" inputmode="decimal" value="${esc(x.qty)}" aria-label="Quantidade">
+        <select data-k="for" aria-label="Para quem">${who(x.for)}</select>
+        <button type="button" class="btn ghost small" data-rm="${i}" aria-label="Tirar">×</button></div></div>`;
+  const fd = await askSheet(`Pedir ao armazém · ${site.cost_center_code}`, `
+    <div id="mtl"></div><button type="button" class="btn ghost small" id="mtadd">+ Outra linha</button>
+    <div class="row"><div><label for="mtn">Preciso até</label><input id="mtn" name="need" type="date" min="${esc(isoDay(new Date()))}"></div>
+      <div><label class="chk"><input type="checkbox" name="urgent"> Urgente</label></div></div>
+    <label for="mto">Nota</label><input id="mto" name="note" maxlength="500" value="${esc(pre.note || '')}" placeholder="ex.: para a frente B, entregar no contentor">
+    <p class="small muted">O armazém prepara e avisa-te. Quem recebe assina com o cartão ao levantar. O que não há no armazém pede-se em Compras.</p>`, 'Enviar pedido', (dlg) => {
+    const box = dlg.querySelector('#mtl');
+    const read = () => box.querySelectorAll('.mt-line').forEach((el) => { const x = lines[+el.dataset.i];
+      el.querySelectorAll('[data-k]').forEach((f) => { x[f.dataset.k] = f.value; }); });
+    const draw = () => { box.innerHTML = lines.map(row).join('');
+      box.querySelectorAll('[data-k=item]').forEach((s) => s.onchange = () => { read(); draw(); });
+      box.querySelectorAll('[data-rm]').forEach((b) => b.onclick = () => { read(); lines.splice(+b.dataset.rm, 1); if (!lines.length) lines.push({ item: '', desc: '', qty: 1, for: '' }); draw(); }); };
+    dlg.querySelector('#mtadd').onclick = () => { read(); lines.push({ item: '', desc: '', qty: 1, for: '' }); draw(); };
+    dlg.querySelector('form').addEventListener('submit', read, true);
+    draw();
+  });
+  if (!fd) return;
+  const send = lines.filter((x) => x.item || (x.desc || '').trim()).map((x) => ({ item: x.item || null, desc: (x.desc || '').trim() || null, qty: Number(x.qty), for: x.for || null }));
+  if (!send.length) return toast('Escolhe ou escreve o que precisas.');
+  const { error } = await sb.rpc('mini_site_request', { p_site: site.id, p_lines: send, p_urgent: fd.get('urgent') === 'on',
+    p_needed_by: fd.get('need') || null, p_note: String(fd.get('note') || '').trim() || null });
+  if (error) return toast(friendly(error));
+  toast('Pedido enviado ao armazém. Avisamos quando estiver pronto.');
+  M.tab = 'pedidos'; loadSiteMaterial();
+}
+async function matCancel(id) {
+  const fd = await askSheet('Cancelar o pedido', '<label for="mcx">Porquê? *</label><input id="mcx" name="x" required minlength="3" maxlength="300" placeholder="ex.: já não é preciso">', 'Cancelar pedido');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_site_request_cancel', { p_req: id, p_reason: String(fd.get('x')).trim() });
+  if (error) return toast(friendly(error));
+  toast('Pedido cancelado.'); loadSiteMaterial();
+}
+async function matToolReport(custody, tag) {
+  const fd = await askSheet(`Ferramenta ${tag}`, `<div class="chips" role="radiogroup"><label class="chip"><input type="radio" name="k" value="missing" required> Desapareceu</label>
+      <label class="chip"><input type="radio" name="k" value="damaged"> Avariou</label></div>
+    <label for="mrn">O que aconteceu? *</label><textarea id="mrn" name="n" rows="2" required minlength="5" maxlength="500" placeholder="ex.: ninguém a encontra desde ontem à tarde"></textarea>
+    <p class="small muted">O armazém é avisado logo. A ferramenta continua em nome de quem a levou até o armazém tratar.</p>`, 'Avisar o armazém');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_site_tool_report', { p_custody: custody, p_kind: fd.get('k'), p_note: String(fd.get('n')).trim() });
+  if (error) return toast(friendly(error));
+  toast('O armazém foi avisado.'); loadSiteMaterial();
+}
+async function matPpeRules() {
+  const d = state.mat.data; const on = new Set(d.ppe_required);
+  if (!d.ppe_families.length) return toast('O armazém ainda não tem EPI no catálogo.');
+  const fd = await askSheet('EPI obrigatório nesta obra', `<p class="small muted">Toda a gente que trabalha nesta obra tem de ter estes EPI. A app mostra a quem falta.</p>
+    <div class="mt-fams">${d.ppe_families.map((f, i) => `<label class="chk"><input type="checkbox" name="f" value="${esc(f)}" ${on.has(f) ? 'checked' : ''}> ${esc(f)}</label>`).join('')}</div>`, 'Guardar');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_site_ppe_rules', { p_site: state.mat.site.id, p_families: fd.getAll('f') });
+  if (error) return toast(friendly(error));
+  toast('EPI obrigatório guardado.'); loadSiteMaterial();
+}
+
+// ---- Armazém › Pedidos das obras: prepare, deliver at the window (the person signs with the card), refuse
+async function whSiteRequests() {
+  const W = state.wh; const body = $('#whbody'); if (!body) return;
+  const { data: d, error } = await sb.rpc('mini_wh_site_requests');
+  if (!body.isConnected) return;
+  if (error) { body.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
+  W.siteReq = d;
+  const open = d.requests.filter((r) => ['pending', 'approved', 'prepared'].includes(r.status));
+  const done = d.requests.filter((r) => !['pending', 'approved', 'prepared'].includes(r.status)).slice(0, 10);
+  const acts = (r) => r.mine && !W.home.is_admin ? '<span class="small muted">É um pedido teu: outra pessoa do armazém trata.</span>'
+    : `${r.status !== 'prepared' ? `<button class="btn ghost small" data-prep="${esc(r.id)}">Preparado</button>` : ''}
+       <button class="btn ghost small" data-no="${esc(r.id)}">Não dá</button>
+       ${[...new Set(r.lines.filter((x) => !x.delivered).map((x) => x.for_id || r.by_id))].map((pid) => { const nm = (r.lines.find((x) => (x.for_id || r.by_id) === pid) || {}).for || r.by;
+         return `<button class="btn small" data-give="${esc(r.id)}" data-who="${esc(pid)}">${ic('card')}Entregar a ${esc(String(nm || '').split(' ')[0])}</button>`; }).join('')}`;
+  body.innerHTML = `${d.reports.length ? `<section class="card mt-reps"><h2 style="margin-top:0">Ferramentas reportadas pelas obras</h2>${d.reports.map((x) => `<div class="wk">
+      <div class="grow"><b>${esc(x.tag)}</b> · ${esc(x.name)} · Obra ${esc(x.site)}<div class="sub">${x.kind === 'missing' ? 'Desaparecida' : 'Avariada'} · com ${esc(x.person || '')} · reportada por ${esc(x.by || '')} a ${esc(fmtTime(x.at))}</div>
+        <div class="small">«${esc(x.note)}»</div></div>${d.can_manage ? `<button class="btn ghost small" data-close="${esc(x.id)}">Tratado</button>` : ''}</div>`).join('')}</section>` : ''}
+    ${open.length ? `<div class="list">${open.map((r) => matReqCard(r, null, acts(r), true)).join('')}</div>`
+      : `<div class="card">${empty('ok', 'Sem pedidos das obras', 'Quando um encarregado pedir material, aparece aqui e recebes um aviso.')}</div>`}
+    ${done.length ? `<h3>Últimos 14 dias</h3><div class="list">${done.map((r) => matReqCard(r, null, '', true)).join('')}</div>` : ''}`;
+  body.querySelectorAll('[data-prep]').forEach((b) => b.onclick = async () => {
+    const { error: e } = await sb.rpc('mini_wh_site_request_step', { p_req: b.dataset.prep, p_step: 'prepared' });
+    if (e) return toast(friendly(e)); toast('Marcado como pronto. Quem pediu foi avisado.'); whSiteRequests(); });
+  body.querySelectorAll('[data-no]').forEach((b) => b.onclick = async () => {
+    const fd = await askSheet('Não dá para atender', '<label for="wno">Porquê? *</label><input id="wno" name="x" required minlength="5" maxlength="300" placeholder="ex.: não temos, pede em Compras">', 'Avisar quem pediu');
+    if (!fd) return;
+    const { error: e } = await sb.rpc('mini_wh_site_request_step', { p_req: b.dataset.no, p_step: 'rejected', p_note: String(fd.get('x')).trim() });
+    if (e) return toast(friendly(e)); toast('Quem pediu foi avisado.'); whSiteRequests(); });
+  body.querySelectorAll('[data-close]').forEach((b) => b.onclick = async () => {
+    const fd = await askSheet('Ferramenta tratada', '<label for="wcl">O que se fez? *</label><input id="wcl" name="x" required minlength="5" maxlength="300" placeholder="ex.: encontrada no contentor; enviada para reparação">', 'Fechar');
+    if (!fd) return;
+    const { error: e } = await sb.rpc('mini_wh_tool_report_close', { p_report: b.dataset.close, p_note: String(fd.get('x')).trim() });
+    if (e) return toast(friendly(e)); toast('Fechado.'); whSiteRequests(); });
+  // deliver: the usual Entregar screen, with the person and the lines already there; after the signature the lines close
+  body.querySelectorAll('[data-give]').forEach((b) => b.onclick = async () => {
+    const r = d.requests.find((x) => x.id === b.dataset.give); const pid = b.dataset.who;
+    const mine = r.lines.filter((x) => !x.delivered && (x.for_id || r.by_id) === pid);
+    const pre = mine.filter((x) => x.item && Number(x.stock) > 0).map((x) => ({ item: x.item, qty: Math.min(Number(x.qty), Number(x.stock)), name: x.desc, unit: x.unit }));
+    Object.assign(W, { tab: 'entregar', giving: { req: r.id, lines: mine.map((x) => x.id), site: r.site_id }, preCart: pre, person: null, cart: [], tools: [], batch: null, needWhy: null });
+    await loadWarehouse();
+    await whPick(pid, null);
+    const free = mine.filter((x) => !x.item || !(Number(x.stock) > 0));
+    if (free.length) toast(`Sem stock ou fora do catálogo: ${free.map((x) => x.desc).join(', ')}. Entrega à mão: ao assinar, o pedido fica todo entregue.`);
+  });
+}
+
 // ------------------------------------------------------------------ Armazém (sql/65): EPI, farda, consumíveis e ferramentas
 // Entregar: a pessoa encosta o cartão (quem recebe), escolhes o que leva, e ela encosta outra vez para assinar.
 // Stock por armazém e por tamanho, com mínimos. Ferramentas: quem tem o quê; inspeção vencida não deixa sair.
@@ -8286,7 +8542,7 @@ async function loadWarehouse() {
   const W = state.wh; W.home = h;
   if (!W.wid || !h.warehouses.find((w) => w.id === W.wid)) W.wid = h.central;
   if (!W.tab) W.tab = h.can_issue ? 'entregar' : 'stock';
-  const tabs = [h.can_issue && ['entregar', 'Entregar'], ['stock', 'Stock'], ['ferramentas', 'Ferramentas']].filter(Boolean);
+  const tabs = [h.can_issue && ['entregar', 'Entregar'], ['stock', 'Stock'], ['ferramentas', 'Ferramentas'], (h.can_issue || h.can_manage) && ['obras', 'Das obras']].filter(Boolean);
   top.innerHTML = `<div class="kpis k4 wh-kpis">
       <button class="kpi ${h.low ? 'warn' : ''}" data-tab="stock"><b>${h.low}</b><span>artigos no mínimo</span></button>
       <button class="kpi ${h.tools_late ? 'warn' : ''}" data-tab="ferramentas"><b>${h.tools_out}${h.tools_late ? `<small> · ${h.tools_late} atrasadas</small>` : ''}</b><span>ferramentas fora</span></button>
@@ -8299,7 +8555,7 @@ async function loadWarehouse() {
   top.querySelectorAll('button.kpi[data-tab]').forEach((b) => b.onclick = () => { W.tab = b.dataset.tab; stopNfc(); loadWarehouse(); });
   if ($('#whsel')) $('#whsel').onchange = (e) => { W.wid = e.target.value; W.cart = []; loadWarehouse(); };
   if ($('#whadd')) $('#whadd').onclick = addWarehouse;
-  ({ entregar: whIssue, stock: whStock, ferramentas: whTools }[W.tab] || whStock)();
+  ({ entregar: whIssue, stock: whStock, ferramentas: whTools, obras: whSiteRequests }[W.tab] || whStock)();
 }
 async function addWarehouse() {
   const sites = activeSites();
@@ -8329,6 +8585,7 @@ async function whIssue() {
   const p = W.person; const [{ data: stock }, { data: tools }] = await Promise.all([sb.rpc('mini_wh_stock', { p_warehouse: W.wid }), sb.rpc('mini_wh_tools')]);
   if (!body.isConnected) return;
   W.stock = stock || []; W.toolList = tools || [];
+  if (W.preCart) { W.cart = W.preCart; W.preCart = null; }   // a site's request (Pedidos das obras): its lines are already in the cart
   const fams = []; for (const it of W.stock) { let f = fams.find((x) => x.family === it.family); if (!f) fams.push(f = { family: it.family, category: it.category, kind: it.size_kind, items: [] }); f.items.push(it); }
   W.fams = fams;
   const sizeOf = (kind) => kind && p.sizes ? p.sizes[kind] : null;
@@ -8354,7 +8611,7 @@ async function whIssue() {
         : `<p class="small muted">Este armazém ainda não tem artigos com stock.${W.home.can_manage ? ' Cria-os em «Stock».' : ''}</p>`}
       ${W.toolList.filter((t) => t.status === 'available').length ? `<label for="wht">Ferramenta</label><div class="wh-addrow"><select id="wht"><option value="">—</option>${W.toolList.filter((t) => t.status === 'available').map((t) => `<option value="${esc(t.id)}" ${t.expired ? 'disabled' : ''}>${esc(t.tag)} · ${esc(t.name)}${t.expired ? ' (inspeção vencida)' : ''}</option>`).join('')}</select><button class="btn small" id="whtadd" type="button">+</button></div>` : ''}
       <div id="whcart"></div></section>`;
-  $('#whchg').onclick = () => { W.person = null; W.cart = []; W.tools = []; whIssue(); };
+  $('#whchg').onclick = () => { W.person = null; W.cart = []; W.tools = []; W.giving = null; whIssue(); };
   $('#whrec').onclick = () => { state.recordFor = p.id; state.recordBack = 'armazem'; go('fichaepi'); };
   $('#whsz').onclick = () => whSizes(p);
   body.querySelectorAll('[data-ret]').forEach((b) => b.onclick = () => returnTool(b.dataset.ret, b.dataset.tag, () => whPick(p.id, null)));
@@ -8389,7 +8646,7 @@ function renderCart() {
   el.innerHTML = `<h3>A entregar</h3><ul class="wh-cart">${W.cart.map((c, i) => `<li><span class="grow">${esc(c.name)}</span>
       <span class="step"><button type="button" class="btn ghost small" data-dec="${i}" aria-label="Menos">−</button><b>${c.qty}</b><button type="button" class="btn ghost small" data-inc="${i}" aria-label="Mais">+</button></span></li>`).join('')}
     ${W.tools.map((id, i) => { const t = W.toolList.find((x) => x.id === id) || {}; return `<li><span class="grow">${ic('key')} ${esc(t.tag)} · ${esc(t.name)}</span><button type="button" class="btn ghost small" data-rmt="${i}" aria-label="Tirar">×</button></li>`; }).join('')}</ul>
-    <div class="row"><div><label for="whsite">Custo para a obra</label><select id="whsite"><option value="">A obra onde a pessoa está</option>${sites.map((s) => `<option value="${esc(s.id)}" ${cur && cur.id === s.id ? 'selected' : ''}>${esc(s.title)} (${esc(s.cost_center_code)})</option>`).join('')}</select></div>
+    <div class="row"><div><label for="whsite">Custo para a obra</label><select id="whsite"><option value="">A obra onde a pessoa está</option>${sites.map((s) => `<option value="${esc(s.id)}" ${(W.giving ? W.giving.site === s.id : cur && cur.id === s.id) ? 'selected' : ''}>${esc(s.title)} (${esc(s.cost_center_code)})</option>`).join('')}</select></div>
       ${W.tools.length ? `<div><label for="whdue">Devolve até</label><input id="whdue" type="date" value="${esc(isoDay(new Date()))}" min="${esc(isoDay(new Date()))}"></div>` : ''}</div>
     <div id="whwhy"${W.needWhy ? '' : ' hidden'}><label for="whr">Porquê? *</label><input id="whr" maxlength="300" placeholder="ex.: botas rasgadas, perdeu as luvas">
       <p class="small muted">${esc(W.needWhy || '')}</p></div>
@@ -8432,6 +8689,11 @@ function whSign() {
       d.querySelector('#sres').innerHTML = `<div class="result bad">${ic('x')}<div><b>Não assinou</b>${esc(friendly(error))}</div></div>`; return;
     }
     beep(true); d.close();
+    if (W.giving) {   // the lines of the site's request this person signed for
+      const g = W.giving; W.giving = null;
+      const r2 = await sb.rpc('mini_wh_site_request_step', { p_req: g.req, p_step: 'delivered', p_lines: g.lines });
+      if (r2.error) toast(friendly(r2.error));
+    }
     showFlash('ok', 'ENTREGUE', `${p.name} assinou ${data.replayed ? '(já estava registado)' : ''}.`);
     Object.assign(W, { cart: [], tools: [], batch: null, needWhy: null }); whPick(p.id, null);
   };
