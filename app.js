@@ -48,6 +48,18 @@ const REASON_PREFIX = {
   'skill_missing:': 'Falta a competência: ',
 };
 const ERRORS = [
+  // Folha de horas (sql/106)
+  [/records hours with the card/i, 'A tua empresa regista as horas com o cartão.'],
+  [/that day has not come yet/i, 'Esse dia ainda não chegou.'],
+  [/more than 7 days ago/i, 'Mais de 7 dias: pede ao encarregado.'],
+  [/not on this site on that day/i, 'Nesse dia não estavas nesta obra.'],
+  [/write the entrada and the saída/i, 'Escreve a entrada e a saída.'],
+  [/lunch started and ended, or neither/i, 'Escreve a saída e a volta do almoço, ou nenhuma.'],
+  [/lunch must be between/i, 'O almoço tem de ser entre a entrada e a saída.'],
+  [/more than 16 hours in one day/i, 'Mais de 16 horas num dia: confirma as horas.'],
+  [/saída has not happened yet/i, 'A saída ainda não aconteceu: escreve-a quando saíres.'],
+  [/already validated this day/i, 'O encarregado já confirmou este dia: pede-lhe para mudar.'],
+  [/choose how hours are recorded/i, 'Escolhe como se registam as horas.'],
   // Área da fábrica (sql/104)
   [/choose the GPS rule/i, 'Escolhe a regra do GPS.'],
   [/the area needs at least 3 corners/i, 'A área precisa de pelo menos 3 cantos.'],
@@ -682,6 +694,8 @@ function friendlyText(err) {
   // A missed entry for a person who was blocked at that time (inactive, documents): say why, in plain words.
   const nosign = /access denied for LMRA signature:\s*(.*)$/i.exec(msg);
   if (nosign) return `Esta pessoa não pode assinar nem trabalhar: ${nosign[1].split(/,\s*/).map(reasonText).join(' · ')}.`;
+  const mine = /you were blocked on that day:\s*(.*)$/i.exec(msg);
+  if (mine) return `Nesse dia não podias entrar: ${mine[1].split(/,\s*/).map(reasonText).join(' · ')}. Fala com o escritório.`;
   const blocked = /could not enter at that time:\s*(.*)$/i.exec(msg);
   if (blocked) return `Esta pessoa não podia entrar a essa hora: ${blocked[1].split(/,\s*/).map(reasonText).join(' · ')}. Resolve isso primeiro ou fala com o escritório.`;
   for (const [re, pt] of ERRORS) if (re.test(msg)) return pt.replace(/\$(\d)/g, (_, n) => (re.exec(msg) || [])[+n] || '');
@@ -872,7 +886,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '82';
+const APP_VERSION = '83';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['emergencia', 'lmra', 'seguranca', 'naobra'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -4595,11 +4609,14 @@ async function loadHours(from, to) {
   const el = $('#list'); const site = currentSite(); if (!el) return [];
   if (!site) { el.innerHTML = `<div class="card">${empty('helmet', 'Sem obras abertas', 'Abre uma obra em Obras.')}</div>`; return []; }
   const seq = ++hoursSeq; const tz = siteTz(site.id);
-  const [{ data, error }, back, per] = await Promise.all([sb.rpc('mini_hours', { p_project: site.id, p_from: from, p_to: to }),
-    sb.rpc('mini_returned_days', { p_project: site.id, p_from: from, p_to: to }), dayPeriods(from, to, site.id)]);
+  const [{ data, error }, back, per, decl] = await Promise.all([sb.rpc('mini_hours', { p_project: site.id, p_from: from, p_to: to }),
+    sb.rpc('mini_returned_days', { p_project: site.id, p_from: from, p_to: to }), dayPeriods(from, to, site.id),
+    sb.rpc('mini_declared_days', { p_project: site.id, p_from: from, p_to: to }).then((r) => r, () => ({}))]);
   if (seq !== hoursSeq || !$('#list')) return [];   // a newer week or site was asked meanwhile
   if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return []; }
   const returned = Object.fromEntries(((back && back.data) || []).map((b) => [b.work_day_id, b.reason]));
+  // days with written times (folha de horas, or added by hand): «declarado», never in the bulk «Validar» (sql/106)
+  const declared = Object.fromEntries(((decl && decl.data) || []).map((x) => [x.work_day_id, x.by_worker]));
   if (!data.length) { el.innerHTML = `<div class="card">${empty('calendar', 'Sem horas nesta semana', 'As horas aparecem aqui quando as pessoas picarem nesta obra.')}</div>`; return []; }
   const byWorker = {};
   for (const r of data) (byWorker[r.collaborator_id] = byWorker[r.collaborator_id] || []).push(r);
@@ -4635,7 +4652,8 @@ async function loadHours(from, to) {
         <span class="hrs">${esc(fmtMin(r.worked_minutes))}</span></div>
       <div class="per">${periodsHtml(list) || '<span class="muted">sem picagens</span>'}</div>
       ${list.length ? dayline(list.join(' · '), r.shift_date === today ? { now: (nowP.hour % 24) * 60 + nowP.minute } : {}) : ''}
-      ${r.overtime_minutes || r.special_day_minutes || r.has_manual || returned[r.work_day_id] ? `<div class="tags">
+      ${r.overtime_minutes || r.special_day_minutes || r.has_manual || returned[r.work_day_id] || declared[r.work_day_id] ? `<div class="tags">
+        ${declared[r.work_day_id] ? chip('warn', 'escrito pelo trabalhador: confirma as horas', 'doc') : ''}
         ${r.overtime_minutes ? chip(r.overtime_approved === false ? '' : 'info', `${fmtMin(r.overtime_minutes)} extra${r.overtime_approved === false ? ' (recusadas)' : ''}`) : ''}
         ${r.special_day_minutes ? chip(r.overtime_approved ? 'info' : r.overtime_approved === false ? '' : 'warn', `${fmtMin(r.special_day_minutes)} em descanso ou feriado${r.overtime_approved ? ' (aprovadas)' : r.overtime_approved === false ? ' (não aprovadas)' : ': por aprovar'}`) : ''}
         ${r.has_manual ? chip('', 'tem picagem à mão') : ''}
@@ -4648,7 +4666,7 @@ async function loadHours(from, to) {
   if (sum) sum.innerHTML = encFlow(data.filter((r) => !onlyOpenToday(r, tz)), 'site') + `<div class="kpis noprint"><div class="kpi ${n.todo ? 'hot' : ''}"><b>${n.todo}</b><span>dias a validar</span></div>
     <div class="kpi ${n.anom ? 'warn' : ''}"><b>${n.anom}</b><span>com problemas</span></div><div class="kpi ok"><b>${n.ok}</b><span>validados</span></div></div>`;
   // Bulk validation only for plain days: no problem, no overtime, not one's own, and never a day the office sent back (M4).
-  const easy = data.filter((r) => r.status === 'registered' && !r.anomalies.length && !r.overtime_minutes && !r.special_day_minutes && r.collaborator_id !== me && !returned[r.work_day_id]);
+  const easy = data.filter((r) => r.status === 'registered' && !r.anomalies.length && !r.overtime_minutes && !r.special_day_minutes && r.collaborator_id !== me && !returned[r.work_day_id] && !(r.work_day_id in declared));
   const all = $('#all'); if (all) { all.hidden = !easy.length; all.lastChild.textContent = `Validar ${easy.length} dia(s) sem problemas`; all.onclick = () => validate(easy.map((r) => r.work_day_id), null); }
   // The worker's weekly visa (sql/82): confirmed, changed after confirming, or not yet.
   sb.rpc('mini_week_confirmations', { p_from: from, p_to: to, p_project: site.id }).then(({ data: vs }) => {
@@ -4760,7 +4778,7 @@ const MINE_STATE = { registered: 'por validar', supervisor_validated: 'validado 
 // (confirm the week, a document out of date), then one big tile per thing that is theirs. Each tile opens its screen;
 // the phone's back button comes back here. Built for gloves and sunlight: big targets, few words.
 const ME_TABS = {
-  horas: ['clock', 'As minhas horas'], progresso: ['sheet', 'Progresso do dia'], pedidos: ['calendar', 'Pedidos'], diarias: ['card', 'Diárias'], despesas: ['cart', 'Despesas'],
+  folha: ['sheet', 'Folha de horas'], horas: ['clock', 'As minhas horas'], progresso: ['sheet', 'Progresso do dia'], pedidos: ['calendar', 'Pedidos'], diarias: ['card', 'Diárias'], despesas: ['cart', 'Despesas'],
   viagens: ['plane', 'Viagens'], dormir: ['home', 'Onde durmo'], andaimes: ['scaffold', 'Posso subir?'], docs: ['doc', 'Os meus documentos'],
   epi: ['shield', 'EPI e ferramentas'], contrato: ['lock', 'O meu contrato'] };
 function viewMine() {
@@ -4788,8 +4806,10 @@ window.addEventListener('popstate', () => {
 });
 async function loadMeHome(quiet) {
   const ym = isoDay(new Date()).slice(0, 7);
-  const [home, sum, papers] = await Promise.all([sb.rpc('mini_my_home', { p_month: ym + '-01' }), sb.rpc('mini_my_summary'),
-    state.mePapers === false ? Promise.resolve({ error: true }) : sb.rpc('mini_my_papers').then((r) => r, () => ({ error: true }))]);
+  const [home, sum, papers, tm] = await Promise.all([sb.rpc('mini_my_home', { p_month: ym + '-01' }), sb.rpc('mini_my_summary'),
+    state.mePapers === false ? Promise.resolve({ error: true }) : sb.rpc('mini_my_papers').then((r) => r, () => ({ error: true })),
+    sb.rpc('mini_time_mode').then((r) => r, () => ({}))]);
+  if (tm && tm.data) state.timeMode = tm.data.mode;   // card or sheet (sql/106)
   const hero = $('#mehero'); if (!hero || (state.mineTab || 'home') !== 'home') return;
   if (home.error) { hero.innerHTML = `<div class="card">${esc(friendly(home.error))}</div>`; return; }
   if (papers.error) state.mePapers = false;   // the function is not there yet (sql/80): no tile
@@ -4824,10 +4844,11 @@ function meHero(d, s) {
   }
   so = Math.max(0, Math.round(so));
   const wk = d.week || []; const wsum = wk.reduce((a, x) => a + (x.date === t.date ? Math.max(x.worked, so) : x.worked), 0);
-  const big = inNow ? 'Na obra' : t.last === 'out' ? 'Dia fechado' : 'Ainda não picaste';
+  const sheet = state.timeMode === 'sheet';
+  const big = inNow ? 'Na obra' : t.last === 'out' ? 'Dia fechado' : sheet ? 'Hoje ainda sem horas' : 'Ainda não picaste';
   const sub = inNow ? `desde as <b>${esc(fmtHour(t.first_in, tz))}</b> · ${esc(fmtMin(so))} hoje`
     : t.last === 'out' ? `saíste às <b>${esc(fmtHour(t.last_at, tz))}</b> · ${esc(fmtMin(so))} hoje`
-    : 'Pica o cartão no telemóvel do encarregado quando chegares.';
+    : sheet ? 'Escreve a entrada, o almoço e a saída na «Folha de horas».' : 'Pica o cartão no telemóvel do encarregado quando chegares.';
   const pd = s && s.per_diem;
   return `<section class="pic-hero me-hero ${inNow ? 'on' : t.last === 'out' ? 'done' : 'off'}">
     <div class="pic-top"><h1>${esc(hello)}</h1>${inNow ? '<span class="live"><i></i>na obra</span>' : ''}</div>
@@ -4842,6 +4863,8 @@ const weekLabel = (w) => `${fmtDate(w.week_start).slice(0, 5)} – ${fmtDate(w.w
 // What needs the worker now, at the top, in big: the week to confirm (art. 202.º CT), documents out of date.
 function meActions(s) {
   const out = [];
+  if (state.timeMode === 'sheet') out.push(`<button class="me-do" data-me="folha"><span class="me-dot"></span><div class="grow"><b>Escrever as horas</b>
+      <small>Entrada, almoço e saída. O encarregado confirma.</small></div>${ic('go')}</button>`);
   for (const w of (s.weeks || []).filter((x) => x.can_confirm).slice(0, 2)) {
     out.push(`<div class="me-do"><div class="grow"><b>${w.state === 'changed' ? 'As horas mudaram: confirma outra vez' : 'Confirma as horas da semana'}</b>
       <small>${esc(weekLabel(w))} · ${esc(fmtMin(w.worked))} · até ${esc(fmtDate(w.due_by).slice(0, 5))}</small></div>
@@ -4861,6 +4884,7 @@ function meTiles(d, s, papers) {
   const docSub = dd.expired ? `${dd.expired} caducado(s)` : dd.missing ? `${dd.missing} em falta` : dd.expiring ? `um vence a ${fmtDate(dd.next_expiry).slice(0, 5)}` : 'Tudo em dia';
   const c = papers && papers.contract;
   return [
+    state.timeMode === 'sheet' ? tile('folha', 'Entrada, almoço e saída', 'go') : '',
     tile('horas', t.worked ? `${fmtMin(t.worked)} este mês${pend ? ` · ${pend} por validar` : ''}` : 'Semana, mês e cada picagem', '', s.weeks_to_confirm ? String(s.weeks_to_confirm) : ''),
     tile('progresso', 'O que fizeste, para o encarregado', 'go'),
     tile('pedidos', s.requests_pending ? `${s.requests_pending} à espera de resposta` : 'Férias e faltas', '', s.disputes_open ? String(s.disputes_open) : ''),
@@ -4883,6 +4907,61 @@ async function meConfirmWeek(week, label, after) {
   if (error) return toast(friendly(error));
   toast('Semana confirmada. Obrigado.'); if (after) after();
 }
+// ---- Folha de horas (sql/106): in a company that records hours on paper-like sheets, the worker writes entrada,
+// almoço and saída on their own phone; the encarregado confirms. Each day shows whether it was written or tapped.
+async function loadMySheet() {
+  const box = $('#mysheet'); if (!box) return;
+  box.innerHTML = skel(3);
+  const { data, error } = await sb.rpc('mini_my_timesheet');
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = `<div class="card">${esc(friendly(error))}</div>`; return; }
+  state.timeMode = data.mode;
+  if (data.mode !== 'sheet') { box.innerHTML = `<div class="card">${empty('tap', 'A tua empresa usa o cartão', 'As horas contam pelas picagens do cartão no telemóvel do encarregado.')}</div>`; return; }
+  const sites = data.sites || [];
+  const hm = (iso, tz) => fmtHour(iso, tz);
+  const label = (d) => d === data.today ? 'Hoje' : d === isoDay(new Date(Date.parse(data.today + 'T12:00:00') - 864e5)) ? 'Ontem' : dayLabel(d);
+  box.innerHTML = `<p class="small muted">Escreve a que horas entraste, o almoço e a que horas saíste. O encarregado confirma. Estas horas ficam marcadas como escritas por ti, não picadas.</p>
+    ${sites.length ? '' : `<div class="card">${empty('helmet', 'Ainda sem obra', 'Quando o escritório te puser numa obra, escreves aqui as tuas horas.')}</div>`}
+    <div class="sh-days">${(data.days || []).map((d) => {
+      const entries = d.entries || [];
+      const anyOpen = !entries.length || entries.some((e) => !e.locked);
+      return `<div class="card sh-day"><div class="day-h"><span class="d"><b>${esc(label(d.date))}</b></span>${entries.length ? `<span class="hrs">${esc(fmtMin(entries.reduce((a, e) => a + (e.worked || 0), 0)))}</span>` : ''}</div>
+        ${entries.map((e) => {
+          const t = e.times || []; const pairs = [];
+          for (let i = 0; i < t.length; i += 2) pairs.push(`${hm(t[i].at, e.tz)}${t[i + 1] ? ' – ' + hm(t[i + 1].at, e.tz) : ' – …'}`);
+          const written = t.some((x) => x.written);
+          return `<div class="sh-row"><span class="chip code" data-nt>${esc(e.code)}</span><span class="grow" data-nt>${esc(pairs.join(' · '))}</span>
+            ${e.locked ? chip('val', 'confirmado', 'ok') : chip('warn', 'por confirmar')}${written ? chip('', 'escrito') : chip('info', 'picado')}</div>`;
+        }).join('') || '<p class="muted small" style="margin:4px 0">Sem horas neste dia.</p>'}
+        ${sites.length && anyOpen ? `<button class="btn ${entries.length ? 'ghost ' : ''}small" data-shday="${esc(d.date)}">${ic('clock')}${entries.length ? 'Corrigir' : 'Escrever'}</button>` : ''}</div>`;
+    }).join('')}</div>`;
+  box.querySelectorAll('[data-shday]').forEach((b) => b.onclick = () => writeSheetDay(b.dataset.shday, data));
+}
+async function writeSheetDay(day, data) {
+  const sites = data.sites || []; const d = (data.days || []).find((x) => x.date === day) || {};
+  const e0 = (d.entries || [])[0]; const t = (e0 && e0.times) || [];
+  const v = (i, dflt) => (t[i] ? fmtHour(t[i].at, e0.tz) : dflt);
+  const four = t.length >= 4;
+  const fd = await askSheet(`Horas de ${day === data.today ? 'hoje' : dayLabel(day)}`, `
+    ${sites.length > 1 ? `<label for="shs">Obra</label><select id="shs" name="site">${sites.map((x) => `<option value="${esc(x.id)}" ${e0 && e0.project === x.id ? 'selected' : ''}>${esc(x.code)} · ${esc(x.title)}</option>`).join('')}</select>`
+      : `<input type="hidden" name="site" value="${esc(sites[0].id)}"><p class="small muted" data-nt>${esc(sites[0].code)} · ${esc(sites[0].title)}</p>`}
+    <div class="row"><div><label for="shi">Entrada</label><input id="shi" name="in" type="time" required value="${esc(v(0, '08:00'))}"></div>
+      <div><label for="sho">Saída</label><input id="sho" name="out" type="time" required value="${esc(four ? v(3, '17:00') : t.length === 2 ? v(1, '17:00') : '17:00')}"></div></div>
+    <label class="check"><input type="checkbox" name="lunch" id="shl" ${t.length === 2 ? '' : 'checked'}> Parei para almoçar</label>
+    <div class="row" id="shlr"><div><label for="sha">Saí para almoçar</label><input id="sha" name="lo" type="time" value="${esc(four ? v(1, '12:00') : '12:00')}"></div>
+      <div><label for="shb">Voltei</label><input id="shb" name="li" type="time" value="${esc(four ? v(2, '13:00') : '13:00')}"></div></div>
+    <p class="small muted">Uma saída antes da entrada conta como o dia seguinte (turno da noite).</p>`, 'Guardar', (dlg) => {
+    const c = dlg.querySelector('#shl'); const r = dlg.querySelector('#shlr');
+    const sync = () => { r.hidden = !c.checked; }; c.onchange = sync; sync();
+  });
+  if (!fd) return;
+  const lunch = fd.get('lunch') === 'on';
+  const { data: res, error } = await sb.rpc('mini_my_timesheet_save', { p_project: fd.get('site'), p_day: day, p_in: fd.get('in'),
+    p_lunch_out: lunch ? fd.get('lo') : null, p_lunch_in: lunch ? fd.get('li') : null, p_out: fd.get('out') });
+  if (error) { toast(friendly(error)); return; }
+  toast(`Guardado: ${fmtMin(res.worked || 0)} neste dia. O encarregado vai confirmar.`);
+  loadMySheet();
+}
 // Each tile's screen: a back button, the title, then the screen's own boxes.
 function meScreen(tab) {
   const [icon, title] = ME_TABS[tab];
@@ -4896,6 +4975,7 @@ function meScreen(tab) {
         <div id="meweeks"></div><div class="mine-grid"><div><div id="minepay"></div><div id="mine">${skel(3)}</div></div><div><div id="minesite"></div></div></div>`;
     },
     progresso: () => '<div id="myprog"></div>',
+    folha: () => '<div id="mysheet"></div>',
     pedidos: () => '<div id="minereq"></div>',
     diarias: () => '<div id="pdmine"></div>',
     despesas: () => '<div id="myexp"></div>',
@@ -4915,6 +4995,7 @@ function meScreen(tab) {
     state.timer = setInterval(() => { if (state.view === 'minhas' && state.mineTab === 'horas' && document.visibilityState === 'visible') loadMine(true); }, 60000);
   }
   if (tab === 'progresso') loadMyProgress();
+  if (tab === 'folha') loadMySheet();
   if (tab === 'pedidos') loadMyRequests();
   if (tab === 'diarias') loadMyPerDiems().then(fallback('#pdmine', 'card', 'Ainda sem diárias', 'As diárias aparecem aqui quando o escritório as emitir, à quinta-feira.'));
   if (tab === 'despesas') loadMyExpenses().then(fallback('#myexp', 'card', 'Sem despesas', 'Quando pagares algo para a obra, entrega aqui o talão.'));
@@ -5474,7 +5555,8 @@ function viewCompanyRules() {
   if (!state.ready) return boot();
   if (!canCompanyRules()) return viewClock();   // code guard as well as the database's
   app.innerHTML = `<div class="ph"><div><p class="ph-k">Administração</p><h1>Acessos e regras</h1></div></div>
-    ${can('contas.gerir') ? `<div class="sec-h"><h2 class="eyebrow">GPS no Picar</h2></div><div class="card" id="gpsco">${skel(1)}</div>` : ''}
+    ${can('contas.gerir') ? `<div class="sec-h"><h2 class="eyebrow">Registo das horas</h2></div><div class="card" id="timeco">${skel(1)}</div>
+    <div class="sec-h"><h2 class="eyebrow">GPS no Picar</h2></div><div class="card" id="gpsco">${skel(1)}</div>` : ''}
     ${can('contas.gerir') ? `<div class="sec-h"><h2 class="eyebrow">Quem tem acesso a quê</h2></div>
     <p class="small muted">Toca numa pessoa para escolher os departamentos dela. Cada pessoa só vê as áreas dos seus departamentos.</p>
     <div id="logins">${skel(2)}</div>
@@ -5498,13 +5580,38 @@ function viewCompanyRules() {
       if (e) { x.checked = !x.checked; return toast(friendly(e)); }
       toast(x.checked ? 'Os colaboradores passam a ver a estimativa do que vão ganhar.' : 'A estimativa deixou de aparecer aos colaboradores.'); };
   });
-  if (can('contas.gerir')) { loadCompanyGps(); loadLogins(); loadDepartments(); }
+  if (can('contas.gerir')) { loadTimeMode(); loadCompanyGps(); loadLogins(); loadDepartments(); }
 }
 // The company's GPS rule (sql/105): every site follows it unless the site has its own rule (Obras › Área da fábrica).
 // Turning it off is allowed (a test, a client that does not want it) but asked twice and kept in the history.
 const GPS_CO = [['block', 'Obrigatório', 'O Picar exige GPS. Uma entrada fora da fábrica, sem GPS ou numa obra sem área é recusada.'],
   ['flag', 'Só avisar', 'Aceita todas as picagens e avisa quando são fora da fábrica ou sem GPS.'],
   ['off', 'Desligado', 'O Picar não pede GPS. As picagens não provam onde foram feitas.']];
+// How the company records hours (sql/106): the card on the encarregado's phone (proof), or each worker writes the
+// times (declared). Changing it is asked twice and kept in the history.
+const TIME_MODES = [['card', 'Cartão', 'O encarregado pica o cartão de cada pessoa no telemóvel dele. As horas ficam provadas.'],
+  ['sheet', 'Folha de horas', 'Cada trabalhador escreve no telemóvel a entrada, o almoço e a saída. O encarregado confirma. As horas ficam como declaradas, não provadas.']];
+async function loadTimeMode() {
+  const box = $('#timeco'); if (!box) return;
+  const { data, error } = await sb.rpc('mini_time_mode');
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  state.timeMode = data.mode;
+  const name = (k) => (TIME_MODES.find((r) => r[0] === k) || TIME_MODES[0])[1];
+  const hist = data.changes || [];
+  box.innerHTML = `<div class="ar-rules" role="radiogroup">${TIME_MODES.map(([k, t, x]) => `<label class="ar-rule"><input type="radio" name="timeco" value="${k}" ${data.mode === k ? 'checked' : ''}><span><b>${esc(t)}</b><small>${esc(x)}</small></span></label>`).join('')}</div>
+    ${hist.length ? `<details class="fold"><summary><span>Histórico<span class="sub">Quem mudou e quando</span></span></summary><ul class="gps-hist">${hist.map((h) => `<li><span data-nt>${esc(new Date(h.at).toLocaleDateString(LOC))} ${esc(fmtHour(h.at))} · ${esc(h.who || '—')}</span> · <span>${esc(name(h.old))}</span> → <span>${esc(name(h.new))}</span></li>`).join('')}</ul></details>` : ''}`;
+  box.querySelectorAll('input[name=timeco]').forEach((r) => r.onchange = async () => {
+    const mode = r.value;
+    if (!await askSheet(mode === 'sheet' ? 'Passar a folha de horas?' : 'Passar ao cartão?', mode === 'sheet'
+      ? '<p>Cada trabalhador passa a escrever as suas horas no telemóvel. Estas horas não têm prova: ficam marcadas como declaradas até aos salários.</p>'
+      : '<p>As horas voltam a contar pelas picagens do cartão. Os dias já escritos ficam como estão.</p>', 'Mudar')) return loadTimeMode();
+    const { error: e } = await sb.rpc('mini_time_mode_set', { p_mode: mode });
+    if (e) { toast(friendly(e)); return loadTimeMode(); }
+    toast(mode === 'sheet' ? 'A empresa passou à folha de horas.' : 'A empresa passou ao cartão.');
+    loadTimeMode();
+  });
+}
 const coName = (k) => (GPS_CO.find((r) => r[0] === k) || GPS_CO[0])[1];
 async function loadCompanyGps() {
   const box = $('#gpsco'); if (!box) return;
@@ -5621,15 +5728,17 @@ const tapKind = (reason) => (/^sem rede/.test(reason || '') ? 'sem rede, chegou 
   : reason === 'número do cartão escrito à mão' ? 'cartão escrito à mão' : 'à mão');
 async function loadOffice(from, to) {
   const el = $('#list'); if (!el) return;
-  const [{ data, error }, man, per] = await Promise.all([sb.rpc('mini_hours_office', { p_from: from, p_to: to }),
-    sb.rpc('mini_manual_taps', { p_from: from, p_to: to }), dayPeriods(from, to)]);
+  const [{ data, error }, man, per, decl] = await Promise.all([sb.rpc('mini_hours_office', { p_from: from, p_to: to }),
+    sb.rpc('mini_manual_taps', { p_from: from, p_to: to }), dayPeriods(from, to),
+    sb.rpc('mini_declared_days', { p_project: null, p_from: from, p_to: to }).then((r) => r, () => ({}))]);
   if (!el.isConnected) return; // the month changed while this one was loading: its newer list wins
   if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; $('#sum').innerHTML = ''; return; }
   const manual = {};
   for (const m of (man && man.data) || []) (manual[m.work_day_id] = manual[m.work_day_id] || []).push(m);
   const me = state.me && state.me.collaborator_id;
   const n = (st) => data.filter((r) => r.status === st).length;
-  for (const r of data) r.flags = dayFlags(r, manual[r.work_day_id]);
+  const declared = new Set(((decl && decl.data) || []).filter((x) => x.by_worker).map((x) => x.work_day_id));
+  for (const r of data) { r.flags = dayFlags(r, manual[r.work_day_id]); r.declared = declared.has(r.work_day_id); }
   const open = (r) => ['registered', 'supervisor_validated'].includes(r.status);
   const noExit = (r) => open(r) && r.anomalies.some((a) => a === 'missing_out' || a === 'open_shift') && !onlyOpenToday(r, siteTz(r.project_id));
   // Approve by exception: the office looks only at the days with a reason to look; the rest go in one tap.
@@ -5840,7 +5949,7 @@ function officeDay(r, manual, per, me, withFlags, noExit) {
   return `<div class="day"><div class="day-h"><span class="d">${esc(dayLabel(r.shift_date))}</span><span class="chip code">${esc(r.project_code)}</span>
       <span class="hrs">${esc(fmtMin(r.worked_minutes))}</span></div>
     <div class="per">${periodsHtml(list) || '<span class="muted">sem picagens</span>'}</div>
-    <div class="tags">${OFFICE_STATUS[r.status] || chip('', r.status)}
+    <div class="tags">${OFFICE_STATUS[r.status] || chip('', r.status)}${r.declared ? chip('', 'declarado pelo trabalhador', 'doc') : ''}
       ${r.overtime_minutes && !(withFlags && r.flags.some(([, t]) => / extra|extra /.test(t))) ? chip(r.overtime_approved ? 'info' : r.overtime_approved === false ? '' : 'warn', `${fmtMin(r.overtime_minutes)} extra ${r.overtime_approved ? 'aprovadas' : r.overtime_approved === false ? 'recusadas' : 'por decidir'}`) : ''}</div>
     ${r.special_day_minutes ? `<div class="tags">${chip(r.overtime_approved ? 'info' : r.overtime_approved === false ? '' : 'warn', `${fmtMin(r.special_day_minutes)} em ${r.is_holiday ? 'feriado' : 'dia de descanso'} ${r.overtime_approved ? 'aprovadas pelo chefe' : r.overtime_approved === false ? 'não aprovadas' : 'por aprovar'}`)}</div>` : ''}
     ${withFlags && r.flags.length ? `<div class="why">${r.flags.map(([k, t]) => chip(k, t, k === 'anom' || k === 'warn' ? 'warn' : '')).join('')}</div>` : ''}
