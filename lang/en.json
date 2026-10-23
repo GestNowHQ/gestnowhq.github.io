@@ -5950,4 +5950,8 @@
 "Mapa aberto na localidade da obra: aproxima até veres a fábrica.":"Map opened on the site's town: zoom in until you see the plant.",
 "Mapa aberto na morada da obra.":"Map opened at the site's address.",
 "Não encontrei essa morada. Escreve a localidade ou o código postal.":"Address not found. Type the town or the postcode.",
-"Mapa: © OpenStreetMap, imagens de satélite © Esri. Os cantos ficam guardados com a obra; a posição dos telemóveis só se grava em cada picagem.":"Map: © OpenStreetMap, satellite images © Esri. The corners are kept with the site; phone positions are only saved at each tap."}
+"Mapa: © OpenStreetMap, imagens de satélite © Esri. Os cantos ficam guardados com a obra; a posição dos telemóveis só se grava em cada picagem.":"Map: © OpenStreetMap, satellite images © Esri. The corners are kept with the site; phone positions are only saved at each tap.",
+"em falta ou fora de validade":"missing or expired",
+"Não podes escrever horas neste dia":"You cannot write hours on this day",
+"Entregar o documento":"Hand in the document",
+"Não podes registar horas neste dia: {x}. Entrega o documento em Eu › Os meus documentos ou fala com o escritório.":"You cannot record hours on this day: {x}. Hand in the document in Me › My documents or talk to the office."}
