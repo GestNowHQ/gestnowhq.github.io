@@ -5943,4 +5943,11 @@
 "Sem rede e o telemóvel não deixou guardar o relato. Tenta outra vez quando tiveres rede.":"No network and the phone could not save the report. Try again when you have signal.",
 "O telemóvel não deixou guardar a fotografia: o relato vai sem ela.":"The phone could not save the photo: the report goes without it.",
 "Sem rede: este ecrã precisa de rede. Podes picar, ver o material, as reuniões e relatar perigos.":"No network: this screen needs signal. You can clock in, see the material, meetings and report hazards.",
-"Sem rede: ficou guardado e vai quando houver rede.":"No network: saved, it will go when there is signal."}
+"Sem rede: ficou guardado e vai quando houver rede.":"No network: saved, it will go when there is signal.",
+"Ver mapa":"Show map",
+"Ver satélite":"Show satellite",
+"Procurar morada ou localidade":"Search address or town",
+"Mapa aberto na localidade da obra: aproxima até veres a fábrica.":"Map opened on the site's town: zoom in until you see the plant.",
+"Mapa aberto na morada da obra.":"Map opened at the site's address.",
+"Não encontrei essa morada. Escreve a localidade ou o código postal.":"Address not found. Type the town or the postcode.",
+"Mapa: © OpenStreetMap, imagens de satélite © Esri. Os cantos ficam guardados com a obra; a posição dos telemóveis só se grava em cada picagem.":"Map: © OpenStreetMap, satellite images © Esri. The corners are kept with the site; phone positions are only saved at each tap."}

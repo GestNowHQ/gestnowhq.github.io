@@ -2,8 +2,8 @@
 // Only GET requests to this same site are handled. Supabase (data, login, files) is another site: never touched,
 // never cached. Network first, so a new version arrives as soon as there is network; the copy is only a fallback.
 'use strict';
-const CACHE = 'gestnow-mini-v89';
-const SHELL = ['./', 'index.html', 'lang.js?v=89', 'lang/fr.json?v=89', 'lang/en.json?v=89', 'lang/es.json?v=89', 'lang/ro.json?v=89', 'app.js', 'style.css', 'config.js', 'vendor/supabase-2.117.2.js', 'ui/gnui.js', 'ui/gnui.css', 'vendor/inter-latin-wght.woff2'];
+const CACHE = 'gestnow-mini-v90';
+const SHELL = ['./', 'index.html', 'lang.js?v=90', 'lang/fr.json?v=90', 'lang/en.json?v=90', 'lang/es.json?v=90', 'lang/ro.json?v=90', 'app.js', 'style.css', 'config.js', 'vendor/supabase-2.117.2.js', 'ui/gnui.js', 'ui/gnui.css', 'vendor/inter-latin-wght.woff2'];
 
 self.addEventListener('install', (e) => {
   // cache: 'reload' skips the browser's own 10-minute copy, so a new version never installs old files.
