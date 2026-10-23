@@ -5956,4 +5956,8 @@
 "Entregar o documento":"Entregar el documento",
 "Não podes registar horas neste dia: {x}. Entrega o documento em Eu › Os meus documentos ou fala com o escritório.":"No puedes registrar horas este día: {x}. Entrega el documento en Yo › Mis documentos o habla con la oficina.",
 "Relatado por ti": "Reportado por ti",
-"Perigo grave": "Peligro grave"}
+"Perigo grave": "Peligro grave",
+"ainda sem horas escritas neste dia": "todavía sin horas escritas este día",
+"Os dias aparecem aqui depois de escreveres as horas em Eu › Escrever as horas. Esqueceste um dia? Toca nesse dia.": "Los días aparecen aquí después de escribir tus horas en Yo › Escribir las horas. ¿Olvidaste un día? Toca ese día.",
+"Horas de hoje escritas": "Horas de hoy escritas",
+"À espera do encarregado. Toca para corrigir.": "Esperando al encargado. Toca para corregir."}

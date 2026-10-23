@@ -1086,7 +1086,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '92';
+const APP_VERSION = '93';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['reunioes', 'emergencia', 'lmra', 'seguranca'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -5033,6 +5033,7 @@ async function loadMeHome(quiet) {
   }
   if (hzq && hzq.data) state.meHz = { n: hzq.data.length, answered: hzq.data.filter((h) => h.status !== 'open' && !h.seen).length };   // hazard reports (sql/112)
   if (tm && tm.data) state.timeMode = tm.data.mode;   // card or sheet (sql/106)
+  state.meToday = home && home.data ? home.data.today : null;   // v93: today already written?
   state.meMeet = mt && mt.data ? mt.data : null;   // safety meetings (sql/107)
   state.meNotes = nt && nt.data ? nt.data : [];   // notices from the site (sql/108)
   const hero = $('#mehero'); if (!hero || (state.mineTab || 'home') !== 'home') return;
@@ -5097,7 +5098,12 @@ function meActions(s) {
   const out = [`<button class="me-do hz-me" data-hzgo><span class="me-ic">${ic('warn')}</span><div class="grow"><b>Relatar um perigo</b>
       <small>Quase acidente ou algo perigoso. Demora 15 segundos.</small></div>${ic('go')}</button>`];
   const notes = meNotices(); if (notes) out.push(notes);
-  if (state.timeMode === 'sheet') out.push(`<button class="me-do" data-me="folha"><span class="me-dot"></span><div class="grow"><b>Escrever as horas</b>
+  // v93: once today is written the yellow call to action becomes a quiet line (still a tap away to correct)
+  const wrote = state.meToday && Number(state.meToday.worked) > 0;
+  if (state.timeMode === 'sheet') out.push(wrote
+    ? `<button class="me-do done" data-me="folha"><span class="me-ic">${ic('ok')}</span><div class="grow"><b>${esc(t_('Horas de hoje escritas'))} · ${esc(fmtMin(state.meToday.worked))}</b>
+      <small>${esc(t_('À espera do encarregado. Toca para corrigir.'))}</small></div>${ic('go')}</button>`
+    : `<button class="me-do" data-me="folha"><span class="me-dot"></span><div class="grow"><b>Escrever as horas</b>
       <small>Entrada, almoço e saída. O encarregado confirma.</small></div>${ic('go')}</button>`);
   for (const w of (s.weeks || []).filter((x) => x.can_confirm).slice(0, 2)) {
     out.push(`<div class="me-do"><div class="grow"><b>${w.state === 'changed' ? 'As horas mudaram: confirma outra vez' : 'Confirma as horas da semana'}</b>
@@ -5279,8 +5285,7 @@ async function loadMyStay() {
   if (error) { box.innerHTML = `<div class="card">${esc(friendly(error))}</div>`; return; }
   if (!data.length) { box.innerHTML = `<div class="card">${empty('box', 'Sem alojamento marcado', 'Se a empresa te arranjar casa ou hotel, a morada e o quarto aparecem aqui.')}</div>`; return; }
   box.innerHTML = data.map((x) => {
-    const q = x.lat && x.lng ? `${x.lat},${x.lng}` : x.address || '';
-    const map = q ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(q)}` : '';
+    const map = navHref(x.lat, x.lng, x.address);
     return `<div class="card me-stay"><div class="tags">${x.now ? chip('val', 'agora', 'home') : chip('info', 'a partir de ' + fmtDate(x.from).slice(0, 5))}${x.site ? chip('code', x.site) : ''}</div>
       <h2>${esc(x.name)}</h2>
       ${x.kind !== 'hotel' ? `<div class="me-bed"><div><small>Quarto</small><b>${esc(x.room || '–')}</b></div><div><small>Cama</small><b>${esc(x.bed || '–')}</b></div></div>`
@@ -5352,7 +5357,8 @@ async function loadMine(quiet) {
   const t = d.totals || {};
   const openNow = (r) => r.anomalies.length > 0 && r.anomalies.every((a) => a === 'open_shift') && r.date >= (d.today || {}).date;
   if (!d.days.length) {
-    el.innerHTML = `<div class="card">${empty('clock', 'Sem horas neste mês', 'Os dias aparecem aqui depois de picares na obra. Estiveste num dia e não aparece? Toca nesse dia.')}</div>
+    el.innerHTML = `<div class="card">${(state.timeMode === 'sheet' ? empty('clock', 'Sem horas neste mês', 'Os dias aparecem aqui depois de escreveres as horas em Eu › Escrever as horas. Esqueceste um dia? Toca nesse dia.')
+      : empty('clock', 'Sem horas neste mês', 'Os dias aparecem aqui depois de picares na obra. Estiveste num dia e não aparece? Toca nesse dia.'))}</div>
       <div class="card cal-card">${mineCalendar(d)}</div>`;
     el.querySelectorAll('[data-day]').forEach((b) => b.onclick = () => mineDay(b.dataset.day));
     return;
@@ -5398,15 +5404,15 @@ function minePay(d) {
 // The site: where it is, a button to the map, and who to call.
 function mineSite(s) {
   if (!s) return '';
-  const q = s.lat && s.lng ? `${s.lat},${s.lng}` : [s.address, s.municipality].filter(Boolean).join(', ');
-  const map = q ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(q)}` : '';
+  const map = navHref(s.lat, s.lng, s.address, s.municipality); const q = map;
+  if (map && (s.lat == null || s.lng == null)) setTimeout(() => navRefine(document.querySelector('#minesite [data-nav]'), `gn.geo.${s.id}`, s.address, s.title, s.municipality), 0);
   const tel = (n) => `tel:${String(n).replace(/[^\d+]/g, '')}`;
   const who = (name, role, phone) => name ? `<div class="contact">${avatar(name)}<div class="grow"><b>${esc(name)}</b><small>${esc(role)}</small></div>
       ${phone ? `<a class="btn ghost small" href="${esc(tel(phone))}">${ic('phone')}Ligar</a>` : ''}</div>` : '';
   return `<div class="card site-card"><p class="eyebrow" style="margin-top:0">A minha obra</p>
     <h2 style="margin:0">${esc(s.title)}</h2><p class="small muted" style="margin:2px 0 10px">${esc([s.code, s.client].filter(Boolean).join(' · '))}</p>
     ${q ? `<p class="addr">${ic('pin')}<span>${esc([s.address, s.municipality].filter(Boolean).join(', ') || 'Localização no mapa')}</span></p>
-      <a class="btn wide" href="${esc(map)}" target="_blank" rel="noopener">${ic('go')}Levar-me lá</a>` : '<p class="small muted">A morada da obra ainda não foi preenchida.</p>'}
+      <a class="btn wide" data-nav href="${esc(map)}" target="_blank" rel="noopener">${ic('go')}Levar-me lá</a>` : '<p class="small muted">A morada da obra ainda não foi preenchida.</p>'}
     ${who(s.supervisor, 'Encarregado', s.supervisor_phone)}${who(s.contact_name, s.contact_role || 'Contacto do cliente', s.contact_phone)}</div>`;
 }
 // One day in full: every tap (and who added it by hand, and why), the taps cancelled or moved (struck through, with
@@ -12232,7 +12238,7 @@ async function loadMyProgress() {
     : sh && sh.sent_at && fromServer ? `<div class="pg-state ok">${ic('ok')}<span><b>Enviada às ${esc(fmtHour(sh.sent_at))}</b>Podes corrigir e enviar outra vez até o encarregado rever.</span></div>`
     : lines.length ? `<div class="pg-state warn">${ic('warn')}<span><b>Ainda não enviaste</b>Fica guardada neste telemóvel até carregares em «Enviar ao encarregado».</span></div>` : '';
   box.innerHTML = `${head}<div class="card pg-me">${pick}
-      <p class="small muted" style="margin-top:0">${ic('pin')} <span data-nt>${esc(site.code)} · ${esc(site.title)} · ${esc(fmtDate(d.day))}</span>${site.tapped ? '' : '<span data-nt> · </span><span>ainda sem picagens neste dia</span>'}</p>
+      <p class="small muted" style="margin-top:0">${ic('pin')} <span data-nt>${esc(site.code)} · ${esc(site.title)} · ${esc(fmtDate(d.day))}</span>${site.tapped ? '' : `<span data-nt> · </span><span>${state.timeMode === 'sheet' ? t_('ainda sem horas escritas neste dia') : t_('ainda sem picagens neste dia')}</span>`}</p>
       ${status}
       ${lines.length ? `<ol class="pg-lines">${lines.map((l, i) => pgLineHtml(l, i, locked ? '' : `<div class="pg-btns">
           <button class="btn ghost small" data-pe="${i}" aria-label="Corrigir a linha ${i + 1}">Corrigir</button>
@@ -12548,13 +12554,30 @@ function areaSize(poly) {
 }
 // v90: find an address on the map (OpenStreetMap Nominatim, 1 request at a time). Tries the full address, then its
 // shorter parts (postcode + town), then the site name; the first hit is kept on this phone per site.
-function geoTries(address, title) {
-  const parts = String(address || '').split(',').map((x) => x.trim()).filter(Boolean);
+// v93: a postal box (BP 13, CS 30001, Apartado 12, PO Box 5) is where letters go, not a place to drive to
+const POBOX = /\b(B\.?P\.?|CS|TSA|Apartado|Apdo\.?|Caixa Postal|P\.?\s?O\.?\s?Box|Postfach)\s*\d+\b/gi;
+const noBox = (a) => String(a || '').split(',').map((x) => x.replace(POBOX, '').replace(/\s{2,}/g, ' ').trim()).filter(Boolean).join(', ');
+// v93: «Levar-me lá» drives to the site's point (the centre of its drawn area) when there is one; else to the address
+// without the postal box, plus the town. With no point, the phone looks the address up and swaps in the exact spot.
+function navHref(lat, lng, address, town) {
+  if (lat != null && lng != null && lat !== '' && lng !== '') return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${lat},${lng}`)}`;
+  const a = noBox(address); const q = [a, town && !a.toLowerCase().includes(String(town).toLowerCase()) ? town : ''].filter(Boolean).join(', ');
+  return q ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(q)}` : '';
+}
+function navRefine(el, key, address, title, town) {
+  if (!el || !address) return;
+  geoFind(geoTries(address, title, town), key).then((r) => {
+    if (r && !r.approx && el.isConnected) el.href = navHref(r.lat, r.lng);
+  }, () => {});
+}
+function geoTries(address, title, town) {
+  const parts = noBox(address).split(',').map((x) => x.trim()).filter(Boolean);
   const out = [];
   if (parts.length) out.push(parts.join(', '));
+  if (title && town) out.push(`${title}, ${town}`);
   if (parts.length > 2) out.push(parts.slice(-2).join(', '));
-  const town = parts.find((x) => /\d{4,5}(-\d{3})?\s+\S/.test(x));
-  if (town) out.push(town.replace(/^.*?(\d{4,5}(-\d{3})?\s+)/, '$1'));
+  const pc = parts.find((x) => /\d{4,5}(-\d{3})?\s+\S/.test(x));
+  if (pc) out.push(pc.replace(/^.*?(\d{4,5}(-\d{3})?\s+)/, '$1'));
   if (parts.length > 1) out.push(parts[parts.length - 2]);
   if (title) out.push(title);
   return [...new Set(out)].filter((x) => x.length >= 3).slice(0, 5);
@@ -12570,7 +12593,7 @@ async function geoFind(tries, key) {
       if (res.ok) {
         const j = await res.json();
         if (j && j[0] && isFinite(+j[0].lat)) {
-          const r = { lat: +j[0].lat, lng: +j[0].lon, approx: i > 0 || /^(city|town|village|municipality|administrative|postcode|county|state)$/.test(j[0].addresstype || j[0].type || '') };
+          const r = { lat: +j[0].lat, lng: +j[0].lon, approx: i > 1 || /^(city|town|village|municipality|administrative|postcode|county|state)$/.test(j[0].addresstype || j[0].type || '') };
           if (key) store(key, r); return r;
         }
       }

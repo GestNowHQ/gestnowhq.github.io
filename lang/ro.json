@@ -5956,4 +5956,8 @@
 "Entregar o documento":"Predă documentul",
 "Não podes registar horas neste dia: {x}. Entrega o documento em Eu › Os meus documentos ou fala com o escritório.":"Nu poți înregistra ore în această zi: {x}. Predă documentul în Eu › Documentele mele sau vorbește cu biroul.",
 "Relatado por ti": "Raportat de tine",
-"Perigo grave": "Pericol grav"}
+"Perigo grave": "Pericol grav",
+"ainda sem horas escritas neste dia": "încă fără ore scrise în această zi",
+"Os dias aparecem aqui depois de escreveres as horas em Eu › Escrever as horas. Esqueceste um dia? Toca nesse dia.": "Zilele apar aici după ce îți scrii orele în Eu › Scrie orele. Ai uitat o zi? Atinge ziua respectivă.",
+"Horas de hoje escritas": "Orele de azi scrise",
+"À espera do encarregado. Toca para corrigir.": "Așteaptă șeful de echipă. Atinge pentru a corecta."}
