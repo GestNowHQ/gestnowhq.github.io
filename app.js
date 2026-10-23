@@ -41,6 +41,11 @@ const REASONS = {
   outside_site: 'Fora da área da fábrica',
   gps_imprecise: 'GPS impreciso: vai para o exterior e tenta outra vez',
 };
+// v91: a person who cannot load the company's document list (a worker) still reads a name, never a code
+const DOC_NAMES = { aptidao_medica: 'Ficha de aptidão médica', acolhimento: 'Acolhimento de segurança', carta_conducao: 'Carta de condução',
+  cartao_saude_europeu: 'Cartão Europeu de Seguro de Doença', cc_bi: 'Cartão de Cidadão ou BI', comprovativo_iban: 'Comprovativo do IBAN (NIB)',
+  formacao_altura: 'Formação de trabalhos em altura', formacao_confinado: 'Formação de espaços confinados' };
+const t_ = (x) => (typeof t === 'function' ? t(x) : x);
 const REASON_PREFIX = {
   'document_invalid:': 'Documento em falta ou caducado: ',
   'company_document_invalid:': 'Documento da empresa em falta: ',
@@ -791,7 +796,7 @@ function friendlyText(err) {
   const nosign = /access denied for LMRA signature:\s*(.*)$/i.exec(msg);
   if (nosign) return `Esta pessoa não pode assinar nem trabalhar: ${nosign[1].split(/,\s*/).map(reasonText).join(' · ')}.`;
   const mine = /you were blocked on that day:\s*(.*)$/i.exec(msg);
-  if (mine) return `Nesse dia não podias entrar: ${mine[1].split(/,\s*/).map(reasonText).join(' · ')}. Fala com o escritório.`;
+  if (mine) return `Não podes registar horas neste dia: ${mine[1].split(/,\s*/).map(reasonText).join(' · ')}. Entrega o documento em Eu › Os meus documentos ou fala com o escritório.`;
   const blocked = /could not enter at that time:\s*(.*)$/i.exec(msg);
   if (blocked) return `Esta pessoa não podia entrar a essa hora: ${blocked[1].split(/,\s*/).map(reasonText).join(' · ')}. Resolve isso primeiro ou fala com o escritório.`;
   for (const [re, pt] of ERRORS) if (re.test(msg)) return pt.replace(/\$(\d)/g, (_, n) => (re.exec(msg) || [])[+n] || '');
@@ -800,8 +805,9 @@ function friendlyText(err) {
 function reasonText(code) {
   if (REASONS[code]) return REASONS[code];
   if (code.startsWith('document_invalid:')) {
-    const t = state.docTypes.find((d) => d.code === code.slice(17));
-    if (t) return t.name + ' em falta ou caducado(a)';
+    const c = code.slice(17); const t = state.docTypes.find((d) => d.code === c);
+    const name = (t && t.name) || (state.docNames || {})[c] || DOC_NAMES[c] || (c.charAt(0).toUpperCase() + c.slice(1).replace(/_/g, ' '));
+    return `${t_(name)}: ${t_('em falta ou fora de validade')}`;
   }
   for (const p in REASON_PREFIX) if (code.startsWith(p)) return REASON_PREFIX[p] + code.slice(p.length);
   return code;
@@ -1080,7 +1086,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '90';
+const APP_VERSION = '91';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['reunioes', 'emergencia', 'lmra', 'seguranca'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -5150,7 +5156,7 @@ async function loadMySheet() {
   const { data, error } = await sb.rpc('mini_my_timesheet');
   if (!box.isConnected) return;
   if (error) { box.innerHTML = `<div class="card">${esc(friendly(error))}</div>`; return; }
-  state.timeMode = data.mode;
+  state.timeMode = data.mode; state.docNames = data.doc_names || {};
   if (data.mode !== 'sheet') { box.innerHTML = `<div class="card">${empty('tap', 'A tua empresa usa o cartão', 'As horas contam pelas picagens do cartão no telemóvel do encarregado.')}</div>`; return; }
   const sites = data.sites || [];
   const hm = (iso, tz) => fmtHour(iso, tz);
@@ -5168,9 +5174,13 @@ async function loadMySheet() {
           return `<div class="sh-row"><span class="chip code" data-nt>${esc(e.code)}</span><span class="grow" data-nt>${esc(pairs.join(' · '))}</span>
             ${e.locked ? chip('val', 'confirmado', 'ok') : chip('warn', 'por confirmar')}${written ? chip('', 'escrito') : chip('info', 'picado')}</div>`;
         }).join('') || '<p class="muted small" style="margin:4px 0">Sem horas neste dia.</p>'}
-        ${sites.length && anyOpen ? `<button class="btn ${entries.length ? 'ghost ' : ''}small" data-shday="${esc(d.date)}">${ic('clock')}${entries.length ? 'Corrigir' : 'Escrever'}</button>` : ''}</div>`;
+        ${sites.length && anyOpen && (d.blocked || []).length ? `<div class="sh-block" role="alert">${ic('warn')}<div><b>${esc(t('Não podes escrever horas neste dia'))}</b>
+            <span>${esc((d.blocked || []).map(reasonText).join(' · '))}</span>
+            <button class="btn small" data-shdocs>${ic('doc')}${esc(t('Entregar o documento'))}</button></div></div>`
+          : sites.length && anyOpen ? `<button class="btn ${entries.length ? 'ghost ' : ''}small" data-shday="${esc(d.date)}">${ic('clock')}${entries.length ? 'Corrigir' : 'Escrever'}</button>` : ''}</div>`;
     }).join('')}</div>`;
   box.querySelectorAll('[data-shday]').forEach((b) => b.onclick = () => writeSheetDay(b.dataset.shday, data));
+  box.querySelectorAll('[data-shdocs]').forEach((b) => b.onclick = () => meOpen('docs'));
 }
 async function writeSheetDay(day, data) {
   const sites = data.sites || []; const d = (data.days || []).find((x) => x.date === day) || {};

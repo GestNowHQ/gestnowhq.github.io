@@ -5950,4 +5950,8 @@
 "Mapa aberto na localidade da obra: aproxima até veres a fábrica.":"Harta e deschisă pe localitatea șantierului: mărește până vezi fabrica.",
 "Mapa aberto na morada da obra.":"Harta e deschisă la adresa șantierului.",
 "Não encontrei essa morada. Escreve a localidade ou o código postal.":"Nu am găsit adresa. Scrie localitatea sau codul poștal.",
-"Mapa: © OpenStreetMap, imagens de satélite © Esri. Os cantos ficam guardados com a obra; a posição dos telemóveis só se grava em cada picagem.":"Hartă: © OpenStreetMap, imagini satelit © Esri. Colțurile se păstrează cu șantierul; poziția telefoanelor se salvează doar la fiecare pontaj."}
+"Mapa: © OpenStreetMap, imagens de satélite © Esri. Os cantos ficam guardados com a obra; a posição dos telemóveis só se grava em cada picagem.":"Hartă: © OpenStreetMap, imagini satelit © Esri. Colțurile se păstrează cu șantierul; poziția telefoanelor se salvează doar la fiecare pontaj.",
+"em falta ou fora de validade":"lipsă sau expirat",
+"Não podes escrever horas neste dia":"Nu poți scrie ore în această zi",
+"Entregar o documento":"Predă documentul",
+"Não podes registar horas neste dia: {x}. Entrega o documento em Eu › Os meus documentos ou fala com o escritório.":"Nu poți înregistra ore în această zi: {x}. Predă documentul în Eu › Documentele mele sau vorbește cu biroul."}

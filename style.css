@@ -2415,3 +2415,8 @@ ul.ct-miss li { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; p
 .hz-imgs img { width: 120px; height: 120px; object-fit: cover; border-radius: 10px; background: var(--surface-2); cursor: zoom-in; }
 .hz-closed p { margin: 4px 0; }
 .btn.big.hz-go { margin-bottom: 14px; }
+/* v91: folha de horas, the day is blocked (documents, suspension): said before writing */
+.sh-block { display: flex; gap: 10px; align-items: flex-start; margin-top: 6px; padding: 12px; border-radius: var(--r-md, 12px); background: color-mix(in srgb, var(--bad, #dc2626) 10%, transparent); color: var(--text); }
+.sh-block > svg { flex: none; width: 22px; height: 22px; color: var(--bad, #dc2626); }
+.sh-block > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.sh-block .btn { align-self: flex-start; }

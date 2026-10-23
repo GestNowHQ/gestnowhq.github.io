@@ -5950,4 +5950,8 @@
 "Mapa aberto na localidade da obra: aproxima até veres a fábrica.":"Mapa abierto en la localidad de la obra: acerca hasta ver la fábrica.",
 "Mapa aberto na morada da obra.":"Mapa abierto en la dirección de la obra.",
 "Não encontrei essa morada. Escreve a localidade ou o código postal.":"No encontré esa dirección. Escribe la localidad o el código postal.",
-"Mapa: © OpenStreetMap, imagens de satélite © Esri. Os cantos ficam guardados com a obra; a posição dos telemóveis só se grava em cada picagem.":"Mapa: © OpenStreetMap, imágenes de satélite © Esri. Las esquinas se guardan con la obra; la posición de los móviles solo se guarda en cada fichaje."}
+"Mapa: © OpenStreetMap, imagens de satélite © Esri. Os cantos ficam guardados com a obra; a posição dos telemóveis só se grava em cada picagem.":"Mapa: © OpenStreetMap, imágenes de satélite © Esri. Las esquinas se guardan con la obra; la posición de los móviles solo se guarda en cada fichaje.",
+"em falta ou fora de validade":"falta o caducado",
+"Não podes escrever horas neste dia":"No puedes escribir horas este día",
+"Entregar o documento":"Entregar el documento",
+"Não podes registar horas neste dia: {x}. Entrega o documento em Eu › Os meus documentos ou fala com o escritório.":"No puedes registrar horas este día: {x}. Entrega el documento en Yo › Mis documentos o habla con la oficina."}
