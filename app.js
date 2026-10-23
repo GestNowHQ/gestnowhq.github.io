@@ -48,6 +48,16 @@ const REASON_PREFIX = {
   'skill_missing:': 'Falta a competência: ',
 };
 const ERRORS = [
+  // Relatos de perigo (sql/112)
+  [/say what happened/i, 'Escolhe o que foi: quase acidente, condição perigosa ou pequeno ferimento.'],
+  [/write in a few words what you saw/i, 'Escreve em poucas palavras o que viste.'],
+  [/photo not found, send it again/i, 'A fotografia não chegou. Tenta outra vez.'],
+  [/at most 3 photos/i, 'No máximo 3 fotografias.'],
+  [/too many reports today/i, 'Já fizeste 30 relatos hoje. Fala com a segurança.'],
+  [/this report is closed/i, 'Este relato já está fechado.'],
+  [/say who fixes it/i, 'Escreve quem resolve.'],
+  [/write the cause and what was done/i, 'Escreve porque aconteceu e o que foi feito (mínimo 5 letras cada).'],
+  [/the lesson has 5 to 480/i, 'A lição tem de ter entre 5 e 480 letras.'],
   // Reuniões de segurança (sql/107)
   [/the meeting is run by a person of the team/i, 'A reunião é aberta por quem a dá: esta conta não tem ficha de trabalhador.'],
   [/choose the kind of meeting/i, 'Escolhe o tipo de reunião.'],
@@ -959,6 +969,102 @@ if (!cfg.url || cfg.url.startsWith('COLA_') || !window.supabase) {
 const sb = window.supabase.createClient(cfg.url, cfg.anonKey, { auth: { persistSession: true, autoRefreshToken: true } });
 const core = () => sb.schema('core');
 
+// ------------------------------------------------------------------ Sem rede (v89): the last answer stays readable
+// The person's own screens («Eu»: horas, documentos, EPI, reuniões, avisos, relatos) and the site's malões, material,
+// reuniões and relatos keep their last answer on this phone. Without network the app shows that copy and the header says
+// from when. Only these read-only functions are kept, and everything goes at sign-out with the rest (forgetPersonal).
+const RC_PREFIX = 'gn.rc.';
+const OFFLINE_READS = new Set(['mini_my_home', 'mini_my_summary', 'mini_my_papers', 'mini_time_mode', 'mini_my_meetings', 'mini_my_team_messages',
+  'mini_my_hazards', 'mini_hazard_sites', 'mini_my_weeks', 'mini_my_day', 'mini_my_day_more', 'mini_my_day_disputes', 'mini_my_documents', 'mini_my_kit',
+  'mini_wh_my_tools', 'mini_my_per_diems', 'mini_my_requests', 'mini_my_glances', 'mini_my_stay', 'mini_my_travels', 'mini_my_timesheet', 'mini_progress_my',
+  'mini_meeting_get', 'mini_meetings', 'mini_cases', 'mini_case_get', 'mini_case_scan', 'mini_site_material', 'mini_hazards', 'mini_hazard']);
+const rpcRaw = sb.rpc.bind(sb);
+const rcKey = (fn, args) => `${RC_PREFIX}${(state.me && state.me.user_id) || '-'}.${fn}.${JSON.stringify(args || {})}`;
+function rcTrim() {   // the phone is full: the oldest half goes
+  try {
+    const ks = Object.keys(localStorage).filter((k) => k.startsWith(RC_PREFIX)).map((k) => [k, (load(k, {}) || {}).at || 0]).sort((a, b) => a[1] - b[1]);
+    ks.slice(0, Math.ceil(ks.length / 2)).forEach(([k]) => localStorage.removeItem(k));
+  } catch (_) { /* storage blocked */ }
+}
+function rcPut(k, data) {
+  const s = JSON.stringify({ at: Date.now(), data });
+  if (s.length > 300000) return;   // a very big answer is not kept
+  try { localStorage.setItem(k, s); } catch (_) { rcTrim(); try { localStorage.setItem(k, s); } catch (__) { /* still full */ } }
+}
+function noteStale(at) { if (!state.staleAt || at < state.staleAt) { state.staleAt = at; showNet(); } }
+sb.rpc = (fn, args, opts) => {
+  const b = rpcRaw(fn, args, opts);
+  if (!OFFLINE_READS.has(fn) || !state.me) return b;
+  const k = rcKey(fn, args);
+  const run = async () => {
+    let r = null;
+    if (navigator.onLine !== false) { try { r = await b; } catch (e) { r = { data: null, error: e, status: 0 }; } }
+    if (r && !r.error) { rcPut(k, r.data); return r; }
+    if (r && !isNetErr(r.error, r.status)) return r;
+    const c = load(k, null);
+    if (!c) return r || { data: null, error: { message: 'Failed to fetch' }, status: 0 };
+    noteStale(c.at);
+    return { data: c.data, error: null, status: 200, cached: c.at };
+  };
+  let p = null; const go1 = () => p || (p = run());
+  return { then: (a, z) => go1().then(a, z), catch: (z) => go1().catch(z), finally: (f) => go1().finally(f) };
+};
+
+// What is done without network waits here and goes when the network comes back: hazard reports (with their photo, kept
+// in the phone's file cache), «li o aviso» and «li o resumo da reunião». Each item has its own id, so sending twice keeps
+// one; never thrown away for lack of network; an item saved under another login waits for that person.
+const OUTBOX_KEY = 'gestnow.outbox'; const OUTBOX_CACHE = 'gn-outbox';
+const outbox = () => load(OUTBOX_KEY, []);
+const outboxMine = () => outbox().filter((x) => !x._u || x._u === (state.me && state.me.user_id));
+const obKey = (id) => new URL(`__outbox/${id}`, location.href).href;
+function outboxAdd(item) {
+  const q = outbox().filter((x) => x.id !== item.id); q.push({ ...item, _u: state.me && state.me.user_id, saved: new Date().toISOString() });
+  const ok = store(OUTBOX_KEY, q); showNet(); return ok;
+}
+function outboxDone(id) { const q = outbox().filter((x) => x.id !== id); store(OUTBOX_KEY, q.length ? q : undefined); try { if (window.caches) caches.open(OUTBOX_CACHE).then((c) => c.delete(obKey(id))); } catch (_) { /* none */ } }
+async function outboxBlob(id, blob) {
+  try { const c = await caches.open(OUTBOX_CACHE); if (blob) { await c.put(obKey(id), new Response(blob, { headers: { 'content-type': blob.type } })); return true; }
+    const hit = await c.match(obKey(id)); return hit ? hit.blob() : null; } catch (_) { return blob ? false : null; }
+}
+// A short call that may wait for the network (idempotent on the server). Returns { data } or { queued } or { error }.
+async function callOrQueue(fn, args, label) {
+  let r; try { r = await rpcRaw(fn, args); } catch (e) { r = { error: e, status: 0 }; }
+  if (!r.error) return { data: r.data };
+  if (await verdict(r) !== 'retry') return { error: r.error };
+  return outboxAdd({ id: uuid(), fn, args, label }) ? { queued: true } : { error: r.error };
+}
+// One hazard report: the photo first (it may already be there), then the report. 'ok' | 'retry' | { error }
+async function sendHazardItem(it) {
+  if (it.photo && !it.photo.sent) {
+    const blob = await outboxBlob(it.id);
+    if (blob) {
+      let up; try { up = await sb.storage.from('relatos').upload(it.photo.path, blob, { contentType: it.photo.type, upsert: false }); } catch (e) { up = { error: e }; }
+      if (up.error && !/exist|duplicate|409/i.test(up.error.message || up.error.statusCode || '')) return isNetErr(up.error, up.error.status) || navigator.onLine === false ? 'retry' : { error: up.error };
+      it.photo.sent = true;
+    } else it.args.p.photos = [];   // the photo was lost from the phone: the report still goes
+  }
+  let r; try { r = await rpcRaw('mini_hazard_report', it.args); } catch (e) { r = { error: e, status: 0 }; }
+  if (!r.error) return { ok: true, data: r.data };
+  const v = await verdict(r); return v === 'retry' ? 'retry' : { error: r.error };
+}
+let outboxBusy = null;
+function flushOutbox() { if (!outboxBusy) outboxBusy = doFlushOutbox().finally(() => { outboxBusy = null; }); return outboxBusy; }
+async function doFlushOutbox() {
+  if (!state.ready || !state.me || state.offline) return;
+  let sent = 0; let refused = 0;
+  for (const it of outboxMine()) {
+    let res;
+    if (it.fn === 'mini_hazard_report') res = await sendHazardItem(it);
+    else { let r; try { r = await rpcRaw(it.fn, it.args); } catch (e) { r = { error: e, status: 0 }; } res = !r.error ? { ok: true } : (await verdict(r)) === 'retry' ? 'retry' : { error: r.error }; }
+    if (res === 'retry') { if (it.photo) { const q = outbox().map((x) => (x.id === it.id ? it : x)); store(OUTBOX_KEY, q); } break; }
+    if (res.error) { refused++; toast(`${it.label || t('Envio')}: ${friendly(res.error)}`); } else sent++;
+    outboxDone(it.id);
+  }
+  showNet();
+  if (sent) toast(sent === 1 ? 'O que ficou guardado sem rede foi enviado.' : `${sent} coisas guardadas sem rede foram enviadas.`);
+  if ((sent || refused) && state.view === 'minhas') viewMine();
+}
+
 nav.addEventListener('click', (e) => {
   if (e.target.id === 'scrim') return openMore(false);
   const b = e.target.closest('button'); if (!b) return;
@@ -974,7 +1080,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '87';
+const APP_VERSION = '89';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['reunioes', 'emergencia', 'lmra', 'seguranca'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -988,7 +1094,8 @@ function tabsFor(role) {
   if (role === 'admin') return isOwner() ? (ownerDesk() ? ['clientes'] : ['clientes', 'inicio', 'horas', 'secretariado']) : ['inicio', 'painel', 'horas', 'secretariado'];
   return TABS[role] || TABS.supervisor;
 }
-const MORE_ORDER = ['inicio', 'empresa', 'onbtextos', 'equipa', 'material', 'picar', 'emergencia', 'reunioes', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'andaimes', 'processo', 'clientes', 'custos', 'progresso'];
+const OFFLINE_VIEWS = ['picar', 'minhas', 'material', 'reunioes', 'relatos', 'emergencia'];   // v89: they keep a copy
+const MORE_ORDER = ['inicio', 'empresa', 'onbtextos', 'equipa', 'material', 'picar', 'emergencia', 'relatos', 'reunioes', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'andaimes', 'processo', 'clientes', 'custos', 'progresso'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -1009,7 +1116,7 @@ const MENU_GROUPS = [
   ['Secretariado', ['secretariado', 'horas', 'despesas', 'custos']],
   ['Recursos Humanos', ['trabalhadores', 'onbtextos', 'acolhimento', 'viagens', 'alojamento']],
   ['Frota', ['frota']],
-  ['QSA · Qualidade, Segurança e Ambiente', ['seguranca', 'reunioes', 'lmra', 'emergencia', 'qualidade', 'processo']],
+  ['QSA · Qualidade, Segurança e Ambiente', ['relatos', 'seguranca', 'reunioes', 'lmra', 'emergencia', 'qualidade', 'processo']],
   ['Produção (Obra)', ['painel', 'obras', 'naobra', 'picar', 'progresso', 'material', 'andaimes', 'equipa', 'producao']],
   ['Compras e Armazém', ['armazem', 'compras']],
   ['Comercial', ['comercial']],
@@ -1021,7 +1128,7 @@ const VIEW_NEEDS = {
   inicio: () => canHome(), empresa: () => canCompanyRules(), processo: () => canProcess(),
   secretariado: () => canOffice(), despesas: () => canExpenses(), viagens: () => canTravel(), alojamento: () => canHousing(),
   trabalhadores: () => can('pessoas.ver') || can('pessoas.gerir'), onbtextos: () => canPeople(),
-  seguranca: () => ['seguranca.lmra', 'seguranca.parar_obra', 'seguranca.emergencia'].some(can), lmra: () => canLmra(), reunioes: () => canMeet(),
+  seguranca: () => ['seguranca.lmra', 'seguranca.parar_obra', 'seguranca.emergencia'].some(can), lmra: () => canLmra(), reunioes: () => canMeet(), relatos: () => canHazards(),
   emergencia: () => can('seguranca.emergencia'), acolhimento: () => can('acolhimento.gerir'),
   obras: () => can('obras.gerir') || can('obras.ver_detalhes') || can('obras.area'), painel: () => canSiteDetails(), naobra: () => canSiteDetails() || can('ponto.picar'),
   equipa: () => canSiteDetails(), picar: () => can('ponto.picar'), horas: () => can('horas.ver') || can('horas.validar_obra'),
@@ -1117,10 +1224,12 @@ function openMore(open) {
 function showNet() {
   const el = document.getElementById('net'); if (!el) return;
   const me = state.me && state.me.user_id;
-  const n = state.ready ? queue().filter((x) => !x._u || x._u === me).length : 0;
+  const n = state.ready ? queue().filter((x) => !x._u || x._u === me).length + outboxMine().length : 0;
   const off = state.ready && (state.offline || navigator.onLine === false);
-  el.hidden = !(off || n);
-  el.textContent = off ? `Sem rede${n ? ' · ' + n : ''}` : `${n} por enviar`;
+  const stale = state.ready && state.staleAt ? new Date(state.staleAt).toLocaleTimeString(LOC, { hour: '2-digit', minute: '2-digit' }) : '';
+  el.hidden = !(off || n || stale);
+  // v89: when a screen shows the copy kept on the phone, the header says from when
+  el.textContent = off ? `Sem rede${stale ? ' · ' + t('dados das') + ' ' + stale : ''}${n ? ' · ' + n + ' ' + t('por enviar') : ''}` : stale && !n ? `${t('Rede fraca · dados das')} ${stale}` : `${n} ${t('por enviar')}`;
 }
 sb.auth.onAuthStateChange((event) => { if (event === 'SIGNED_OUT') boot(); });
 // The session can end outside this tab (Sair in another tab, expired token). Re-check when the user comes back.
@@ -1151,6 +1260,7 @@ async function idleOut() {
 function forgetPersonal() {
   store(ME_KEY, undefined);
   store(MYDOCS_KEY, undefined); try { if (window.caches) caches.delete(DOC_CACHE); } catch (_) { /* none */ }
+  try { Object.keys(localStorage).filter((k) => k.startsWith(RC_PREFIX)).forEach((k) => localStorage.removeItem(k)); } catch (_) { /* storage blocked */ }   // v89 copies
   try { Object.keys(localStorage).filter((k) => k.startsWith('gn.emer.')).forEach((k) => localStorage.removeItem(k)); } catch (_) { /* storage blocked */ }
   const rej = load(REJECTED_KEY, []);
   if (rej.some((x) => x.name)) store(REJECTED_KEY, rej.map((x) => ({ ...x, name: null })));   // kept to be dealt with: «Cartão …1234»
@@ -1162,10 +1272,11 @@ let lastTouch = 0;
 setInterval(() => { if (state.ready && state.me && idleTooLong(state.me.role)) idleOut(); }, 30000);
 // Saved taps are retried every minute too: the "online" event alone is not reliable on Android.
 setInterval(() => { if (state.ready && queue().length) flushQueue(); }, 60000);
+setInterval(() => { if (state.ready && outboxMine().length) flushOutbox(); }, 60000);
 setInterval(() => { if (state.ready && !state.offline) syncClock(); }, 10 * 60000);
 window.addEventListener('online', () => {
   if (!state.ready || state.offline) return boot();   // the network-error screen, or Picar opened without network
-  flushQueue(); syncClock(); flushMuster();
+  flushQueue(); syncClock(); flushMuster(); flushOutbox();
 });
 window.addEventListener('offline', () => { showQueue(); });
 // The app shell (these files, never the Supabase data or the login) is kept on the phone, so Picar opens without network.
@@ -1189,7 +1300,7 @@ boot();
 async function boot() {
   await I18N.ready;
   stopNfc(); clearInterval(state.timer); clearInterval(state.tick); hideFlash(); openMore(false);
-  state.ready = false; state.offline = false; nav.hidden = true; document.getElementById('whoami').hidden = true;
+  state.ready = false; state.offline = false; state.prefetched = false; nav.hidden = true; document.getElementById('whoami').hidden = true;
   document.getElementById('sol').hidden = true; document.getElementById('search').hidden = true; document.getElementById('help').hidden = true; document.getElementById('bell').hidden = true; if (Live) Live.stop(); closePalette(); signedOut(true); showNet();
   takeClimbLink();
   if (await openInvite()) return;
@@ -1264,8 +1375,9 @@ async function boot() {
   nav.querySelector('[data-view=progresso]').hidden = worker || state.offline || !canProgress();
   nav.querySelector('[data-view=equipa]').hidden = me.role !== 'supervisor' || !canSiteDetails();
   nav.querySelector('[data-view=lmra]').hidden = worker || state.offline || !canLmra();
-  nav.querySelector('[data-view=reunioes]').hidden = worker || state.offline || !canMeet();
-  nav.querySelector('[data-view=material]').hidden = worker || state.offline || !canSiteMaterial();
+  nav.querySelector('[data-view=reunioes]').hidden = worker || !canMeet();   // v89: these three open without network (kept copy)
+  nav.querySelector('[data-view=relatos]').hidden = worker || !canHazards();
+  nav.querySelector('[data-view=material]').hidden = worker || !canSiteMaterial();
   nav.querySelector('[data-view=emergencia]').hidden = worker || !canEmergency();
   nav.querySelector('[data-view=armazem]').hidden = worker || state.offline || !canWh();
   nav.querySelector('[data-view=compras]').hidden = worker || state.offline || !canBuy();
@@ -1288,9 +1400,10 @@ async function boot() {
   document.getElementById('help').hidden = nav.querySelector('[data-view=processo]').hidden; showNet();
   await loadBasics();
   showWho();
-  if (state.offline) { go('picar'); return; }
+  // v89: without network the person lands where they can still work: «Eu» for a worker, the site screens that keep a copy
+  if (state.offline) { go(OFFLINE_VIEWS.includes(state.view) && visible(state.view) ? state.view : me.role === 'worker' && me.collaborator_id ? 'minhas' : 'picar'); return; }
   syncClock();
-  flushQueue();
+  flushQueue(); flushOutbox();
   const other = queue().filter((x) => x._u && x._u !== state.me.user_id);
   if (other.length) toast(`Há ${other.length} picagem(ns) de outra conta neste telemóvel, ainda por enviar.`);
   go(state.view);
@@ -1715,10 +1828,10 @@ function bindSiteSelect(id, after) {
 function go(view) {
   if (!state.ready) return boot();   // never show a screen before login (and the phone code, when required)
   if (state.me.role === 'worker') view = 'minhas';   // the worker profile has one screen (the database checks the same)
-  else if (state.offline && view !== 'picar' && view !== 'emergencia') { toast('Sem rede: por agora só podes picar.'); view = 'picar'; }
+  else if (state.offline && !OFFLINE_VIEWS.includes(view)) { toast('Sem rede: este ecrã precisa de rede. Podes picar, ver o material, as reuniões e relatar perigos.'); view = 'picar'; }
   stopNfc(); gpsStop(); clearInterval(state.timer); clearInterval(state.tick); hideFlash(); openMore(false); Voice.stop(); dropRobots();
   if (state.uiEl && window.GNUI) { window.GNUI.unmount(state.uiEl); state.uiEl = null; }
-  state.view = view;
+  state.view = view; state.staleAt = null; showNet();   // v89: each screen says again if it shows a kept copy
   if (state.navDesk !== ownerDesk()) layoutNav(state.me.role);   // owner moved between his clients and a company
   app.classList.toggle('wide', view === 'secretariado' || view === 'painel');
   const tab = view === 'ficha' ? 'trabalhadores' : view === 'fichaepi' ? 'armazem' : view === 'cliente' || view === 'precos' ? 'clientes' : view === 'area' ? 'obras' : view;
@@ -1728,7 +1841,7 @@ function go(view) {
   window.scrollTo(0, 0);
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
      ficha: viewWorker, obras: viewSites, area: viewArea, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients, cliente: viewClient, precos: viewPrices, empresa: viewCompanyRules, inicio: viewHome,
-     processo: viewProcess, orcamentos: viewEstimates, comercial: viewSales, premios: viewAwards, custos: viewCosts, lmra: viewLmra, reunioes: viewMeetings, material: viewSiteMaterial, emergencia: viewEmergency,
+     processo: viewProcess, orcamentos: viewEstimates, comercial: viewSales, premios: viewAwards, custos: viewCosts, lmra: viewLmra, reunioes: viewMeetings, relatos: viewHazards, material: viewSiteMaterial, emergencia: viewEmergency,
      armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, producao: viewProd, progresso: viewProgress, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
   checkEmergencyBar(); encBadges();
 }
@@ -4876,7 +4989,7 @@ const MINE_STATE = { registered: 'por validar', supervisor_validated: 'validado 
 const ME_TABS = {
   folha: ['sheet', 'Folha de horas'], horas: ['clock', 'As minhas horas'], progresso: ['sheet', 'Progresso do dia'], pedidos: ['calendar', 'Pedidos'], diarias: ['card', 'Diárias'], despesas: ['cart', 'Despesas'],
   viagens: ['plane', 'Viagens'], dormir: ['home', 'Onde durmo'], andaimes: ['scaffold', 'Posso subir?'], docs: ['doc', 'Os meus documentos'],
-  epi: ['shield', 'EPI e ferramentas'], reunioes: ['team', 'Reuniões de segurança'], contrato: ['lock', 'O meu contrato'] };
+  epi: ['shield', 'EPI e ferramentas'], reunioes: ['team', 'Reuniões de segurança'], relatos: ['warn', 'Os meus relatos'], contrato: ['lock', 'O meu contrato'] };
 function viewMine() {
   if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!state.me.collaborator_id) return go(tabsFor(state.me.role)[0]);
@@ -4902,9 +5015,17 @@ window.addEventListener('popstate', () => {
 });
 async function loadMeHome(quiet) {
   const ym = isoDay(new Date()).slice(0, 7);
-  const [home, sum, papers, tm, mt, nt] = await Promise.all([sb.rpc('mini_my_home', { p_month: ym + '-01' }), sb.rpc('mini_my_summary'),
+  const [home, sum, papers, tm, mt, nt, hzq] = await Promise.all([sb.rpc('mini_my_home', { p_month: ym + '-01' }), sb.rpc('mini_my_summary'),
     state.mePapers === false ? Promise.resolve({ error: true }) : sb.rpc('mini_my_papers').then((r) => r, () => ({ error: true })),
-    sb.rpc('mini_time_mode').then((r) => r, () => ({})), sb.rpc('mini_my_meetings').then((r) => r, () => ({})), sb.rpc('mini_my_team_messages').then((r) => r, () => ({}))]);
+    sb.rpc('mini_time_mode').then((r) => r, () => ({})), sb.rpc('mini_my_meetings').then((r) => r, () => ({})), sb.rpc('mini_my_team_messages').then((r) => r, () => ({})),
+    sb.rpc('mini_my_hazards').then((r) => r, () => ({}))]);
+  // v89: once per session with network, the screens behind the tiles are kept on the phone for a site without signal
+  if (!state.prefetched && navigator.onLine !== false && !home.cached) {
+    state.prefetched = true;
+    for (const [fn, args] of [['mini_hazard_sites'], ['mini_my_documents'], ['mini_my_kit'], ['mini_wh_my_tools'], ['mini_my_weeks', { p_weeks: 6 }]])
+      sb.rpc(fn, args).then(() => {}, () => {});
+  }
+  if (hzq && hzq.data) state.meHz = { n: hzq.data.length, answered: hzq.data.filter((h) => h.status !== 'open' && !h.seen).length };   // hazard reports (sql/112)
   if (tm && tm.data) state.timeMode = tm.data.mode;   // card or sheet (sql/106)
   state.meMeet = mt && mt.data ? mt.data : null;   // safety meetings (sql/107)
   state.meNotes = nt && nt.data ? nt.data : [];   // notices from the site (sql/108)
@@ -4918,9 +5039,10 @@ async function loadMeHome(quiet) {
   $('#metiles').innerHTML = meTiles(d, s, papers.error ? null : papers.data);
   $('#metiles').dataset.on = '1';
   app.querySelectorAll('[data-me]').forEach((b) => b.onclick = () => meOpen(b.dataset.me));
+  $('#meact').onclick = (e) => { if (e.target.closest('[data-hzgo]')) hazardReport(() => loadMeHome()); };   // survives the re-renders of #meact
   app.querySelectorAll('[data-confirm]').forEach((b) => b.onclick = () => meConfirmWeek(b.dataset.confirm, b.dataset.label, () => loadMeHome()));
   app.querySelectorAll('[data-gotit]').forEach((b) => b.onclick = async () => {
-    b.disabled = true; const { error } = await sb.rpc('mini_my_team_read', { p_message: b.dataset.gotit });
+    b.disabled = true; const { error } = await callOrQueue('mini_my_team_read', { p_message: b.dataset.gotit }, t('Aviso lido'));
     if (error) { b.disabled = false; return toast(friendly(error)); }
     const m = (state.meNotes || []).find((x) => x.id === b.dataset.gotit); if (m) m.read = new Date().toISOString();
     $('#meact').innerHTML = meActions(state.meSum || {}); loadMeHome();
@@ -4966,7 +5088,8 @@ function meHero(d, s) {
 const weekLabel = (w) => `${fmtDate(w.week_start).slice(0, 5)} – ${fmtDate(w.week_end).slice(0, 5)}`;
 // What needs the worker now, at the top, in big: the week to confirm (art. 202.º CT), documents out of date.
 function meActions(s) {
-  const out = [];
+  const out = [`<button class="me-do hz-me" data-hzgo><span class="me-ic">${ic('warn')}</span><div class="grow"><b>Relatar um perigo</b>
+      <small>Quase acidente ou algo perigoso. Demora 15 segundos.</small></div>${ic('go')}</button>`];
   const notes = meNotices(); if (notes) out.push(notes);
   if (state.timeMode === 'sheet') out.push(`<button class="me-do" data-me="folha"><span class="me-dot"></span><div class="grow"><b>Escrever as horas</b>
       <small>Entrada, almoço e saída. O encarregado confirma.</small></div>${ic('go')}</button>`);
@@ -5006,6 +5129,7 @@ function meTiles(d, s, papers) {
     tile('epi', `${ppe.count || 0} EPI · ${tools.count || 0} ferramenta(s)`, ppe.due || tools.overdue ? 'warn' : ''),
     state.meMeet ? (() => { const mm = state.meMeet; const open = (mm.missed || []).filter((f) => f.status === 'counted' && !f.decision).length;
       return tile('reunioes', open ? `${open} falta(s) para os RH decidirem` : `${(mm.attended || []).length} reunião(ões) este ano`, open ? 'warn' : '', (mm.to_read || []).length ? String((mm.to_read || []).length) : ''); })() : '',
+    tile('relatos', state.meHz && state.meHz.answered ? `${state.meHz.answered} resposta(s) nova(s)` : state.meHz && state.meHz.n ? `${state.meHz.n} relato(s)` : 'Quase acidentes e perigos', state.meHz && state.meHz.answered ? 'go' : '', state.meHz && state.meHz.answered ? String(state.meHz.answered) : ''),
     papers ? tile('contrato', c && c.signed_at ? `Assinado a ${new Date(c.signed_at).toLocaleDateString(LOC)}` : c ? 'Por assinar' : 'Regras e valor à hora', c && !c.signed_at ? 'warn' : '') : '',
   ].join('');
 }
@@ -5096,6 +5220,7 @@ function meScreen(tab) {
     docs: () => '<div id="mydocs"></div>',
     epi: () => '<div id="mykit"></div><div id="mytools"></div>',
     reunioes: () => '<div id="mymeet"></div>',
+    relatos: () => '<div id="myhz"></div>',
     contrato: () => '<div id="mypapers"></div>',
   }[tab]();
   app.innerHTML = `<div class="me-screen">${head}${body}</div>`;
@@ -5117,6 +5242,7 @@ function meScreen(tab) {
   if (tab === 'docs') loadMyDocs();
   if (tab === 'epi') { loadMyKit(); loadMyTools(); }
   if (tab === 'reunioes') loadMyMeetings();
+  if (tab === 'relatos') loadMyHazards();
   if (tab === 'contrato') loadMyPapers();
 }
 // The weeks and their visa: confirmed, changed after, to confirm (with the date the law asks for).
@@ -8404,7 +8530,7 @@ async function meetDoc(id, opts = {}) {
   d.addEventListener('close', () => d.remove());
   d.querySelector('[data-x]').onclick = () => d.close(); d.querySelector('[data-print]').onclick = () => window.print();
   if (opts.read) d.querySelector('[data-read]').onclick = async () => {
-    const { error: e2 } = await sb.rpc('mini_my_meeting_read', { p_meeting: id });
+    const { error: e2 } = await callOrQueue('mini_my_meeting_read', { p_meeting: id }, t('Resumo da reunião lido'));
     if (e2) return toast(friendly(e2));
     d.close(); toast('Obrigado. Fica registado que leste.'); if (opts.after) opts.after();
   };
@@ -11040,6 +11166,185 @@ async function flCost(v) {
   const { error } = await sb.rpc('mini_fleet_cost', { p_vehicle: v.id, p_kind: fd.get('k'), p_amount: Number(fd.get('a')), p_on: fd.get('on'), p_ref: String(fd.get('r') || '').trim() || null, p_site: fd.get('site') || null });
   if (error) return toast(friendly(error));
   toast('Custo registado.'); flDetail(v.id);
+}
+
+// ============================================================================ Relatos de perigo (v88, sql/112)
+// «Relatar um perigo» in 15 seconds: what it was, a photo, a sentence (the keyboard's microphone writes it), the energy
+// that was there and «podia ter sido grave?». The site comes from the person's entry tap of the day. The report's id is
+// made here, so sending it twice keeps one. QSA and the encarregados follow it up (Relatos de perigo): em análise, then
+// fechar with the cause and what was done; the lesson can go to the team. The reporter sees the answer in «Eu».
+const canHazards = () => can('seguranca.relatos');
+const HZ_KIND = { near_miss: ['Quase acidente', 'Quase aconteceu, ninguém se magoou'], unsafe_condition: ['Condição perigosa', 'Algo pode magoar alguém'], first_aid: ['Pequeno ferimento', 'Alguém se magoou pouco'] };
+const HZ_EN = { altura: 'Altura', pressao: 'Pressão', eletricidade: 'Eletricidade', maquinas: 'Máquinas a mexer', quimico: 'Químico ou gás', fogo: 'Fogo ou calor', carga: 'Carga suspensa', outro: 'Outro' };
+const HZ_ST = { open: ['bad', 'À espera'], investigating: ['warn', 'Em análise'], closed: ['ok', 'Resolvido'] };
+const hzKind = (k) => (HZ_KIND[k] || [k])[0];
+const hzRef = (n) => n ? 'REL-' + String(n).padStart(4, '0') : '';
+// GPS only when the phone already allows it for this app: never a question in the middle of a report.
+async function hzWhere() {
+  try {
+    if (!navigator.geolocation || !navigator.permissions) return null;
+    const st = await navigator.permissions.query({ name: 'geolocation' });
+    if (st.state !== 'granted') return null;
+    return await new Promise((r) => navigator.geolocation.getCurrentPosition((p) => r({ lat: p.coords.latitude, lng: p.coords.longitude }), () => r(null), { timeout: 3000, maximumAge: 300000 }));
+  } catch (_) { return null; }
+}
+async function hazardReport(after) {
+  if (!state.me || !state.me.collaborator_id) return toast('Esta conta não tem ficha de trabalhador: o relato é feito por quem está na obra.');
+  const { data: ss, error: se } = await sb.rpc('mini_hazard_sites');   // without network: the copy kept on the phone
+  if (se) return toast(isNetErr(se, se.status) ? 'Sem rede e ainda sem obras guardadas neste telemóvel. Abre «Os meus relatos» uma vez com rede.' : friendly(se));
+  const sites = ss.sites || [];
+  if (!sites.length) return toast('Ainda não estás em nenhuma obra. Fala com o encarregado.');
+  const def = ss.default;
+  const fd = await askSheet('Relatar um perigo', `
+    <div class="chips reasons hz-kinds" role="radiogroup" aria-label="O que foi">${Object.entries(HZ_KIND).map(([k, [lb, sub]], i) =>
+      `<label class="chip hz-k"><input type="radio" name="k" value="${k}" ${i ? '' : 'required'}><b>${esc(lb)}</b><small>${esc(sub)}</small></label>`).join('')}</div>
+    <label class="hz-photo btn ghost wide" for="hzf">${ic('camera')}<span id="hzfl">Tirar fotografia</span></label>
+    <input id="hzf" name="f" type="file" accept="image/*" capture="environment" hidden>
+    <label for="hzt">O que viste? *</label>
+    <textarea id="hzt" name="t" rows="3" required minlength="3" maxlength="2000" placeholder="Ex.: guarda-corpo solto no piso 3"></textarea>
+    <p class="small muted">${ic('mic')} Para falar em vez de escrever, toca no microfone do teclado.</p>
+    <label>Havia perigo de…</label><div class="chips reasons hz-en">${Object.entries(HZ_EN).map(([k, lb]) => `<label class="chip"><input type="checkbox" name="e" value="${k}">${esc(lb)}</label>`).join('')}</div>
+    <label>Podia ter morto ou ferido gravemente alguém? *</label>
+    <div class="chips reasons" role="radiogroup"><label class="chip hz-sif"><input type="radio" name="s" value="1" required>Sim</label><label class="chip"><input type="radio" name="s" value="0">Não</label></div>
+    ${sites.length > 1 || !def ? `<label for="hzs">Obra *</label><select id="hzs" name="site" required>${def ? '' : '<option value="">Escolhe a obra</option>'}${sites.map((x) => `<option value="${esc(x.id)}" ${x.id === def ? 'selected' : ''}>${esc(x.code)} · ${esc(x.title)}</option>`).join('')}</select>`
+      : `<input type="hidden" name="site" value="${esc(def)}"><p class="small muted" data-nt>${ic('pin')} ${esc(sites[0].code)} · ${esc(sites[0].title)}</p>`}
+    <label class="check"><input type="checkbox" name="a"> Enviar sem o meu nome</label>
+    <p class="small muted">A segurança e o encarregado da obra recebem já. Respondem-te aqui no telemóvel. Relatar nunca dá castigo.</p>`, 'Enviar relato', (d) => {
+    d.classList.add('hz-dlg');
+    const f = d.querySelector('#hzf'); const l = d.querySelector('#hzfl');
+    f.onchange = () => { l.textContent = f.files[0] ? t('Fotografia pronta') + ' ✓' : t('Tirar fotografia'); };
+  });
+  if (!fd) return;
+  const id = uuid();
+  toast('A enviar…');
+  const file = fd.get('f'); let f = null; let photo = null;
+  if (file && file.size) {
+    f = await shrinkPhoto(file);
+    if (!HO_PHOTO[f.type]) return toast('Só fotografias (JPG, PNG ou WebP).');
+    photo = { path: `${state.me.tenant_id}/${id}/${uuid()}.${HO_PHOTO[f.type]}`, type: f.type };
+  }
+  const where = await hzWhere();
+  const p = { id, kind: fd.get('k'), text: String(fd.get('t') || '').trim(), energies: fd.getAll('e'), sif: fd.get('s') === '1',
+    site: fd.get('site') || null, anonymous: fd.get('a') === 'on', photos: photo ? [photo.path] : [], at: new Date().toISOString(), ...(where || {}) };
+  // v89: the photo waits in the phone's file cache with the report; both go when there is network (same id: one report)
+  const it = { id, fn: 'mini_hazard_report', args: { p }, photo, label: t('Relato de perigo') };
+  if (photo && !(await outboxBlob(id, f))) { toast('O telemóvel não deixou guardar a fotografia: o relato vai sem ela.'); it.photo = null; p.photos = []; }
+  const res = await sendHazardItem(it);
+  if (res === 'retry') {
+    if (!outboxAdd(it)) return toast('Sem rede e o telemóvel não deixou guardar o relato. Tenta outra vez quando tiveres rede.');
+    beep('neutral');
+    toast(p.sif ? 'Sem rede: o relato ficou guardado e vai sozinho quando houver rede. É grave: avisa já o encarregado de viva voz.' : 'Sem rede: o relato ficou guardado e vai sozinho quando houver rede.');
+    if (after) after(); return;
+  }
+  outboxDone(id);
+  if (res.error) return toast(friendly(res.error));
+  const data = res.data;
+  beep(true);
+  toast(p.sif ? `Relato ${hzRef(data.ref)} enviado. É grave: a segurança e a direção já foram avisadas.` : `Relato ${hzRef(data.ref)} enviado. Obrigado: a segurança vai responder-te.`);
+  if (after) after();
+}
+// «Eu» › Os meus relatos: each one with its state and the answer.
+async function loadMyHazards() {
+  const box = $('#myhz'); if (!box) return;
+  box.innerHTML = skel(2);
+  const { data, error } = await sb.rpc('mini_my_hazards');
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = `<div class="card">${esc(friendly(error))}</div>`; return; }
+  const waiting = outboxMine().filter((x) => x.fn === 'mini_hazard_report' && !data.some((h) => h.id === x.id));
+  box.innerHTML = `<button class="btn big wide hz-go" id="hznew">${ic('warn')}Relatar um perigo</button>
+    ${waiting.map((x) => `<div class="card hz-card${x.args.p.sif ? ' sif' : ''}"><div class="hz-top"><b>${esc(hzKind(x.args.p.kind))}</b><span class="grow"></span>${chip('warn', 'Por enviar (sem rede)', 'cloud')}</div>
+      <p class="hz-txt">${esc(x.args.p.text)}</p><div class="small muted">${esc(fmtTime(x.args.p.at))}</div></div>`).join('')}
+    ${data.length || waiting.length ? data.map((h) => hzCard(h, false)).join('') : `<div class="card">${empty('helmet', 'Ainda sem relatos', 'Viste algo perigoso? Relata: a segurança responde-te aqui.')}</div>`}`;
+  $('#hznew').onclick = () => hazardReport(loadMyHazards);
+  box.querySelectorAll('[data-hz]').forEach((b) => b.onclick = () => hazardOpen(b.dataset.hz, loadMyHazards));
+  for (const h of data) if (h.status !== 'open' && !h.seen) sb.rpc('mini_my_hazard_seen', { p_id: h.id }).then(() => {}, () => {});   // a query runs only when awaited
+}
+function hzCard(h, staff) {
+  const [k, lb] = HZ_ST[h.status] || ['', h.status];
+  return `<button class="card hz-card${h.sif ? ' sif' : ''}" data-hz="${esc(h.id)}">
+    <div class="hz-top"><b>${esc(hzKind(h.kind))}</b>${h.sif ? chip('bad', 'Podia ser grave', 'warn') : ''}<span class="grow"></span>${chip(k, lb)}</div>
+    <p class="hz-txt">${esc(h.text)}</p>
+    <div class="small muted" data-nt>${esc(hzRef(h.ref))} · ${esc(h.site || '')} · ${esc(fmtTime(h.created_at))}${staff ? ' · ' + esc(h.by || t('Anónimo')) : ''}${(h.photos || []).length ? ' · ' + ic('camera') : ''}</div>
+    ${h.status === 'closed' && h.action ? `<p class="hz-ans">${ic('ok')} <span>${esc(h.action)}</span></p>` : h.owner ? `<p class="small"><span>${esc(t('A tratar:'))}</span> <b data-nt>${esc(h.owner)}</b></p>` : ''}
+  </button>`;
+}
+// One report: the photo, the words, and (for QSA and the encarregado) the follow-up.
+async function hazardOpen(id, after) {
+  const { data: h, error } = await sb.rpc('mini_hazard', { p_id: id });
+  if (error) return toast(friendly(error));
+  const d = document.createElement('dialog'); d.className = 'dlg';
+  const [k, lb] = HZ_ST[h.status] || ['', h.status];
+  d.innerHTML = `<div><h2><span>${esc(hzKind(h.kind))}</span> <span data-nt>${esc(hzRef(h.ref))}</span></h2>
+    <p>${chip(k, lb)} ${h.sif ? chip('bad', 'Podia ter morto ou ferido gravemente', 'warn') : ''}</p>
+    <p class="small muted" data-nt>${esc(h.site)} · ${esc(h.site_title || '')} · ${esc(fmtTime(h.at))}${h.can_manage !== undefined && h.by !== undefined ? ' · ' + esc(h.by || t('Anónimo')) : ''}</p>
+    <p class="hz-txt">${esc(h.text)}</p>
+    ${(h.energies || []).length ? `<p>${h.energies.map((e) => chip('reg', HZ_EN[e] || e)).join(' ')}</p>` : ''}
+    <div class="hz-imgs">${(h.photos || []).map((p) => `<img alt="${esc(t('Fotografia do relato'))}" data-path="${esc(p)}">`).join('')}</div>
+    ${h.owner ? `<p><b>${esc(t('Quem trata:'))}</b> ${esc(h.owner)}</p>` : ''}
+    ${h.status === 'closed' ? `<div class="card hz-closed"><p><b>${esc(t('Causa:'))}</b> ${esc(h.cause)}</p><p><b>${esc(t('O que foi feito:'))}</b> ${esc(h.action)}</p>
+      ${h.lesson ? `<p><b>${esc(t('Lição:'))}</b> ${esc(h.lesson)}</p>` : ''}<p class="small muted">${esc(h.closed_by || '')} · ${esc(fmtTime(h.closed_at))}</p></div>` : ''}
+    <div class="acts">${h.can_manage ? `${h.status === 'open' ? `<button class="btn" data-a="take">${ic('user')}Em análise</button>` : ''}<button class="btn" data-a="close">${ic('ok')}Fechar com o que foi feito</button>` : ''}
+      <button class="btn ghost wide" data-a="x">Fechar</button></div></div>`;
+  const urls = [];
+  d.addEventListener('close', () => { d.remove(); urls.forEach((u) => URL.revokeObjectURL(u)); });
+  d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
+  document.body.appendChild(d); d.showModal();
+  for (const img of d.querySelectorAll('img[data-path]')) {
+    const { data: b } = await sb.storage.from('relatos').download(img.dataset.path);
+    if (b) { const u = URL.createObjectURL(b); urls.push(u); img.src = u; img.onclick = () => openDocFile(img.dataset.path, 'relatos', { title: hzRef(h.ref) }); }
+  }
+  d.querySelectorAll('[data-a]').forEach((b) => b.onclick = async () => {
+    if (b.dataset.a === 'x') return d.close();
+    d.close();
+    if (b.dataset.a === 'take') {
+      const fd = await askSheet('Em análise', `<label for="hzo">Quem resolve? *</label><input id="hzo" name="o" required minlength="2" maxlength="120" value="${esc((state.me && state.me.name) || '')}">
+        <p class="small muted">Quem relatou recebe a mensagem de que o relato está a ser tratado.</p>`, 'Guardar');
+      if (!fd) return;
+      const { error: e2 } = await sb.rpc('mini_hazard_take', { p_id: h.id, p_owner: String(fd.get('o')).trim() });
+      if (e2) return toast(friendly(e2));
+      toast('Em análise. Quem relatou foi avisado.');
+    } else {
+      const fd = await askSheet(`${t('Fechar o relato')} ${hzRef(h.ref)}`, `<label for="hzc">Porque aconteceu? *</label><textarea id="hzc" name="c" rows="2" required minlength="5" maxlength="1000"></textarea>
+        <label for="hza">O que foi feito? *</label><textarea id="hza" name="a" rows="2" required minlength="5" maxlength="1000"></textarea>
+        <p class="small muted">Quem relatou recebe esta resposta no telemóvel.</p>
+        <label for="hzl">Lição para a equipa</label><textarea id="hzl" name="l" rows="2" maxlength="480" placeholder="Ex.: em altura, toda a ferramenta leva fio de segurança."></textarea>
+        <div class="chips reasons" role="radiogroup"><label class="chip"><input type="radio" name="to" value="site" checked>Equipa desta obra</label><label class="chip"><input type="radio" name="to" value="all">Todas as obras</label><label class="chip"><input type="radio" name="to" value="">Não enviar</label></div>`, 'Fechar o relato');
+      if (!fd) return;
+      const lesson = String(fd.get('l') || '').trim();
+      const { data: r, error: e3 } = await sb.rpc('mini_hazard_close', { p_id: h.id, p_cause: String(fd.get('c')).trim(), p_action: String(fd.get('a')).trim(),
+        p_lesson: lesson || null, p_lesson_to: lesson ? (fd.get('to') || null) : null });
+      if (e3) return toast(friendly(e3));
+      toast(r.sent ? `Relato fechado. Lição enviada a ${r.sent} pessoa(s).` : 'Relato fechado. Quem relatou recebeu a resposta.');
+    }
+    if (after) after();
+  });
+}
+// QSA › Relatos de perigo: what waits, the serious ones first, the month in numbers.
+function viewHazards() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
+  if (!canHazards()) return viewClock();   // code guard as well as the database's
+  if (!state.hzTab) state.hzTab = 'open';
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Quase acidentes e condições perigosas</p><h1>Relatos de perigo</h1></div>
+      ${state.me.collaborator_id ? `<button class="btn hz-go" id="hznew">${ic('warn')}Relatar</button>` : ''}</div>
+    <p class="muted lead">O que as pessoas viram nas obras. Os que podiam ter sido graves aparecem primeiro. Responde sempre: sem resposta, as pessoas deixam de relatar.</p>
+    <div class="chips" role="tablist">${[['open', 'Por resolver'], ['closed', 'Resolvidos'], ['all', 'Todos']].map(([k, lb]) => `<button class="chip" data-hzt="${k}" aria-pressed="${state.hzTab === k}">${esc(lb)}</button>`).join('')}</div>
+    <div id="hzbody">${skel(3)}</div>`;
+  if ($('#hznew')) $('#hznew').onclick = () => hazardReport(loadHazards);
+  app.querySelectorAll('[data-hzt]').forEach((b) => b.onclick = () => { state.hzTab = b.dataset.hzt; viewHazards(); });
+  loadHazards();
+}
+async function loadHazards() {
+  const box = $('#hzbody'); if (!box) return;
+  const { data, error } = await sb.rpc('mini_hazards', { p_status: state.hzTab || 'open', p_site: null });
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = `<div class="card">${esc(friendly(error))}</div>`; return; }
+  const kpi = (n, lb, cls) => `<div class="kpi${cls ? ' ' + cls : ''}"><b class="tnum">${esc(String(n))}</b><span>${esc(lb)}</span></div>`;
+  const en = Object.entries(data.energies || {}).sort((a, b) => b[1] - a[1]).slice(0, 4);
+  box.innerHTML = `<div class="kpis k4">${kpi(data.open, 'por resolver', data.open ? 'warn' : '')}${kpi(data.open_sif, 'graves por resolver', data.open_sif ? 'bad' : '')}
+      ${kpi(data.month, 'este mês')}${kpi(data.close_days ?? '—', 'dias até resolver')}</div>
+    ${en.length ? `<p class="small muted">${esc(t('Perigos mais relatados (90 dias):'))} ${en.map(([e, n]) => esc(`${t(HZ_EN[e] || e)} ${n}`)).join(' · ')}</p>` : ''}
+    ${(data.items || []).length ? data.items.map((h) => hzCard(h, true)).join('') : `<div class="card">${empty('helmet', state.hzTab === 'closed' ? 'Ainda nada resolvido' : 'Nada por resolver', 'Os relatos das obras aparecem aqui.')}</div>`}`;
+  box.querySelectorAll('[data-hz]').forEach((b) => b.onclick = () => hazardOpen(b.dataset.hz, loadHazards));
 }
 
 // ============================================================================ Alojamento (v40)
