@@ -2366,3 +2366,28 @@ ul.ct-miss li { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; p
 .mc-person .btn.wide { margin-top: 8px; }
 .mt-tabs { overflow-x: auto; scrollbar-width: none; }
 @media (max-width: 480px) { .mt-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; overflow: visible; } .mt-tabs button { padding-left: 6px; padding-right: 6px; } }
+
+/* Orçamento feito noutra plataforma (v87) */
+.orc-how { display: grid; gap: 8px; margin: 8px 0; }
+.orc-how-o { display: flex; gap: 10px; align-items: flex-start; padding: 12px; border: var(--bw) solid var(--line); border-radius: 12px; cursor: pointer; }
+.orc-how-o:has(input:checked) { border-color: var(--brand-2); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-2) 22%, transparent); }
+.orc-how-o input { margin-top: 3px; }
+.orc-how-o span { display: grid; gap: 2px; }
+.orc-how-o small { color: var(--muted); }
+.orc-ext { display: inline-flex; gap: 4px; align-items: center; color: var(--brand-2); font-weight: 600; }
+.orc-ext svg { width: 14px; height: 14px; }
+.orc-files { display: grid; gap: 6px; margin: 0 0 10px; }
+.orc-files li { display: flex; gap: 8px; align-items: center; }
+.orc-files li.off { opacity: .55; }
+.orc-files li.off b { text-decoration: line-through; }
+.orc-file { display: flex; gap: 8px; align-items: center; flex: 1; min-width: 0; text-align: left; font: inherit; color: inherit; background: none; border: var(--bw) solid var(--line); border-radius: 10px; padding: 10px; cursor: pointer; }
+.orc-file:hover { border-color: var(--brand-2); }
+.orc-file b { display: block; overflow-wrap: anywhere; }
+.orc-file small { color: var(--muted); }
+.orc-tabs { margin: 8px 0 12px; }
+.orc-year { display: flex; align-items: center; justify-content: space-between; margin: 0 0 8px; }
+.orc-bar { display: grid; grid-template-columns: minmax(90px, 34%) 1fr auto; gap: 10px; align-items: center; padding: 4px 0; }
+.orc-bar i { height: 10px; border-radius: 6px; background: color-mix(in srgb, var(--line) 70%, transparent); overflow: hidden; }
+.orc-bar u { display: block; height: 100%; background: var(--bad, #dc2626); border-radius: 6px; }
+.orc-deal .status-hero { margin: 8px 0; }
+.ok-t { color: var(--ok, #16a34a); }
