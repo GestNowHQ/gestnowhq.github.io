@@ -5954,4 +5954,6 @@
 "em falta ou fora de validade":"missing or expired",
 "Não podes escrever horas neste dia":"You cannot write hours on this day",
 "Entregar o documento":"Hand in the document",
-"Não podes registar horas neste dia: {x}. Entrega o documento em Eu › Os meus documentos ou fala com o escritório.":"You cannot record hours on this day: {x}. Hand in the document in Me › My documents or talk to the office."}
+"Não podes registar horas neste dia: {x}. Entrega o documento em Eu › Os meus documentos ou fala com o escritório.":"You cannot record hours on this day: {x}. Hand in the document in Me › My documents or talk to the office.",
+"Relatado por ti": "Reported by you",
+"Perigo grave": "Serious hazard"}
