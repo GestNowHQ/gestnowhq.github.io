@@ -5943,4 +5943,11 @@
 "Sem rede e o telemóvel não deixou guardar o relato. Tenta outra vez quando tiveres rede.":"Fără rețea și telefonul nu a putut salva raportarea. Încearcă din nou când ai rețea.",
 "O telemóvel não deixou guardar a fotografia: o relato vai sem ela.":"Telefonul nu a putut salva fotografia: raportarea pleacă fără ea.",
 "Sem rede: este ecrã precisa de rede. Podes picar, ver o material, as reuniões e relatar perigos.":"Fără rețea: acest ecran are nevoie de rețea. Poți ponta, vedea materialul, ședințele și raporta pericole.",
-"Sem rede: ficou guardado e vai quando houver rede.":"Fără rețea: e salvat și pleacă când apare rețeaua."}
+"Sem rede: ficou guardado e vai quando houver rede.":"Fără rețea: e salvat și pleacă când apare rețeaua.",
+"Ver mapa":"Vezi harta",
+"Ver satélite":"Vezi satelit",
+"Procurar morada ou localidade":"Caută adresa sau localitatea",
+"Mapa aberto na localidade da obra: aproxima até veres a fábrica.":"Harta e deschisă pe localitatea șantierului: mărește până vezi fabrica.",
+"Mapa aberto na morada da obra.":"Harta e deschisă la adresa șantierului.",
+"Não encontrei essa morada. Escreve a localidade ou o código postal.":"Nu am găsit adresa. Scrie localitatea sau codul poștal.",
+"Mapa: © OpenStreetMap, imagens de satélite © Esri. Os cantos ficam guardados com a obra; a posição dos telemóveis só se grava em cada picagem.":"Hartă: © OpenStreetMap, imagini satelit © Esri. Colțurile se păstrează cu șantierul; poziția telefoanelor se salvează doar la fiecare pontaj."}

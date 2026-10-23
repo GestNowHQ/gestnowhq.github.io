@@ -1080,7 +1080,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '89';
+const APP_VERSION = '90';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['reunioes', 'emergencia', 'lmra', 'seguranca'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -12536,6 +12536,39 @@ function areaSize(poly) {
   for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { s += pts[j][0] * pts[i][1] - pts[i][0] * pts[j][1]; per += Math.hypot(pts[i][0] - pts[j][0], pts[i][1] - pts[j][1]); }
   return { ha: Math.abs(s) / 2 / 10000, km: per / 1000 };
 }
+// v90: find an address on the map (OpenStreetMap Nominatim, 1 request at a time). Tries the full address, then its
+// shorter parts (postcode + town), then the site name; the first hit is kept on this phone per site.
+function geoTries(address, title) {
+  const parts = String(address || '').split(',').map((x) => x.trim()).filter(Boolean);
+  const out = [];
+  if (parts.length) out.push(parts.join(', '));
+  if (parts.length > 2) out.push(parts.slice(-2).join(', '));
+  const town = parts.find((x) => /\d{4,5}(-\d{3})?\s+\S/.test(x));
+  if (town) out.push(town.replace(/^.*?(\d{4,5}(-\d{3})?\s+)/, '$1'));
+  if (parts.length > 1) out.push(parts[parts.length - 2]);
+  if (title) out.push(title);
+  return [...new Set(out)].filter((x) => x.length >= 3).slice(0, 5);
+}
+async function geoFind(tries, key) {
+  if (key) { const c = load(key, null); if (c && c.lat != null) return c; }
+  for (let i = 0; i < tries.length; i++) {
+    const q = String(tries[i] || '').trim(); if (q.length < 3) continue;
+    try {
+      const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 8000);
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&accept-language=pt&q=${encodeURIComponent(q)}`, { signal: ctl.signal, referrerPolicy: 'origin' });
+      clearTimeout(tm);
+      if (res.ok) {
+        const j = await res.json();
+        if (j && j[0] && isFinite(+j[0].lat)) {
+          const r = { lat: +j[0].lat, lng: +j[0].lon, approx: i > 0 || /^(city|town|village|municipality|administrative|postcode|county|state)$/.test(j[0].addresstype || j[0].type || '') };
+          if (key) store(key, r); return r;
+        }
+      }
+    } catch (_) { return null; }   // no network: stop asking
+    await new Promise((ok) => setTimeout(ok, 1100));   // the map service allows one question per second
+  }
+  return null;
+}
 async function viewArea() {
   if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canSiteDetails() && !can('ponto.picar') && !canArea()) return viewClock();   // code guard as well as the database's
@@ -12549,19 +12582,28 @@ async function viewArea() {
   const edit = a.can_edit;
   box.innerHTML = `<div class="card ar-card"><p class="ar-site"><b data-nt>${esc(a.code)} · ${esc(a.title)}</b></p>
       ${edit ? '<p class="small muted">Toca no mapa em cada canto da vedação da fábrica, pela ordem, à volta. Arrasta um canto para o acertar. São precisos pelo menos 3.</p>' : ''}
-      <div class="ar-map" role="application" aria-label="Mapa da área da fábrica"><div id="amap" data-nt></div></div>
+      ${edit && !(poly.length >= 3) ? `<input id="arq" class="ar-q" type="search" enterkeyhint="search" autocomplete="off" placeholder="${esc(t('Procurar morada ou localidade'))}" value="${esc(a.address || '')}">` : ''}
+      <div class="ar-map" role="application" aria-label="Mapa da área da fábrica"><div id="amap" data-nt></div><button type="button" class="btn small ar-lyr" id="arlyr"></button></div>
+      <p class="small muted" id="arwhere"></p>
       <p class="small" id="arsize"></p>
       ${edit ? `<div class="ar-btns"><button class="btn ghost small" id="arundo">Desfazer</button><button class="btn ghost small" id="arclear">Apagar tudo</button>
         <button class="btn ghost small" id="arme">${ic('pin')}Centrar onde estou</button><button class="btn ghost small" id="arhere">+ Canto onde estou</button></div>
       <h2>Regra do GPS nesta obra</h2>
       <div class="ar-rules" role="radiogroup">${[['company', 'Como a empresa', `Agora: ${ruleName(a.company_rule)}. Muda em Administração › Acessos e regras.`], ...RULES].map(([k, t, s]) => `<label class="ar-rule"><input type="radio" name="arr" value="${k}" ${(a.own ? a.rule : 'company') === k ? 'checked' : ''}><span><b>${esc(t)}</b><small>${esc(s)}</small></span></label>`).join('')}</div>
       <button class="btn big wide" id="arsave">${ic('ok')}Guardar a área</button>` : `<p class="small muted">Regra: <b>${esc(ruleName(a.rule))}</b>. Só quem gere as obras muda a área.</p>`}
-      <p class="small muted">Mapa: © OpenStreetMap. Os cantos ficam guardados com a obra; a posição dos telemóveis só se grava em cada picagem.</p></div>`;
+      <p class="small muted">Mapa: © OpenStreetMap, imagens de satélite © Esri. Os cantos ficam guardados com a obra; a posição dos telemóveis só se grava em cada picagem.</p></div>`;
   let L;
   try { L = await loadLeaflet(); } catch (_) { app.querySelector('.ar-map').innerHTML = `<p class="small">${esc('Não consegui abrir o mapa. Verifica a rede e volta a abrir.')}</p>`; return; }
   if (!$('#amap')) return;
   const map = L.map('amap', { zoomControl: true, attributionControl: true });
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+  // v90: satellite by default (the fence is seen from above), street map one tap away
+  const sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Imagens © Esri, Maxar' });
+  const street = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' });
+  let layer = state.arLayer === 'street' ? street : sat; layer.addTo(map);
+  const lyrBtn = $('#arlyr');
+  const lyrLabel = () => { lyrBtn.innerHTML = `${ic('map')}${esc(t(layer === sat ? 'Ver mapa' : 'Ver satélite'))}`; };
+  lyrBtn.onclick = () => { map.removeLayer(layer); layer = layer === sat ? street : sat; layer.addTo(map); state.arLayer = layer === sat ? 'sat' : 'street'; lyrLabel(); };
+  lyrLabel();
   const shape = L.polygon([], { color: '#4f46e5', weight: 3, fillOpacity: 0.15 }).addTo(map);
   let pins = []; let me = null;
   const pinIcon = (i) => L.divIcon({ className: 'ar-pin', html: `<span>${i + 1}</span>`, iconSize: [28, 28], iconAnchor: [14, 14] });
@@ -12576,11 +12618,21 @@ async function viewArea() {
     size();
   };
   const size = () => { const s = areaSize(poly); $('#arsize').textContent = s ? `${poly.length} cantos · ${s.ha.toLocaleString(LOC, { maximumFractionDigits: 1 })} ha · ${s.km.toLocaleString(LOC, { maximumFractionDigits: 2 })} km de vedação` : (poly.length ? `Faltam ${3 - poly.length} canto(s).` : 'Ainda sem área desenhada.'); };
+  // v90: the map opens on the factory, never on the whole country: the area, else the site's point, else its address
+  // (found on the map once and kept on this phone), else where the phone is, else the country.
   if (poly.length >= 3) map.fitBounds(L.latLngBounds(poly), { padding: [24, 24] });
-  else if (a.lat != null) map.setView([+a.lat, +a.lng], 15);
-  else if (Gps.fix) map.setView([Gps.fix.lat, Gps.fix.lng], 16);
-  else map.setView([39.6, -8.2], 6);
+  else if (a.lat != null) map.setView([+a.lat, +a.lng], 16);
+  else map.setView(Gps.fix ? [Gps.fix.lat, Gps.fix.lng] : [39.6, -8.2], Gps.fix ? 16 : 6);
   draw();
+  const goTo = (r, z) => { if ($('#amap')) map.setView([r.lat, r.lng], z || 16); };
+  const search = $('#arq');
+  if (search) search.onkeydown = async (e) => { if (e.key !== 'Enter') return; e.preventDefault();
+    const r = await geoFind([search.value]); if (r) goTo(r, 16); else toast('Não encontrei essa morada. Escreve a localidade ou o código postal.'); };
+  if (poly.length < 3 && a.lat == null) {
+    const r = await geoFind(geoTries(a.address, a.title), `gn.geo.${id}`);
+    if (r) { goTo(r, r.approx ? 14 : 16); $('#arwhere').textContent = t(r.approx ? 'Mapa aberto na localidade da obra: aproxima até veres a fábrica.' : 'Mapa aberto na morada da obra.'); }
+    else if (!Gps.fix && navigator.geolocation) { const f = await gpsNow(); if (f) goTo(f, 17); }
+  }
   if (!edit) return;
   map.on('click', (e) => { poly.push([e.latlng.lat, e.latlng.lng]); draw(); });
   $('#arundo').onclick = () => { poly.pop(); draw(); };

@@ -5943,4 +5943,11 @@
 "Sem rede e o telemóvel não deixou guardar o relato. Tenta outra vez quando tiveres rede.":"Sans réseau et le téléphone n'a pas pu garder le signalement. Réessaie quand tu auras du réseau.",
 "O telemóvel não deixou guardar a fotografia: o relato vai sem ela.":"Le téléphone n'a pas pu garder la photo : le signalement part sans elle.",
 "Sem rede: este ecrã precisa de rede. Podes picar, ver o material, as reuniões e relatar perigos.":"Sans réseau : cet écran a besoin du réseau. Tu peux pointer, voir le matériel, les réunions et signaler des dangers.",
-"Sem rede: ficou guardado e vai quando houver rede.":"Sans réseau : c'est gardé et partira dès qu'il y aura du réseau."}
+"Sem rede: ficou guardado e vai quando houver rede.":"Sans réseau : c'est gardé et partira dès qu'il y aura du réseau.",
+"Ver mapa":"Voir le plan",
+"Ver satélite":"Voir satellite",
+"Procurar morada ou localidade":"Chercher une adresse ou une ville",
+"Mapa aberto na localidade da obra: aproxima até veres a fábrica.":"Carte ouverte sur la ville du chantier : zoome jusqu'à voir l'usine.",
+"Mapa aberto na morada da obra.":"Carte ouverte à l'adresse du chantier.",
+"Não encontrei essa morada. Escreve a localidade ou o código postal.":"Adresse introuvable. Écris la ville ou le code postal.",
+"Mapa: © OpenStreetMap, imagens de satélite © Esri. Os cantos ficam guardados com a obra; a posição dos telemóveis só se grava em cada picagem.":"Carte : © OpenStreetMap, images satellite © Esri. Les coins sont gardés avec le chantier ; la position des téléphones n'est enregistrée qu'à chaque pointage."}
