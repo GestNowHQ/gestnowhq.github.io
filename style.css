@@ -2391,3 +2391,25 @@ ul.ct-miss li { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; p
 .orc-bar u { display: block; height: 100%; background: var(--bad, #dc2626); border-radius: 6px; }
 .orc-deal .status-hero { margin: 8px 0; }
 .ok-t { color: var(--ok, #16a34a); }
+
+/* Relatos de perigo (v88, sql/112): the red button, the report sheet, the cards */
+.me-do.hz-me { background: var(--bad-fill); color: #fff; border-color: transparent; cursor: pointer; box-shadow: var(--sh-1); }
+.me-do.hz-me small, .me-do.hz-me > .i { color: rgba(255, 255, 255, .88); }
+.me-do.hz-me .me-ic { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: rgba(255, 255, 255, .18); flex: 0 0 auto; }
+.me-do.hz-me .me-ic .i { width: 22px; height: 22px; color: #fff; }
+.btn.hz-go { background: var(--bad-fill); color: #fff; border-color: var(--bad-fill); }
+.hz-dlg .chips.hz-kinds { display: grid; grid-template-columns: 1fr; gap: 8px; }
+.hz-dlg .chips.reasons label.hz-k { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 14px; }
+.hz-dlg .chips.reasons label.hz-k small { font-weight: 500; font-size: var(--t-xs); opacity: .85; }
+.hz-dlg .chips.reasons .hz-sif:has(input:checked) { background: var(--bad-fill); border-color: var(--bad-fill); color: #fff; }
+.hz-photo { display: flex; justify-content: center; gap: 8px; margin: 4px 0 12px; }
+.hz-card { display: block; width: 100%; text-align: left; font: inherit; color: var(--ink); cursor: pointer; margin: 0 0 10px; }
+.hz-card.sif { box-shadow: inset 6px 0 0 var(--bad-fill), var(--sh-1); }
+.hz-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.hz-txt { margin: 6px 0; overflow-wrap: anywhere; }
+.hz-ans { display: flex; gap: 6px; margin: 8px 0 0; padding: 8px 10px; border-radius: var(--r-md, 10px); background: var(--ok-bg); color: var(--ok); }
+.hz-ans span { color: var(--ink); }
+.hz-imgs { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.hz-imgs img { width: 120px; height: 120px; object-fit: cover; border-radius: 10px; background: var(--surface-2); cursor: zoom-in; }
+.hz-closed p { margin: 4px 0; }
+.btn.big.hz-go { margin-bottom: 14px; }
