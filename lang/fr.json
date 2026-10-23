@@ -5954,4 +5954,6 @@
 "em falta ou fora de validade":"manquant ou expiré",
 "Não podes escrever horas neste dia":"Tu ne peux pas écrire d'heures ce jour-là",
 "Entregar o documento":"Remettre le document",
-"Não podes registar horas neste dia: {x}. Entrega o documento em Eu › Os meus documentos ou fala com o escritório.":"Tu ne peux pas enregistrer d'heures ce jour-là : {x}. Remets le document dans Moi › Mes documents ou parle au bureau."}
+"Não podes registar horas neste dia: {x}. Entrega o documento em Eu › Os meus documentos ou fala com o escritório.":"Tu ne peux pas enregistrer d'heures ce jour-là : {x}. Remets le document dans Moi › Mes documents ou parle au bureau.",
+"Relatado por ti": "Signalé par toi",
+"Perigo grave": "Danger grave"}

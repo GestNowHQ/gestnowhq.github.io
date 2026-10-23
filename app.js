@@ -1086,7 +1086,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '91';
+const APP_VERSION = '92';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['reunioes', 'emergencia', 'lmra', 'seguranca'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -11286,7 +11286,7 @@ async function hazardOpen(id, after) {
   const [k, lb] = HZ_ST[h.status] || ['', h.status];
   d.innerHTML = `<div><h2><span>${esc(hzKind(h.kind))}</span> <span data-nt>${esc(hzRef(h.ref))}</span></h2>
     <p>${chip(k, lb)} ${h.sif ? chip('bad', 'Podia ter morto ou ferido gravemente', 'warn') : ''}</p>
-    <p class="small muted" data-nt>${esc(h.site)} · ${esc(h.site_title || '')} · ${esc(fmtTime(h.at))}${h.can_manage !== undefined && h.by !== undefined ? ' · ' + esc(h.by || t('Anónimo')) : ''}</p>
+    <p class="small muted" data-nt>${esc(h.site)} · ${esc(h.site_title || '')} · ${esc(fmtTime(h.at))}${' · ' + esc(h.by || (h.anonymous ? t('Anónimo') : t('Relatado por ti')))}</p>
     <p class="hz-txt">${esc(h.text)}</p>
     ${(h.energies || []).length ? `<p>${h.energies.map((e) => chip('reg', HZ_EN[e] || e)).join(' ')}</p>` : ''}
     <div class="hz-imgs">${(h.photos || []).map((p) => `<img alt="${esc(t('Fotografia do relato'))}" data-path="${esc(p)}">`).join('')}</div>
@@ -13141,6 +13141,8 @@ function noticeRoute(x) {
   if (/^(stop_work|red_card|team_risk)/.test(k)) return view('seguranca');
   if (/^(open_shift|no_show|locked_day)/.test(k)) return viewOpen('equipa') ? view('equipa') : view('horas');
   if (/^onboarding/.test(k)) return view('acolhimento');
+  if (/^(hazard_sif|incident_)/.test(k)) return view('relatos');
+  if (k === 'hazard_answer') return mine('relatos');
   return () => false;
 }
 async function showNotices() {
@@ -13161,8 +13163,14 @@ async function showNotices() {
   const items = [];
   for (const x of (data && data.items) || []) {
     const g = items.find((y) => y.group && y.group === x.group);
-    if (g) { g.ids.push(x.id); g.n += 1; if (!x.read) g.read = false; } else items.push({ ...x, ids: [x.id], n: 1 });
+    // v92: one event sent to several roles (QSA, encarregado, administração) arrives as several rows at the same instant:
+    // that is one time, not «2 vezes»
+    if (g) { g.ids.push(x.id); if (!g.ats.includes(x.at)) { g.ats.push(x.at); g.n += 1; } if (!x.read) g.read = false; }
+    else items.push({ ...x, ids: [x.id], ats: [x.at], n: 1 });
   }
+  // v92: what can hurt someone comes first: urgent, then a report that could have been serious, then the rest by date
+  const rank = (x) => (x.severity === 'critical' ? 0 : x.kind === 'hazard_sif' ? 1 : 2);
+  items.sort((a, b) => rank(a) - rank(b) || String(b.at).localeCompare(String(a.at)));
   if (!items.length) { el.innerHTML = empty('box', 'Sem avisos', 'Quando houver algo para ti (um documento a caducar, uma semana para confirmar), aparece aqui.'); return; }
   const all = d.querySelector('#ntall');
   if (can('contas.gerir')) el.insertAdjacentHTML('beforebegin', '<p class="small muted"><button class="linkbtn" id="ntjobs">Ver as tarefas automáticas</button> (o que a app faz sozinha, todas as manhãs)</p>');
@@ -13176,8 +13184,8 @@ async function showNotices() {
     const more = !showRead && nRead ? `<p class="small muted nt-more"><button class="linkbtn" id="ntread">Ver os já lidos (${nRead})</button></p>` : '';
     el.innerHTML = (list.length ? `<ul class="nt-list">${list.map(([x, i]) => { const [cls, lab] = NOTICE_SEV[x.severity] || NOTICE_SEV.low;
       const sub = [x.person, x.site, x.n > 1 ? t('{x} vezes', x.n) : '', ago(x.at)].filter(Boolean).map(esc).join(' · ');
-      return `<li><button class="nt${x.read ? '' : ' unread'} sev-${esc(x.severity || 'low')}" data-i="${i}"><span class="nt-dot" aria-hidden="true"></span>
-        <span class="grow"><b>${esc(x.title)}</b><small>${sub}</small></span>${x.severity === 'critical' || x.severity === 'high' ? chip(cls, lab) : ''}</button></li>`; }).join('')}</ul>`
+      return `<li><button class="nt${x.read ? '' : ' unread'} sev-${esc(x.kind === 'hazard_sif' ? 'critical' : x.severity || 'low')}" data-i="${i}"><span class="nt-dot" aria-hidden="true"></span>
+        <span class="grow"><b>${esc(x.title)}</b><small>${sub}</small></span>${x.kind === 'hazard_sif' && x.severity !== 'critical' ? chip('bad', 'Perigo grave', 'warn') : x.severity === 'critical' || x.severity === 'high' ? chip(cls, lab) : ''}</button></li>`; }).join('')}</ul>`
       : empty('box', 'Tudo lido', 'Não tens avisos por ler. Os novos aparecem aqui.')) + more;
     const rb = el.querySelector('#ntread'); if (rb) rb.onclick = () => { showRead = true; render(); };
     el.querySelectorAll('[data-i]').forEach((b) => b.onclick = async () => {
