@@ -1086,7 +1086,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '94';
+const APP_VERSION = '95';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['reunioes', 'emergencia', 'lmra', 'seguranca'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -2197,22 +2197,29 @@ async function loadTeam() {
   if (!site) { el.innerHTML = `<div class="card">${empty('box', 'Sem obras abertas', 'Quando tiveres uma obra, a tua equipa aparece aqui.')}</div>`; $('#tkpis').innerHTML = ''; return; }
   const seq = ++teamSeq; const tz = siteTz(site.id);
   const dayStart = zonedToUtc(localDay(new Date().toISOString(), tz) + 'T00:00', tz);
-  const [{ data: team, error }, room, refused] = await Promise.all([sb.rpc('mini_team_today', { p_project: site.id }), sb.rpc('mini_control_room'),
+  // v95: a company on «folha de horas» has no taps: the team shows the hours each person wrote today
+  if (!state.timeMode) { const tm = await sb.rpc('mini_time_mode').then((r) => r, () => ({})); if (tm && tm.data) state.timeMode = tm.data.mode; }
+  const sheet = state.timeMode === 'sheet'; const todayL = localDay(new Date().toISOString(), tz);
+  const pic = document.getElementById('tpic'); if (pic) pic.hidden = sheet;   // no big PICAR button where nobody taps
+  const [{ data: team, error }, room, refused, wrote] = await Promise.all([sb.rpc('mini_team_today', { p_project: site.id }), sb.rpc('mini_control_room'),
     core().from('time_events').select('collaborator_id, event_time, reasons').eq('project_id', site.id).eq('status', 'rejected')
-      .gte('event_time', dayStart || new Date(Date.now() - 86400000).toISOString()).order('event_time', { ascending: false }).limit(50)]);
+      .gte('event_time', dayStart || new Date(Date.now() - 86400000).toISOString()).order('event_time', { ascending: false }).limit(50),
+    sheet ? sb.rpc('mini_hours', { p_project: site.id, p_from: todayL, p_to: todayL }).then((r) => r, () => ({})) : Promise.resolve({})]);
   if (seq !== teamSeq || !el.isConnected) return;
+  const wmin = {}; const wst = {};
+  for (const r of (wrote && wrote.data) || []) { wmin[r.collaborator_id] = (wmin[r.collaborator_id] || 0) + (r.worked_minutes || 0); wst[r.collaborator_id] = r.status; }
   if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
   const s = ((room.data && room.data.sites) || []).find((x) => x.id === site.id) || {};
   const tried = {};   // today's refused taps per person: the newest one says why
   for (const e of (refused && refused.data) || []) if (e.collaborator_id && !tried[e.collaborator_id]) tried[e.collaborator_id] = e;
-  const rows = team.map((p) => ({ ...p, st: teamState(p), tried: tried[p.id] }));
+  const rows = team.map((p) => ({ ...p, st: sheet ? (p.blocked ? 'blocked' : wmin[p.id] > 0 ? 'in' : 'absent') : teamState(p), tried: tried[p.id], wrote: wmin[p.id] || 0, wst: wst[p.id] }));
   const c = (k) => rows.filter((p) => p.st === k).length;
   const inside = c('in'); const missing = c('absent'); const blocked = c('blocked');
   const tval = $('#tval'); if (tval) tval.querySelector('span').textContent = s.to_validate ? `Validar a semana · ${s.to_validate} dia(s)` : 'Validar a semana';
   $('#tkpis').innerHTML = `<div class="enc-counts">
-    <button class="enc-c ok" data-f="in"><b class="tnum">${inside}<small>/${rows.length}</small></b><span>dentro agora</span></button>
+    <button class="enc-c ok" data-f="in"><b class="tnum">${inside}<small>/${rows.length}</small></b><span>${sheet ? t_('com horas escritas') : 'dentro agora'}</span></button>
     <button class="enc-c" data-f="all"><b class="tnum">${rows.length}</b><span>esperados hoje</span></button>
-    <button class="enc-c ${missing ? 'warn' : ''}" data-f="absent"><b class="tnum">${missing}</b><span>em falta</span></button>
+    <button class="enc-c ${missing ? 'warn' : ''}" data-f="absent"><b class="tnum">${missing}</b><span>${sheet ? t_('sem horas escritas') : 'em falta'}</span></button>
     <button class="enc-c ${blocked ? 'bad' : ''}" data-f="blocked"><b class="tnum">${blocked}</b><span>bloqueados</span></button></div>`;
   const alerts = [];
   if (s.to_validate) alerts.push(`<button class="enc-al info" data-go="horas">${ic('clock')}<span><b>${s.to_validate} dia(s) por validar</b>Valida em Horas: depois seguem para o Secretariado.</span>${ic('go')}</button>`);
@@ -2221,27 +2228,33 @@ async function loadTeam() {
   $('#talert').querySelectorAll('[data-go]').forEach((b) => b.onclick = () => go(b.dataset.go));
   const f = state.teamFilter;
   const n = { all: rows.length, in: inside, absent: missing, blocked, left: c('left') + c('pause') };
-  $('#tfilter').innerHTML = TEAM_FILTERS.map(([k, t]) => `<button class="enc-chip ${f === k ? 'on' : ''}" data-f="${k}" aria-pressed="${f === k}">${esc(t)} <b>${n[k]}</b></button>`).join('');
+  const FL = sheet ? TEAM_FILTERS.filter(([k]) => k !== 'left').map(([k, l]) => [k, k === 'in' ? 'Com horas' : k === 'absent' ? 'Sem horas' : l]) : TEAM_FILTERS;
+  $('#tfilter').innerHTML = FL.map(([k, t]) => `<button class="enc-chip ${f === k ? 'on' : ''}" data-f="${k}" aria-pressed="${f === k}">${esc(t)} <b>${n[k]}</b></button>`).join('');
   app.querySelectorAll('#tfilter [data-f], #tkpis [data-f]').forEach((b) => b.onclick = () => { state.teamFilter = b.dataset.f; loadTeam(); });
   if (!rows.length) { el.innerHTML = `<div class="card">${empty('box', 'Ninguém atribuído a esta obra', 'O escritório atribui as pessoas à obra em Pessoas.')}</div>`; loadPending('#treq', site.id); return; }
   const ORDER = { blocked: 0, absent: 1, in: 2, pause: 3, left: 4 };
   const shown = rows.filter((p) => f === 'all' || p.st === f || (f === 'left' && p.st === 'pause')).sort((a, b) => ORDER[a.st] - ORDER[b.st] || a.name.localeCompare(b.name, 'pt'));
   const me = state.me && state.me.collaborator_id;
-  const ST = {
+  const WST = { registered: 'por validar', supervisor_validated: 'validado', hr_approved: 'aprovado pelo RH', closed: 'fechado' };
+  const ST = sheet ? {
+    blocked: () => [chip('anom', 'bloqueado', 'x'), 'faltam documentos'],
+    absent: () => [chip('warn', t_('sem horas escritas'), 'clock'), ''],
+    in: (p) => [chip('ok', t_('horas escritas'), 'ok'), `${fmtMin(p.wrote)}${p.wst && WST[p.wst] ? ' · ' + t_(WST[p.wst]) : ''}`],
+  } : {
     blocked: (p) => [chip('anom', 'bloqueado', 'x'), p.tried ? `tentou às ${fmtHour(p.tried.event_time, tz)}` : 'faltam documentos'],
     absent: () => [chip('warn', 'em falta', 'clock'), 'ainda não picou'],
     in: (p) => [chip('ok', 'dentro', 'ok'), p.blocked ? 'atenção: documentos em falta' : ''],
     pause: (p) => [chip('info', 'em pausa'), `saiu às ${fmtHour(p.last_at, tz)}`],
     left: (p) => [chip('', 'saiu'), `entrou às ${fmtHour(p.first_in, tz)}`],
   };
-  const time = (p) => p.st === 'in' ? [fmtHour(p.first_in, tz), 'entrou'] : p.st === 'pause' || p.st === 'left' ? [fmtHour(p.last_at, tz), 'saiu'] : p.tried ? [fmtHour(p.tried.event_time, tz), 'recusado'] : ['–', ''];
+  const time = (p) => sheet ? (p.wrote ? [fmtMin(p.wrote), t_('escritas')] : ['–', '']) : p.st === 'in' ? [fmtHour(p.first_in, tz), 'entrou'] : p.st === 'pause' || p.st === 'left' ? [fmtHour(p.last_at, tz), 'saiu'] : p.tried ? [fmtHour(p.tried.event_time, tz), 'recusado'] : ['–', ''];
   el.innerHTML = shown.length ? `<div class="enc-list">${shown.map((p) => { const [ch, sub] = ST[p.st](p); const [t, tl] = time(p);
     return `<div class="enc-p ${p.st}">
       <button class="enc-p-main" data-id="${esc(p.id)}" aria-label="Abrir a ficha de ${esc(p.name)}"><span class="tm-av">${avatar(p.name)}<i></i></span>
         <span class="grow"><b>${esc(p.name)}</b><small>${ch}${sub ? ` <span>${esc(sub)}</span>` : ''}</small></span></button>
       <span class="enc-p-t">${tl ? `<b class="tnum">${esc(t)}</b><small>${esc(tl)}</small>` : ''}</span>
       <span class="enc-p-a">${p.blocked || p.tried ? `<button class="btn small ${p.st === 'blocked' ? 'danger' : 'ghost'}" data-why="${esc(p.id)}">${ic('warn')}Porquê?</button>` : ''}
-        ${p.id !== me && (p.st === 'absent' || p.st === 'pause') ? `<button class="btn small ghost" data-miss="${esc(p.id)}">${ic('clock')}Picagem esquecida</button>` : ''}</span></div>`; }).join('')}</div>`
+        ${!sheet && p.id !== me && (p.st === 'absent' || p.st === 'pause') ? `<button class="btn small ghost" data-miss="${esc(p.id)}">${ic('clock')}Picagem esquecida</button>` : ''}</span></div>`; }).join('')}</div>`
     : `<div class="card">${empty('check', 'Ninguém nesta lista', 'Escolhe «Todos» para ver a equipa toda.')}</div>`;
   el.querySelectorAll('[data-id]').forEach((b) => b.onclick = () => { state.worker = b.dataset.id; go('ficha'); });
   el.querySelectorAll('[data-why]').forEach((b) => b.onclick = () => whyBlocked(rows.find((p) => p.id === b.dataset.why), tz));
@@ -4868,7 +4881,7 @@ async function loadHours(from, to) {
       <div class="per">${periodsHtml(list) || '<span class="muted">sem picagens</span>'}</div>
       ${list.length ? dayline(list.join(' · '), r.shift_date === today ? { now: (nowP.hour % 24) * 60 + nowP.minute } : {}) : ''}
       ${r.overtime_minutes || r.special_day_minutes || r.has_manual || returned[r.work_day_id] || declared[r.work_day_id] ? `<div class="tags">
-        ${declared[r.work_day_id] ? chip('warn', 'escrito pelo trabalhador: confirma as horas', 'doc') : ''}
+        ${declared[r.work_day_id] ? (r.status === 'registered' ? chip('warn', 'escrito pelo trabalhador: confirma as horas', 'doc') : chip('', 'escrito pelo trabalhador', 'doc')) : ''}
         ${r.overtime_minutes ? chip(r.overtime_approved === false ? '' : 'info', `${fmtMin(r.overtime_minutes)} extra${r.overtime_approved === false ? ' (recusadas)' : ''}`) : ''}
         ${r.special_day_minutes ? chip(r.overtime_approved ? 'info' : r.overtime_approved === false ? '' : 'warn', `${fmtMin(r.special_day_minutes)} em descanso ou feriado${r.overtime_approved ? ' (aprovadas)' : r.overtime_approved === false ? ' (não aprovadas)' : ': por aprovar'}`) : ''}
         ${r.has_manual ? chip('', 'tem picagem à mão') : ''}
@@ -12290,6 +12303,7 @@ async function loadProgressDay() {
   const site = currentSite(); const G = state.prog; const day = G.day || isoDay(new Date());
   if (!site) { box.innerHTML = `<div class="card">${empty('box', 'Sem obras abertas', 'Quando tiveres uma obra, as folhas de produção aparecem aqui.')}</div>`; return; }
   const seq = ++pgSeq;
+  if (!state.timeMode) { const tm = await sb.rpc('mini_time_mode').then((r) => r, () => ({})); if (tm && tm.data) state.timeMode = tm.data.mode; }   // v95: «(folha de horas)»
   const { data: d, error } = await sb.rpc('mini_progress_day', { p_site: site.id, p_day: day });
   if (seq !== pgSeq || !box.isConnected) return;
   if (error) { box.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
@@ -12307,7 +12321,7 @@ async function loadProgressDay() {
     <div class="fl-sum">
       <div class="fl-n ${missing.length ? 'warn' : 'ok'}"><b>${sent.length}<small>/${d.team.filter((p) => p.tapped || p.sent).length || d.team.length}</small></b><span>enviaram a folha</span></div>
       <div class="fl-n"><b>${live.length}</b><span>linha(s)</span></div>
-      <div class="fl-n"><b>${esc(fmtMin(d.worked))}</b><span>horas trabalhadas (picagens)</span></div>
+      <div class="fl-n"><b>${esc(fmtMin(d.worked))}</b><span>${state.timeMode === 'sheet' ? t_('horas trabalhadas (folha de horas)') : t_('horas trabalhadas (picagens)')}</span></div>
       <div class="fl-n ${last ? 'ok' : ''}"><b>${last ? 'v' + last.version : '—'}</b><span>${last ? (last.received_at ? 'recebida pelo gestor' : 'enviada ao gestor') : 'por enviar ao gestor'}</span></div></div>
     ${missing.length ? `<div class="pg-state warn">${ic('warn')}<span><b>Ainda não enviaram (${missing.length})</b><span data-nt>${esc(missing.map((p) => p.name).join(', '))}</span></span></div>` : ''}
     ${last && d.changed_since ? `<div class="pg-state warn">${ic('warn')}<span><b>Mudou depois de enviares a versão ${last.version}</b>Envia outra vez: o gestor recebe a versão corrigida.</span></div>` : ''}
@@ -12419,7 +12433,7 @@ function progressBook(X, s) {
     ['Data de execução', fmtDate(s.day)], ['Nº do projeto (obra)', `${s.site.code} · ${s.site.title}`],
     ['Encarregado (nome / validação)', `${s.supervisor || ''} · ${when}${s.version ? ` (versão ${s.version})` : ''}`],
     ['Chefe de equipa', s.team_leader || ''], ['Executantes', (s.executantes || []).join(', ')],
-    ['Pessoas por equipa', String(s.people)], ['Horas trabalhadas (picagens)', fmtMin(s.worked)],
+    ['Pessoas por equipa', String(s.people)], [state.timeMode === 'sheet' ? 'Horas trabalhadas (folha de horas)' : 'Horas trabalhadas (picagens)', fmtMin(s.worked)],
     ...(s.quantities || []).map((q) => [`Índice de produtividade · ${q.activity}`, `${pgQty(q)}${q.per_man_hour != null ? ` · ${String(q.per_man_hour).replace('.', ',')} ${q.unit || ''} por homem-hora` : ''}`]),
     ['Observações', s.notes || '']];
   for (const [k, v] of head) { xlNote(t.ws, r, `${k}: ${v}`, k === 'Observações' ? {} : { color: { argb: XL.ink } }); r++; }

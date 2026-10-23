@@ -5961,4 +5961,13 @@
 "Os dias aparecem aqui depois de escreveres as horas em Eu › Escrever as horas. Esqueceste um dia? Toca nesse dia.": "Days show up here after you write your hours in Me › Write your hours. Forgot a day? Tap that day.",
 "Horas de hoje escritas": "Today's hours written",
 "À espera do encarregado. Toca para corrigir.": "Waiting for the supervisor. Tap to correct.",
-"{x}: dia validado. Seguiu para o Secretariado.": "{x}: day confirmed. Sent to the Office."}
+"{x}: dia validado. Seguiu para o Secretariado.": "{x}: day confirmed. Sent to the Office.",
+"com horas escritas": "with hours written",
+"sem horas escritas": "no hours written",
+"horas escritas": "hours written",
+"escritas": "written",
+"Com horas": "With hours",
+"aprovado pelo RH": "approved by HR",
+"fechado": "closed",
+"escrito pelo trabalhador": "written by the worker",
+"horas trabalhadas (folha de horas)": "hours worked (timesheet)"}
