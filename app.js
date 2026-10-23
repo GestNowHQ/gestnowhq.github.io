@@ -1086,7 +1086,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '93';
+const APP_VERSION = '94';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['reunioes', 'emergencia', 'lmra', 'seguranca'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -4849,20 +4849,20 @@ async function loadHours(from, to) {
     // hours on a rest day or holiday enter the timesheet (pay and client billing) only if the team leader approves them
     else if (r.special_day_minutes) b = `<button class="btn small" data-ok="${esc(r.work_day_id)}" data-ot="1">Aprovar as ${esc(fmtMin(r.special_day_minutes))}</button>
               <button class="btn ghost small" data-ok="${esc(r.work_day_id)}" data-ot="0">Não aprovar</button>` + fixBtn(r, 'Picagens', 'ghost');
-    else b = `<button class="btn small" data-ok="${esc(r.work_day_id)}">Validar</button>` + fixBtn(r, 'Picagens', 'ghost');
+    else b = `<button class="btn small" data-ok="${esc(r.work_day_id)}" data-who="${esc(r.full_name)}"><span class="okl">${esc(t_('Validar'))} · <b data-nt>${esc(shortName(r.full_name))}</b> · ${esc(fmtMin(r.worked_minutes))}</span></button>` + fixBtn(r, 'Picagens', 'ghost');
     return `<div class="acts noprint">${b}</div>`;
   };
   const n = { todo: 0, anom: 0, ok: 0, open: 0 };
   el.innerHTML = Object.values(byWorker).map((rows) => {
     const tot = rows.reduce((a, r) => ({ w: a.w + r.worked_minutes, o: a.o + r.overtime_minutes }), { w: 0, o: 0 });
-    return `<div class="card pcard"><div class="wk">${avatar(rows[0].full_name)}<div class="grow"><h2 style="margin:0;font-size:18px">${esc(rows[0].full_name)}</h2>
+    return `<div class="card pcard"><div class="wk phead">${avatar(rows[0].full_name)}<div class="grow"><h2 style="margin:0;font-size:18px">${esc(rows[0].full_name)}</h2>
       <div class="sub">${rows[0].employee_number ? 'nº ' + esc(rows[0].employee_number) : ''} <span data-visa="${esc(rows[0].collaborator_id)}"></span></div></div>
       <div class="ptop"><b class="tnum">${esc(fmtMin(tot.w))}</b><span>${tot.o ? esc(fmtMin(tot.o)) + ' extra' : 'na semana'}</span></div></div>
     ${weekStrip(rows, from, tz, today)}
     ${rows.map((r) => {
       const anom = r.anomalies.length; if (onlyOpenToday(r, tz)) n.open++; else if (anom) n.anom++; else if (r.status === 'registered') n.todo++; else n.ok++;
       const list = periodsOf(r, per[r.work_day_id], tz);
-      return `<div class="day"><div class="day-h"><span class="d">${esc(dayLabel(r.shift_date))}</span>
+      return `<div class="day"><div class="day-h"><span class="d">${esc(dayLabel(r.shift_date))}<small class="who" data-nt>${esc(shortName(r.full_name))}</small></span>
         ${anom ? `<span class="chip ${onlyOpenToday(r, tz) ? 'warn' : 'anom'}">${ic(onlyOpenToday(r, tz) ? 'clock' : 'warn')}${esc(r.anomalies.map((a) => anomalyText(a, r.shift_date, tz)).join(', '))}</span>` : DAY_STATUS[r.status] || chip('', r.status)}
         <span class="hrs">${esc(fmtMin(r.worked_minutes))}</span></div>
       <div class="per">${periodsHtml(list) || '<span class="muted">sem picagens</span>'}</div>
@@ -4890,7 +4890,7 @@ async function loadHours(from, to) {
       x.innerHTML = v.state === 'confirmed' ? chip('val', 'confirmou a semana', 'ok') : v.state === 'changed' ? chip('warn', 'mudou depois de confirmar') : v.can_confirm ? chip('', 'semana por confirmar') : ''; }
   }, () => {});
   el.querySelectorAll('button[data-ok]').forEach((b) => b.onclick = () =>
-    validate([b.dataset.ok], b.dataset.ot === undefined ? null : b.dataset.ot === '1'));
+    validate([b.dataset.ok], b.dataset.ot === undefined ? null : b.dataset.ot === '1', b.dataset.who));
   el.querySelectorAll('button[data-fix], button[data-taps]').forEach((b) => b.onclick = () => fixDay(b.dataset.fix || b.dataset.taps, b.dataset.day, b.dataset.name));
   el.querySelectorAll('button[data-out]').forEach((b) => b.onclick = async () => {
     const r = data.find((x) => x.work_day_id === b.dataset.out); if (!r) return;
@@ -4898,10 +4898,12 @@ async function loadHours(from, to) {
   });
   return data;
 }
-async function validate(ids, overtime) {
+// v93: «Teste Trabalhador», «Diogo Henriques»: first and last name, so the person is clear on every line
+const shortName = (n) => { const p = String(n || '').trim().split(/\s+/); return p.length > 2 ? `${p[0]} ${p[p.length - 1]}` : p.join(' '); };
+async function validate(ids, overtime, who) {
   const { data, error } = await sb.rpc('advance_work_days', { p_ids: ids, p_to: 'supervisor_validated', p_overtime_approved: overtime });
   if (error) return toast(friendly(error));
-  toast(`${data} dia(s) validado(s). Seguiram para o Secretariado.`); viewHours(); encBadges(true);
+  toast(who ? t_('{x}: dia validado. Seguiu para o Secretariado.').replace('{x}', who) : `${data} dia(s) validado(s). Seguiram para o Secretariado.`, 'ok'); viewHours(); encBadges(true);
 }
 // The taps of the day (and the days around it), each one with "Anular"; and the form pointed at the missing one (M8, A2).
 async function fixDay(collabId, day, name) {
@@ -6015,7 +6017,7 @@ async function loadOffice(from, to) {
     const byWorker = (rows) => { const g = {}; for (const r of rows) (g[r.collaborator_id] = g[r.collaborator_id] || []).push(r); return Object.values(g); };
     const card = (rows, withFlags) => {
       const tot = rows.reduce((a, r) => a + r.worked_minutes, 0);
-      return `<div class="card pcard"><div class="wk">${avatar(rows[0].full_name)}<div class="grow"><h2 style="margin:0;font-size:19px">${esc(rows[0].full_name)}</h2>
+      return `<div class="card pcard"><div class="wk phead">${avatar(rows[0].full_name)}<div class="grow"><h2 style="margin:0;font-size:19px">${esc(rows[0].full_name)}</h2>
         <div class="sub">${rows[0].employee_number ? 'nº ' + esc(rows[0].employee_number) + ' · ' : ''}${rows.length} dia(s)</div></div>
         <div class="hrs" style="font-size:20px;font-weight:800">${esc(fmtMin(tot))}</div></div>
         ${rows.map((r) => officeDay(r, manual[r.work_day_id], per, me, withFlags, noExit(r))).join('')}</div>`;

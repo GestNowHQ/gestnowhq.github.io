@@ -2422,3 +2422,11 @@ ul.ct-miss li { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; p
 .sh-block > svg { flex: none; width: 22px; height: 22px; color: var(--bad, #dc2626); }
 .sh-block > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .sh-block .btn { align-self: flex-start; }
+/* v93: the person's name stays at the top while their days scroll past (Mapa de horas, Secretariado) */
+.pcard > .phead { position: sticky; top: calc(var(--top-h) + max(0px, env(safe-area-inset-top))); z-index: 4; background: var(--surface);
+  margin: -16px -16px 8px; padding: 12px 16px; border-radius: var(--r-lg) var(--r-lg) 0 0; border-bottom: var(--bw) solid var(--line); }
+.day-h .d .who { display: block; font-size: var(--t-xs); font-weight: 500; color: var(--ink-2); }
+@media print { .pcard > .phead { position: static; } }
+.acts .okl { display: inline; text-align: center; line-height: 1.25; }
+.acts .okl b { font-weight: 750; }
+.acts button[data-who] { flex: 2 1 auto; }
