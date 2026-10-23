@@ -5961,7 +5961,7 @@
 "Os dias aparecem aqui depois de escreveres as horas em Eu › Escrever as horas. Esqueceste um dia? Toca nesse dia.": "Les jours apparaissent ici après avoir écrit tes heures dans Moi › Écrire les heures. Tu as oublié un jour ? Touche ce jour.",
 "Horas de hoje escritas": "Heures du jour écrites",
 "À espera do encarregado. Toca para corrigir.": "En attente du chef d’équipe. Touche pour corriger.",
-"{x}: dia validado. Seguiu para o Secretariado.": "{x} : jour validé. Envoyé au Secrétariat.",
+"{x}: dia validado. Seguiu para aprovação: {x}.": "{x} : jour validé. Envoyé pour approbation : {x}.",
 "com horas escritas": "avec heures écrites",
 "sem horas escritas": "sans heures écrites",
 "horas escritas": "heures écrites",
@@ -5970,4 +5970,8 @@
 "aprovado pelo RH": "approuvé par les RH",
 "fechado": "clôturé",
 "escrito pelo trabalhador": "écrit par le travailleur",
-"horas trabalhadas (folha de horas)": "heures travaillées (feuille d’heures)"}
+"horas trabalhadas (folha de horas)": "heures travaillées (feuille d’heures)",
+"Faltam validar {x} dia(s). Depois seguem para aprovação: {x}.": "Il reste {x} jour(s) à valider. Ensuite, ils partent pour approbation : {x}.",
+"Validaste tudo. {x} dia(s) à espera de aprovação: {x}.": "Tu as tout validé. {x} jour(s) en attente d’approbation : {x}.",
+"Aprovado: {x}. Falta o fecho do mês.": "Approuvé : {x}. Reste la clôture du mois.",
+"aprovado": "approuvé"}

@@ -5961,7 +5961,7 @@
 "Os dias aparecem aqui depois de escreveres as horas em Eu › Escrever as horas. Esqueceste um dia? Toca nesse dia.": "Zilele apar aici după ce îți scrii orele în Eu › Scrie orele. Ai uitat o zi? Atinge ziua respectivă.",
 "Horas de hoje escritas": "Orele de azi scrise",
 "À espera do encarregado. Toca para corrigir.": "Așteaptă șeful de echipă. Atinge pentru a corecta.",
-"{x}: dia validado. Seguiu para o Secretariado.": "{x}: zi validată. Trimisă la Secretariat.",
+"{x}: dia validado. Seguiu para aprovação: {x}.": "{x}: zi validată. Trimisă la aprobare: {x}.",
 "com horas escritas": "cu ore scrise",
 "sem horas escritas": "fără ore scrise",
 "horas escritas": "ore scrise",
@@ -5970,4 +5970,8 @@
 "aprovado pelo RH": "aprobat de HR",
 "fechado": "închis",
 "escrito pelo trabalhador": "scris de muncitor",
-"horas trabalhadas (folha de horas)": "ore lucrate (foaie de ore)"}
+"horas trabalhadas (folha de horas)": "ore lucrate (foaie de ore)",
+"Faltam validar {x} dia(s). Depois seguem para aprovação: {x}.": "Mai sunt de validat {x} zi(le). Apoi merg la aprobare: {x}.",
+"Validaste tudo. {x} dia(s) à espera de aprovação: {x}.": "Ai validat tot. {x} zi(le) așteaptă aprobarea: {x}.",
+"Aprovado: {x}. Falta o fecho do mês.": "Aprobat: {x}. Mai trebuie închisă luna.",
+"aprovado": "aprobat"}

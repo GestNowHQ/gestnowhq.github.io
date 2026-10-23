@@ -45,7 +45,7 @@ const REASONS = {
 const DOC_NAMES = { aptidao_medica: 'Ficha de aptidão médica', acolhimento: 'Acolhimento de segurança', carta_conducao: 'Carta de condução',
   cartao_saude_europeu: 'Cartão Europeu de Seguro de Doença', cc_bi: 'Cartão de Cidadão ou BI', comprovativo_iban: 'Comprovativo do IBAN (NIB)',
   formacao_altura: 'Formação de trabalhos em altura', formacao_confinado: 'Formação de espaços confinados' };
-const t_ = (x) => (typeof t === 'function' ? t(x) : x);
+const t_ = (x, ...v) => { if (typeof t === 'function') return t(x, ...v); let i = 0; return String(x).replace(/\{x\}/g, () => String(v[i++] ?? '')); };
 const REASON_PREFIX = {
   'document_invalid:': 'Documento em falta ou caducado: ',
   'company_document_invalid:': 'Documento da empresa em falta: ',
@@ -1086,7 +1086,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '95';
+const APP_VERSION = '96';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['reunioes', 'emergencia', 'lmra', 'seguranca'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -1356,6 +1356,7 @@ async function boot() {
     if (acc) { state.me.perms = acc.permissions || []; state.me.depts = acc.departments || []; state.me.profiles = acc.profiles || state.me.profiles; }
     const { data: pw } = await sb.rpc('platform_whoami');
     state.platform = pw || null;
+    sb.rpc('mini_hours_approver').then(({ data }) => { state.approver = data || null; }, () => {});   // v96: who approves the hours (sql/114)
     await loadModules();
     store(ME_KEY, { ...state.me });
   }
@@ -2235,7 +2236,7 @@ async function loadTeam() {
   const ORDER = { blocked: 0, absent: 1, in: 2, pause: 3, left: 4 };
   const shown = rows.filter((p) => f === 'all' || p.st === f || (f === 'left' && p.st === 'pause')).sort((a, b) => ORDER[a.st] - ORDER[b.st] || a.name.localeCompare(b.name, 'pt'));
   const me = state.me && state.me.collaborator_id;
-  const WST = { registered: 'por validar', supervisor_validated: 'validado', hr_approved: 'aprovado pelo RH', closed: 'fechado' };
+  const WST = { registered: 'por validar', supervisor_validated: 'validado', hr_validated: 'aprovado', sent_to_payroll: 'fechado' };
   const ST = sheet ? {
     blocked: () => [chip('anom', 'bloqueado', 'x'), 'faltam documentos'],
     absent: () => [chip('warn', t_('sem horas escritas'), 'clock'), ''],
@@ -4916,7 +4917,7 @@ const shortName = (n) => { const p = String(n || '').trim().split(/\s+/); return
 async function validate(ids, overtime, who) {
   const { data, error } = await sb.rpc('advance_work_days', { p_ids: ids, p_to: 'supervisor_validated', p_overtime_approved: overtime });
   if (error) return toast(friendly(error));
-  toast(who ? t_('{x}: dia validado. Seguiu para o Secretariado.').replace('{x}', who) : `${data} dia(s) validado(s). Seguiram para o Secretariado.`, 'ok'); viewHours(); encBadges(true);
+  toast(who ? t_('{x}: dia validado. Seguiu para aprovação: {x}.', who, approverName()) : `${data} dia(s) validado(s). Seguiram para o Secretariado.`, 'ok'); viewHours(); encBadges(true);
 }
 // The taps of the day (and the days around it), each one with "Anular"; and the form pointed at the missing one (M8, A2).
 async function fixDay(collabId, day, name) {
@@ -6330,22 +6331,24 @@ async function encBadges(force) {
   if (inside) more.dataset.badge = String(inside); else delete more.dataset.badge;
 }
 // The four states of a day, in order: the site validates, the office approves, the month closes. One bar, the same on every screen.
+// v96: the office step carries the company's own name for the department that approves (sql/114), never a fixed «RH»
+const approverName = () => state.approver || t_('Secretariado');
 const ENC_FLOW = [['registered', 'Por validar', 'na obra'], ['supervisor_validated', 'Validado', 'pelo encarregado'],
-  ['hr_validated', 'Aprovado', 'pelo RH'], ['sent_to_payroll', 'Fechado', 'para salários']];
+  ['hr_validated', 'Aprovado', null], ['sent_to_payroll', 'Fechado', 'para salários']];
 function encFlow(rows, who) {
   const n = Object.fromEntries(ENC_FLOW.map(([k]) => [k, rows.filter((r) => r.status === k).length]));
   const at = ENC_FLOW.findIndex(([k]) => n[k] > 0);
   const total = rows.length;
   let line;
   if (!total) line = 'Sem dias neste período.';
-  else if (n.registered) line = who === 'office' ? `${n.registered} dia(s) ainda na obra: o encarregado tem de validar primeiro.` : `Faltam validar ${n.registered} dia(s). Depois seguem para o Secretariado.`;
-  else if (n.supervisor_validated) line = who === 'office' ? `${n.supervisor_validated} dia(s) validados na obra à tua espera.` : `Validaste tudo. ${n.supervisor_validated} dia(s) à espera do Secretariado (RH).`;
-  else if (n.hr_validated) line = who === 'office' ? `Tudo aprovado. Falta fechar o mês.` : 'Aprovado pelo RH. Falta o fecho do mês.';
+  else if (n.registered) line = who === 'office' ? `${n.registered} dia(s) ainda na obra: o encarregado tem de validar primeiro.` : t_('Faltam validar {x} dia(s). Depois seguem para aprovação: {x}.', n.registered, approverName());
+  else if (n.supervisor_validated) line = who === 'office' ? `${n.supervisor_validated} dia(s) validados na obra à tua espera.` : t_('Validaste tudo. {x} dia(s) à espera de aprovação: {x}.', n.supervisor_validated, approverName());
+  else if (n.hr_validated) line = who === 'office' ? `Tudo aprovado. Falta fechar o mês.` : t_('Aprovado: {x}. Falta o fecho do mês.', approverName());
   else line = 'Fechado para salários. Ninguém pode mudar estas horas.';
   return `<div class="enc-flow" role="group" aria-label="Estado dos dias">
     <p class="enc-flow-l">${ic(n.registered && who !== 'office' ? 'clock' : n.registered || n.supervisor_validated ? 'clock' : 'ok')}<b>${esc(line)}</b></p>
     <ol>${ENC_FLOW.map(([k, t, s], i) => `<li class="${n[k] ? 'has' : ''} ${i === at ? 'now' : ''} ${at >= 0 && i < at && !n[k] ? 'done' : ''}">
-      <b class="tnum">${n[k]}</b><span>${esc(t)}</span><small>${esc(s)}</small></li>`).join('')}</ol></div>`;
+      <b class="tnum">${n[k]}</b><span>${esc(t)}</span>${s ? `<small>${esc(s)}</small>` : `<small data-nt>${esc(approverName())}</small>`}</li>`).join('')}</ol></div>`;
 }
 // Office: the same four states per site, so the Secretariado sees which site has sent its days and which is late.
 function encOfficeFlow(data) {
