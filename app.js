@@ -1127,7 +1127,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '101';
+const APP_VERSION = '102';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['reunioes', 'emergencia', 'lmra', 'seguranca'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -12766,7 +12766,20 @@ async function loadRoutinesOverview() {
   if (error) { box.innerHTML = `<div class="card">${esc(friendly(error))}</div>`; return; }
   const sites = data || [];
   const late = sites.reduce((a, s) => a + (s.late || 0), 0);
-  if (!sites.some((s) => s.total)) { box.innerHTML = `<div class="card">${empty('check', 'Ainda sem rotinas', 'Escreve-as em «Escrever as rotinas», ou junta os exemplos.')}</div>`; return; }
+  if (!sites.some((s) => s.total)) {
+    // nothing due now: either the company has no routines yet (offer the examples here) or they only count from the next period
+    const { data: all } = await sb.rpc('mini_routines').then((r) => r, () => ({}));
+    if (!box.isConnected) return;
+    if ((all || []).length) { box.innerHTML = `<div class="card">${empty('check', 'Nada para fazer agora', 'Uma rotina nova começa a contar no período a seguir ao dia em que foi escrita.')}</div>`; return; }
+    box.innerHTML = `<div class="card">${empty('check', 'Ainda sem rotinas', 'Junta os exemplos e muda-os à tua maneira, ou escreve as tuas.')}
+      <p><button class="btn wide" id="rtex2">${ic('plus')}${esc(t_('Juntar exemplos'))}</button></p></div>`;
+    $('#rtex2').onclick = async () => {
+      const { error: e } = await sb.rpc('mini_routine_examples');
+      if (e) return toast(friendly(e));
+      toast(t_('Exemplos juntos. Muda o que não servir.')); state.rt.tab = 'editar'; viewRoutines();
+    };
+    return;
+  }
   box.innerHTML = `<div class="kpis k2"><div class="kpi ${late ? 'bad' : ''}"><b class="tnum">${late}</b><span>${esc(t_('atrasadas'))}</span></div>
       <div class="kpi"><b class="tnum">${sites.reduce((a, s) => a + (s.today || 0), 0)}</b><span>${esc(t_('para hoje'))}</span></div></div>
     ${sites.map((s) => `<button class="card rt-site" data-rtsite="${esc(s.id)}"><div class="wk"><span class="chip code" data-nt>${esc(s.code)}</span>

@@ -2472,3 +2472,6 @@ button.card.rt-site { display: block; width: 100%; text-align: left; font: inher
 .ct-card .acts { margin-top: 8px; flex-wrap: wrap; }
 #ctbody > .btn.danger, #mycontacts > .btn.danger { margin-bottom: 12px; }
 .ac-steps { white-space: pre-line; background: var(--surface-2); border-radius: var(--r-md, 10px); padding: 10px 12px; }
+/* v102: a long email or phone stays inside its button (Diogo 2026-10-26: the email ran over the phone button) */
+.ct-card .acts > .btn { min-width: 0; max-width: 100%; flex: 0 1 auto; }
+.ct-card .acts > .btn > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
