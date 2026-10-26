@@ -6201,4 +6201,10 @@
 "Acidente": "Accident",
 "Registo de segurança": "Safety record",
 "SOS": "SOS",
-"Só tu podes assinar este orçamento, e quem o faz não o pode assinar. Antes de enviar, junta outro administrador (no cartão do cliente) ou escreve uma regra em «Quem assina» com outra pessoa.": "Only you can sign this estimate, and whoever makes it cannot sign it. Before sending, add another administrator (on the client card) or write a rule in «Who signs» with someone else."}
+"Só tu podes assinar este orçamento, e quem o faz não o pode assinar. Antes de enviar, junta outro administrador (no cartão do cliente) ou escreve uma regra em «Quem assina» com outra pessoa.": "Only you can sign this estimate, and whoever makes it cannot sign it. Before sending, add another administrator (on the client card) or write a rule in «Who signs» with someone else.",
+"hora da obra, {x}": "site time, {x}",
+"As horas estão na hora da obra ({x}): agora lá são {x}, no teu telemóvel são {x}.": "Times are in site time ({x}): it is {x} there, {x} on your phone.",
+"Açores": "Azores",
+"Madeira": "Madeira",
+"Canárias": "Canary Islands",
+"Passagem para {x} a partir de {x}: {x} pessoa(s).": "Moved to {x} from {x}: {x} person(s)."}

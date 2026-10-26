@@ -867,6 +867,12 @@ function tzParts(ms, tz) {
   return p;
 }
 const tzOffset = (ms, tz) => { const p = tzParts(ms, tz); return Date.UTC(p.year, p.month - 1, p.day, p.hour % 24, p.minute, p.second) - Math.floor(ms / 1000) * 1000; };
+// v103: when the site's clock is not the phone's (TGP-01 in Paris, phone in Lisbon), the screen says so next to the times
+const TZ_PLACE = { 'Europe/Lisbon': 'Portugal', 'Europe/Madrid': 'Espanha', 'Europe/Paris': 'França', 'Atlantic/Azores': 'Açores', 'Atlantic/Madeira': 'Madeira', 'Atlantic/Canary': 'Canárias' };
+const tzDiffers = (tz) => { const n = Date.now(); return !!tz && tzOffset(n, tz) !== -new Date(n).getTimezoneOffset() * 60000; };
+const tzTag = (tz) => tzDiffers(tz) ? ' (' + t_('hora da obra, {x}', t_(TZ_PLACE[tz] || tz)) + ')' : '';
+const tzNote = (tz) => tzDiffers(tz) ? `<p class="small muted tz-note" data-tz>${ic('clock')}<span>${esc(t_('As horas estão na hora da obra ({x}): agora lá são {x}, no teu telemóvel são {x}.',
+  t_(TZ_PLACE[tz] || tz), fmtHour(new Date().toISOString(), tz), new Date().toLocaleTimeString(LOC, { hour: '2-digit', minute: '2-digit' })))}</span></p>` : '';
 // "2026-10-16T08:00" typed as the site's time -> the real moment (ISO, UTC). In the October hour that repeats, the first one.
 function zonedToUtc(local, tz) {
   const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(local || ''); if (!m) return null;
@@ -1127,7 +1133,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '102';
+const APP_VERSION = '103';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['reunioes', 'emergencia', 'lmra', 'seguranca'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -2278,7 +2284,7 @@ async function loadTeam() {
   const alerts = [];
   if (s.to_validate) alerts.push(`<button class="enc-al info" data-go="horas">${ic('clock')}<span><b>${s.to_validate} dia(s) por validar</b>Valida em Horas: depois seguem para o Secretariado.</span>${ic('go')}</button>`);
   if (s.missing_out) alerts.push(`<button class="enc-al warn" data-go="horas">${ic('warn')}<span><b>${s.missing_out} saída(s) em falta nos últimos 7 dias</b>Marca-as em Horas, com o motivo.</span>${ic('go')}</button>`);
-  $('#talert').innerHTML = alerts.join('');
+  $('#talert').innerHTML = tzNote(tz) + alerts.join('');
   $('#talert').querySelectorAll('[data-go]').forEach((b) => b.onclick = () => go(b.dataset.go));
   const f = state.teamFilter;
   const n = { all: rows.length, in: inside, absent: missing, blocked, left: c('left') + c('pause') };
@@ -5175,8 +5181,8 @@ function meHero(d, s) {
   const wk = d.week || []; const wsum = wk.reduce((a, x) => a + (x.date === t.date ? Math.max(x.worked, so) : x.worked), 0);
   const sheet = state.timeMode === 'sheet';
   const big = inNow ? 'Na obra' : t.last === 'out' ? 'Dia fechado' : sheet ? 'Hoje ainda sem horas' : 'Ainda não picaste';
-  const sub = inNow ? `desde as <b>${esc(fmtHour(t.first_in, tz))}</b> · ${esc(fmtMin(so))} hoje`
-    : t.last === 'out' ? `saíste às <b>${esc(fmtHour(t.last_at, tz))}</b> · ${esc(fmtMin(so))} hoje`
+  const sub = inNow ? `desde as <b>${esc(fmtHour(t.first_in, tz))}</b><small data-nt>${esc(tzTag(tz))}</small> · ${esc(fmtMin(so))} hoje`
+    : t.last === 'out' ? `saíste às <b>${esc(fmtHour(t.last_at, tz))}</b><small data-nt>${esc(tzTag(tz))}</small> · ${esc(fmtMin(so))} hoje`
     : sheet ? 'Escreve a entrada, o almoço e a saída na «Folha de horas».' : 'Pica o cartão no telemóvel do encarregado quando chegares.';
   const pd = s && s.per_diem;
   return `<section class="pic-hero me-hero ${inNow ? 'on' : t.last === 'out' ? 'done' : 'off'}">
@@ -12581,10 +12587,10 @@ async function loadFrontBoard() {
     <div class="chips">${Object.entries(tot).sort((a, b) => b[1] - a[1]).map(([n, m]) => `<span class="chip">${ic('pin')}<span data-nt>${esc(n)}</span>&nbsp;·&nbsp;<b>${esc(fmtMin(m))}</b></span>`).join('')}</div>
     <p class="small muted" style="margin-bottom:0">Contam os dias já fechados de hoje. Quem ainda está na obra entra quando picar a saída.</p></div>` : '';
   const fronts = d.fronts || []; const people = d.people || [];
-  const since = (p) => !p.since ? '' : localDay(p.since, F.tz) === today ? t_('desde as {x}', fmtHour(p.since, F.tz)) : t_('desde {x}', fmtTime(p.since, F.tz));
+  const since = (p) => !p.since ? '' : localDay(p.since, F.tz) === today ? t_('desde as {x}', fmtHour(p.since, F.tz)) : t_('desde {x}', fmtTime(p.since, F.tz)) + tzTag(F.tz);
   const groups = [...fronts, { id: '', code: '', name: t_('Sem frente') }];
   const mv = canMoveFronts();
-  box.innerHTML = (fronts.length ? '' : `<div class="card">${empty('box', 'Ainda sem frentes nesta obra', canMakeFronts() ? 'Cria a primeira em «Nova frente», em baixo.' : 'Pede-a ao Secretariado em «Pedir nova frente», em baixo.')}</div>`)
+  box.innerHTML = tzNote(F.tz) + (fronts.length ? '' : `<div class="card">${empty('box', 'Ainda sem frentes nesta obra', canMakeFronts() ? 'Cria a primeira em «Nova frente», em baixo.' : 'Pede-a ao Secretariado em «Pedir nova frente», em baixo.')}</div>`)
     + groups.map((g) => {
       const ps = people.filter((p) => (p.front || '') === g.id);
       if (!ps.length) return '';   // empty fronts go together in one line below, so 20 fronts do not fill the phone
@@ -12618,7 +12624,7 @@ async function loadFrontBoard() {
     $('#frgo').disabled = true;
     const { error: e } = await sb.rpc('mini_front_move', { p_project: site.id, p_people: [...F.sel], p_front: to, p_day: day, p_time: tm });
     if (e) { if ($('#frgo')) $('#frgo').disabled = false; return toast(friendly(e)); }
-    toast(t_('{x} pessoa(s) passam para {x} a partir de {x}.', n, name, `${day === today ? t_('hoje') : dayLabel(day)} ${tm}`));
+    toast(t_('Passagem para {x} a partir de {x}: {x} pessoa(s).', name, `${day === today ? t_('hoje') : dayLabel(day)} ${tm}`, n));
     F.sel = new Set(); loadFrontBoard();
   };
   sync();
@@ -12752,7 +12758,7 @@ async function loadSiteRoutines() {
   const late = items.filter((x) => x.status === 'late').length;
   const due = (x) => { const d = localDay(x.due_at, tz); const today = localDay(new Date().toISOString(), tz);
     return d === today ? t_('hoje às {x}', fmtHour(x.due_at, tz)) : `${dayLabel(d)} ${fmtHour(x.due_at, tz)}`; };
-  list.innerHTML = `${late ? `<div class="pg-state warn">${ic('warn')}<span><b>${esc(t_('{x} rotina(s) atrasada(s)', late))}</b>${esc(t_('Faz e marca como feita: o escritório vê os atrasos.'))}</span></div>` : ''}
+  list.innerHTML = `${tzNote(tz)}${late ? `<div class="pg-state warn">${ic('warn')}<span><b>${esc(t_('{x} rotina(s) atrasada(s)', late))}</b>${esc(t_('Faz e marca como feita: o escritório vê os atrasos.'))}</span></div>` : ''}
     <div class="card">${items.map((x) => `<div class="day wk rt-row ${x.status}">
       <div class="grow"><b data-nt>${esc(x.title)}</b>
         ${x.detail ? `<small class="muted" data-nt>${esc(x.detail)}</small>` : ''}

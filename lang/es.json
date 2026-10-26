@@ -6201,4 +6201,10 @@
 "Acidente": "Accidente",
 "Registo de segurança": "Registro de seguridad",
 "SOS": "SOS",
-"Só tu podes assinar este orçamento, e quem o faz não o pode assinar. Antes de enviar, junta outro administrador (no cartão do cliente) ou escreve uma regra em «Quem assina» com outra pessoa.": "Solo tú puedes firmar este presupuesto, y quien lo hace no puede firmarlo. Antes de enviar, añade otro administrador (en la ficha del cliente) o escribe una regla en «Quién firma» con otra persona."}
+"Só tu podes assinar este orçamento, e quem o faz não o pode assinar. Antes de enviar, junta outro administrador (no cartão do cliente) ou escreve uma regra em «Quem assina» com outra pessoa.": "Solo tú puedes firmar este presupuesto, y quien lo hace no puede firmarlo. Antes de enviar, añade otro administrador (en la ficha del cliente) o escribe una regla en «Quién firma» con otra persona.",
+"hora da obra, {x}": "hora de la obra, {x}",
+"As horas estão na hora da obra ({x}): agora lá são {x}, no teu telemóvel são {x}.": "Las horas están en la hora de la obra ({x}): allí son las {x}, en tu móvil son las {x}.",
+"Açores": "Azores",
+"Madeira": "Madeira",
+"Canárias": "Canarias",
+"Passagem para {x} a partir de {x}: {x} pessoa(s).": "Paso a {x} a partir de {x}: {x} persona(s)."}

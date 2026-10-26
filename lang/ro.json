@@ -6201,4 +6201,10 @@
 "Acidente": "Accident",
 "Registo de segurança": "Înregistrare de siguranță",
 "SOS": "SOS",
-"Só tu podes assinar este orçamento, e quem o faz não o pode assinar. Antes de enviar, junta outro administrador (no cartão do cliente) ou escreve uma regra em «Quem assina» com outra pessoa.": "Doar tu poți semna acest deviz, iar cine îl face nu îl poate semna. Înainte de trimitere, adaugă alt administrator (în fișa clientului) sau scrie o regulă în «Cine semnează» cu altă persoană."}
+"Só tu podes assinar este orçamento, e quem o faz não o pode assinar. Antes de enviar, junta outro administrador (no cartão do cliente) ou escreve uma regra em «Quem assina» com outra pessoa.": "Doar tu poți semna acest deviz, iar cine îl face nu îl poate semna. Înainte de trimitere, adaugă alt administrator (în fișa clientului) sau scrie o regulă în «Cine semnează» cu altă persoană.",
+"hora da obra, {x}": "ora șantierului, {x}",
+"As horas estão na hora da obra ({x}): agora lá são {x}, no teu telemóvel são {x}.": "Orele sunt în ora șantierului ({x}): acolo este {x}, pe telefonul tău este {x}.",
+"Açores": "Azore",
+"Madeira": "Madeira",
+"Canárias": "Canare",
+"Passagem para {x} a partir de {x}: {x} pessoa(s).": "Mutare pe {x} de la {x}: {x} persoană(e)."}
