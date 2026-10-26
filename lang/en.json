@@ -6249,4 +6249,10 @@
 "Aprovar o novo valor hora de {x}": "Approve the new hourly rate of {x}",
 "Valor hora aprovado: {x}": "Hourly rate approved: {x}",
 "Valor hora recusado: {x}": "Hourly rate refused: {x}",
-"saiu": "left"}
+"saiu": "left",
+"Usados há pouco":"Used recently",
+"Procurar ecrã, pessoa ou obra":"Search screen, person or site",
+"Voltar aos departamentos":"Back to departments",
+"1 ecrã":"1 screen",
+"{x} ecrãs":"{x} screens"
+}
