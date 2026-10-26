@@ -152,7 +152,7 @@ const ERRORS = [
   // Folha de horas (sql/106)
   [/records hours with the card/i, 'A tua empresa regista as horas com o cartão.'],
   [/that day has not come yet/i, 'Esse dia ainda não chegou.'],
-  [/more than 7 days ago/i, 'Mais de 7 dias: pede ao encarregado.'],
+  [/more than 7 days ago(?!: ask the office)/i, 'Mais de 7 dias: pede ao encarregado.'],
   [/not on this site on that day/i, 'Nesse dia não estavas nesta obra.'],
   [/write the entrada and the saída/i, 'Escreve a entrada e a saída.'],
   [/lunch started and ended, or neither/i, 'Escreve a saída e a volta do almoço, ou nenhuma.'],
@@ -160,6 +160,23 @@ const ERRORS = [
   [/more than 16 hours in one day/i, 'Mais de 16 horas num dia: confirma as horas.'],
   [/saída has not happened yet/i, 'A saída ainda não aconteceu: escreve-a quando saíres.'],
   [/already validated this day/i, 'O encarregado já confirmou este dia: pede-lhe para mudar.'],
+  // Frentes do chefe e pedidos ao Secretariado (sql/119-121)
+  [/at most 6 periods/i, 'No máximo 6 períodos num dia.'],
+  [/choose the site of period (\d+)/i, 'Escolhe a obra do período $1.'],
+  [/two periods overlap/i, 'Há dois períodos ao mesmo tempo: confirma as horas.'],
+  [/you are not on this site on that day/i, 'Nesse dia não estás posto nessa obra. Fala com o encarregado.'],
+  [/choose who changes front/i, 'Marca quem muda de frente.'],
+  [/choose from what time/i, 'Escolhe a partir de que dia e hora.'],
+  [/plan at most a week ahead/i, 'Só dá para planear até uma semana à frente.'],
+  [/more than 7 days ago: ask the office/i, 'Isso foi há mais de 7 dias: fala com o escritório.'],
+  [/someone chosen is not on this site/i, 'Alguém que marcaste não está nesta obra nesse dia.'],
+  [/already validated, not changed: (.+)/i, 'Nada foi mudado: estes dias já estão validados ($1).'],
+  [/at most 500 people/i, 'No máximo 500 pessoas de cada vez.'],
+  [/that front already exists/i, 'Essa frente já existe nesta obra.'],
+  [/that front was already asked for/i, 'Essa frente já foi pedida: está à espera do Secretariado.'],
+  [/this request was already answered/i, 'Este pedido já foi respondido.'],
+  [/write why it is refused/i, 'Escreve porque recusas: quem pediu vai ver.'],
+  [/choose approve or refuse/i, 'Escolhe aprovar ou recusar.'],
   [/choose the front you worked on/i, 'Escolhe a frente onde trabalhaste.'],
   [/choose a front of this site/i, 'Essa frente não é desta obra, ou já foi arquivada. Escolhe outra.'],
   [/this company does not record hours by front/i, 'Esta empresa não conta as horas por frente.'],
@@ -1092,7 +1109,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '99';
+const APP_VERSION = '100';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['reunioes', 'emergencia', 'lmra', 'seguranca'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -1107,7 +1124,7 @@ function tabsFor(role) {
   return TABS[role] || TABS.supervisor;
 }
 const OFFLINE_VIEWS = ['picar', 'minhas', 'material', 'reunioes', 'relatos', 'emergencia'];   // v89: they keep a copy
-const MORE_ORDER = ['inicio', 'empresa', 'onbtextos', 'equipa', 'material', 'picar', 'emergencia', 'relatos', 'reunioes', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'andaimes', 'processo', 'clientes', 'custos', 'progresso'];
+const MORE_ORDER = ['inicio', 'empresa', 'onbtextos', 'equipa', 'material', 'picar', 'emergencia', 'relatos', 'reunioes', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'andaimes', 'processo', 'clientes', 'custos', 'progresso', 'frentes'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -1129,7 +1146,7 @@ const MENU_GROUPS = [
   ['Recursos Humanos', ['trabalhadores', 'onbtextos', 'acolhimento', 'viagens', 'alojamento']],
   ['Frota', ['frota']],
   ['QSA · Qualidade, Segurança e Ambiente', ['relatos', 'seguranca', 'reunioes', 'lmra', 'emergencia', 'qualidade', 'processo']],
-  ['Produção (Obra)', ['painel', 'obras', 'naobra', 'picar', 'progresso', 'material', 'andaimes', 'equipa', 'producao']],
+  ['Produção (Obra)', ['painel', 'obras', 'naobra', 'picar', 'frentes', 'progresso', 'material', 'andaimes', 'equipa', 'producao']],
   ['Compras e Armazém', ['armazem', 'compras']],
   ['Comercial', ['comercial']],
   ['Orçamentação', ['orcamentos']],
@@ -1144,7 +1161,7 @@ const VIEW_NEEDS = {
   emergencia: () => can('seguranca.emergencia'), acolhimento: () => can('acolhimento.gerir'),
   obras: () => can('obras.gerir') || can('obras.ver_detalhes') || can('obras.area'), painel: () => canSiteDetails(), naobra: () => canSiteDetails() || can('ponto.picar'),
   equipa: () => canSiteDetails(), picar: () => can('ponto.picar'), horas: () => can('horas.ver') || can('horas.validar_obra'),
-  andaimes: () => canScaffolds(), producao: () => canProd(), progresso: () => canProgress(), material: () => canSiteMaterial(), armazem: () => canWh(), compras: () => canBuy(), frota: () => canFleet(),
+  andaimes: () => canScaffolds(), producao: () => canProd(), progresso: () => canProgress(), frentes: () => canFronts(), material: () => canSiteMaterial(), armazem: () => canWh(), compras: () => canBuy(), frota: () => canFleet(),
   orcamentos: () => canEstimates(), qualidade: () => canQuality(), comercial: () => canSales(), premios: () => canAwards(), custos: () => canCosts(),
 };
 // v73 (Diogo 2026-10-21): «o standard da gestão serve para todas as empresas, mas o administrador de cada empresa adapta».
@@ -1179,9 +1196,10 @@ const ENC_ICONS = {
   target: '<path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 12h.01M16 8l4-4M17 4h3v3"/>',
   coins: '<path d="M9 9.5c3.3 0 6-1.1 6-2.5S12.3 4.5 9 4.5 3 5.6 3 7s2.7 2.5 6 2.5zM3 7v4c0 1.4 2.7 2.5 6 2.5M3 11v4c0 1.4 2.7 2.5 6 2.5M15 13.5c3.3 0 6-1.1 6-2.5s-2.7-2.5-6-2.5-6 1.1-6 2.5 2.7 2.5 6 2.5zM9 11v4c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5v-4M9 15v4c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5v-4"/>',
   sheet: '<path d="M9 3h6v3H9zM9 4.5H6v16.5h12V4.5h-3M9 11h6M9 14.5h6M9 18h3"/>',
+  fronts: '<path d="M5 21V3M5 4h9l-2 3 2 3H5M15 21v-8M15 13h5l-1.5 2 1.5 2h-5M3 21h18"/>',
   medal: '<path d="M12 14a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM9.5 13.3 8 21l4-2 4 2-1.5-7.7M10 9l1.5 1.5L14.5 7.5"/>',
 };
-const MENU_ICON = { painel: 'gauge', producao: 'chart', seguranca: 'hhat', equipa: 'crew', minhas: 'myclock', naobra: 'gate', qualidade: 'medal', clientes: 'firms', comercial: 'target', premios: 'trophy', custos: 'coins', progresso: 'sheet' };
+const MENU_ICON = { painel: 'gauge', producao: 'chart', seguranca: 'hhat', equipa: 'crew', minhas: 'myclock', naobra: 'gate', qualidade: 'medal', clientes: 'firms', comercial: 'target', premios: 'trophy', custos: 'coins', progresso: 'sheet', frentes: 'fronts' };
 (function encIcons() {
   const ns = 'http://www.w3.org/2000/svg'; const sp = document.createElementNS(ns, 'svg');
   sp.setAttribute('width', '0'); sp.setAttribute('height', '0'); sp.setAttribute('aria-hidden', 'true'); sp.style.position = 'absolute';
@@ -1386,6 +1404,7 @@ async function boot() {
   nav.querySelector('[data-view=premios]').hidden = worker || state.offline || !canAwards();
   nav.querySelector('[data-view=custos]').hidden = worker || state.offline || !canCosts();
   nav.querySelector('[data-view=progresso]').hidden = worker || state.offline || !canProgress();
+  nav.querySelector('[data-view=frentes]').hidden = worker || state.offline || !canFronts();
   nav.querySelector('[data-view=equipa]').hidden = me.role !== 'supervisor' || !canSiteDetails();
   nav.querySelector('[data-view=lmra]').hidden = worker || state.offline || !canLmra();
   nav.querySelector('[data-view=reunioes]').hidden = worker || !canMeet();   // v89: these three open without network (kept copy)
@@ -1855,7 +1874,7 @@ function go(view) {
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
      ficha: viewWorker, obras: viewSites, area: viewArea, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients, cliente: viewClient, precos: viewPrices, empresa: viewCompanyRules, inicio: viewHome,
      processo: viewProcess, orcamentos: viewEstimates, comercial: viewSales, premios: viewAwards, custos: viewCosts, lmra: viewLmra, reunioes: viewMeetings, relatos: viewHazards, material: viewSiteMaterial, emergencia: viewEmergency,
-     armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, producao: viewProd, progresso: viewProgress, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
+     armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, producao: viewProd, progresso: viewProgress, frentes: viewFronts, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
   checkEmergencyBar(); encBadges();
 }
 
@@ -2172,6 +2191,7 @@ function viewTeam() {
     <div id="tlist">${skel(4)}</div>
     </div><aside class="enc-side">
     <div class="team-acts"><button class="btn big ghost" id="tval">${ic('ok')}<span>Validar a semana</span></button>
+      ${canFronts() ? `<button class="btn big ghost" id="tfr">${ic('pin')}<span>Frentes</span></button>` : ''}
       ${canProgress() ? `<button class="btn big ghost" id="tprog">${ic('sheet')}<span>Folha de produção</span></button>` : ''}
       ${canSiteMaterial() ? `<button class="btn big ghost" id="tmat">${ic('box')}<span>Material da obra</span></button>` : ''}
       ${can('equipa.avisar') ? `<button class="btn big ghost" id="tnote">${ic('bell')}<span>Mandar aviso à equipa</span></button>` : ''}
@@ -2186,6 +2206,7 @@ function viewTeam() {
   if ($('#tmeet')) $('#tmeet').onclick = () => go('reunioes');
   if ($('#tmat')) $('#tmat').onclick = () => go('material');
   if ($('#tnote')) $('#tnote').onclick = () => teamNotice(currentSite(), 'notice');
+  if ($('#tfr')) $('#tfr').onclick = () => go('frentes');
   if ($('#tprog')) { $('#tprog').onclick = () => go('progresso'); progressBadge(); }
   if ($('#temer')) $('#temer').onclick = () => go('emergencia');
   $('#tlook').onclick = () => cardGlance(currentSite() && currentSite().id);
@@ -2399,7 +2420,7 @@ function viewClock() {
     </div><div>
     <div class="sec-h"><h2 class="eyebrow">Últimas picagens nesta obra</h2></div><div id="recent">${skel(3)}</div>
     </div></div>`;
-  bindSiteSelect('site', () => { loadRecent(); loadLive(); tickClock(); gpsRender(); gpsForSite(); });
+  bindSiteSelect('site', () => { picFronts(); loadRecent(); loadLive(); tickClock(); gpsRender(); gpsForSite(); });
   gpsStart(); gpsRender(); gpsForSite();
   app.querySelectorAll('.dir button').forEach((b) => b.onclick = () => {
     // ALMOÇO keeps the automatic direction (out for who is in, in for who is out) and names the taps as lunch.
@@ -2414,7 +2435,7 @@ function viewClock() {
   if (nfcOk) $('#nfc').onclick = toggleNfc;
   if ($('#pemer')) $('#pemer').onclick = () => go('emergencia');
   if ($('#simtap')) $('#simtap').onclick = toggleSimTaps;
-  renderDir(); renderTapLog(); showQueue(); showRejected(); showClockWarn(); loadRecent(); loadLive();
+  renderDir(); renderTapLog(); showQueue(); showRejected(); showClockWarn(); loadRecent(); loadLive(); picFronts();
   tickClock(); state.tick = setInterval(tickClock, 1000);
   state.timer = setInterval(() => { loadRecent(); loadLive(); }, 60000);
 }
@@ -2586,7 +2607,8 @@ async function clock(rawUid, typed, sim) {
   const d = r.data; const who = d.name || 'Cartão ' + ev.p_raw;
   if (d.status === 'accepted') {
     rememberDir(raw, dir, at.getTime());
-    showResult('ok', who, `${word} aceite${typed ? ' · número escrito à mão: o escritório confirma' : ''}${sim ? ` · simulada às ${fmtHour(at.toISOString(), siteTz(site.id))}` : ''}`, seq); beep(true);
+    const fr = d.collaborator_id ? picFrontOf(site.id, d.collaborator_id) : '';
+    showResult('ok', who, `${word} aceite${fr ? ' · ' + t_('frente') + ': ' + fr : ''}${typed ? ' · número escrito à mão: o escritório confirma' : ''}${sim ? ` · simulada às ${fmtHour(at.toISOString(), siteTz(site.id))}` : ''}`, seq); beep(true);
     if (dir === 'in' && d.collaborator_id) warnExpiring(d.collaborator_id, who, word, seq);
   } else if (d.status === 'duplicate') { showResult('warn', who, `Já picou há instantes (${word})`, seq); beep(true); }
   else { showResult('bad', `${who}: NÃO ENTRA`, (d.reasons || []).map(reasonText).join(' · '), seq); beep(false); }
@@ -4606,6 +4628,7 @@ async function onbHunt(x, items) {
 // The guided tour: the bot shows each screen this person has, on the real menu. From «Mais» › «Visita guiada»,
 // from the Acolhimento screen, and once by itself when someone finishes the onboarding.
 const TOUR_TEXT = {
+  frentes: 'Frentes: põe a equipa na frente certa, por grupos e a partir de uma hora. As horas de cada pessoa dividem-se sozinhas pelas frentes. As frentes novas pede-as ao Secretariado.',
   equipa: 'A minha equipa: quem está na obra agora, quem ainda não chegou e o que tens de validar.',
   picar: 'Picar: o leitor de cartões. Cada pessoa encosta o cartão à entrada e à saída.',
   painel: 'Dashboard de obra: todas as obras num só ecrã, com o que precisa de atenção, vistas pela produção, faturação e secretariado.',
@@ -4847,8 +4870,8 @@ async function loadHours(from, to) {
   const [{ data, error }, back, per, decl, fr] = await Promise.all([sb.rpc('mini_hours', { p_project: site.id, p_from: from, p_to: to }),
     sb.rpc('mini_returned_days', { p_project: site.id, p_from: from, p_to: to }), dayPeriods(from, to, site.id),
     sb.rpc('mini_declared_days', { p_project: site.id, p_from: from, p_to: to }).then((r) => r, () => ({})),
-    sb.rpc('mini_day_fronts', { p_project: site.id, p_from: from, p_to: to }).then((r) => r, () => ({}))]);
-  state.dayFronts = Object.fromEntries(((fr && fr.data) || []).filter((x) => (x.fronts || []).length).map((x) => [x.work_day_id, x.fronts]));
+    sb.rpc('mini_day_front_hours', { p_project: site.id, p_from: from, p_to: to }).then((r) => r, () => ({}))]);
+  state.dayFronts = frontChips(fr);
   if (seq !== hoursSeq || !$('#list')) return [];   // a newer week or site was asked meanwhile
   if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return []; }
   const returned = Object.fromEntries(((back && back.data) || []).map((b) => [b.work_day_id, b.reason]));
@@ -5021,7 +5044,7 @@ const MINE_STATE = { registered: 'por validar', supervisor_validated: 'validado 
 // (confirm the week, a document out of date), then one big tile per thing that is theirs. Each tile opens its screen;
 // the phone's back button comes back here. Built for gloves and sunlight: big targets, few words.
 const ME_TABS = {
-  folha: ['sheet', 'Folha de horas'], horas: ['clock', 'As minhas horas'], progresso: ['sheet', 'Progresso do dia'], pedidos: ['calendar', 'Pedidos'], diarias: ['card', 'Diárias'], despesas: ['cart', 'Despesas'],
+  folha: ['sheet', 'Folha de horas'], obras: ['pin', 'As minhas obras'], horas: ['clock', 'As minhas horas'], progresso: ['sheet', 'Progresso do dia'], pedidos: ['calendar', 'Pedidos'], diarias: ['card', 'Diárias'], despesas: ['cart', 'Despesas'],
   viagens: ['plane', 'Viagens'], dormir: ['home', 'Onde durmo'], andaimes: ['scaffold', 'Posso subir?'], docs: ['doc', 'Os meus documentos'],
   epi: ['shield', 'EPI e ferramentas'], reunioes: ['team', 'Reuniões de segurança'], relatos: ['warn', 'Os meus relatos'], contrato: ['lock', 'O meu contrato'] };
 function viewMine() {
@@ -5173,6 +5196,7 @@ function meTiles(d, s, papers) {
   return [
     state.timeMode === 'sheet' ? tile('folha', 'Entrada, almoço e saída', 'go') : '',
     tile('horas', t.worked ? `${fmtMin(t.worked)} este mês${pend ? ` · ${pend} por validar` : ''}` : 'Semana, mês e cada picagem', '', s.weeks_to_confirm ? String(s.weeks_to_confirm) : ''),
+    tile('obras', 'Onde trabalhas, a morada e o encarregado'),
     tile('progresso', 'O que fizeste, para o encarregado', 'go'),
     tile('pedidos', s.requests_pending ? `${s.requests_pending} à espera de resposta` : 'Férias e faltas', '', s.disputes_open ? String(s.disputes_open) : ''),
     tile('diarias', s.per_diem ? `${euro(s.per_diem.net)} · semana de ${fmtDate(s.per_diem.week_start).slice(0, 5)}` : 'Ainda sem diárias'),
@@ -5198,13 +5222,16 @@ async function meConfirmWeek(week, label, after) {
   toast('Semana confirmada. Obrigado.'); if (after) after();
 }
 // ---- Frentes de obra (sql/118): off unless the company switched them on and the site has open fronts.
+// v100 (sql/120): the hours of each day split by front, as chips «Fornalha 2h30».
+const frontChips = (fr) => Object.fromEntries(((fr && fr.data) || []).filter((x) => (x.fronts || []).some((f) => f.front))
+  .map((x) => [x.work_day_id, x.fronts.map((f) => `${f.name || t_('Sem frente')} ${fmtMin(f.minutes)}`)]));
 const frontsOn = () => !!(state.meFronts && state.meFronts.on && Object.keys(state.meFronts.sites || {}).length);
 const frontsOf = (project) => (state.meFronts && state.meFronts.sites && state.meFronts.sites[project]) || [];
 const frontOf = (project, day) => (state.meFronts && state.meFronts.days && state.meFronts.days[`${project}|${day}`]) || '';
 const frontOpts = (project, chosen) => {
   const list = frontsOf(project);
   return `<option value="">${esc(t_('Escolhe a frente…'))}</option>` + list.map((f) =>
-    `<option value="${esc(f.id)}" ${f.name === chosen ? 'selected' : ''}>${esc(f.name)}</option>`).join('');
+    `<option value="${esc(f.id)}" ${f.name === chosen || f.id === chosen ? 'selected' : ''}>${esc(f.name)}</option>`).join('');
 };
 // ---- Folha de horas (sql/106): in a company that records hours on paper-like sheets, the worker writes entrada,
 // almoço and saída on their own phone; the encarregado confirms. Each day shows whether it was written or tapped.
@@ -5243,37 +5270,83 @@ async function loadMySheet() {
   box.querySelectorAll('[data-shday]').forEach((b) => b.onclick = () => writeSheetDay(b.dataset.shday, data));
   box.querySelectorAll('[data-shdocs]').forEach((b) => b.onclick = () => meOpen('docs'));
 }
+// v100 (Diogo 2026-10-26): «ninguém sabe para onde vão 2 horas». The day is written in periods, each with its site and
+// its front: the morning on one front, the afternoon on another, or on another client's site. The lunch is the gap
+// between two periods. The last site and front are remembered for the next day.
 async function writeSheetDay(day, data) {
   const sites = data.sites || []; const d = (data.days || []).find((x) => x.date === day) || {};
-  const e0 = (d.entries || [])[0]; const t = (e0 && e0.times) || [];
-  const v = (i, dflt) => (t[i] ? fmtHour(t[i].at, e0.tz) : dflt);
-  const four = t.length >= 4;
+  const on = !!(state.meFronts && state.meFronts.on);
+  const hasFronts = (project) => on && frontsOf(project).length > 0;
+  const last = load('gestnow-sheet-last', {}) || {};
+  const per = [];
+  (d.entries || []).forEach((e) => {
+    const t = e.times || []; const fr = frontOf(e.project, day);
+    for (let i = 0; i + 1 < t.length; i += 2) per.push({ project: e.project, front: fr, in: fmtHour(t[i].at, e.tz), out: fmtHour(t[i + 1].at, e.tz) });
+  });
+  if (!per.length) {
+    const p0 = sites.some((x) => x.id === last.project) ? last.project : (sites[0] || {}).id;
+    const f0 = ((last.fronts || {})[p0]) || '';
+    per.push({ project: p0, front: f0, in: '08:00', out: '12:00' }, { project: p0, front: f0, in: '13:00', out: '17:00' });
+  }
+  const siteOpts = (chosen) => sites.map((x) => `<option value="${esc(x.id)}" ${x.id === chosen ? 'selected' : ''}>${esc(x.code)} · ${esc(x.title)}</option>`).join('');
+  const rowHtml = (p, i) => `<fieldset class="sh-per"><legend>${esc(t_('Período {x}', i + 1))}</legend>
+      ${sites.length > 1 ? `<label>${esc(t_('Obra'))}</label><select data-pp>${siteOpts(p.project)}</select>`
+        : `<input type="hidden" data-pp value="${esc(p.project)}"><p class="small muted" style="margin:0" data-nt>${esc(sites[0].code)} · ${esc(sites[0].title)}</p>`}
+      <div data-pfw ${hasFronts(p.project) ? '' : 'hidden'}><label>${esc(t_('Frente'))}</label><select data-pf ${hasFronts(p.project) ? 'required' : ''}>${frontOpts(p.project, p.front)}</select></div>
+      <div class="row"><div><label>${esc(t_('Entrada'))}</label><input data-pi type="time" required value="${esc(p.in)}"></div>
+        <div><label>${esc(t_('Saída'))}</label><input data-po type="time" required value="${esc(p.out)}"></div>
+        <button type="button" class="iconbtn sh-x" data-shx aria-label="${esc(t_('Tirar este período'))}">${ic('x')}</button></div></fieldset>`;
+  let dlg = null;
+  const read = () => [...dlg.querySelectorAll('.sh-per')].map((f) => ({ project: f.querySelector('[data-pp]').value, front: (f.querySelector('[data-pf]') || {}).value || '',
+    in: f.querySelector('[data-pi]').value, out: f.querySelector('[data-po]').value }));
+  const draw = (list) => {
+    const box = dlg.querySelector('#shps'); box.innerHTML = list.map(rowHtml).join('');
+    box.querySelectorAll('.sh-x').forEach((b, i) => { b.hidden = list.length < 2; b.onclick = () => { const l = read(); l.splice(i, 1); draw(l); }; });
+    box.querySelectorAll('.sh-per').forEach((f) => {
+      const ps = f.querySelector('select[data-pp]'); if (!ps) return;
+      ps.onchange = () => { const w = f.querySelector('[data-pfw]'); const s = f.querySelector('[data-pf]');
+        s.innerHTML = frontOpts(ps.value, ((last.fronts || {})[ps.value]) || ''); w.hidden = !hasFronts(ps.value); s.required = hasFronts(ps.value); };
+    });
+    dlg.querySelector('#shadd').hidden = list.length >= 6;
+  };
   const fd = await askSheet(`Horas de ${day === data.today ? 'hoje' : dayLabel(day)}`, `
-    ${sites.length > 1 ? `<label for="shs">Obra</label><select id="shs" name="site">${sites.map((x) => `<option value="${esc(x.id)}" ${e0 && e0.project === x.id ? 'selected' : ''}>${esc(x.code)} · ${esc(x.title)}</option>`).join('')}</select>`
-      : `<input type="hidden" name="site" value="${esc(sites[0].id)}"><p class="small muted" data-nt>${esc(sites[0].code)} · ${esc(sites[0].title)}</p>`}
-    ${frontsOn() ? `<label for="shf">${esc(t_('Frente'))}</label><select id="shf" name="front" required>${frontOpts(e0 ? e0.project : (sites[0] || {}).id, frontOf(e0 && e0.project, day))}</select>` : ''}
-    <div class="row"><div><label for="shi">Entrada</label><input id="shi" name="in" type="time" required value="${esc(v(0, '08:00'))}"></div>
-      <div><label for="sho">Saída</label><input id="sho" name="out" type="time" required value="${esc(four ? v(3, '17:00') : t.length === 2 ? v(1, '17:00') : '17:00')}"></div></div>
-    <label class="check"><input type="checkbox" name="lunch" id="shl" ${t.length === 2 ? '' : 'checked'}> Parei para almoçar</label>
-    <div class="row" id="shlr"><div><label for="sha">Saí para almoçar</label><input id="sha" name="lo" type="time" value="${esc(four ? v(1, '12:00') : '12:00')}"></div>
-      <div><label for="shb">Voltei</label><input id="shb" name="li" type="time" value="${esc(four ? v(2, '13:00') : '13:00')}"></div></div>
-    <p class="small muted">Uma saída antes da entrada conta como o dia seguinte (turno da noite).</p>`, 'Guardar', (dlg) => {
-    const c = dlg.querySelector('#shl'); const r = dlg.querySelector('#shlr');
-    const sync = () => { r.hidden = !c.checked; }; c.onchange = sync; sync();
-    const ss = dlg.querySelector('#shs'); const ff = dlg.querySelector('#shf');
-    if (ss && ff) ss.onchange = () => { ff.innerHTML = frontOpts(ss.value, ''); };
+    <div id="shps"></div>
+    <button type="button" class="btn ghost wide" id="shadd">${ic('plus')}${esc(t_('Acrescentar período'))}</button>
+    <p class="small muted">${esc(t_('Um período por obra e por frente. O almoço é o intervalo entre dois períodos. Uma saída antes da entrada conta como o dia seguinte (turno da noite).'))}</p>`, 'Guardar', (x) => {
+    dlg = x; draw(per);
+    x.querySelector('#shadd').onclick = () => { const l = read(); const p = l[l.length - 1] || per[0]; l.push({ project: p.project, front: p.front, in: p.out || '', out: '' }); draw(l); };
   });
   if (!fd) return;
-  const lunch = fd.get('lunch') === 'on';
-  const front = frontsOn() ? fd.get('front') || null : null;
-  const { data: res, error } = front
-    ? await sb.rpc('mini_my_timesheet_save_at', { p_project: fd.get('site'), p_day: day, p_in: fd.get('in'),
-      p_lunch_out: lunch ? fd.get('lo') : null, p_lunch_in: lunch ? fd.get('li') : null, p_out: fd.get('out'), p_front: front })
-    : await sb.rpc('mini_my_timesheet_save', { p_project: fd.get('site'), p_day: day, p_in: fd.get('in'),
-      p_lunch_out: lunch ? fd.get('lo') : null, p_lunch_in: lunch ? fd.get('li') : null, p_out: fd.get('out') });
+  const periods = read().map((p) => ({ project: p.project, front: hasFronts(p.project) ? p.front || null : null, in: p.in, out: p.out }));
+  const { data: res, error } = await sb.rpc('mini_my_timesheet_save_periods', { p_day: day, p_periods: periods });
   if (error) { toast(friendly(error)); return; }
+  const lp = periods[periods.length - 1];
+  store('gestnow-sheet-last', { project: lp.project, fronts: { ...(last.fronts || {}), ...Object.fromEntries(periods.filter((p) => p.front).map((p) => [p.project, p.front])) } });
   toast(`Guardado: ${fmtMin(res.worked || 0)} neste dia. O encarregado vai confirmar.`);
   loadMySheet();
+}
+// «As minhas obras» (v100, sql/119): every site the worker is on this week and the next two, with the client, the
+// address, the way there and who to call. People change client often: today one refinery, next week another.
+async function loadMySites() {
+  const box = $('#mysites'); if (!box) return;
+  box.innerHTML = skel(2);
+  const { data, error } = await sb.rpc('mini_my_sites');
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = `<div class="card">${esc(friendly(error))}</div>`; return; }
+  const list = data.sites || [];
+  const tel = (n) => `tel:${String(n).replace(/[^\d+]/g, '')}`;
+  box.innerHTML = list.length ? list.map((s) => {
+    const map = navHref(s.lat, s.lng, s.address, s.municipality);
+    const when = s.today ? chip('val', t_('hoje'), 'ok') : s.from > data.today ? chip('info', t_('a partir de {x}', fmtDate(s.from))) : chip('', t_('acabou a {x}', fmtDate(s.to)));
+    return `<div class="card site-card" data-site="${esc(s.id)}"><div class="wk"><p class="eyebrow grow" style="margin:0" data-nt>${esc(s.code)}${s.client ? ' · ' + esc(s.client) : ''}</p>${when}</div>
+      <h2 style="margin:4px 0 2px" data-nt>${esc(s.title)}</h2>
+      <p class="small muted" style="margin:0 0 10px">${esc(s.to ? t_('De {x} a {x}', fmtDate(s.from), fmtDate(s.to)) : t_('Desde {x}', fmtDate(s.from)))}</p>
+      ${map ? `<p class="addr">${ic('pin')}<span data-nt>${esc([s.address, s.municipality].filter(Boolean).join(', ') || t_('Localização no mapa'))}</span></p>
+        <a class="btn wide" data-nav href="${esc(map)}" target="_blank" rel="noopener">${ic('go')}Levar-me lá</a>` : '<p class="small muted">A morada da obra ainda não foi preenchida.</p>'}
+      ${s.supervisor ? `<div class="contact">${avatar(s.supervisor)}<div class="grow"><b data-nt>${esc(s.supervisor)}</b><small>Encarregado</small></div>
+        ${s.supervisor_phone ? `<a class="btn ghost small" href="${esc(tel(s.supervisor_phone))}">${ic('phone')}Ligar</a>` : ''}</div>` : ''}</div>`;
+  }).join('') : `<div class="card">${empty('helmet', 'Ainda sem obra', 'Quando o escritório te puser numa obra, ela aparece aqui com a morada e o encarregado.')}</div>`;
+  list.forEach((s) => { if ((s.lat == null || s.lng == null) && s.address) navRefine(box.querySelector(`[data-site="${CSS.escape(s.id)}"] [data-nav]`), `gn.geo.${s.id}`, s.address, s.title, s.municipality); });
 }
 // Each tile's screen: a back button, the title, then the screen's own boxes.
 function meScreen(tab) {
@@ -5289,6 +5362,7 @@ function meScreen(tab) {
     },
     progresso: () => '<div id="myprog"></div>',
     folha: () => '<div id="mysheet"></div>',
+    obras: () => '<div id="mysites"></div>',
     pedidos: () => '<div id="minereq"></div>',
     diarias: () => '<div id="pdmine"></div>',
     despesas: () => '<div id="myexp"></div>',
@@ -5311,6 +5385,7 @@ function meScreen(tab) {
   }
   if (tab === 'progresso') loadMyProgress();
   if (tab === 'folha') loadMySheet();
+  if (tab === 'obras') loadMySites();
   if (tab === 'pedidos') loadMyRequests();
   if (tab === 'diarias') loadMyPerDiems().then(fallback('#pdmine', 'card', 'Ainda sem diárias', 'As diárias aparecem aqui quando o escritório as emitir, à quinta-feira.'));
   if (tab === 'despesas') loadMyExpenses().then(fallback('#myexp', 'card', 'Sem despesas', 'Quando pagares algo para a obra, entrega aqui o talão.'));
@@ -5940,12 +6015,12 @@ async function loadCompanyFronts() {
   if (!box.isConnected) return;
   if (error) { box.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
   box.innerHTML = `<label class="check prof"><input type="checkbox" id="fron" ${data.on ? 'checked' : ''}><span><b>${esc(t_('Contar as horas por frente de obra'))}</b>
-    <small>${esc(t_('Quem escreve as horas escolhe a frente (fornalha, coluna, permutadores). As frentes criam-se em Obras, em cada obra.'))}</small></span></label>`;
+    <small>${esc(t_('O chefe põe cada pessoa na sua frente (fornalha, coluna, permutadores) no ecrã Frentes. As frentes cria-as o Secretariado; o chefe pede-as lá.'))}</small></span></label>`;
   $('#fron').onchange = async () => {
     const x = $('#fron');
     const { error: e } = await sb.rpc('mini_fronts_on_set', { p_on: x.checked });
     if (e) { x.checked = !x.checked; return toast(friendly(e)); }
-    toast(x.checked ? t_('As horas passam a contar por frente. Cria as frentes de cada obra em Obras.') : t_('As horas deixam de contar por frente.'));
+    toast(x.checked ? t_('As horas passam a contar por frente. Cria as frentes de cada obra no ecrã Frentes.') : t_('As horas deixam de contar por frente.'));
   };
 }
 const coName = (k) => (GPS_CO.find((r) => r[0] === k) || GPS_CO[0])[1];
@@ -6068,10 +6143,10 @@ async function loadOffice(from, to) {
     sb.rpc('mini_manual_taps', { p_from: from, p_to: to }), dayPeriods(from, to),
     sb.rpc('mini_declared_days', { p_project: null, p_from: from, p_to: to }).then((r) => r, () => ({})),
     sb.rpc('mini_hours_office_who', { p_from: from, p_to: to }).then((r) => r, () => ({})),
-    sb.rpc('mini_day_fronts', { p_project: null, p_from: from, p_to: to }).then((r) => r, () => ({})),
+    sb.rpc('mini_day_front_hours', { p_project: null, p_from: from, p_to: to }).then((r) => r, () => ({})),
     state.timeMode ? null : sb.rpc('mini_time_mode').then((r) => r, () => ({}))]);
   if (tm && tm.data) state.timeMode = tm.data.mode;
-  state.dayFronts = Object.fromEntries(((fr && fr.data) || []).filter((x) => (x.fronts || []).length).map((x) => [x.work_day_id, x.fronts]));
+  state.dayFronts = frontChips(fr);
   if (!el.isConnected) return; // the month changed while this one was loading: its newer list wins
   if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; $('#sum').innerHTML = ''; return; }
   const manual = {};
@@ -7149,13 +7224,13 @@ async function loadSiteFronts(id) {
   const off = !(on && on.data && on.data.on);
   box.innerHTML = `<p class="small muted" style="margin-top:0">${esc(off
       ? t_('Esta empresa ainda não conta as horas por frente. Liga-o em Administração › Acessos e regras.')
-      : t_('Quem escreve as horas nesta obra escolhe uma destas frentes.'))}</p>
+      : t_('Quem escreve as horas nesta obra escolhe uma destas frentes.'))}${canMakeFronts() ? '' : ' ' + esc(t_('Para uma frente nova, o chefe pede-a em Frentes e o Secretariado aprova.'))}</p>
     ${fronts.length ? fronts.map((f) => `<div class="day wk"><span class="chip code" data-nt>${esc(f.code)}</span>
         <div class="grow">${esc(f.name)}${f.is_active ? '' : ` <span class="small muted">· ${esc(t_('arquivada'))}</span>`}</div>
-        ${canSetSite() ? `<button class="btn small ghost" data-frname="${esc(f.id)}" data-n="${esc(f.name)}">${esc(t_('Mudar o nome'))}</button>
+        ${canMakeFronts() ? `<button class="btn small ghost" data-frname="${esc(f.id)}" data-n="${esc(f.name)}">${esc(t_('Mudar o nome'))}</button>
           <button class="btn small ghost" data-frarc="${esc(f.id)}" data-on="${f.is_active ? '1' : ''}">${esc(f.is_active ? t_('Arquivar') : t_('Voltar a usar'))}</button>` : ''}</div>`).join('')
       : `<p class="muted small">${esc(t_('Ainda sem frentes nesta obra.'))}</p>`}
-    ${canSetSite() ? `<p><button class="btn ghost wide" id="frnew">${ic('plus')}${esc(t_('Acrescentar frente'))}</button></p>` : ''}
+    ${canMakeFronts() ? `<p><button class="btn ghost wide" id="frnew">${ic('plus')}${esc(t_('Acrescentar frente'))}</button></p>` : ''}
     ${live.length ? '' : ''}`;
   const save = async (fid, name) => {
     const fd = await askSheet(fid ? t_('Mudar o nome da frente') : t_('Nova frente'),
@@ -12406,6 +12481,187 @@ async function loadMyProgress() {
   };
 }
 
+// ---- Frentes (v100, sql/120 + sql/121, Diogo 2026-10-26): «ninguém sabe para onde vão 2 horas». The worker taps the card
+// once in and once out; the chief places his people on the site's fronts by groups, and a mid-day change is «from HH:MM
+// these N go to X», with no new tap: the hours split by themselves. Fronts are created by the office (obras.frentes);
+// the chief asks for a new one and the office approves (it opens on that site) or refuses with the reason.
+const canFronts = () => ['horas.ver', 'horas.validar_obra', 'horas.corrigir', 'obras.frentes'].some(can);
+const canMoveFronts = () => ['horas.corrigir', 'horas.validar_obra'].some(can);
+const canMakeFronts = () => can('obras.frentes');
+function viewFronts() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
+  if (!canFronts()) return viewClock();   // code guard as well as the database's
+  const F = state.fr || (state.fr = { when: 'now' });
+  F.sel = new Set();
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Produção (Obra)</p><h1>Frentes</h1></div></div>
+    <div id="frreq"></div>
+    <div class="card"><div class="row"><div>${siteSelect('frs')}</div>
+      <div><label>Ver</label><div class="chips" role="group">
+        <button class="chip" data-frw="now" aria-pressed="${F.when === 'now'}">Agora</button>
+        <button class="chip" data-frw="tom" aria-pressed="${F.when === 'tom'}">Amanhã, como fica planeado</button></div></div></div>
+      <p class="small muted" style="margin-bottom:0">Cada pessoa pica uma vez à entrada e uma à saída. Aqui pões a equipa na frente certa: marca as pessoas e passa-as todas de uma vez, a partir da hora que escolheres. As horas dividem-se sozinhas.</p></div>
+    <div id="frsum"></div><div id="frboard">${skel(4)}</div><div id="fracts"></div><div id="frmine"></div>`;
+  bindSiteSelect('frs', () => { F.sel = new Set(); loadFrontBoard(); loadFrontRequests(); });
+  app.querySelectorAll('[data-frw]').forEach((b) => b.onclick = () => {
+    F.when = b.dataset.frw; F.sel = new Set();
+    app.querySelectorAll('[data-frw]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    loadFrontBoard();
+  });
+  loadFrontBoard(); loadFrontRequests();
+}
+let frSeq = 0;
+async function loadFrontBoard() {
+  const box = $('#frboard'); if (!box) return;
+  const site = currentSite(); const F = state.fr;
+  const acts = $('#fracts'); const sum = $('#frsum');
+  if (!site) { box.innerHTML = `<div class="card">${empty('helmet', 'Sem obras abertas', 'Quando houver uma obra aberta, as frentes aparecem aqui.')}</div>`; sum.innerHTML = ''; acts.innerHTML = ''; return; }
+  const seq = ++frSeq; const tz = siteTz(site.id);
+  const today = localDay(new Date().toISOString(), tz);
+  const tom = isoDay(new Date(Date.parse(today + 'T12:00:00') + 864e5));
+  const [{ data: d, error }, hrs] = await Promise.all([
+    sb.rpc('mini_front_board', { p_project: site.id, p_at: F.when === 'tom' ? tom + 'T20:00:00Z' : null }),
+    sb.rpc('mini_day_front_hours', { p_project: site.id, p_from: today, p_to: today }).then((r) => r, () => ({}))]);
+  if (seq !== frSeq || !box.isConnected) return;
+  if (error) { box.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
+  F.data = d; F.tz = d.tz || tz; F.day = F.when === 'tom' ? tom : today;
+  if (!d.on) {
+    sum.innerHTML = ''; acts.innerHTML = '';
+    box.innerHTML = `<div class="card">${empty('box', 'Esta empresa não conta as horas por frente', can('contas.gerir') ? 'Liga-o em Administração › Acessos e regras.' : 'Quem gere a empresa liga-o em Administração › Acessos e regras.')}</div>`;
+    return;
+  }
+  // today's hours per front: the closed days of today (who is still in counts when they tap out)
+  const tot = {};
+  ((hrs && hrs.data) || []).forEach((x) => (x.fronts || []).forEach((f) => { const k = f.name || t_('Sem frente'); tot[k] = (tot[k] || 0) + (f.minutes || 0); }));
+  sum.innerHTML = Object.keys(tot).length ? `<div class="card"><h2 style="margin-top:0">Horas de hoje por frente</h2>
+    <div class="chips">${Object.entries(tot).sort((a, b) => b[1] - a[1]).map(([n, m]) => `<span class="chip">${ic('pin')}<span data-nt>${esc(n)}</span>&nbsp;·&nbsp;<b>${esc(fmtMin(m))}</b></span>`).join('')}</div>
+    <p class="small muted" style="margin-bottom:0">Contam os dias já fechados de hoje. Quem ainda está na obra entra quando picar a saída.</p></div>` : '';
+  const fronts = d.fronts || []; const people = d.people || [];
+  const since = (p) => !p.since ? '' : localDay(p.since, F.tz) === today ? t_('desde as {x}', fmtHour(p.since, F.tz)) : t_('desde {x}', fmtTime(p.since, F.tz));
+  const groups = [...fronts, { id: '', code: '', name: t_('Sem frente') }];
+  const mv = canMoveFronts();
+  box.innerHTML = (fronts.length ? '' : `<div class="card">${empty('box', 'Ainda sem frentes nesta obra', canMakeFronts() ? 'Cria a primeira em «Nova frente», em baixo.' : 'Pede-a ao Secretariado em «Pedir nova frente», em baixo.')}</div>`)
+    + groups.map((g) => {
+      const ps = people.filter((p) => (p.front || '') === g.id);
+      if (!ps.length) return '';   // empty fronts go together in one line below, so 20 fronts do not fill the phone
+      return `<div class="card fr-g"><div class="wk"><h2 class="grow" style="margin:0">${g.code ? `<span class="chip code" data-nt>${esc(g.code)}</span> ` : ''}<span data-nt>${esc(g.name)}</span> <small class="muted">${ps.length}</small></h2>
+        ${mv && ps.length ? `<button class="btn small ghost" data-frall="${esc(g.id)}">Marcar todos</button>` : ''}</div>
+        ${ps.length ? `<ul class="fr-people">${ps.map((p) => `<li><label class="fr-p">${mv ? `<input type="checkbox" data-frp="${esc(p.id)}">` : ''}
+            <span class="grow"><b data-nt>${esc(p.name)}</b> <small class="muted" data-nt>${esc(p.number || '')}</small></span><small class="muted">${esc(since(p))}</small></label></li>`).join('')}</ul>`
+          : '<p class="muted small" style="margin-bottom:0">Ninguém nesta frente.</p>'}</div>`;
+    }).join('')
+    + (fronts.some((f) => !people.some((p) => p.front === f.id)) ? `<div class="card"><h2 style="margin-top:0">Frentes sem ninguém</h2><div class="chips">${fronts.filter((f) => !people.some((p) => p.front === f.id))
+        .map((f) => `<span class="chip"><span class="code" data-nt>${esc(f.code)}</span>&nbsp;<span data-nt>${esc(f.name)}</span></span>`).join('')}</div></div>` : '')
+    + (people.length ? '' : `<div class="card">${empty('helmet', 'Ninguém posto nesta obra para esse dia', 'As pessoas aparecem aqui quando o escritório as põe na obra.')}</div>`)
+    + (mv && fronts.length ? `<div class="fr-bar" id="frbar" hidden>
+      <p id="frn"></p>
+      <div class="row"><div><label for="frto">Frente</label><select id="frto">${fronts.map((f) => `<option value="${esc(f.id)}">${esc(f.name)}</option>`).join('')}<option value="">${esc(t_('Sem frente'))}</option></select></div>
+        <div><label for="frd">Dia</label><input id="frd" type="date" value="${esc(F.day)}" min="${esc(today)}" max="${esc(isoDay(new Date(Date.parse(today + 'T12:00:00') + 7 * 864e5)))}"></div>
+        <div><label for="frt">A partir das</label><input id="frt" type="time" value="${esc(F.when === 'tom' ? '08:00' : localInput(new Date().toISOString(), F.tz).slice(11, 16))}"></div></div>
+      <div class="fr-btns"><button class="btn" id="frgo">${ic('go')}Passar</button><button class="btn ghost" id="frclr">Desmarcar</button></div></div>` : '');
+  const sync = () => { const bar = $('#frbar'); if (bar) { bar.hidden = !F.sel.size; $('#frn').textContent = t_('{x} pessoa(s) marcada(s): passar para', F.sel.size); } };
+  const tick = () => box.querySelectorAll('[data-frp]').forEach((c) => { c.checked = F.sel.has(c.dataset.frp); });
+  box.querySelectorAll('[data-frp]').forEach((c) => c.onchange = () => { if (c.checked) F.sel.add(c.dataset.frp); else F.sel.delete(c.dataset.frp); sync(); });
+  box.querySelectorAll('[data-frall]').forEach((b) => b.onclick = () => {
+    const ps = people.filter((p) => (p.front || '') === b.dataset.frall); const all = ps.every((p) => F.sel.has(p.id));
+    ps.forEach((p) => (all ? F.sel.delete(p.id) : F.sel.add(p.id))); tick(); sync();
+  });
+  if ($('#frclr')) $('#frclr').onclick = () => { F.sel = new Set(); tick(); sync(); };
+  if ($('#frgo')) $('#frgo').onclick = async () => {
+    const to = $('#frto').value || null; const day = $('#frd').value; const tm = $('#frt').value;
+    if (!day || !tm) return toast(t_('Escolhe o dia e a hora.'));
+    const n = F.sel.size; const name = to ? (fronts.find((f) => f.id === to) || {}).name : t_('Sem frente');
+    $('#frgo').disabled = true;
+    const { error: e } = await sb.rpc('mini_front_move', { p_project: site.id, p_people: [...F.sel], p_front: to, p_day: day, p_time: tm });
+    if (e) { if ($('#frgo')) $('#frgo').disabled = false; return toast(friendly(e)); }
+    toast(t_('{x} pessoa(s) passam para {x} a partir de {x}.', n, name, `${day === today ? t_('hoje') : dayLabel(day)} ${tm}`));
+    F.sel = new Set(); loadFrontBoard();
+  };
+  sync();
+  acts.innerHTML = `<div class="acts">${canMakeFronts() ? `<button class="btn ghost" id="frnew2">${ic('plus')}Nova frente</button>` : ''}
+    ${!canMakeFronts() ? `<button class="btn ghost" id="frask">${ic('plus')}Pedir nova frente</button>` : ''}</div>`;
+  if ($('#frnew2')) $('#frnew2').onclick = () => frontSave(site.id, null, '', loadFrontBoard);
+  if ($('#frask')) $('#frask').onclick = () => frontAsk(site);
+}
+// The office creates or renames a front (sql/121: only obras.frentes).
+async function frontSave(project, fid, name, after) {
+  const fd = await askSheet(fid ? t_('Mudar o nome da frente') : t_('Nova frente'),
+    `<label for="frn">${esc(t_('Nome'))} *</label><input id="frn" name="name" required minlength="2" maxlength="120" value="${esc(name || '')}"
+      placeholder="${esc(t_('ex.: Fornalha'))}"><p class="small muted">${esc(t_('O código (FR-01, FR-02…) é dado pela app.'))}</p>`, t_('Guardar'));
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_save_front', { p_id: fid, p_project: project, p_name: fd.get('name') });
+  if (error) return toast(friendly(error));
+  toast(t_('Frente guardada.')); if (after) after();
+}
+// The chief asks; the office gets a notice.
+async function frontAsk(site) {
+  const fd = await askSheet(t_('Pedir nova frente'), `<p class="small muted" data-nt>${esc(site.cost_center_code || '')} · ${esc(site.title)}</p>
+    <label for="fqn">${esc(t_('Nome da frente'))} *</label><input id="fqn" name="name" required minlength="2" maxlength="120" placeholder="${esc(t_('ex.: Fornalha'))}">
+    <label for="fqr">${esc(t_('Porque é precisa?'))} *</label><textarea id="fqr" name="reason" required minlength="5" maxlength="500" rows="3"
+      placeholder="${esc(t_('ex.: Começámos a montagem da coluna C-201 e a equipa vai lá ficar duas semanas.'))}"></textarea>
+    <p class="small muted">${esc(t_('O Secretariado recebe o pedido. Quando aprovar, a frente abre nesta obra e recebes um aviso.'))}</p>`, t_('Enviar o pedido'));
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_front_request', { p_project: site.id, p_name: fd.get('name'), p_reason: fd.get('reason') });
+  if (error) return toast(friendly(error));
+  toast(t_('Pedido enviado ao Secretariado.')); loadFrontRequests();
+}
+const FR_STATE = { requested: ['warn', 'à espera do Secretariado'], approved: ['val', 'frente aberta'], rejected: ['bad', 'recusada'] };
+async function loadFrontRequests() {
+  const top = $('#frreq'); const mine = $('#frmine'); if (!top || !mine) return;
+  const office = canMakeFronts(); const site = currentSite();
+  const { data, error } = await sb.rpc('mini_front_requests', { p_project: office ? null : (site && site.id) || null });
+  if (!top.isConnected) return;
+  if (error) { top.innerHTML = ''; mine.innerHTML = ''; return; }
+  const list = data || [];
+  const row = (r) => `<div class="day wk fr-req"><div class="grow"><b data-nt>${esc(r.name)}</b>
+      <small class="muted" data-nt>${esc(r.code)} · ${esc(r.title)}</small>
+      ${r.reason ? `<small data-nt>«${esc(r.reason)}»</small>` : ''}
+      <small class="muted"><span>Pedido por</span> <span data-nt>${esc(r.by || '—')} · ${esc(fmtTime(r.at))}</span></small>
+      ${r.status !== 'requested' ? `<small class="muted"><span>${r.status === 'approved' ? 'Aberta por' : 'Recusada por'}</span> <span data-nt>${esc(r.decided_by || '—')} · ${esc(fmtTime(r.decided_at))}${r.status === 'approved' && r.front && r.front !== r.name ? ' · «' + esc(r.front) + '»' : ''}</span></small>` : ''}
+      ${r.note ? `<small data-nt>${esc(r.note)}</small>` : ''}</div>
+    ${chip(FR_STATE[r.status][0], FR_STATE[r.status][1])}
+    ${office && r.status === 'requested' ? `<div class="pg-btns"><button class="btn small" data-fqok="${esc(r.id)}">${ic('ok')}Aprovar</button><button class="btn small ghost" data-fqno="${esc(r.id)}">Recusar</button></div>` : ''}</div>`;
+  const open = list.filter((r) => r.status === 'requested'); const done = list.filter((r) => r.status !== 'requested');
+  if (office) {
+    top.innerHTML = open.length ? `<div class="card fr-pend"><h2 style="margin-top:0">${esc(t_('Pedidos de frentes novas ({x})', open.length))}</h2>${open.map(row).join('')}</div>` : '';
+    mine.innerHTML = done.length ? `<details class="fold"><summary><span>Pedidos já respondidos<span class="sub">Últimos 30 dias</span></span></summary><div>${done.map(row).join('')}</div></details>` : '';
+  } else {
+    top.innerHTML = '';
+    mine.innerHTML = list.length ? `<div class="card"><h2 style="margin-top:0">Os teus pedidos de frentes</h2>${list.map(row).join('')}</div>` : '';
+  }
+  const pick = (id) => list.find((r) => r.id === id);
+  document.querySelectorAll('[data-fqok]').forEach((b) => b.onclick = async () => {
+    const r = pick(b.dataset.fqok);
+    const fd = await askSheet(t_('Abrir a frente'), `<p class="small muted" data-nt>${esc(r.code)} · ${esc(r.title)}</p>
+      <label for="fqa">${esc(t_('Nome da frente'))} *</label><input id="fqa" name="name" required minlength="2" maxlength="120" value="${esc(r.name)}">
+      <p class="small muted">${esc(t_('Podes corrigir o nome antes de abrir. Quem pediu recebe um aviso.'))}</p>`, t_('Aprovar e abrir'));
+    if (!fd) return;
+    const { error: e } = await sb.rpc('mini_front_request_decide', { p_id: r.id, p_ok: true, p_name: fd.get('name'), p_note: null });
+    if (e) return toast(friendly(e));
+    toast(t_('Frente aberta na obra.')); loadFrontRequests(); loadFrontBoard();
+  });
+  document.querySelectorAll('[data-fqno]').forEach((b) => b.onclick = async () => {
+    const r = pick(b.dataset.fqno);
+    const fd = await askSheet(t_('Recusar o pedido'), `<p class="small muted" data-nt>${esc(r.name)} · ${esc(r.code)}</p>
+      <label for="fqx">${esc(t_('Porquê?'))} *</label><textarea id="fqx" name="note" required minlength="3" maxlength="500" rows="3"></textarea>
+      <p class="small muted">${esc(t_('Quem pediu vê o motivo.'))}</p>`, t_('Recusar'));
+    if (!fd) return;
+    const { error: e } = await sb.rpc('mini_front_request_decide', { p_id: r.id, p_ok: false, p_name: null, p_note: fd.get('note') });
+    if (e) return toast(friendly(e));
+    toast(t_('Pedido recusado. Quem pediu vai saber porquê.')); loadFrontRequests();
+  });
+}
+// Picar (v100): the success line says which front the person is on now, from the chief's plan (kept 5 minutes).
+async function picFronts() {
+  const site = currentSite(); if (!site || state.offline || !canFronts()) return;
+  const c = state.picFr || (state.picFr = {});
+  if (c[site.id] && Date.now() - c[site.id].t < 300000) return;
+  const { data } = await sb.rpc('mini_front_board', { p_project: site.id, p_at: null }).then((r) => r, () => ({}));
+  if (!data || !data.on) { c[site.id] = { t: Date.now(), m: {} }; return; }
+  const names = Object.fromEntries((data.fronts || []).map((f) => [f.id, f.name]));
+  c[site.id] = { t: Date.now(), m: Object.fromEntries((data.people || []).filter((p) => p.front).map((p) => [p.id, names[p.front]])) };
+}
+const picFrontOf = (site, collab) => (((state.picFr || {})[site] || {}).m || {})[collab] || '';
+
 // ---- the encarregado and the gestor de obra (Produção › Folha de produção)
 function viewProgress() {
   if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
@@ -13304,6 +13560,7 @@ function noticeRoute(x) {
   if (/^onboarding/.test(k)) return view('acolhimento');
   if (/^(hazard_sif|incident_)/.test(k)) return view('relatos');
   if (k === 'hazard_answer') return mine('relatos');
+  if (k === 'front_request' || k === 'front_answer') return view('frentes');
   return () => false;
 }
 async function showNotices() {

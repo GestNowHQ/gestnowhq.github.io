@@ -10,7 +10,7 @@
   <!-- M3: hidden until app.js checks it is not inside another site's frame (CSP in a meta cannot say frame-ancestors) -->
   <style id="nofr">html{display:none!important}</style>
   <link rel="stylesheet" href="style.css">
-  <link rel="manifest" href="manifest.webmanifest?v=99">
+  <link rel="manifest" href="manifest.webmanifest?v=100">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 </head>
@@ -110,6 +110,7 @@
       <button data-view="qualidade" hidden><svg class="i" aria-hidden="true"><use href="#i-medal"/></svg><span>Qualidade</span></button>
       <button data-view="obras"><svg class="i" aria-hidden="true"><use href="#i-crane"/></svg><span>Obras</span></button>
       <button data-view="material" hidden><svg class="i" aria-hidden="true"><use href="#i-box"/></svg><span>Material da obra</span></button>
+      <button data-view="frentes" hidden><svg class="i" aria-hidden="true"><use href="#i-pin"/></svg><span>Frentes</span></button>
       <button data-view="progresso" hidden><svg class="i" aria-hidden="true"><use href="#i-sheet"/></svg><span>Folha de produção</span></button>
       <button data-view="custos" hidden><svg class="i" aria-hidden="true"><use href="#i-coins"/></svg><span>Custos das obras</span></button>
       <button data-view="premios" hidden><svg class="i" aria-hidden="true"><use href="#i-trophy"/></svg><span>Prémios</span></button>
@@ -130,7 +131,7 @@
   <div id="toast" role="status" aria-live="polite"></div>
   <script src="vendor/supabase-2.117.2.js"></script>
   <script src="config.js"></script>
-  <script src="lang.js?v=99"></script>
+  <script src="lang.js?v=100"></script>
   <script src="app.js"></script>
 </body>
 </html>
