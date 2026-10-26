@@ -1137,6 +1137,7 @@ body.onboarding .top { display: none; }
 .picto.card svg { background: var(--brand); border-radius: var(--r-lg); }
 .picto.no svg { background: var(--paper); border: 4px solid var(--iso-red); border-radius: 50%; stroke: var(--iso-black); padding: 12px; }
 .picto.no .slash { stroke: var(--iso-red); stroke-width: 2.6; }
+.picto.iso img { width: 64px; height: 64px; display: block; object-fit: contain; filter: drop-shadow(0 1px 1.5px rgb(0 0 0 / .18)); }
 .picto figcaption { font-size: var(--t-xs); line-height: 1.25; font-weight: 650; color: var(--ink-2); }
 .picto-pick { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 8px; } .picto-pick .chip { cursor: pointer; font-size: var(--t-xs); }
 .bot-set { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
