@@ -7304,11 +7304,15 @@ function loadUI() {
   return uiLoading;
 }
 // v48: Produção left the menu for whoever opens the Dashboard; it is one tap from here.
+// v102: the site's fronts are one tap from its page too (Diogo looked for them in the site and found nothing).
 function dashLinks() {
-  if (!canProd() || $('#encdl')) return;
+  if ((!canProd() && !canFronts()) || $('#encdl')) return;
   const bar = Object.assign(document.createElement('div'), { id: 'encdl', className: 'enc-dashlinks noprint' });
-  bar.innerHTML = `<button class="btn ghost small" id="toprod">${ic('chart')}Abrir a Produção${ic('go')}</button>`;
-  app.prepend(bar); bar.querySelector('#toprod').onclick = () => go('producao');
+  bar.innerHTML = `${canFronts() ? `<button class="btn ghost small" id="tofr">${ic('fronts')}${esc(t_('Frentes de obra'))}${ic('go')}</button>` : ''}
+    ${canProd() ? `<button class="btn ghost small" id="toprod">${ic('chart')}Abrir a Produção${ic('go')}</button>` : ''}`;
+  app.prepend(bar);
+  if (bar.querySelector('#toprod')) bar.querySelector('#toprod').onclick = () => go('producao');
+  if (bar.querySelector('#tofr')) bar.querySelector('#tofr').onclick = () => go('frentes');
 }
 async function viewSitePanel() {
   if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
@@ -11438,7 +11442,10 @@ const canHazards = () => can('seguranca.relatos');
 const HZ_KIND = { near_miss: ['Quase acidente', 'Quase aconteceu, ninguém se magoou'], unsafe_condition: ['Condição perigosa', 'Algo pode magoar alguém'], first_aid: ['Pequeno ferimento', 'Alguém se magoou pouco'] };
 const HZ_EN = { altura: 'Altura', pressao: 'Pressão', eletricidade: 'Eletricidade', maquinas: 'Máquinas a mexer', quimico: 'Químico ou gás', fogo: 'Fogo ou calor', carga: 'Carga suspensa', outro: 'Outro' };
 const HZ_ST = { open: ['bad', 'À espera'], investigating: ['warn', 'Em análise'], closed: ['ok', 'Resolvido'] };
-const hzKind = (k) => (HZ_KIND[k] || [k])[0];
+// kinds that are not picked in «Relatar» but arrive from other buttons (accident, SOS, man down)
+const HZ_OTHER = { lost_time_injury: 'Acidente de trabalho', sos: 'SOS', man_down: 'Pessoa caída', property_damage: 'Dano material', environmental: 'Ambiente' };
+const hzAcc = (k) => ['lost_time_injury', 'sos', 'man_down'].includes(k);
+const hzKind = (k) => (HZ_KIND[k] || [HZ_OTHER[k] || t_('Registo de segurança')])[0];
 const hzRef = (n) => n ? 'REL-' + String(n).padStart(4, '0') : '';
 // GPS only when the phone already allows it for this app: never a question in the middle of a report.
 async function hzWhere() {
@@ -11522,8 +11529,8 @@ async function loadMyHazards() {
 }
 function hzCard(h, staff) {
   const [k, lb] = HZ_ST[h.status] || ['', h.status];
-  return `<button class="card hz-card${h.sif ? ' sif' : ''}" data-hz="${esc(h.id)}">
-    <div class="hz-top"><b>${esc(hzKind(h.kind))}</b>${h.sif ? chip('bad', 'Podia ser grave', 'warn') : ''}<span class="grow"></span>${chip(k, lb)}</div>
+  return `<button class="card hz-card${h.sif || hzAcc(h.kind) ? ' sif' : ''}" data-hz="${esc(h.id)}">
+    <div class="hz-top"><b>${esc(hzKind(h.kind))}</b>${hzAcc(h.kind) ? chip('bad', 'Alguém se magoou', 'warn') : h.sif ? chip('bad', 'Podia ser grave', 'warn') : ''}<span class="grow"></span>${chip(k, lb)}</div>
     <p class="hz-txt">${esc(h.text)}</p>
     <div class="small muted" data-nt>${esc(hzRef(h.ref))} · ${esc(h.site || '')} · ${esc(fmtTime(h.created_at))}${staff ? ' · ' + esc(h.by || t('Anónimo')) : ''}${(h.photos || []).length ? ' · ' + ic('camera') : ''}</div>
     ${h.status === 'closed' && h.action ? `<p class="hz-ans">${ic('ok')} <span>${esc(h.action)}</span></p>` : h.owner ? `<p class="small"><span>${esc(t('A tratar:'))}</span> <b data-nt>${esc(h.owner)}</b></p>` : ''}
@@ -11536,7 +11543,7 @@ async function hazardOpen(id, after) {
   const d = document.createElement('dialog'); d.className = 'dlg';
   const [k, lb] = HZ_ST[h.status] || ['', h.status];
   d.innerHTML = `<div><h2><span>${esc(hzKind(h.kind))}</span> <span data-nt>${esc(hzRef(h.ref))}</span></h2>
-    <p>${chip(k, lb)} ${h.sif ? chip('bad', 'Podia ter morto ou ferido gravemente', 'warn') : ''}</p>
+    <p>${chip(k, lb)} ${hzAcc(h.kind) ? chip('bad', 'Alguém se magoou', 'warn') : h.sif ? chip('bad', 'Podia ter morto ou ferido gravemente', 'warn') : ''}</p>
     <p class="small muted" data-nt>${esc(h.site)} · ${esc(h.site_title || '')} · ${esc(fmtTime(h.at))}${' · ' + esc(h.by || (h.anonymous ? t('Anónimo') : t('Relatado por ti')))}</p>
     <p class="hz-txt">${esc(h.text)}</p>
     ${(h.energies || []).length ? `<p>${h.energies.map((e) => chip('reg', HZ_EN[e] || e)).join(' ')}</p>` : ''}
@@ -13877,7 +13884,7 @@ async function showNotices() {
     el.innerHTML = (list.length ? `<ul class="nt-list">${list.map(([x, i]) => { const [cls, lab] = NOTICE_SEV[x.severity] || NOTICE_SEV.low;
       const sub = [x.person, x.site, x.n > 1 ? t('{x} vezes', x.n) : '', ago(x.at)].filter(Boolean).map(esc).join(' · ');
       return `<li><button class="nt${x.read ? '' : ' unread'} sev-${esc(x.kind === 'hazard_sif' ? 'critical' : x.severity || 'low')}" data-i="${i}"><span class="nt-dot" aria-hidden="true"></span>
-        <span class="grow"><b>${esc(x.title)}</b><small>${sub}</small></span>${x.kind === 'hazard_sif' && x.severity !== 'critical' ? chip('bad', 'Perigo grave', 'warn') : x.severity === 'critical' || x.severity === 'high' ? chip(cls, lab) : ''}</button></li>`; }).join('')}</ul>`
+        <span class="grow"><b>${esc(x.title)}</b><small>${sub}</small></span>${x.kind === 'incident_lost_time_injury' ? chip('bad', 'Acidente', 'warn') : x.kind === 'hazard_sif' && x.severity !== 'critical' ? chip('bad', 'Perigo grave', 'warn') : x.severity === 'critical' || x.severity === 'high' ? chip(cls, lab) : ''}</button></li>`; }).join('')}</ul>`
       : empty('box', 'Tudo lido', 'Não tens avisos por ler. Os novos aparecem aqui.')) + more;
     const rb = el.querySelector('#ntread'); if (rb) rb.onclick = () => { showRead = true; render(); };
     el.querySelectorAll('[data-i]').forEach((b) => b.onclick = async () => {

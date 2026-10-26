@@ -1981,7 +1981,7 @@ button.cd.me-none { background: transparent; color: var(--ink-2); box-shadow: in
 .taplog .tl > .i { width: 20px; height: 20px; flex: 0 0 auto; margin-top: 2px; }
 .taplog .tl.ok > .i { color: var(--ok); } .taplog .tl.bad > .i { color: var(--bad); } .taplog .tl.warn > .i { color: var(--warn); }
 .enc-tl-t { flex: 0 0 auto; font-weight: 750; } .enc-tl-x { min-width: 0; }
-.enc-dashlinks { display: flex; justify-content: flex-end; margin: 0 0 10px; }
+.enc-dashlinks { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; }
 
 /* The four states of a day: site validates → office approves → month closes */
 .enc-flow { margin: 0 0 14px; padding: 14px; border: var(--bw) solid var(--line); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--sh-1); }
