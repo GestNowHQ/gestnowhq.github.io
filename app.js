@@ -3746,7 +3746,7 @@ async function onbItem(x, items) {
   onbShell(ob, `<div class="card onb-view"><p class="eyebrow" style="margin-top:0">Parte ${n} de ${items.length}</p><h2>${esc(x.title)}</h2>
     ${x.kind === 'filevideo' ? `<div class="onb-video onb-vfile"><video controls playsinline preload="metadata" controlslist="nodownload" disablepictureinpicture src="${esc(fileUrl)}"></video></div>`
       : x.kind === 'pdf' ? `<div class="onb-manual onb-pdf" id="onbman"><p class="muted small" id="pdfst">A abrir o documento…</p></div>`
-      : x.kind === 'video' ? `<div class="onb-video"><iframe src="https://www.youtube-nocookie.com/embed/${esc(x.video_id)}?rel=0&modestbranding=1&playsinline=1" title="${esc(x.title)}"
+      : x.kind === 'video' ? `<div class="onb-video"><iframe src="https://www.youtube-nocookie.com/embed/${esc(x.video_id)}?rel=0&modestbranding=1&playsinline=1&cc_load_policy=1&hl=${esc(document.documentElement.lang || 'pt-PT')}&cc_lang_pref=${esc((document.documentElement.lang || 'pt').slice(0, 2))}" title="${esc(x.title)}"
         allow="encrypted-media; picture-in-picture; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div>`
       : `<div class="onb-manual" id="onbman">${paras(x.body)}</div>`}
     <div class="onb-go"><button class="btn big" id="seen" disabled>${ic('clock')}<span id="seentx">…</span></button>
