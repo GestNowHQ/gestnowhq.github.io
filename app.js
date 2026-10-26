@@ -1134,18 +1134,23 @@ nav.addEventListener('click', (e) => {
   if (e.target.id === 'scrim') return openMore(false);
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.more !== undefined) return openMore(document.getElementById('more').hidden);
+  if (b.dataset.dep !== undefined) return showDept(b.dataset.dep);
+  if (b.dataset.back !== undefined) return showDept(null);
+  if (b.dataset.find !== undefined) return openPalette();
+  const v = b.dataset.view || b.dataset.cv;
+  if (v && b.closest('#more')) recentMenu(v);
   openMore(false);
   if (b.dataset.action === 'sair') return signOut();
   if (b.dataset.action === 'tour') return startTour();
-  if (b.dataset.view === 'orcamentos' && state.orc) { state.orc.id = null; state.orc.mode = 'list'; }   // the menu always opens the list
-  if (b.dataset.view === 'minhas') state.mineTab = 'home';
-  if (b.dataset.view === 'comercial' && state.sales) state.sales.sel = null;   // the menu always opens the list   // «Eu» always opens the home
-  go(b.dataset.view);
+  if (v === 'orcamentos' && state.orc) { state.orc.id = null; state.orc.mode = 'list'; }   // the menu always opens the list
+  if (v === 'minhas') state.mineTab = 'home';
+  if (v === 'comercial' && state.sales) state.sales.sel = null;   // the menu always opens the list   // «Eu» always opens the home
+  go(v);
 });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '104';
+const APP_VERSION = '106';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['reunioes', 'emergencia', 'lmra', 'seguranca'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -1267,13 +1272,27 @@ function layoutNav(role) {
   for (const v of first) tabs.insertBefore(btn(v), moreBtn);
   // Phone: the role's tabs at the bottom, the rest in the sheet by group. Computer: everything in the left column, by group.
   const place = isWide() ? (el) => tabs.insertBefore(el, moreBtn) : (el) => sheet.appendChild(el);
-  for (const [title, views] of groups) {
-    const rest = views.filter((v) => all.includes(v) && !first.includes(v) && shown(v));
+  sheet.querySelectorAll('.mdtop, .mdbar, .mdeps, .mclone').forEach((x) => x.remove());
+  nav.querySelectorAll('[data-g]').forEach((x) => { delete x.dataset.g; x.classList.remove('mhid'); });
+  const deps = [];
+  groups.forEach(([title, views], g) => {
     const tour = title === 'Eu';   // the sheet: «Eu · Visita guiada»
-    if (!rest.length && !tour) continue;
-    place(head(title)); for (const v of rest) place(btn(v));
-    if (tour) place(nav.querySelector('button[data-action=tour]'));
-  }
+    if (isWide()) {
+      const rest = views.filter((v) => all.includes(v) && !first.includes(v) && shown(v));
+      if (!rest.length && !tour) return;
+      place(head(title)); for (const v of rest) place(btn(v));
+      if (tour) place(nav.querySelector('button[data-action=tour]'));
+      return;
+    }
+    // Phone (v105): a department holds ALL its screens, the bottom-bar ones too (as copies), in the department's order
+    const mine = views.filter((v) => all.includes(v) && shown(v));
+    if (!mine.some((v) => !first.includes(v)) && !tour) return;   // only bottom-bar screens: not one of this person's departments
+    const put = (el) => { el.dataset.g = g; sheet.appendChild(el); };
+    for (const v of mine) put(first.includes(v) ? navCopy(v) : btn(v));
+    if (tour) put(nav.querySelector('button[data-action=tour]'));
+    deps.push({ title, g, views: mine });
+  });
+  if (!isWide()) moreDepts(sheet, deps);
   for (const v of all) if (!first.includes(v) && !shown(v)) sheet.appendChild(btn(v));   // hidden ones wait in the sheet
   sheet.appendChild(Object.assign(document.createElement('hr'), {}));
   sheet.appendChild(nav.querySelector('button[data-action=sair]'));
@@ -1283,8 +1302,78 @@ function layoutNav(role) {
   if (isWide()) tabs.insertBefore(nav.querySelector('button[data-action=sair]'), moreBtn);
   encBadges(true);
 }
+// v105 (Diogo 2026-10-26): «Mais» on the phone opens on the DEPARTMENTS only, as big tiles. A tap on one opens a screen with
+// that department's screens and «Voltar». Same groups and the same permissions as before (menuGroups): each person sees only
+// the departments that give them a screen. «Procurar» and the last screens used stay on top, so nobody gains taps.
+const DEPT_ICON = { 'Administração': 'firms', 'Secretariado': 'office', 'Recursos Humanos': 'users', 'Frota': 'car', 'QSA · Qualidade, Segurança e Ambiente': 'shield',
+  'Produção (Obra)': 'crane', 'Compras e Armazém': 'cart', 'Comercial': 'target', 'Orçamentação': 'calc', 'Eu': 'user', 'Outros': 'more' };
+const RECENT_KEY = 'gestnow.menu.recent';
+// a copy of a menu button (a bottom-bar screen shown again inside its department, or a recent one): data-cv, not data-view,
+// so everything that looks for THE button of a screen still finds the real one
+function navCopy(v) {
+  const b = nav.querySelector(`button[data-view="${v}"]`).cloneNode(true);
+  b.removeAttribute('data-view'); b.removeAttribute('hidden'); b.classList.remove('enc-off'); b.dataset.cv = v; b.classList.add('mclone');
+  return b;
+}
+function moreDepts(sheet, deps) {
+  const icon = (d) => DEPT_ICON[d.title] || ((nav.querySelector(`button[data-view="${d.views[0]}"] use`) || { getAttribute: () => '#i-more' }).getAttribute('href') || '').replace('#i-', '');
+  const top = Object.assign(document.createElement('div'), { className: 'mdtop' });
+  const canFind = state.me && state.me.role !== 'worker';
+  top.innerHTML = (canFind ? `<button type="button" class="mfind" data-find>${ic('search')}<span>${t('Procurar ecrã, pessoa ou obra')}</span></button>` : '')
+    + `<div class="mrecent" hidden><h3 class="enc-mh">${t('Usados há pouco')}</h3><div class="mrow"></div></div><h3 class="enc-mh">${t('Departamentos')}</h3>`;
+  const bar = Object.assign(document.createElement('div'), { className: 'mdbar' });
+  bar.innerHTML = `<button type="button" class="mback" data-back aria-label="${t('Voltar aos departamentos')}">${ic('back')}<span>${t('Departamentos')}</span></button><h2 id="mdt"></h2>`;
+  const grid = Object.assign(document.createElement('div'), { className: 'mdeps' });
+  grid.innerHTML = deps.map((d) => {
+    const [name, sub] = d.title.split(' · ');
+    const n = d.views.length + (d.title === 'Eu' ? 1 : 0);
+    return `<button type="button" class="mdep" data-dep="${d.g}"><svg class="i" aria-hidden="true"><use href="#i-${esc(icon(d))}"/></svg>`
+      + `<span class="grow"><b>${esc(name)}</b><small>${sub ? esc(sub) : n === 1 ? t('1 ecrã') : t(`${n} ecrãs`)}</small></span>${ic('go', 'mgo')}</button>`;
+  }).join('');
+  sheet.prepend(top, bar, grid);
+  sheet._deps = deps;
+  showDept(null);
+}
+function showDept(g) {
+  const sheet = document.getElementById('more'); if (!sheet || !sheet._deps) return;
+  const d = sheet._deps.find((x) => String(x.g) === String(g));
+  if (d) sheet.dataset.dep = d.g; else delete sheet.dataset.dep;
+  sheet.querySelectorAll(':scope > [data-g]').forEach((x) => x.classList.toggle('mhid', !d || x.dataset.g !== String(d.g)));
+  const h = sheet.querySelector('#mdt'); if (h && d) h.textContent = d.title;
+  sheet.scrollTop = 0;
+  deptBadges();
+}
+// the waiting counts of a department's screens add up on its tile; copies show their screen's count
+function deptBadges() {
+  const sheet = document.getElementById('more'); if (!sheet || !sheet._deps) return;
+  sheet.querySelectorAll('[data-cv]').forEach((c) => { const b = nav.querySelector(`button[data-view="${c.dataset.cv}"]`); if (b && b.dataset.badge) c.dataset.badge = b.dataset.badge; else delete c.dataset.badge; });
+  for (const d of sheet._deps) {
+    const n = d.views.reduce((a, v) => a + (parseInt((nav.querySelector(`button[data-view="${v}"]`) || { dataset: {} }).dataset.badge, 10) || 0), 0);
+    const tile = sheet.querySelector(`.mdep[data-dep="${d.g}"]`); if (!tile) continue;
+    if (n) tile.dataset.badge = n > 99 ? '99+' : String(n); else delete tile.dataset.badge;
+  }
+}
+function recentMenu(v) {
+  if (!state.me) return;
+  const key = RECENT_KEY + '.' + state.me.user_id;
+  store(key, [v, ...load(key, []).filter((x) => x !== v)].slice(0, 6));
+}
+function paintRecent(sheet) {
+  const box = sheet.querySelector('.mrecent'); if (!box || !state.me) return;
+  const row = box.querySelector('.mrow'); row.innerHTML = '';
+  const ok = (v) => { const b = nav.querySelector(`button[data-view="${v}"]`); return b && !b.hidden && !b.classList.contains('enc-off') && b.parentElement.id === 'more'; };
+  const list = load(RECENT_KEY + '.' + state.me.user_id, []).filter(ok).slice(0, 3);
+  for (const v of list) row.appendChild(navCopy(v));
+  box.hidden = !list.length;
+  deptBadges();
+}
 function openMore(open) {
   const sheet = document.getElementById('more'); if (!sheet) return;
+  if (open && sheet._deps && !isWide()) {
+    paintRecent(sheet);
+    const real = sheet._deps.filter((x) => x.title !== 'Eu');
+    showDept(real.length === 1 ? real[0].g : null);   // one department only: straight into it
+  }
   sheet.hidden = !open; document.getElementById('scrim').hidden = !open;
   nav.querySelector('button[data-more]').setAttribute('aria-expanded', String(!!open));
 }
@@ -1907,7 +1996,7 @@ function go(view) {
   if (state.navDesk !== ownerDesk()) layoutNav(state.me.role);   // owner moved between his clients and a company
   app.classList.toggle('wide', view === 'secretariado' || view === 'painel');
   const tab = view === 'ficha' ? 'trabalhadores' : view === 'fichaepi' ? 'armazem' : view === 'cliente' || view === 'precos' ? 'clientes' : view === 'area' ? 'obras' : view;
-  nav.querySelectorAll('button[data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === tab));
+  nav.querySelectorAll('button[data-view], button[data-cv]').forEach((b) => b.classList.toggle('on', (b.dataset.view || b.dataset.cv) === tab));
   const cur = nav.querySelector(`button[data-view="${tab}"]`);
   nav.querySelector('button[data-more]').classList.toggle('on', !!cur && cur.parentElement.id === 'more');
   window.scrollTo(0, 0);
@@ -6677,10 +6766,11 @@ async function encBadges(force) {
     }));
   }
   await Promise.all(jobs.map((j) => j.catch(() => {})));
+  deptBadges();
   if (state.view === 'secretariado' && state.encOfficeData && $('#encflow')) encOfficeFlow(state.encOfficeData);
   // The «Mais» button carries the sum of what is inside it, so nothing waits out of sight.
   const more = nav.querySelector('button[data-more]'); if (!more) return;
-  const inside = [...document.querySelectorAll('#more button[data-badge]')].filter((b) => !b.hidden).reduce((a, b) => a + (parseInt(b.dataset.badge, 10) || 0), 0);
+  const inside = [...document.querySelectorAll('#more button[data-view][data-badge]')].filter((b) => !b.hidden).reduce((a, b) => a + (parseInt(b.dataset.badge, 10) || 0), 0);
   if (inside) more.dataset.badge = String(inside); else delete more.dataset.badge;
 }
 // The four states of a day, in order: the site validates, the office approves, the month closes. One bar, the same on every screen.

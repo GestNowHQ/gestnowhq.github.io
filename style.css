@@ -1876,15 +1876,40 @@ button.cd.me-none { background: transparent; color: var(--ink-2); box-shadow: in
 .sheet > .enc-mh, .sheet > hr, .sheet > .ver, .sheet > button[data-action] { grid-column: 1 / -1; }
 .enc-mh { margin: 10px 8px 2px; font-size: 11.5px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2); }
 .sheet > .enc-mh:first-child { margin-top: 4px; }
-.sheet > button[data-view] { flex-direction: column; justify-content: center; gap: 6px; min-height: 80px; padding: 8px 4px; font-size: 13px; line-height: 1.2; text-align: center; overflow-wrap: anywhere; }
-.sheet > button[data-view] .i { width: 40px; height: 40px; padding: 9px; border-radius: 12px; }
-.sheet > button[data-view] span { max-width: 100%; }
+.sheet > button[data-view], .sheet > button[data-cv] { flex-direction: column; justify-content: center; gap: 6px; min-height: 80px; padding: 8px 4px; font-size: 13px; line-height: 1.2; text-align: center; overflow-wrap: anywhere; }
+.sheet > button[data-view] .i, .sheet > button[data-cv] .i { width: 40px; height: 40px; padding: 9px; border-radius: 12px; }
+.sheet > button[data-view] span, .sheet > button[data-cv] span, .mrow > button span { max-width: 100%; }
 .tabs .enc-mh { margin: 14px 12px 4px; font-size: 10.5px; }
+/* v105 «Mais» on the phone: first the departments (tiles), a tap opens that department's screens with «Voltar» */
+.sheet > .mdtop, .sheet > .mdbar, .sheet > .mdeps { grid-column: 1 / -1; }
+.sheet .mhid { display: none !important; }
+.sheet:not([data-dep]) > .mdbar { display: none; }
+.sheet[data-dep] > .mdtop, .sheet[data-dep] > .mdeps, .sheet[data-dep] > hr, .sheet[data-dep] > .out, .sheet[data-dep] > .ver { display: none; }
+.sheet .mfind { min-height: 48px; margin: 2px 0 4px; padding: 0 14px; border: var(--bw) solid var(--line); border-radius: 999px; background: var(--surface-2); color: var(--ink-2); font-size: var(--t-sm); font-weight: 600; }
+.sheet .mfind .i { width: 20px; height: 20px; padding: 0; background: none; }
+.mrow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.mrow > button { flex-direction: column; justify-content: center; gap: 6px; min-height: 80px; padding: 8px 4px; font-size: 13px; line-height: 1.2; text-align: center; overflow-wrap: anywhere; }
+.mrow > button .i { width: 40px; height: 40px; padding: 9px; border-radius: 12px; }
+.mdeps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 2px 0 4px; }
+.sheet .mdep { position: relative; flex-direction: column; align-items: flex-start; gap: 10px; min-height: 112px; padding: 14px 12px 12px; border: var(--bw) solid var(--line);
+  border-radius: var(--r-lg); background: var(--surface); text-align: left; transition: transform .15s var(--ease), border-color .15s var(--ease); }
+.sheet .mdep:active { transform: scale(.97); }
+.sheet .mdep:hover { border-color: var(--brand); background: var(--surface); }
+.sheet .mdep .i { width: 42px; height: 42px; padding: 10px; border-radius: 12px; background: var(--brand-soft); color: var(--brand); }
+.sheet .mdep .grow { display: flex; flex-direction: column; gap: 2px; min-width: 0; width: 100%; }
+.sheet .mdep b { font-size: 15px; line-height: 1.2; overflow-wrap: anywhere; }
+.sheet .mdep small { font-size: 12px; font-weight: 500; color: var(--ink-2); line-height: 1.25; }
+.sheet .mdep .mgo { position: absolute; top: 14px; right: 10px; width: 20px; height: 20px; padding: 0; background: none; color: var(--ink-3); }
+#nav .sheet .mdep[data-badge]::after { top: 10px; left: 46px; }
+.mdbar { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 0 0 6px; margin-bottom: 4px; border-bottom: var(--bw) solid var(--line); }
+.sheet .mback { width: auto; min-height: 44px; padding: 0 12px 0 4px; gap: 4px; color: var(--brand); font-size: var(--t-sm); }
+.sheet .mback .i { width: 24px; height: 24px; padding: 0; background: none; color: var(--brand); }
+.mdbar h2 { margin: 0 8px 4px; font-size: 20px; line-height: 1.25; }
 /* waiting counts on menu buttons (a data attribute, so the button's text stays its name) */
 #nav button[data-badge] { position: relative; }
 #nav button[data-badge]::after { content: attr(data-badge); position: absolute; top: 4px; left: calc(50% + 8px); min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box;
   border-radius: 999px; background: var(--bad-fill); color: #fff; font: 800 11.5px/20px var(--font); text-align: center; box-shadow: 0 0 0 2px var(--surface); pointer-events: none; }
-.sheet > button[data-view][data-badge]::after { top: 6px; left: calc(50% + 10px); }
+.sheet > button[data-view][data-badge]::after, .sheet > button[data-cv][data-badge]::after, .mrow > button[data-badge]::after { top: 6px; left: calc(50% + 10px); }
 @media (min-width: 1100px) { #nav .tabs button[data-badge]::after { position: static; margin-left: auto; box-shadow: none; } }
 
 /* Supervisor board */
