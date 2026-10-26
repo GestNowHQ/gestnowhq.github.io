@@ -588,6 +588,13 @@ const ERRORS = [
   [/cannot send back your own hours/i, 'Não podes devolver as tuas próprias horas.'],
   [/set the municipality of the site first/i, 'Escreve primeiro o concelho da obra e guarda.'],
   [/date and name are required/i, 'Escreve a data e o nome do feriado.'],
+  [/write the certificate number/i, 'Escreve o número do certificado (CIT). Nunca o diagnóstico.'],
+  [/this person has hours on (\d\d\/\d\d)/i, 'Esta pessoa tem horas no dia $1: escolhe outros dias.'],
+  [/there is already an absence on these days/i, 'Já há uma ausência nesses dias.'],
+  [/only an approved absence can be taken off/i, 'Só se tira uma ausência já aprovada.'],
+  [/you cannot record your own absence/i, 'Não podes registar as tuas próprias ausências: pede a outra pessoa do escritório.'],
+  [/choose the days of the absence/i, 'Escolhe os dias da ausência (até um ano).'],
+  [/this region is not in the site's country/i, 'Essa região não é do país da obra.'],
   [/week must start on a Monday/i, 'A semana das diárias começa à segunda-feira.'],
   [/this week has not started yet/i, 'Esta semana ainda não começou: emite as diárias a partir de segunda.'],
   [/choose who to pay/i, 'Escolhe pelo menos uma pessoa.'],
@@ -1150,7 +1157,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '107';
+const APP_VERSION = '108';
 // v107 (Diogo 2026-10-26): «Início» = what is urgent + the departments. The bottom bar keeps only Início, the field tools of
 // the encarregado (Equipa, Picar) or of the safety officer (Emergência), Procurar and Eu. Everything else is in its department.
 const TABS = { supervisor: ['inicio', 'equipa', 'picar', 'minhas'], admin: ['inicio', 'minhas'],
@@ -6270,7 +6277,7 @@ function viewOffice() {
       ${can('horas.aprovar') ? `<p class="small muted">A obra valida, tu aprovas, no fim do mês fechas.</p>
       ${more('Em que reparar', '<p>Olha com atenção para as picagens marcadas «à mão», «sem rede, chegou tarde» e «próprio cartão»: aparecem a amarelo no dia.</p>')}
       <div id="encflow"></div><div id="sum">${skel(1)}</div>` : ''}</div>
-    ${can('horas.aprovar') ? `<div id="list">${skel(3)}</div>` : ''}`;
+    ${can('horas.aprovar') ? `<div id="omiss"></div><div id="list">${skel(3)}</div><div id="osum"></div>` : ''}`;
   const side = `${can('horas.aprovar') ? '<div id="offreq" class="noprint"></div>' : ''}${can('salarios.exportar') ? `<div class="card noprint"><h2 style="margin-top:0">Salários</h2>
       <p class="small muted">Folha Excel do mês e ficheiro para o Primavera.</p>
       ${more('O que leva a folha', '<p>Uma linha por pessoa e obra, com as horas normais, as extra aprovadas, as noturnas e as de descanso ou feriado, mais um resumo por pessoa. Abre no Excel, no Google Sheets ou no telemóvel.</p>')}
@@ -6502,13 +6509,15 @@ const tapKind = (reason) => (/^sem rede/.test(reason || '') ? 'sem rede, chegou 
   : reason === 'número do cartão escrito à mão' ? 'cartão escrito à mão' : 'à mão');
 async function loadOffice(from, to) {
   const el = $('#list'); if (!el) return;
-  const [{ data, error }, man, per, decl, who, fr, tm] = await Promise.all([sb.rpc('mini_hours_office', { p_from: from, p_to: to }),
+  const [{ data, error }, man, per, decl, who, fr, tm, om] = await Promise.all([sb.rpc('mini_hours_office', { p_from: from, p_to: to }),
     sb.rpc('mini_manual_taps', { p_from: from, p_to: to }), dayPeriods(from, to),
     sb.rpc('mini_declared_days', { p_project: null, p_from: from, p_to: to }).then((r) => r, () => ({})),
     sb.rpc('mini_hours_office_who', { p_from: from, p_to: to }).then((r) => r, () => ({})),
     sb.rpc('mini_day_front_hours', { p_project: null, p_from: from, p_to: to }).then((r) => r, () => ({})),
-    state.timeMode ? null : sb.rpc('mini_time_mode').then((r) => r, () => ({}))]);
+    state.timeMode ? null : sb.rpc('mini_time_mode').then((r) => r, () => ({})),
+    sb.rpc('mini_office_month', { p_from: from, p_to: to }).then((r) => r, () => ({}))]);
   if (tm && tm.data) state.timeMode = tm.data.mode;
+  state.officeMon = (om && om.data) || null;
   state.dayFronts = frontChips(fr);
   if (!el.isConnected) return; // the month changed while this one was loading: its newer list wins
   if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; $('#sum').innerHTML = ''; return; }
@@ -6526,6 +6535,7 @@ async function loadOffice(from, to) {
   const look = data.filter((r) => (r.status === 'supervisor_validated' && r.flags.length) || noExit(r));
   const clean = data.filter((r) => r.status === 'supervisor_validated' && !r.flags.length && !noExit(r) && r.collaborator_id !== me);
   encOfficeFlow(data);
+  officeMonthViews(state.officeMon, from, to);
   $('#sum').innerHTML = `<div class="kpis k4">
       <div class="kpi" data-f="obra"><b>${n('registered')}</b> <span>por validar na obra</span></div>
       <div class="kpi ${look.length ? 'warn' : ''}" data-f="ti"><b>${look.length}</b> <span>precisam de ti</span></div>
@@ -6630,7 +6640,7 @@ function officeTable(el, data, manual, per, me, noExit, look) {
         <td><span class="chip code" title="${esc(r.project_title)}">${esc(r.project_code)}</span></td>
         <td class="per">${periodsHtml(periodsOf(r, per[r.work_day_id], tz)) || '<span class="muted">sem picagens</span>'}</td>
         <td class="num"><b>${esc(fmtMin(r.worked_minutes))}</b></td>
-        <td class="num" title="${r.overtime_minutes ? (r.overtime_approved ? 'aprovadas' : r.overtime_approved === false ? 'recusadas' : 'por decidir') : ''}">${esc(otText(r))}</td>
+        <td class="num" title="${esc(r.overtime_minutes ? (r.overtime_approved ? 'aprovadas' : r.overtime_approved === false ? 'recusadas' : 'por decidir') + (otWhy(r) ? ': ' + otWhy(r) : '') : '')}">${esc(otText(r))}${otWhy(r) ? `<div class="small muted ot-why-t">${esc(otWhyShort(r))}</div>` : ''}</td>
         <td class="num">${r.night_minutes ? esc(fmtMin(r.night_minutes)) : ''}</td>
         <td>${OFFICE_STATUS[r.status] || esc(r.status)}${r.supervisor_name && r.status !== 'registered' ? `<div class="small muted">por ${esc(r.supervisor_name)}</div>` : ''}</td>
         <td class="why"><div class="chips-row">${warn.map(([c, t]) => chip(c, t)).join('')}</div>${(manual[r.work_day_id] || []).length ? `<div class="small muted" title="${esc(manual[r.work_day_id].map((m) =>
@@ -6724,6 +6734,143 @@ function dayFlags(r, manual) {
   if (r.declared && state.timeMode !== 'sheet') f.push(['warn', 'escrito pelo trabalhador, sem cartão']);
   return f;
 }
+// v108 (sql/129): the regions whose holidays count by themselves (on top of the country's).
+const REGIONS = { 'ES-CT': 'Catalunha', 'PT-20': 'Açores', 'PT-30': 'Madeira', 'FR-AM': 'Alsácia-Mosela' };
+const regionOptions = (country, cur) => `<option value="">Sem região (só os feriados nacionais)</option>${Object.entries(REGIONS)
+  .filter(([k]) => k.slice(0, 2) === country).map(([k, v]) => `<option value="${k}" ${cur === k ? 'selected' : ''}>${esc(v)}</option>`).join('')}`;
+// What the office can record for a day with no hours. Sick leave, accidents and parental leave keep only the certificate number.
+const ABS_OFFICE = [['vacation', 'Férias'], ['sick_leave', 'Baixa médica'], ['justified_paid', 'Falta justificada'], ['unjustified', 'Falta injustificada'],
+  ['justified_unpaid', 'Falta sem vencimento'], ['work_accident', 'Acidente de trabalho'], ['medical_appointment', 'Consulta médica'],
+  ['bereavement', 'Falecimento de familiar'], ['marriage', 'Casamento'], ['parental_leave', 'Licença parental'], ['training', 'Formação'],
+  ['strike', 'Greve'], ['other', 'Outro motivo']];
+const ABS_ALL = Object.fromEntries(ABS_OFFICE);
+const ABS_DOC = new Set(['sick_leave', 'work_accident', 'parental_leave']);
+// Why a day has overtime (sql/129 «why»): past the day's normal hours, the week already full, or the day's hours used at another site.
+function otWhy(r) {
+  const om = state.officeMon; const w = om && om.why && om.why[r.work_day_id];
+  if (!w || !r.overtime_minutes) return '';
+  const d = om.daily || 480;
+  if (w.k === 'week') return `A semana já tinha ${fmtMin(w.week + w.other)} normais: acima de ${fmtMin(5 * d)} por semana tudo é extra.`;
+  if (w.k === 'site') return `${fmtMin(w.other)} normais deste dia já contaram noutra obra: o resto aqui é extra.`;
+  return `Trabalhou ${fmtMin(r.worked_minutes)}: o que passa das ${fmtMin(d)} do dia é extra.`;
+}
+function otWhyShort(r) {
+  const om = state.officeMon; const w = om && om.why && om.why[r.work_day_id];
+  return !w ? '' : w.k === 'week' ? `semana > ${fmtMin(5 * (om.daily || 480))}` : w.k === 'site' ? 'outra obra' : `dia > ${fmtMin(om.daily || 480)}`;
+}
+// The month for the office: days with no record (say what they were), one line per person, the sites' holidays, the cost.
+function officeMonthViews(om, from, to) {
+  const top = $('#omiss'); const bottom = $('#osum');
+  if (!top || !bottom) return;
+  if (!om) { top.innerHTML = ''; bottom.innerHTML = ''; return; }
+  const me = state.me && state.me.collaborator_id;
+  // the person's missing days in runs: the next working day continues the run (a weekend in between does not break it)
+  const byPerson = {};
+  for (const m of om.missing) (byPerson[m.collab] = byPerson[m.collab] || { name: m.name, number: m.number, days: [] }).days.push(m);
+  const nextWorkday = (iso) => { const d = new Date(iso + 'T12:00:00Z'); do d.setUTCDate(d.getUTCDate() + 1); while ([0, 6].includes(d.getUTCDay())); return d.toISOString().slice(0, 10); };
+  for (const p of Object.values(byPerson)) {
+    p.runs = [];
+    for (const m of p.days) {
+      const r = p.runs[p.runs.length - 1];
+      if (r && r.code === m.code && nextWorkday(r.to) === m.day) { r.to = m.day; r.n++; } else p.runs.push({ from: m.day, to: m.day, n: 1, code: m.code });
+    }
+  }
+  const short = (iso) => iso.slice(8, 10) + '/' + iso.slice(5, 7);
+  const runText = (r) => r.n === 1 ? `${dayLabel(r.from)} · ${r.code}` : `${short(r.from)} a ${short(r.to)} · ${r.n} dias · ${r.code}`;
+  const absences = om.absences || [];
+  top.innerHTML = `<div class="sec-h"><h2>Dias sem registo</h2>${chip(om.missing.length ? 'warn' : 'ok', String(om.missing.length))}</div>
+    <div class="card" id="misscard">${om.missing.length ? `<p class="small muted" style="margin-top:0">Dias de trabalho em que a pessoa estava numa obra e não tem horas nem ausência. Não contam fins de semana, descanso da obra nem feriados. Toca nos dias e diz o que foi.</p>
+      ${Object.entries(byPerson).map(([id, p]) => `<div class="miss-p" data-p="${esc(id)}"><div class="wk">${avatar(p.name)}<div class="grow"><b>${esc(p.name)}</b>
+          <div class="small muted">${p.number ? 'nº ' + esc(p.number) + ' · ' : ''}${p.days.length} dia(s) sem registo</div></div></div>
+        <div class="miss-days">${p.runs.map((r) => id === me ? `<span class="miss-run">${esc(runText(r))}</span>`
+          : `<button type="button" class="miss-run" data-miss="${esc(id)}" data-day="${esc(r.from)}" data-to="${esc(r.to)}">${ic('calendar')}<span>${esc(runText(r))}</span></button>`).join('')}</div>
+        <div class="miss-form" hidden></div></div>`).join('')}`
+      : empty('check', 'Nenhum dia por explicar', 'Todos os dias de trabalho deste mês têm horas ou uma ausência registada.')}
+    ${absences.length ? `<details class="fold"><summary><span>Ausências deste mês<span class="sub">${absences.length} registo(s): férias, baixas, faltas</span></span></summary><div>
+      ${absences.map((a) => `<div class="day wk"><div class="grow"><b>${esc(a.name)}</b><div class="small">${esc(ABS_ALL[a.kind] || ABS_KIND[a.kind] || a.kind)} · ${esc(absWhen(a))}${a.days ? ` · ${a.days} dia(s) úteis` : ''}${a.doc ? ` · cert. ${esc(a.doc)}` : ''}</div>
+          ${a.note ? `<div class="small muted">«${esc(a.note)}»</div>` : ''}</div>${ABS_CHIP[a.status] || ''}
+        ${a.status === 'approved' && a.collab !== me ? `<button class="btn small ghost" data-unabs="${esc(a.id)}">Tirar</button>` : ''}</div>`).join('')}</div></details>` : ''}</div>`;
+  top.querySelectorAll('button[data-miss]').forEach((b) => b.onclick = () => missForm(b.closest('.miss-p'), b.dataset.miss, b.dataset.day, b.dataset.to, b));
+  top.querySelectorAll('button[data-unabs]').forEach((b) => b.onclick = async () => {
+    if (!confirm('Tirar esta ausência? Os dias voltam a aparecer como dias sem registo.')) return;
+    const { error } = await sb.rpc('mini_office_absence_cancel', { p_id: b.dataset.unabs });
+    if (error) return toast(friendly(error));
+    toast('Ausência tirada.'); viewOffice();
+  });
+  // one line per person
+  const people = om.people || [];
+  const cost = om.cost_on;
+  const absText = (o) => Object.entries(o || {}).map(([k, n]) => `${t_(ABS_ALL[k] || k)} ${n}`).join(', ');
+  const sum = (k) => people.reduce((a, p) => a + (Number(p[k]) || 0), 0);
+  const wide = isWide();
+  const nights = people.some((p) => p.night);
+  const row = (p) => wide ? `<tr${p.missing || p.ot_open ? ' class="look"' : ''}>
+      <td class="name"><b title="${esc(p.job || '')}">${esc(p.name)}</b><div class="small muted">${p.number ? 'nº ' + esc(p.number) : ''}</div></td>
+      <td>${p.sites.map((c) => `<span class="chip code">${esc(c)}</span>`).join(' ')}</td>
+      <td class="num">${p.days}</td><td class="num">${esc(fmtMin(p.normal))}</td><td class="num">${p.ot ? esc(fmtMin(p.ot)) : ''}</td>
+      <td class="num">${p.rest + p.holiday ? esc(fmtMin(p.rest + p.holiday)) : ''}</td>${nights ? `<td class="num">${p.night ? esc(fmtMin(p.night)) : ''}</td>` : ''}
+      <td class="small">${esc(absText(p.absent))}</td><td class="num">${p.missing ? chip('warn', String(p.missing)) : ''}</td>
+      ${cost ? `<td class="num">${p.no_rate ? chip('warn', 'sem valor hora') : esc(eur(p.cost))}</td>` : ''}</tr>`
+    : `<div class="day"><div class="day-h"><span class="d">${esc(p.name)}</span>${p.number ? `<span class="small muted">nº ${esc(p.number)}</span>` : ''}<span class="hrs">${esc(fmtMin(p.worked))}</span></div>
+      <div class="small">${p.days} dia(s) · ${esc(fmtMin(p.normal))} normais${p.ot ? ` · ${esc(fmtMin(p.ot))} extra` : ''}${p.rest + p.holiday ? ` · ${esc(fmtMin(p.rest + p.holiday))} descanso/feriado` : ''}${p.night ? ` · ${esc(fmtMin(p.night))} noturnas` : ''}</div>
+      <div class="tags">${p.sites.map((c) => chip('code', c)).join('')}${p.missing ? chip('warn', `${p.missing} dia(s) sem registo`) : ''}${absText(p.absent) ? chip('', absText(p.absent)) : ''}
+        ${cost ? (p.no_rate ? chip('warn', 'sem valor hora') : chip('info', eur(p.cost))) : ''}${p.pending ? chip('reg', `${p.pending} por aprovar`) : ''}</div></div>`;
+  const holidays = om.holidays || [];
+  const sites = (om.sites || []).filter((x) => x.worked > 0);
+  bottom.innerHTML = `<div class="sec-h"><h2>Resumo do mês por pessoa</h2>${chip('', String(people.length))}</div>
+    <div class="card${wide ? ' tbl-card' : ''}" id="psum">${!people.length ? '<p class="muted" style="margin:0">Ninguém com horas neste mês.</p>' : wide ? `<div class="tbl-wrap"><table class="grid"><thead><tr>
+        <th>Pessoa</th><th>Obras</th><th class="num">Dias</th><th class="num">Normais</th><th class="num">Extra</th><th class="num">Descanso e feriado</th>
+        ${nights ? '<th class="num">Noturnas</th>' : ''}<th>Ausências (dias)</th><th class="num">Sem registo</th>${cost ? '<th class="num">Custo</th>' : ''}</tr></thead>
+      <tbody>${people.map(row).join('')}</tbody>
+      <tfoot><tr><td colspan="2">${people.length} pessoa(s)</td><td class="num">${sum('days')}</td><td class="num">${esc(fmtMin(sum('normal')))}</td><td class="num">${esc(fmtMin(sum('ot')))}</td>
+        <td class="num">${esc(fmtMin(sum('rest') + sum('holiday')))}</td>${nights ? `<td class="num">${esc(fmtMin(sum('night')))}</td>` : ''}<td></td><td class="num">${sum('missing') || ''}</td>
+        ${cost ? `<td class="num">${esc(eur(sum('cost')))}</td>` : ''}</tr></tfoot></table></div>`
+      : people.map(row).join('')}
+      <p class="small muted"><span>Extra: só as aprovadas pelo chefe de equipa.</span> ${cost ? `<span>Custo: horas × valor hora de cada dia.</span>${om.burden ? ` <span>Inclui ${esc(String(om.burden).replace('.', ','))} % de encargos da empresa.</span>` : ''}` : ''}</p></div>
+    <div class="sec-h"><h2>Feriados deste mês</h2>${chip('', String(holidays.length))}</div>
+    <div class="card">${holidays.length ? holidays.map((h) => `<div class="day wk"><span class="chip code">${esc(fmtDate(h.day))}</span><span class="chip code">${esc(h.code)}</span><div class="grow">${esc(h.name)}</div></div>`).join('')
+      : '<p class="muted" style="margin:0">Nenhum feriado neste mês nas obras.</p>'}
+      <p class="small muted">Cada obra conta os feriados do seu país, da região e do concelho. Muda-os em Obras › a obra › Detalhes.</p></div>
+    ${cost ? `<div class="sec-h"><h2>Custo do mês por obra${om.fronts_on ? ' e frente' : ''}</h2></div>
+    ${sites.length ? sites.map((x) => { const fr = x.fronts || []; const tot = fr.reduce((a, f) => a + (Number(f.cost) || 0), 0);
+      return `<div class="card site-cost"><div class="wk"><span class="chip code">${esc(x.code)}</span><div class="grow"><b>${esc(x.title)}</b>
+          <div class="small muted">${x.people} pessoa(s) · ${esc(fmtMin(x.worked))}${x.ot ? ` · ${esc(fmtMin(x.ot))} extra` : ''}</div></div><b class="hrs">${x.cost == null ? '–' : esc(eur(x.cost))}</b></div>
+        ${x.no_rate ? `<p class="small">${chip('warn', `${x.no_rate} pessoa(s) sem valor hora: fora do custo`)}</p>` : ''}
+        ${fr.length ? `<table class="grid mini"><thead><tr><th>Frente</th><th class="num">Horas</th><th class="num">Custo</th><th class="num">%</th></tr></thead><tbody>
+          ${fr.map((f) => `<tr><td>${esc(f.name || 'Sem frente')}</td><td class="num">${esc(fmtMin(f.minutes))}</td><td class="num">${esc(eur(f.cost))}</td>
+            <td class="num">${tot ? Math.round(f.cost * 100 / tot) : 0} %</td></tr>`).join('')}</tbody></table>` : ''}</div>`; }).join('')
+      : '<div class="card"><p class="muted" style="margin:0">Sem horas neste mês.</p></div>'}` : ''}`;
+}
+function missForm(box, collab, day, last, btn) {
+  const f = box.querySelector('.miss-form');
+  box.querySelectorAll('button[data-miss]').forEach((b) => b.classList.toggle('on', b === btn));
+  f.hidden = false;
+  f.innerHTML = `<form class="absf"><label>O que foi</label><div class="chips reasons" role="radiogroup" aria-label="Tipo de ausência">${ABS_OFFICE.slice(0, 4).map(([k, v], i) =>
+      `<label class="chip"><input type="radio" name="kind" value="${k}" ${i === 0 ? 'checked' : ''}>${esc(v)}</label>`).join('')}</div>
+    <select name="other" aria-label="Outro motivo"><option value="">Outro motivo…</option>${ABS_OFFICE.slice(4).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join('')}</select>
+    <div class="row"><div><label>De</label><input type="date" name="from" value="${esc(day)}" required></div><div><label>Até</label><input type="date" name="to" value="${esc(last || day)}" required></div></div>
+    <div class="absdoc" hidden><label>Nº do certificado (CIT)</label><input name="doc" maxlength="64" placeholder="ex.: CIT 123456789"><p class="small muted">Só o número. Nunca escrevas a doença.</p></div>
+    <label>Nota (opcional)</label><input name="note" maxlength="300" placeholder="ex.: avisou por telefone">
+    <div class="acts"><button class="btn acc">${ic('ok')}Guardar</button><button type="button" class="btn ghost" data-x>Cancelar</button></div></form>`;
+  const form = f.querySelector('form');
+  const other = form.querySelector('[name=other]');
+  const kind = () => other.value || (form.querySelector('[name=kind]:checked') || {}).value;
+  const doc = () => { form.querySelector('.absdoc').hidden = !ABS_DOC.has(kind()); };
+  form.querySelectorAll('[name=kind]').forEach((x) => x.onchange = () => { other.value = ''; doc(); });
+  other.onchange = () => { if (other.value) form.querySelectorAll('[name=kind]').forEach((x) => { x.checked = false; }); doc(); };
+  form.querySelector('[data-x]').onclick = () => { f.hidden = true; f.innerHTML = ''; box.querySelectorAll('button[data-miss]').forEach((b) => b.classList.remove('on')); };
+  form.onsubmit = async (e) => {
+    e.preventDefault(); const d = new FormData(form);
+    const btn = form.querySelector('button.acc'); btn.disabled = true;
+    const k = kind(); if (!k) { btn.disabled = false; return toast('Escolhe o que foi.'); }
+    const { error } = await sb.rpc('mini_office_absence', { p_collab: collab, p_kind: k, p_from: d.get('from'), p_to: d.get('to'),
+      p_doc: String(d.get('doc') || '').trim() || null, p_note: String(d.get('note') || '').trim() || null });
+    btn.disabled = false;
+    if (error) return toast(friendly(error));
+    toast(`Registado: ${ABS_ALL[k]}.`); viewOffice();
+  };
+  form.querySelector('[name=kind]').focus();
+}
 // One day in the office lists: site, periods, status, why it is here, who validated, and the actions.
 function officeDay(r, manual, per, me, withFlags, noExit) {
   const tz = siteTz(r.project_id); const list = periodsOf(r, per[r.work_day_id], tz);
@@ -6737,6 +6884,7 @@ function officeDay(r, manual, per, me, withFlags, noExit) {
     <div class="per">${periodsHtml(list) || '<span class="muted">sem picagens</span>'}</div>
     <div class="tags">${OFFICE_STATUS[r.status] || chip('', r.status)}${r.declared ? chip('', 'escrito na folha pelo trabalhador', 'doc') : (manual || []).length ? '' : chip('', 'picagens do cartão', 'card')}
       ${r.overtime_minutes && !(withFlags && r.flags.some(([, t]) => / extra|extra /.test(t))) ? chip(r.overtime_approved ? 'info' : r.overtime_approved === false ? '' : 'warn', `${fmtMin(r.overtime_minutes)} extra ${r.overtime_approved ? 'aprovadas' : r.overtime_approved === false ? 'recusadas' : 'por decidir'}`) : ''}</div>
+    ${otWhy(r) ? `<p class="small muted ot-why">${ic('info')}<span>${esc(otWhy(r))}</span></p>` : ''}
     ${r.special_day_minutes ? `<div class="tags">${chip(r.overtime_approved ? 'info' : r.overtime_approved === false ? '' : 'warn', `${fmtMin(r.special_day_minutes)} em ${r.is_holiday ? 'feriado' : 'dia de descanso'} ${r.overtime_approved ? 'aprovadas pelo chefe' : r.overtime_approved === false ? 'não aprovadas' : 'por aprovar'}`)}</div>` : ''}
     ${withFlags && r.flags.length ? `<div class="why">${r.flags.map(([k, t]) => chip(k, t, k === 'anom' || k === 'warn' ? 'warn' : '')).join('')}</div>` : ''}
     ${!withFlags && r.anomalies.length ? `<div class="why">${chip(onlyOpenToday(r, tz) ? 'warn' : 'anom', r.anomalies.map((a) => anomalyText(a, r.shift_date, tz)).join(', '), onlyOpenToday(r, tz) ? 'clock' : 'warn')}</div>` : ''}
@@ -6769,6 +6917,9 @@ async function closeChecklist(data, from, to, noExit) {
     { ok: !atSite.length, t: 'As obras validaram tudo', s: atSite.length ? `Faltam ${atSite.length} dia(s). ${bySite(atSite)}. O encarregado valida em «Horas».` : 'Todos os dias foram validados na obra.' },
     { ok: !toApprove.length, t: 'Aprovaste tudo', s: toApprove.length ? `${toApprove.length} dia(s) à tua espera.${ownDays.length ? ` ${ownDays.length} são teus: outra pessoa do escritório tem de os aprovar.` : ''}` : 'Nada à tua espera.' },
   ];
+  const om = state.officeMon;
+  if (om && Array.isArray(om.missing)) steps.push({ ok: !om.missing.length, t: 'Dias sem registo explicados',
+    s: om.missing.length ? `${om.missing.length} dia(s) sem horas nem ausência: ${names(om.missing.map((m) => ({ full_name: m.name })))}. Diz o que foi em «Dias sem registo».` : 'Todos os dias de trabalho têm horas ou uma ausência.' });
   const done = steps.filter((x) => x.ok).length;
   // Primavera: not needed to close, but the file will not come out without it (only approved days count there).
   let prim = null;
@@ -6785,10 +6936,10 @@ async function closeChecklist(data, from, to, noExit) {
   const li = (x, cls) => `<li class="${cls}"><span class="dot">${ic(cls === 'done' ? 'ok' : cls === 'info' ? 'warn' : 'clock')}</span><div><b>${esc(x.t)}</b><div class="sub">${esc(x.s)}</div></div></li>`;
   box.innerHTML = `<div class="card"><h2 style="margin-top:0">${closed ? 'Mês fechado' : 'Fechar o mês'}</h2>
     ${closed ? `<div class="nonfc">${chip('fech', 'Mês fechado')}<span>Estas horas já seguiram para os salários. Ninguém as pode mudar.</span></div>`
-    : `<div class="prog" role="progressbar" aria-valuemin="0" aria-valuemax="4" aria-valuenow="${done}"><i style="width:${done * 25}%"></i></div>
-      <p class="small muted" style="margin:0">${done} de 4 passos feitos</p>
+    : `<div class="prog" role="progressbar" aria-valuemin="0" aria-valuemax="${steps.length}" aria-valuenow="${done}"><i style="width:${Math.round(done * 100 / steps.length)}%"></i></div>
+      <p class="small muted" style="margin:0">${done} de ${steps.length} passos feitos</p>
       <ol class="steps">${steps.map((x) => li(x, x.ok ? 'done' : 'todo')).join('')}${prim ? li(prim, prim.ok ? 'done' : 'info') : ''}</ol>
-      ${done === 4 && toClose && can('horas.fechar_mes') ? `<p style="margin-top:12px"><button class="btn big" id="closeMonth">${ic('ok')}Fechar o mês para os salários</button></p>
+      ${done === steps.length && toClose && can('horas.fechar_mes') ? `<p style="margin-top:12px"><button class="btn big" id="closeMonth">${ic('ok')}Fechar o mês para os salários</button></p>
         <p class="small muted">${toClose} dia(s) seguem para os salários. Depois de fechar, ninguém pode mudar as horas deste mês.</p>` : ''}`}</div>`;
   const b = $('#closeMonth');
   if (b) b.onclick = async () => {
@@ -7507,7 +7658,9 @@ async function loadSiteDetails(id) {
     ${canSetSite() ? `<form id="cfgf"><div class="row"><div><label>País</label><select name="country">
         ${Object.entries(COUNTRY).map(([k, v]) => `<option value="${k}" ${(d.country || 'PT') === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
       <div><label>Concelho (município)</label><input name="mun" maxlength="128" value="${esc(d.municipality || '')}" placeholder="ex.: Sines"></div></div>
-      <p><button class="btn wide">Guardar país e concelho</button></p></form>` : ''}
+      <label for="cfgreg">Região (feriados regionais)</label><select id="cfgreg" name="region">${regionOptions(d.country || 'PT', d.region)}</select>
+      <p class="small muted">Os feriados da região contam sozinhos. Ao guardar, as horas dos dias que mudaram são recalculadas.</p>
+      <p><button class="btn wide">Guardar país, região e concelho</button></p></form>` : d.region ? `<p style="margin-top:0">Região: <b>${esc(REGIONS[d.region] || d.region)}</b></p>` : ''}
     <h3>Diária</h3>
     <p style="margin-top:0"><b>${d.per_diem_effective == null ? 'sem valor' : Number(d.per_diem_effective) === 0 ? 'não paga diária' : esc(euro(d.per_diem_effective)) + ' por dia'}</b>
       <span class="small muted">· ${d.per_diem_amount == null ? 'valor da empresa para ' + (d.country === 'PT' || !d.country ? 'Portugal' : 'o estrangeiro') : 'valor próprio desta obra'}</span></p>
@@ -7529,17 +7682,21 @@ async function loadSiteDetails(id) {
     <h3>Feriados municipais e regionais</h3>
     ${hol.length ? hol.map((h) => `<div class="day wk"><span class="chip code">${esc(fmtDate(h.date))}</span><div class="grow">${esc(h.name)}</div>
       ${canHolidays() ? `<button class="btn small ghost" data-delhol="${esc(h.id)}">Tirar</button>` : ''}</div>`).join('')
-      : '<p class="muted small">Nenhum. Os feriados nacionais (de Portugal ou de Espanha) já contam sozinhos.</p>'}
+      : '<p class="muted small">Nenhum. Os feriados nacionais (Portugal, Espanha, França) e os da região já contam sozinhos.</p>'}
     ${canHolidays() ? (d.municipality ? `<form id="holf"><div class="row"><div><label>Dia</label><input name="date" type="date" required></div>
       <div><label>Nome</label><input name="name" required minlength="3" placeholder="ex.: Dia do Município"></div></div>
       <p class="small muted">Vale para todas as obras deste concelho; as horas desse dia são recalculadas.</p>
       <p><button class="btn ghost wide">Acrescentar feriado</button></p></form>`
       : '<p class="small muted">Para acrescentar o feriado municipal, escreve primeiro o concelho da obra.</p>') : ''}`;
+  const cfgCountry = $('#cfgf') && $('#cfgf').querySelector('[name=country]');
+  if (cfgCountry) cfgCountry.onchange = () => { $('#cfgreg').innerHTML = regionOptions(cfgCountry.value, null); };
   if ($('#cfgf')) $('#cfgf').onsubmit = async (e) => {
     e.preventDefault(); const f = new FormData(e.target);
     const { error: e2 } = await sb.rpc('mini_set_site_details', { p_project: id, p_country: f.get('country'), p_municipality: String(f.get('mun') || '').trim() });
     if (e2) return toast(friendly(e2));
-    toast('País e concelho guardados.'); await loadBasics(); loadSiteDetails(id);
+    const { data: nr, error: e3 } = await sb.rpc('mini_set_site_region', { p_project: id, p_region: f.get('region') || null });
+    if (e3) return toast(friendly(e3));
+    toast(nr ? `Guardado. ${nr} dia(s) de horas recalculado(s) por causa dos feriados.` : 'País, região e concelho guardados.'); await loadBasics(); loadSiteDetails(id);
     const s = state.sites.find((x) => x.id === id); const fl = app.querySelector(`[data-flag="${id}"]`);
     if (s && fl) fl.outerHTML = flag(s.country, id);
   };
