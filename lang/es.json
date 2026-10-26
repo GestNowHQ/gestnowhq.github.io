@@ -5974,4 +5974,6 @@
 "Faltam validar {x} dia(s). Depois seguem para aprovação: {x}.": "Faltan validar {x} día(s). Después pasan a aprobación: {x}.",
 "Validaste tudo. {x} dia(s) à espera de aprovação: {x}.": "Validaste todo. {x} día(s) esperando aprobación: {x}.",
 "Aprovado: {x}. Falta o fecho do mês.": "Aprobado: {x}. Falta el cierre del mes.",
-"aprovado": "aprobado"}
+"aprovado": "aprobado",
+"Isto mexia no dia $1, que já está validado. Nada foi mudado: fala com o encarregado.": "Esto cambiaría el día $1, que ya está validado. No se cambió nada: habla con el encargado.",
+"As horas aparecem aqui quando as pessoas as escreverem na folha de horas.": "Las horas aparecen aquí cuando las personas las escriban en la hoja de horas."}
