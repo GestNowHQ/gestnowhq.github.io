@@ -6254,5 +6254,14 @@
 "Procurar ecrã, pessoa ou obra":"Chercher écran, personne ou chantier",
 "Voltar aos departamentos":"Retour aux services",
 "1 ecrã":"1 écran",
-"{x} ecrãs":"{x} écrans"
+"{x} ecrãs":"{x} écrans",
+"Precisa de ti hoje":"A besoin de toi aujourd’hui",
+"‹ Início":"‹ Accueil",
+"Departamento":"Service",
+"Mais {x} assunto(s)":"{x} sujet(s) de plus",
+"{x}: {x} à espera":"{x} : {x} en attente",
+"{x} dia(s) por aprovar":"{x} jour(s) à approuver",
+"{x} reclamação(ões) de horas":"{x} réclamation(s) d'heures",
+"{x} pessoa(s) com documento caducado":"{x} personne(s) avec document expiré",
+"{x} pessoa(s) com documento a caducar":"{x} personne(s) avec document qui expire bientôt"
 }

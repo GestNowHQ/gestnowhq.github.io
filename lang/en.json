@@ -6254,5 +6254,14 @@
 "Procurar ecrã, pessoa ou obra":"Search screen, person or site",
 "Voltar aos departamentos":"Back to departments",
 "1 ecrã":"1 screen",
-"{x} ecrãs":"{x} screens"
+"{x} ecrãs":"{x} screens",
+"Precisa de ti hoje":"Needs you today",
+"‹ Início":"‹ Home",
+"Departamento":"Department",
+"Mais {x} assunto(s)":"{x} more item(s)",
+"{x}: {x} à espera":"{x}: {x} waiting",
+"{x} dia(s) por aprovar":"{x} day(s) to approve",
+"{x} reclamação(ões) de horas":"{x} hours complaint(s)",
+"{x} pessoa(s) com documento caducado":"{x} person(s) with an expired document",
+"{x} pessoa(s) com documento a caducar":"{x} person(s) with a document expiring"
 }

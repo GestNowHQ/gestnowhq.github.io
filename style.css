@@ -1890,16 +1890,16 @@ button.cd.me-none { background: transparent; color: var(--ink-2); box-shadow: in
 .mrow > button { flex-direction: column; justify-content: center; gap: 6px; min-height: 80px; padding: 8px 4px; font-size: 13px; line-height: 1.2; text-align: center; overflow-wrap: anywhere; }
 .mrow > button .i { width: 40px; height: 40px; padding: 9px; border-radius: 12px; }
 .mdeps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 2px 0 4px; }
-.sheet .mdep { position: relative; flex-direction: column; align-items: flex-start; gap: 10px; min-height: 112px; padding: 14px 12px 12px; border: var(--bw) solid var(--line);
+.mdep { position: relative; flex-direction: column; align-items: flex-start; gap: 10px; min-height: 112px; padding: 14px 12px 12px; border: var(--bw) solid var(--line);
   border-radius: var(--r-lg); background: var(--surface); text-align: left; transition: transform .15s var(--ease), border-color .15s var(--ease); }
-.sheet .mdep:active { transform: scale(.97); }
-.sheet .mdep:hover { border-color: var(--brand); background: var(--surface); }
-.sheet .mdep .i { width: 42px; height: 42px; padding: 10px; border-radius: 12px; background: var(--brand-soft); color: var(--brand); }
-.sheet .mdep .grow { display: flex; flex-direction: column; gap: 2px; min-width: 0; width: 100%; }
-.sheet .mdep b { font-size: 15px; line-height: 1.2; overflow-wrap: anywhere; }
-.sheet .mdep small { font-size: 12px; font-weight: 500; color: var(--ink-2); line-height: 1.25; }
-.sheet .mdep .mgo { position: absolute; top: 14px; right: 10px; width: 20px; height: 20px; padding: 0; background: none; color: var(--ink-3); }
-#nav .sheet .mdep[data-badge]::after { top: 10px; left: 46px; }
+.mdep:active { transform: scale(.97); }
+.mdep:hover { border-color: var(--brand); background: var(--surface); }
+.mdep .i { width: 42px; height: 42px; padding: 10px; border-radius: 12px; background: var(--brand-soft); color: var(--brand); }
+.mdep .grow { display: flex; flex-direction: column; gap: 2px; min-width: 0; width: 100%; }
+.mdep b { font-size: 15px; line-height: 1.2; overflow-wrap: anywhere; }
+.mdep small { font-size: 12px; font-weight: 500; color: var(--ink-2); line-height: 1.25; }
+.mdep .mgo { position: absolute; top: 14px; right: 10px; width: 20px; height: 20px; padding: 0; background: none; color: var(--ink-3); }
+#nav .mdep[data-badge]::after, .mdep[data-badge]::after { top: 10px; left: 46px; }
 .mdbar { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 0 0 6px; margin-bottom: 4px; border-bottom: var(--bw) solid var(--line); }
 .sheet .mback { width: auto; min-height: 44px; padding: 0 12px 0 4px; gap: 4px; color: var(--brand); font-size: var(--t-sm); }
 .sheet .mback .i { width: 24px; height: 24px; padding: 0; background: none; color: var(--brand); }
@@ -2509,3 +2509,19 @@ button.card.rt-site { display: block; width: 100%; text-align: left; font: inher
 .rt-hist > li:first-child { border-top: 0; }
 .rt-hist small { display: block; }
 .rt-hist .row-b { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+
+/* v107 Início: the same tiles on the page (outside the menu) */
+.mdep { display: flex; width: 100%; color: var(--ink); font: inherit; cursor: pointer; }
+.home-deps { margin-bottom: 12px; }
+@media (min-width: 700px) { .home-deps { grid-template-columns: repeat(3, minmax(0, 1fr)); } .home-tools { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+@media (min-width: 1100px) { .home-deps { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.home-tools { margin-bottom: 12px; gap: 8px; }
+.home-tools > button { display: flex; align-items: center; border: var(--bw) solid var(--line); border-radius: var(--r-lg); background: var(--surface); color: var(--ink); font-weight: 600; cursor: pointer; position: relative; }
+.home-tools > button:hover { border-color: var(--brand); }
+.home-tools > button .i { background: var(--brand-soft); color: var(--brand); }
+.mdep[data-badge]::after, .home-tools > button[data-badge]::after { content: attr(data-badge); position: absolute; min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box;
+  border-radius: 999px; background: var(--bad-fill); color: #fff; font: 800 11.5px/20px var(--font); text-align: center; box-shadow: 0 0 0 2px var(--surface); pointer-events: none; }
+.home-tools > button[data-badge]::after { top: 6px; left: calc(50% + 10px); }
+.home-more { margin: 4px 0 8px; }
+.home-ver { text-align: center; margin: 16px 0 4px; }
+#dtour { margin-top: 8px; }
