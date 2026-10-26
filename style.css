@@ -2439,3 +2439,24 @@ ul.ct-miss li { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; p
 .acts .okl { display: inline; text-align: center; line-height: 1.25; }
 .acts .okl b { font-weight: 750; }
 .acts button[data-who] { flex: 2 1 auto; }
+/* v100 Frentes: the chief's board, the sticky move bar, the office's requests; the folha in periods */
+.fr-people { list-style: none; margin: 8px 0 0; padding: 0; }
+.fr-p { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 6px 0; border-top: var(--bw) solid var(--line); cursor: pointer; }
+.fr-p input { width: 22px; height: 22px; flex: none; }
+.fr-bar { position: sticky; bottom: calc(72px + env(safe-area-inset-bottom)); z-index: 5; background: var(--surface); border: 2px solid var(--brand); border-radius: var(--r-lg); padding: 12px 16px; margin: 12px 0; box-shadow: var(--sh-2, 0 6px 24px rgba(0,0,0,.18)); }
+.fr-bar { padding: 10px 12px; }
+.fr-bar p { margin: 0 0 4px; font-weight: 650; }
+.fr-bar .row { display: grid; grid-template-columns: 1.3fr 1fr 0.9fr; gap: 8px; }
+.fr-bar .row > div { min-width: 0; }
+.fr-bar label { font-size: var(--t-xs); margin: 2px 0; }
+.fr-bar select, .fr-bar input { min-height: 44px; padding: 6px 8px; width: 100%; }
+.fr-btns { display: flex; gap: 8px; margin-top: 8px; }
+.fr-btns .btn { flex: 1; min-height: 46px; }
+.fr-pend { border-color: var(--warn, #d97706); }
+.fr-req { display: flex; align-items: flex-start; gap: 10px; }
+.fr-req .grow { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sh-per { border: var(--bw) solid var(--line); border-radius: var(--r-md, 10px); padding: 8px 12px 10px; margin: 0 0 10px; }
+.sh-per legend { font-weight: 650; padding: 0 6px; }
+.sh-per .row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: end; }
+.sh-per .sh-x { flex: none; margin-bottom: 4px; }
+@media (min-width: 1100px) { .fr-bar { bottom: 12px; } }
