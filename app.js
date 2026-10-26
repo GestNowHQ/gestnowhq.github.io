@@ -534,6 +534,8 @@ const ERRORS = [
   [/see it to the end first \((\d+) s left\)/i, 'Ainda não chegaste ao fim. Faltam $1 s.'],
   [/see it to the end first/i, 'Vê até ao fim primeiro.'],
   [/answer every question/i, 'Responde a todas as perguntas.'],
+  [/get the questions first/i, 'Abre outra vez esta parte para receberes as perguntas.'],
+  [/ask between 1 and 10/i, 'Em cada tentativa, de 1 a 10 perguntas.'],
   [/each question needs/i, 'Cada pergunta precisa de texto, 2 a 4 respostas e a certa marcada.'],
   [/paste a YouTube link/i, 'Cola um link de um vídeo do YouTube.'],
   [/this card is not known/i, 'Este cartão não está registado na empresa.'],
@@ -1148,7 +1150,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '105';
+const APP_VERSION = '106';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['reunioes', 'emergencia', 'lmra', 'seguranca'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -3725,7 +3727,7 @@ async function showOnboarding(ob) {
       <p class="small muted">Vê ou lê cada parte até ao fim. No fim respondes a umas perguntas rápidas. Se errares, vês outra vez.</p>
       ${items.map((x, i) => { const st = x.passed_at ? 'done' : x === cur ? 'now' : 'lock'; return `<button class="onb-item ${st}" ${st === 'now' ? `data-open="${esc(x.id)}"` : 'disabled'}>
         <span class="oi">${st === 'done' ? ic('ok') : st === 'lock' ? ic('lock') : ic(KIND_IC[x.kind] || 'doc')}</span>
-        <span class="grow"><b>${i + 1}. ${esc(x.title)}</b><small>${KIND_TX[x.kind] || 'Para ler'} · ${Math.max(1, Math.round(x.min_seconds / 60))} min${x.questions.length ? ` · ${pl(x.questions.length, 'pergunta', 'perguntas')}` : ''}${x.attempts && !x.passed_at ? ` · ${x.attempts}ª tentativa falhada` : ''}</small></span>
+        <span class="grow"><b>${i + 1}. ${esc(x.title)}</b><small>${KIND_TX[x.kind] || 'Para ler'} · ${Math.max(1, Math.round(x.min_seconds / 60))} min${x.ask ? ` · ${pl(x.ask, 'pergunta', 'perguntas')}` : ''}${x.attempts && !x.passed_at ? ` · ${x.attempts}ª tentativa falhada` : ''}</small></span>
         ${st === 'now' ? `<span class="btn small">${x.opened_at ? 'Continuar' : 'Começar'}</span>` : st === 'done' ? chip('val', 'feito', 'ok') : ''}</button>`; }).join('')}</div>`
     : `<div class="card onb-wait">${ic('clock')}<h2>O acolhimento ainda está a ser preparado</h2><p>A empresa ainda não pôs os vídeos e manuais. Volta daqui a pouco.</p><button class="btn ghost" id="onbre">Atualizar</button></div>`);
   if ($('#onbre')) $('#onbre').onclick = () => showOnboarding();
@@ -3744,7 +3746,7 @@ async function onbItem(x, items) {
   onbShell(ob, `<div class="card onb-view"><p class="eyebrow" style="margin-top:0">Parte ${n} de ${items.length}</p><h2>${esc(x.title)}</h2>
     ${x.kind === 'filevideo' ? `<div class="onb-video onb-vfile"><video controls playsinline preload="metadata" controlslist="nodownload" disablepictureinpicture src="${esc(fileUrl)}"></video></div>`
       : x.kind === 'pdf' ? `<div class="onb-manual onb-pdf" id="onbman"><p class="muted small" id="pdfst">A abrir o documento…</p></div>`
-      : x.kind === 'video' ? `<div class="onb-video"><iframe src="https://www.youtube-nocookie.com/embed/${esc(x.video_id)}?rel=0&modestbranding=1&playsinline=1" title="${esc(x.title)}"
+      : x.kind === 'video' ? `<div class="onb-video"><iframe src="https://www.youtube-nocookie.com/embed/${esc(x.video_id)}?rel=0&modestbranding=1&playsinline=1&cc_load_policy=1&hl=${esc(document.documentElement.lang || 'pt-PT')}&cc_lang_pref=${esc((document.documentElement.lang || 'pt').slice(0, 2))}" title="${esc(x.title)}"
         allow="encrypted-media; picture-in-picture; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div>`
       : `<div class="onb-manual" id="onbman">${paras(x.body)}</div>`}
     <div class="onb-go"><button class="btn big" id="seen" disabled>${ic('clock')}<span id="seentx">…</span></button>
@@ -3759,7 +3761,7 @@ async function onbItem(x, items) {
     if (!read && atEnd()) read = true;
     const left = Math.ceil((end - Date.now()) / 1000);
     b.disabled = left > 0 || !read;
-    $('#seentx').textContent = left > 0 ? `Podes continuar daqui a ${mmss(left)}` : !read ? 'Lê até ao fim para continuar' : x.questions.length ? 'Já vi: responder às perguntas' : 'Já vi: continuar';
+    $('#seentx').textContent = left > 0 ? `Podes continuar daqui a ${mmss(left)}` : !read ? 'Lê até ao fim para continuar' : x.ask ? 'Já vi: responder às perguntas' : 'Já vi: continuar';
   };
   const t = setInterval(tick, 1000); tick();
   if ($('#onbman')) { $('#onbman').addEventListener('scroll', tick, { passive: true }); window.addEventListener('scroll', tick, { passive: true }); }
@@ -3769,8 +3771,11 @@ async function onbItem(x, items) {
     if (e) return toast(friendly(e));
     clearInterval(t); window.removeEventListener('scroll', tick);
     if (r.step_done) { toast('Acolhimento concluído. Obrigado!'); return showOnboarding(); }
-    if (!x.questions.length) return showOnboarding();
-    onbQuiz(x, n, items.length);
+    if (!x.ask) return showOnboarding();
+    // The questions of this attempt are drawn on the server (sql/128): a few of the part's bank, answers shuffled.
+    const qz = await sb.rpc('mini_induction_quiz', { p_item: x.id });
+    if (qz.error) return toast(friendly(qz.error));
+    onbQuiz({ ...x, questions: qz.data.questions }, n, items.length);
   };
 }
 // Induction files (sql/85b) are private: a link that works for one hour, made for this person.
@@ -3820,7 +3825,7 @@ function onbQuiz(x, n, total, wrong) {
     if (r.passed) { toast(r.step_done ? 'Acolhimento concluído. Obrigado!' : 'Muito bem! Passa à parte seguinte.'); return showOnboarding(); }
     const bad = (r.wrong || []).map((i) => i + 1);
     onbShell(state.onb, `<div class="card onb-wait bad">${ic('warn')}<h2>Ainda não</h2>
-      <p>Erraste ${bad.length === 1 ? 'a pergunta ' + bad[0] : 'as perguntas ' + bad.join(' e ')}. Vê outra vez com atenção e responde de novo.</p>
+      <p>Erraste ${bad.length === 1 ? 'a pergunta ' + bad[0] : 'as perguntas ' + bad.join(' e ')}. Vê outra vez com atenção. Da próxima vez as perguntas são outras.</p>
       <button class="btn big" id="again">Ver outra vez</button></div>`);
     $('#again').onclick = async () => { const r2 = await sb.rpc('mini_onboarding'); if (r2.error) return toast(friendly(r2.error)); r2.data.skew = new Date(r2.data.server_now).getTime() - Date.now(); state.onb = r2.data;
       const items = r2.data.items; onbItem(items.find((y) => y.id === x.id), items); };
@@ -4267,7 +4272,7 @@ async function loadInduction() {
   }
   el.innerHTML = `<div class="card ind-list">${data.map((x, i) => `<button class="ind ${x.is_active ? '' : 'off'}" data-id="${esc(x.id)}">
       <span class="oi">${ic(KIND_IC[x.kind] || 'doc')}</span><span class="grow"><b>${i + 1}. ${esc(x.title)}</b>
-      <small>${x.kind === 'document' ? 'Manual' : KIND_TX[x.kind]} · mín. ${mmss(x.min_seconds)} · ${pl(x.questions.length, 'pergunta', 'perguntas')} · versão ${x.version}${x.for_external ? '' : ' · só da empresa'} · ${x.passed === 1 ? '1 pessoa concluiu' : `${x.passed} pessoas concluíram`}</small></span>
+      <small>${x.kind === 'document' ? 'Manual' : KIND_TX[x.kind]} · mín. ${mmss(x.min_seconds)} · ${x.questions.length ? `${pl(x.questions.length, 'pergunta', 'perguntas')} no banco, ${x.ask} por tentativa` : 'sem perguntas'} · versão ${x.version}${x.for_external ? '' : ' · só da empresa'} · ${x.passed === 1 ? '1 pessoa concluiu' : `${x.passed} pessoas concluíram`}</small></span>
       ${x.is_active ? chip('val', 'ativo', 'ok') : chip('', 'desligado')}</button>`).join('')}</div>
     <p class="small muted">Toca para mudar. Quem já é ativo não precisa de rever; uma versão nova vale para quem entrar a partir de agora.</p>
     ${INDUCTION_TEMPLATE.some((t) => !data.some((x) => x.title === t.title)) ? `<p><button class="btn ghost wide" id="tpl">${ic('bot')}Juntar o que falta do pacote geral da GestNow</button></p>` : ''}`;
@@ -4288,12 +4293,15 @@ async function loadOnbBoard(sel, onlyIfAny) {
       : `<p class="small muted">${ic('ok')} Ninguém a meio do acolhimento. Ao registar uma pessoa nova em Pessoas, escolhe «Faz o acolhimento na app».</p>`}</div>`;
   el.querySelectorAll('[data-id]').forEach((b) => b.onclick = () => { state.worker = b.dataset.id; go('ficha'); });
 }
+const QBANK_MAX = 20;
 async function editInduction(x) {
   const q = (x && x.questions) || [];
   const scenes = ((await sb.rpc('mini_hunt_scenes')).data) || [];
-  const qrow = (i, v) => `<fieldset class="qedit" data-q="${i}"><legend>Pergunta ${i + 1}</legend><input name="q${i}" value="${esc(v ? v.q : '')}" placeholder="ex.: Sem capacete podes entrar na obra?" maxlength="200">
-    ${[0, 1, 2].map((j) => `<label class="opt"><input type="radio" name="c${i}" value="${j}" ${v && v.correct === j ? 'checked' : !v && j === 0 ? 'checked' : ''} title="Resposta certa">
-      <input name="o${i}_${j}" value="${esc(v && v.options[j] ? v.options[j] : '')}" placeholder="${j === 0 ? 'Resposta' : 'Outra resposta'}${j === 2 ? ' (opcional)' : ''}" maxlength="120"></label>`).join('')}</fieldset>`;
+  // The bank (sql/128): up to QBANK_MAX questions; each attempt draws a few of them and shuffles the answers.
+  const qrow = (i, v) => `<fieldset class="qedit" data-q="${i}"><legend>Pergunta ${i + 1}</legend><input name="q${i}" value="${esc(v ? v.q : '')}" placeholder="ex.: Vais usar um produto corrosivo. Que luvas pões?" maxlength="200">
+    ${[0, 1, 2, 3].map((j) => `<label class="opt"><input type="radio" name="c${i}" value="${j}" ${v && v.correct === j ? 'checked' : !v && j === 0 ? 'checked' : ''} title="Resposta certa">
+      <input name="o${i}_${j}" value="${esc(v && v.options[j] ? v.options[j] : '')}" placeholder="${j === 0 ? 'Resposta' : 'Outra resposta'}${j >= 2 ? ' (opcional)' : ''}" maxlength="120"></label>`).join('')}</fieldset>`;
+  const rows0 = Math.min(QBANK_MAX, Math.max(3, q.length + 1));
   const fd = await askSheet(x ? 'Mudar: ' + x.title : 'Nova parte do acolhimento', `
     <label for="it">Título</label><input id="it" name="title" required minlength="3" maxlength="120" value="${esc(x ? x.title : '')}" placeholder="ex.: Regras de segurança da refinaria">
     <div class="chips reasons" role="radiogroup"><label class="chip"><input type="radio" name="kind" value="bot" ${!x || x.kind === 'bot' ? 'checked' : ''}>Conversa com o bot</label>
@@ -4315,7 +4323,11 @@ async function editInduction(x) {
       <textarea id="ib" name="body" rows="9" maxlength="20000">${esc(x && x.body ? x.body : '')}</textarea></div>
     <div id="km"><label for="im">Tempo mínimo antes de poder continuar (minutos)</label><input id="im" name="min" type="number" min="0.5" max="60" step="0.5" value="${x ? x.min_seconds / 60 : 2}">
     <p class="small muted">Para um vídeo, põe a duração dele. A pessoa só avança depois deste tempo.</p></div>
-    <h3>Perguntas (marca a resposta certa)</h3>${[0, 1, 2].map((i) => qrow(i, q[i])).join('')}
+    <h3>Banco de perguntas (marca a resposta certa)</h3>
+    <p class="small muted">Escreve várias perguntas: cada pessoa recebe só algumas, sorteadas, e as respostas aparecem baralhadas. Assim não dá para passar as respostas a um colega. Respostas erradas que pareçam certas, e nada de «todas as anteriores».</p>
+    <label for="iask">Perguntas em cada tentativa</label><input id="iask" name="ask" type="number" min="1" max="10" step="1" value="${x && x.ask_count ? x.ask_count : 4}">
+    <div id="qbank">${Array.from({ length: rows0 }, (_, i) => qrow(i, q[i])).join('')}</div>
+    <p><button type="button" class="btn ghost wide" id="qmore">+ Mais uma pergunta</button></p>
     <label class="check inline"><input type="checkbox" name="ext" ${!x || x.for_external ? 'checked' : ''}> Também para trabalhadores de subempreiteiros</label>
     ${x ? `<label class="check inline"><input type="checkbox" name="active" ${x.is_active ? 'checked' : ''}> Ativo (desliga para deixar de mostrar a quem entra)</label>` : ''}`, 'Guardar', (dlg) => {
     const sync = () => { const v = dlg.querySelector('input[name=kind]:checked').value; const isFile = v === 'pdf' || v === 'filevideo';
@@ -4334,20 +4346,27 @@ async function editInduction(x) {
       const v = document.createElement('video'); v.preload = 'metadata'; const u = URL.createObjectURL(f);
       v.onloadedmetadata = () => { if (isFinite(v.duration) && v.duration > 0) dlg.querySelector('#im').value = Math.max(0.5, Math.ceil(v.duration / 30) / 2); URL.revokeObjectURL(u); };
       v.src = u; };
+    const more = dlg.querySelector('#qmore'); const bank = dlg.querySelector('#qbank');
+    const room = () => { more.hidden = bank.children.length >= QBANK_MAX; }; room();
+    more.onclick = () => { bank.insertAdjacentHTML('beforeend', qrow(bank.children.length)); room(); bank.lastElementChild.querySelector('input').focus(); };
     const ta = dlg.querySelector('#ib');
     dlg.querySelectorAll('[data-tag]').forEach((b) => b.onclick = () => { const at = ta.selectionStart ?? ta.value.length; const t = `[${b.dataset.tag}] `;
       ta.value = ta.value.slice(0, at) + t + ta.value.slice(ta.selectionEnd ?? at); ta.focus(); ta.selectionStart = ta.selectionEnd = at + t.length; });
   });
   if (!fd) return;
   const kind = fd.get('kind');
-  const questions = [0, 1, 2].map((i) => {
-    const text = String(fd.get('q' + i) || '').trim(); const opts = [0, 1, 2].map((j) => String(fd.get(`o${i}_${j}`) || '').trim());
+  const questions = Array.from({ length: QBANK_MAX }, (_, i) => i).map((i) => {
+    const text = String(fd.get('q' + i) || '').trim(); const opts = [0, 1, 2, 3].map((j) => String(fd.get(`o${i}_${j}`) || '').trim());
     const c = Number(fd.get('c' + i) || 0);
     if (!text) return null;
     const kept = opts.map((o, j) => ({ o, j })).filter((y) => y.o);
     return { q: text, options: kept.map((y) => y.o), correct: Math.max(0, kept.findIndex((y) => y.j === c)) };
   }).filter(Boolean);
   if (questions.some((y) => y.options.length < 2)) return toast('Cada pergunta precisa de pelo menos 2 respostas.');
+  const ask = Math.round(Number(fd.get('ask') || 4));
+  if (!(ask >= 1 && ask <= 10)) return toast('Em cada tentativa, de 1 a 10 perguntas.');
+  const setAsk = async (id) => { if ((x ? x.ask_count || 4 : 4) === ask) return true;
+    const r = await sb.rpc('mini_induction_set_ask', { p_id: id, p_ask: ask }); if (r.error) { toast(friendly(r.error)); return false; } return true; };
   const vid = kind === 'video' ? ytId(fd.get('video')) : kind === 'hunt' ? String(fd.get('scene') || '') : null;
   if (kind === 'video' && !vid) return toast('Esse link não é de um vídeo do YouTube.');
   const isFile = kind === 'pdf' || kind === 'filevideo';
@@ -4370,6 +4389,7 @@ async function editInduction(x) {
     const { data: fid, error: fe } = await sb.rpc('mini_induction_save_file', { p_id: x ? x.id : null, p_title: String(fd.get('title')).trim(), p_kind: kind,
       p_file: path, p_sha256: sha, p_min_seconds: Math.round(Number(fd.get('min') || 1) * 60), p_questions: questions, p_position: x ? x.position : null, p_for_external: !!fd.get('ext') });
     if (fe) return toast(friendly(fe));
+    if (!(await setAsk(fid))) return;
     if (x && !!fd.get('active') !== x.is_active) { const r = await sb.rpc('mini_induction_set_active', { p_id: fid, p_active: !!fd.get('active') }); if (r.error) return toast(friendly(r.error)); }
     toast('Guardado.'); return loadInduction();
   }
@@ -4377,6 +4397,7 @@ async function editInduction(x) {
     p_video_id: vid, p_body: kind !== 'video' ? String(fd.get('body') || '') : null, p_min_seconds: kind === 'bot' || kind === 'hunt' ? null : Math.round(Number(fd.get('min') || 1) * 60),
     p_questions: questions, p_position: x ? x.position : null, p_for_external: !!fd.get('ext') });
   if (error) return toast(friendly(error));
+  if (!(await setAsk(id))) return;
   if (x && !!fd.get('active') !== x.is_active) { const r = await sb.rpc('mini_induction_set_active', { p_id: id, p_active: !!fd.get('active') }); if (r.error) return toast(friendly(r.error)); }
   toast('Guardado.'); loadInduction();
 }
@@ -4390,108 +4411,182 @@ const INDUCTION_TEMPLATE = [
 
 Se te esqueceres de picar, avisa logo o encarregado. Ele regista a picagem com o motivo.
 
-Nunca piques por um colega, e nunca emprestes o teu cartão.
+Nunca piques por um colega, e nunca emprestes o teu cartão. As picagens dizem quem está na obra: numa emergência, é por elas que se sabe quem falta.
+
+Se perderes o cartão, ou se o leitor não funcionar, avisa logo o encarregado.
 
 O encarregado diz-te o horário da obra. Se precisares de faltar ou de sair mais cedo, faz o pedido na app, com antecedência.
 
 Na app vês todas as tuas horas. Se um dia estiver errado, carrega em «Não concordo com este dia», antes do fim do mês.`,
-    q: [{ q: 'Esqueceste-te de picar a saída. O que fazes?', options: ['Aviso o encarregado', 'Peço a um colega para picar por mim', 'Não faço nada'], correct: 0 },
-      { q: 'Podes emprestar o teu cartão a um colega?', options: ['Sim, se for amigo', 'Nunca'], correct: 1 }] },
+    // A bank of 8: each attempt draws 4 and shuffles the answers (sql/128), so «correct: 0» never shows as the first one.
+    q: [{ q: 'Chegaste à obra e o leitor do cartão não funciona. O que fazes?', options: ['Aviso logo o encarregado, para registar a entrada', 'Começo a trabalhar e pico só quando sair à tarde', 'Peço a um colega para picar por mim quando voltar', 'Não faço nada, a app acerta a hora sozinha depois'], correct: 0 },
+      { q: 'Um colega tem de sair mais cedo e pede-te para picares a saída com o cartão dele. O que fazes?', options: ['Recuso: cada um pica só com o seu cartão', 'Pico, e aviso o encarregado amanhã', 'Pico, se ele me disser a hora exata a que saiu', 'Pico só se o encarregado já tiver saído'], correct: 0 },
+      { q: 'Esqueceste-te de picar a saída ontem. O que fazes?', options: ['Aviso o encarregado, para ele registar com o motivo', 'Pico hoje duas vezes à saída', 'Deixo estar, no fim do mês ninguém repara', 'Peço ao colega que saiu comigo para confirmar'], correct: 0 },
+      { q: 'Precisas de sair duas horas mais cedo na sexta-feira. Como fazes?', options: ['Faço o pedido na app, com antecedência', 'Explico ao encarregado na segunda', 'Peço a um colega da equipa para avisar o encarregado por mim', 'Saio sem picar, para não contar'], correct: 0 },
+      { q: 'Na app, um dos teus dias tem as horas erradas. Até quando reclamas?', options: ['Antes do fim do mês, na própria app', 'Quando receber o salário', 'No fim do ano, de uma vez, com tudo junto', 'Não se pode reclamar'], correct: 0 },
+      { q: 'Quem te diz o horário da obra?', options: ['O encarregado da obra', 'O cliente', 'O colega mais antigo da equipa', 'Cada um combina o seu'], correct: 0 },
+      { q: 'Perdeste o teu cartão. O que fazes?', options: ['Aviso logo o encarregado, no mesmo dia', 'Uso o de um colega', 'Espero uns dias para ver se o cartão aparece', 'Deixo de picar até ter outro'], correct: 0 },
+      { q: 'Porque é que nunca se pica por um colega?', options: ['Numa emergência, as picagens dizem quem está lá dentro', 'O leitor do cartão só aceita um cartão de cada vez', 'Porque só o encarregado pode picar por outra pessoa', 'Pode-se, se o colega for de confiança e pedir'], correct: 0 }] },
   { title: 'Equipamento de proteção individual (EPI)', kind: 'bot', body: `Agora, o mais importante: o teu equipamento de proteção.
 
 [capacete] [botas] [colete] Na obra usas sempre capacete, botas de biqueira de aço e colete refletor.
 
 [oculos] [luvas] Também óculos de proteção, e as luvas certas para a tarefa que estás a fazer.
 
-[auditiva] [arnes] Algumas zonas pedem mais: proteção auditiva, máscara ou arnês. Segue a sinalização e o que o encarregado disser.
+[auditiva] [mascara] [arnes] Algumas zonas pedem mais: proteção auditiva, máscara ou arnês. Segue a sinalização e o que o encarregado disser.
+
+Antes de começares, verifica o teu equipamento. Um capacete com fissuras, ou que levou uma pancada forte, troca-se. Um colete sujo, que já não brilha, também.
+
+O equipamento é pessoal: não se empresta, sobretudo máscaras e proteção auditiva. A proteção auditiva põe-se onde está o sinal, mesmo que seja por pouco tempo.
 
 Sem o equipamento completo, não entras na obra. Se alguma coisa estiver estragada ou perdida, pede outra antes de começar a trabalhar.`,
-    q: [{ q: 'Sem capacete podes entrar na obra?', options: ['Sim, se for rápido', 'Não'], correct: 1 },
-      { q: 'As tuas luvas rasgaram-se. O que fazes?', options: ['Trabalho sem luvas', 'Peço luvas novas antes de continuar'], correct: 1 }] },
+    // A bank of 8: each attempt draws 4 and shuffles the answers (sql/128), so «correct: 0» never shows as the first one.
+    q: [{ q: 'O teu capacete caiu de um andaime alto e ficou com uma fissura pequena. O que fazes?', options: ['Troco-o antes de continuar a trabalhar', 'Uso-o até ao fim do dia', 'Tapo a fissura com fita e continuo a usá-lo', 'Continuo: a fissura é pequena'], correct: 0 },
+      { q: 'Vais passar dois minutos numa zona com o sinal de proteção auditiva obrigatória. O que fazes?', options: ['Ponho a proteção auditiva, mesmo por pouco tempo', 'Não ponho: são só dois minutos', 'Ponho só se o barulho me incomodar', 'Tapo os ouvidos com as mãos'], correct: 0 },
+      { q: 'Vais trabalhar com um produto corrosivo. Que luvas usas?', options: ['As indicadas para esse produto químico', 'Quaisquer luvas de trabalho', 'Luvas de couro, mais resistentes', 'As mais grossas que houver no armazém'], correct: 0 },
+      { q: 'Um colega esqueceu-se da máscara e pede-te a tua emprestada. O que fazes?', options: ['Não empresto: ele pede uma nova ao encarregado', 'Empresto e uso-a depois', 'Empresto, se ele a limpar bem no fim', 'Partilhamos ao longo do dia'], correct: 0 },
+      { q: 'Qual é o equipamento mínimo para entrar na obra?', options: ['Capacete, botas e colete refletor', 'Capacete, luvas e óculos de sol', 'Botas de segurança e colete refletor', 'Capacete e óculos de proteção, sempre'], correct: 0 },
+      { q: 'O teu colete refletor está tão sujo que já quase não brilha. O que fazes?', options: ['Peço outro, porque assim já não me veem bem', 'Continuo: o importante é ter colete', 'Tiro-o, já não serve', 'Uso-o só de dia e à noite peço outro'], correct: 0 },
+      { q: 'Numa zona, a sinalização pede um equipamento que não costumas usar. O que fazes?', options: ['Uso o que a sinalização e o encarregado pedem', 'Uso só o meu de sempre', 'Uso-o só se o cliente estiver a ver', 'Passo depressa, sem parar'], correct: 0 },
+      { q: 'As tuas botas de segurança têm a sola descolada. O que fazes?', options: ['Peço botas novas antes de começar', 'Trabalho assim até ao fim da obra', 'Colo a sola com fita e continuo', 'Trabalho de ténis até virem as novas'], correct: 0 }] },
   { title: 'Autorização de trabalho e direito de parar', kind: 'bot', body: `Nas fábricas e refinarias, quase todos os trabalhos precisam de uma autorização de trabalho, assinada antes de começar.
 
 [autorizacao] A autorização diz o que vais fazer, onde, os perigos e as proteções. Lê-a, ou pede que ta expliquem, antes de assinares.
 
-Só fazes o que está escrito na autorização. Se o trabalho mudar, para e pede uma autorização nova.
+Só fazes o que está escrito na autorização. A autorização vale para aquele sítio e aquele período. Se o trabalho mudar, se mudares de sítio, ou se o prazo acabar, para e pede uma autorização nova.
 
 [stop] Tens sempre o direito, e o dever, de parar um trabalho que não é seguro. Ninguém te pode castigar por isso.
 
 Se vires um perigo, para, afasta as pessoas, e avisa o encarregado. Primeiro a segurança, depois o trabalho.`,
-    q: [{ q: 'O trabalho mudou e já não é o que está na autorização. O que fazes?', options: ['Continuo, é quase igual', 'Paro e peço uma autorização nova'], correct: 1 },
-      { q: 'Achas que um trabalho não é seguro. Podes pará-lo?', options: ['Sim, e devo avisar o encarregado', 'Não, só o chefe pode parar'], correct: 0 }] },
+    // A bank of 8: each attempt draws 4 and shuffles the answers (sql/128), so «correct: 0» never shows as the first one.
+    q: [{ q: 'O trabalho mudou e já não é o que está na autorização. O que fazes?', options: ['Paro e peço uma autorização nova', 'Continuo: é quase igual', 'Acabo depressa e aviso o encarregado no fim', 'Escrevo eu a alteração'], correct: 0 },
+      { q: 'Não percebes um dos perigos escritos na autorização. O que fazes antes de assinar?', options: ['Peço que mo expliquem antes de assinar', 'Assino: o encarregado sabe', 'Assino e pergunto depois, já no local', 'Não assino, mas começo'], correct: 0 },
+      { q: 'Achas que um trabalho não é seguro, mas o chefe de equipa diz para continuar. O que fazes?', options: ['Paro, afasto as pessoas e falo com o encarregado', 'Continuo: quem decide é o chefe', 'Continuo, mas com mais cuidado', 'Vou embora sem dizer nada a ninguém'], correct: 0 },
+      { q: 'Podes ser castigado por parares um trabalho que te pareceu perigoso?', options: ['Não: parar é um direito e um dever', 'Sim, se afinal não era perigoso', 'Sim, se por causa disso a obra se atrasar', 'Só se o cliente se queixar'], correct: 0 },
+      { q: 'A autorização é para a bomba A. Pedem-te para fazer o mesmo na bomba B, ao lado. O que fazes?', options: ['Peço uma autorização para a bomba B', 'Faço: é o mesmo trabalho', 'Faço, porque as duas bombas são exatamente iguais', 'Faço e aviso no fim'], correct: 0 },
+      { q: 'Vês um perigo junto de outra equipa. O que fazes?', options: ['Paro, afasto as pessoas e aviso o encarregado', 'Nada: não é a minha equipa', 'Tiro uma foto e continuo', 'Conto ao encarregado no fim do dia'], correct: 0 },
+      { q: 'A autorização acabou a meio do trabalho. O que fazes?', options: ['Paro e peço uma autorização nova', 'Continuo: falta pouco', 'Continuo, se ninguém da obra disser nada', 'Mudo a hora no papel'], correct: 0 },
+      { q: 'Quem tem de conhecer o que está na autorização de trabalho?', options: ['Todos os que fazem esse trabalho', 'Só o encarregado que a assina', 'Só quem a assina em primeiro lugar', 'Só o cliente e o técnico de segurança'], correct: 0 }] },
   { title: 'Trabalhos em altura', kind: 'bot', body: `As quedas em altura são das maiores causas de mortes nas obras. Vamos falar disso.
 
 [queda] Onde há risco de cair, tem de haver proteção: guarda-corpos, redes, ou arnês preso a um ponto seguro.
 
-[arnes] Se usas arnês, está sempre preso. Um arnês solto não te protege de nada.
+[arnes] Se usas arnês, está sempre preso. Um arnês solto não te protege de nada. Antes de o pores, verifica as fitas, as costuras e os mosquetões. Um arnês que já segurou uma queda não se volta a usar.
 
 [andaime] Só sobes a um andaime com a etiqueta verde, verificado. Etiqueta vermelha, ou sem etiqueta: não sobes.
 
 Nunca tires um guarda-corpos, uma tampa ou uma rede. Se for preciso, quem monta o andaime faz a alteração.
 
-Ferramentas em altura vão presas, para não caírem em cima de ninguém. E por baixo, a zona fica vedada.`,
-    q: [{ q: 'O andaime tem a etiqueta vermelha. Podes subir?', options: ['Não', 'Sim, se for só um minuto'], correct: 0 },
-      { q: 'Estás em altura com arnês. Quando o prendes?', options: ['Só nas zonas mais altas', 'Sempre'], correct: 1 },
-      { q: 'Um guarda-corpos atrapalha o teu trabalho. O que fazes?', options: ['Tiro-o e volto a pôr no fim', 'Peço a quem montou para o alterar'], correct: 1 }] },
+Ferramentas em altura vão presas, para não caírem em cima de ninguém. E por baixo, a zona fica vedada.
+
+Uma escada serve para subir e descer, ou para trabalhos curtos e leves. Para um trabalho mais longo, pede um andaime ou uma plataforma.`,
+    // A bank of 8: each attempt draws 4 and shuffles the answers (sql/128), so «correct: 0» never shows as the first one.
+    q: [{ q: 'O andaime não tem etiqueta. Podes subir?', options: ['Não: sem etiqueta não se sobe', 'Sim, se parecer bem montado', 'Sim, se for só para ir buscar uma ferramenta', 'Sim, se tiver guarda-corpos'], correct: 0 },
+      { q: 'Estás com arnês numa plataforma alta. Quando é que o tens preso?', options: ['Sempre, preso a um ponto seguro', 'Só nas zonas mais altas', 'Só quando o encarregado está a ver', 'Quando tenho as mãos ocupadas'], correct: 0 },
+      { q: 'Um guarda-corpos atrapalha o teu trabalho. O que fazes?', options: ['Peço a quem montou para o alterar', 'Tiro-o e volto a pô-lo quando acabar', 'Tiro-o e trabalho com muito cuidado', 'Prendo o arnês e depois tiro-o'], correct: 0 },
+      { q: 'O teu arnês segurou ontem uma queda. Podes voltar a usá-lo?', options: ['Não: entrego-o e uso outro', 'Sim, se não tiver rasgões', 'Sim, depois de o lavar e secar bem', 'Sim, até ao fim da semana'], correct: 0 },
+      { q: 'Vais trabalhar em altura com uma chave pesada. O que fazes?', options: ['Prendo-a e confirmo que por baixo está vedado', 'Ponho-a no bolso', 'Seguro-a bem com a mão', 'Pouso-a na borda do andaime'], correct: 0 },
+      { q: 'Tens um trabalho de duas horas no alto. Fazes em cima de uma escada?', options: ['Não: peço um andaime ou uma plataforma', 'Sim, com a escada bem presa', 'Sim, com cuidado e com as botas de segurança', 'Sim, se um colega a segurar'], correct: 0 },
+      { q: 'Antes de pores o arnês, o que verificas?', options: ['Fitas, costuras e mosquetões', 'Só se a cor ainda está viva', 'Só se é do meu tamanho certo', 'Nada, se o arnês ainda for novo'], correct: 0 },
+      { q: 'O que tem de haver por baixo de quem trabalha em altura?', options: ['A zona vedada, para ninguém passar', 'Nada, se houver cuidado', 'Um colega a segurar a escada o tempo todo', 'Os materiais arrumados'], correct: 0 }] },
   { title: 'Espaços confinados', kind: 'bot', body: `Um espaço confinado é um sítio fechado com entrada apertada: um tanque, uma cisterna, uma caixa de visita, o interior de um equipamento.
 
 [gas] O ar lá dentro pode não ter oxigénio suficiente, ou ter gases tóxicos ou que explodem. Muitas vezes não se vê nem se cheira.
 
 [autorizacao] Só entras com autorização de trabalho, e depois de o ar ser medido. As medições continuam enquanto lá estás.
 
-Fica sempre um vigilante cá fora, a falar contigo, com o plano de salvamento pronto.
+[vigilante] Fica sempre um vigilante cá fora, a falar contigo, com o plano de salvamento pronto. Se o vigilante tiver de sair, tu também sais.
+
+[detetor] Se o detetor de gás apitar, sais logo e avisas.
 
 Se um colega desmaiar lá dentro, não entres para o tirar. Dá o alarme. A maior parte das vítimas destes acidentes são pessoas que entraram para salvar.`,
-    q: [{ q: 'Um colega desmaiou dentro de um tanque. O que fazes?', options: ['Entro logo para o tirar', 'Dou o alarme e não entro sem equipamento'], correct: 1 },
-      { q: 'Quando podes entrar num espaço confinado?', options: ['Com autorização e o ar medido', 'Quando não cheira a nada'], correct: 0 }] },
+    // A bank of 8: each attempt draws 4 and shuffles the answers (sql/128), so «correct: 0» never shows as the first one.
+    q: [{ q: 'Um colega desmaiou dentro de um tanque. O que fazes?', options: ['Dou o alarme e não entro sem equipamento', 'Entro logo para o tirar', 'Entro a suster a respiração', 'Espero que ele acorde'], correct: 0 },
+      { q: 'Quando podes entrar num espaço confinado?', options: ['Com autorização e o ar medido', 'Quando não cheira a nada', 'Quando a tampa esteve aberta uma hora inteira', 'Com um colega já lá dentro'], correct: 0 },
+      { q: 'O ar foi medido de manhã. À tarde voltas a entrar. O que é preciso?', options: ['Medir outra vez: as medições continuam', 'Nada: a medição da manhã serve', 'Medir só se lá dentro cheirar mal', 'Só se o encarregado pedir'], correct: 0 },
+      { q: 'Porque é que não basta cheirar o ar?', options: ['Muitos gases perigosos não têm cheiro', 'O nariz cansa-se depressa', 'O cheiro só aparece com o calor', 'Basta: um gás perigoso cheira sempre'], correct: 0 },
+      { q: 'Quem fica cá fora enquanto trabalhas lá dentro?', options: ['Um vigilante, com o plano de salvamento', 'Ninguém, não é preciso', 'O encarregado, quando tiver tempo', 'Um colega, a fazer outro trabalho ao lado'], correct: 0 },
+      { q: 'Qual destes é um espaço confinado?', options: ['Uma caixa de visita no chão', 'Um contentor-escritório de porta aberta', 'Um armazém aberto', 'Um telheiro'], correct: 0 },
+      { q: 'O vigilante tem de sair por um minuto. O que fazes lá dentro?', options: ['Saio também, até ele voltar', 'Continuo: é só um minuto', 'Continuo, mas mais depressa', 'Fecho a tampa por dentro para me proteger'], correct: 0 },
+      { q: 'O detetor de gás começa a apitar enquanto estás lá dentro. O que fazes?', options: ['Saio logo e aviso o vigilante', 'Acabo o que estou a fazer', 'Desligo o detetor, deve estar avariado', 'Abano o detetor e continuo'], correct: 0 }] },
   { title: 'Produtos químicos', kind: 'bot', body: `Na indústria trabalhas perto de produtos químicos. Alguns queimam, outros são tóxicos, outros pegam fogo.
 
 [quimico] Lê sempre o rótulo. Os símbolos de perigo, em losango vermelho, dizem-te o risco.
 
 A ficha de dados de segurança explica como usar, que proteção usar, e o que fazer num acidente. Pergunta ao encarregado onde está.
 
-[luvas] [oculos] Usa as luvas e os óculos certos para aquele produto. Nunca uses um produto numa embalagem sem rótulo.
+[luvas] [oculos] Usa as luvas e os óculos certos para aquele produto. Nunca uses um produto numa embalagem sem rótulo, e nunca passes um produto para uma garrafa de bebida.
 
 [fumar] Nunca comas, bebas ou fumes onde há produtos químicos. Lava as mãos antes das pausas.
 
 Se um produto te salpicar os olhos ou a pele, lava logo com muita água, e avisa.`,
-    q: [{ q: 'Encontraste uma garrafa sem rótulo. O que fazes?', options: ['Uso, deve ser água', 'Não uso e aviso o encarregado'], correct: 1 },
-      { q: 'Um produto salpicou-te os olhos. O que fazes primeiro?', options: ['Lavo logo com muita água', 'Espero para ver se passa'], correct: 0 }] },
+    // A bank of 8: each attempt draws 4 and shuffles the answers (sql/128), so «correct: 0» never shows as the first one.
+    q: [{ q: 'Encontraste uma garrafa sem rótulo. O que fazes?', options: ['Não uso e aviso o encarregado', 'Uso, porque deve ser só água', 'Cheiro primeiro, para saber o que é', 'Despejo o que tem no esgoto mais perto'], correct: 0 },
+      { q: 'Um produto salpicou-te os olhos. O que fazes primeiro?', options: ['Lavo logo com muita água', 'Espero para ver se passa', 'Esfrego os olhos com as mãos limpas', 'Ponho os óculos'], correct: 0 },
+      { q: 'Onde encontras como usar um produto e o que fazer num acidente?', options: ['Na ficha de dados de segurança', 'No talão de compra do produto', 'No folheto de publicidade da loja', 'Pergunto a qualquer colega da obra'], correct: 0 },
+      { q: 'Queres levar um pouco de produto para o andaime numa garrafa de água vazia. Podes?', options: ['Não: nunca em garrafas de bebida', 'Sim, se escrever o nome à mão', 'Sim, se levar só uma pequena quantidade', 'Sim, se a lavar antes'], correct: 0 },
+      { q: 'Acabaste de trabalhar com um produto químico e vais almoçar. O que fazes antes?', options: ['Lavo as mãos antes de comer', 'Nada: usei luvas', 'Limpo as mãos à roupa de trabalho', 'Como longe da zona'], correct: 0 },
+      { q: 'O que te diz o símbolo em losango vermelho no rótulo?', options: ['O perigo do produto', 'O preço por litro', 'A marca do fabricante', 'O prazo de validade'], correct: 0 },
+      { q: 'Podes fumar junto a produtos químicos se estiveres ao ar livre?', options: ['Não: ali não se come, bebe nem fuma', 'Sim, ao ar livre não faz mal', 'Sim, com o vento pelas costas', 'Sim, se for um cigarro rápido'], correct: 0 },
+      { q: 'Que luvas usas para trabalhar com um produto químico?', options: ['As que a ficha do produto indica', 'As de couro', 'Quaisquer luvas, desde que tenha luvas', 'As mais grossas'], correct: 0 }] },
   { title: 'Trabalho a quente e incêndio', kind: 'bot', body: `Soldar, cortar ou rebarbar faz faíscas. Numa zona com gases ou combustíveis, uma faísca chega para um incêndio ou uma explosão.
 
 [inflamavel] [autorizacao] Trabalho a quente só com autorização, e depois de medir os gases à volta.
 
-[extintor] Tem sempre um extintor ao teu lado, e tira ou tapa tudo o que possa arder.
+[extintor] Tem sempre um extintor ao teu lado, e tira ou tapa tudo o que possa arder. Se o medidor de gases der alarme, paras logo.
 
 Quando acabas, a zona fica vigiada durante algum tempo. Muitos incêndios começam depois de o trabalho acabar.
 
 [alarme] Se houver um início de incêndio, dá o alarme primeiro. Só usas o extintor se for pequeno e tiveres uma saída atrás de ti.`,
-    q: [{ q: 'Antes de soldar perto de tubagens com produto, o que é preciso?', options: ['Nada, sou soldador experiente', 'Autorização e medição de gases'], correct: 1 },
-      { q: 'Acabaste de soldar. A zona pode ficar sozinha logo?', options: ['Não, fica vigiada durante algum tempo', 'Sim'], correct: 0 }] },
+    // A bank of 8: each attempt draws 4 and shuffles the answers (sql/128), so «correct: 0» never shows as the first one.
+    q: [{ q: 'Antes de soldar perto de tubagens com produto, o que é preciso?', options: ['Autorização e medição de gases', 'Nada, se for um soldador experiente', 'Só ter um extintor por perto', 'Só avisar o colega que está ao lado'], correct: 0 },
+      { q: 'Acabaste de soldar. A zona pode ficar sozinha logo?', options: ['Não: fica vigiada algum tempo', 'Sim: o trabalho acabou', 'Sim, se desligar a máquina de soldar', 'Sim, se molhar o chão'], correct: 0 },
+      { q: 'Começa um pequeno incêndio ao teu lado. Qual é o primeiro passo?', options: ['Dar o alarme e avisar', 'Pegar no extintor', 'Afastar-me sem dizer nada', 'Tapar o fogo com a roupa'], correct: 0 },
+      { q: 'Quando é que usas o extintor?', options: ['Fogo pequeno e uma saída atrás de mim', 'Em qualquer fogo', 'Só quando o encarregado manda usar', 'Nunca: é só para os bombeiros'], correct: 0 },
+      { q: 'Vais rebarbar e há paletes de madeira ao lado. O que fazes?', options: ['Tiro ou tapo a madeira antes de começar', 'Rebarbo virado para o outro lado', 'Rebarbo depressa', 'Começo e vou ficando atento às faíscas'], correct: 0 },
+      { q: 'Rebarbar é trabalho a quente?', options: ['Sim, porque faz faíscas', 'Não: trabalho a quente é só soldar', 'Só se durar mais de uma hora', 'Só com maçarico'], correct: 0 },
+      { q: 'Onde fica o extintor quando fazes trabalho a quente?', options: ['Ao meu lado, pronto a usar', 'Na carrinha', 'No armazém da obra', 'Não é preciso'], correct: 0 },
+      { q: 'A meio da soldadura, o medidor de gases dá alarme. O que fazes?', options: ['Paro logo e aviso', 'Acabo a soldadura', 'Afasto o medidor da zona', 'Continuo com cuidado'], correct: 0 }] },
   { title: 'Bloqueio de energias (consignação)', kind: 'bot', body: `Antes de mexer numa máquina, numa bomba ou num quadro elétrico, a energia tem de estar desligada e bloqueada. Chama-se consignação.
+
+Não é só a eletricidade: também a pressão, o vapor, o ar comprimido, e peças que podem cair ou rodar. Carregar no botão de paragem não é bloquear.
 
 [cadeado] Cada pessoa que trabalha no equipamento põe o seu próprio cadeado e a sua etiqueta. A chave fica contigo.
 
 Depois de bloquear, confirma que não há energia: tenta arrancar, mede a tensão, verifica a pressão.
 
-Nunca tires o cadeado de outra pessoa. E nunca trabalhes num equipamento só porque «disseram que está desligado».
+Nunca tires o cadeado de outra pessoa. Se ela não estiver, só o responsável o pode tirar, com um procedimento próprio. E nunca trabalhes num equipamento só porque «disseram que está desligado».
 
 [stop] Se encontrares um cadeado ou uma etiqueta, não mexas. Pergunta de quem é.`,
-    q: [{ q: 'Vais trabalhar numa bomba. Basta alguém dizer que está desligada?', options: ['Sim', 'Não: ponho o meu cadeado e confirmo'], correct: 1 },
-      { q: 'Podes tirar o cadeado de um colega que já foi embora?', options: ['Nunca', 'Sim, se ele demorar'], correct: 0 }] },
+    // A bank of 8: each attempt draws 4 and shuffles the answers (sql/128), so «correct: 0» never shows as the first one.
+    q: [{ q: 'Vais trabalhar numa bomba. Basta alguém dizer que está desligada?', options: ['Não: ponho o meu cadeado e confirmo', 'Sim, se quem diz for o encarregado', 'Sim, se a luz do painel estiver apagada', 'Sim, se a bomba estiver parada e calada'], correct: 0 },
+      { q: 'Um colega deixou o cadeado dele e já foi embora. Podes tirá-lo?', options: ['Não, só o responsável, com o procedimento', 'Sim, se ele demorar muito a voltar à obra', 'Sim, se ele me autorizar pelo telefone', 'Sim, se o trabalho dele já estiver acabado'], correct: 0 },
+      { q: 'Já puseste o teu cadeado. Antes de começar, o que fazes?', options: ['Confirmo que não há energia nenhuma', 'Começo logo', 'Peço a um colega que veja por mim', 'Espero dez minutos'], correct: 0 },
+      { q: 'Três pessoas vão trabalhar na mesma máquina. Quantos cadeados?', options: ['Três: cada um põe o seu', 'Um, o do encarregado', 'Um só, de quem chegar primeiro', 'Nenhum: está parada'], correct: 0 },
+      { q: 'Onde fica a chave do teu cadeado?', options: ['Comigo, no bolso', 'No quadro', 'Com o encarregado', 'Pendurada no cadeado'], correct: 0 },
+      { q: 'Encontras um cadeado com etiqueta num quadro e não sabes de quem é. O que fazes?', options: ['Não mexo e pergunto de quem é', 'Tiro-o: ficou esquecido', 'Corto-o, se precisar de trabalhar ali', 'Ligo o quadro ao lado'], correct: 0 },
+      { q: 'Além da eletricidade, o que mais se bloqueia?', options: ['Pressão, vapor, ar e peças móveis', 'Mais nada, só a eletricidade', 'Só o gás, quando há tubagens', 'Só a água, nas bombas e nos tubos'], correct: 0 },
+      { q: 'A máquina parou com o botão de paragem. Já podes mexer nela?', options: ['Não: parar não é bloquear', 'Sim: o botão desligou-a', 'Sim, se estiver parada há algum tempo', 'Sim, se for rápido'], correct: 0 }] },
   { title: 'Emergências e quase-acidentes', kind: 'bot', body: `Para terminar: o que fazer quando alguma coisa corre mal.
 
 [alarme] [saida] Se tocar o alarme, para o trabalho, deixa a zona em segurança se puderes, e sai pelo caminho de evacuação.
 
 [encontro] Vai para o ponto de encontro e espera pelo encarregado, para seres contado. Não voltes atrás para buscar nada.
 
-[112] [socorro] Se houver um acidente: protege-te primeiro, chama ajuda, 112 e o encarregado, e não mexas no ferido se não souberes como.
+[112] [socorro] Se houver um acidente: protege-te primeiro, chama ajuda, 112 e o encarregado, e não mexas no ferido se não souberes como. Só o tiras do sítio se lá houver um perigo imediato, como fogo.
 
 Um quase-acidente é quando quase acontece. Conta sempre ao encarregado, no mesmo dia. Falar disso evita o próximo acidente.
 
 Obrigado por me ouvires. Bom trabalho, e em segurança!`,
-    q: [{ q: 'Toca o alarme. Para onde vais?', options: ['Para o ponto de encontro', 'Volto à carrinha buscar as minhas coisas', 'Continuo a trabalhar'], correct: 0 },
-      { q: 'Quase caiu uma peça em cima de um colega, mas ninguém se magoou. O que fazes?', options: ['Nada, não aconteceu nada', 'Conto ao encarregado no mesmo dia'], correct: 1 }] },
+    // A bank of 8: each attempt draws 4 and shuffles the answers (sql/128), so «correct: 0» never shows as the first one.
+    q: [{ q: 'Toca o alarme. Para onde vais?', options: ['Para o ponto de encontro', 'À carrinha buscar as minhas coisas', 'Fico a trabalhar', 'Para o refeitório'], correct: 0 },
+      { q: 'Quase caiu uma peça em cima de um colega, mas ninguém se magoou. O que fazes?', options: ['Conto ao encarregado no mesmo dia', 'Nada, porque não aconteceu nada', 'Conto só na reunião do fim do mês', 'Conto só se voltar a acontecer'], correct: 0 },
+      { q: 'Porque é que esperas no ponto de encontro?', options: ['Para seres contado pelo encarregado', 'Para descansar', 'Porque é o sítio mais perto da saída', 'Para receber outro trabalho'], correct: 0 },
+      { q: 'Durante a evacuação lembras-te de que deixaste o telemóvel lá dentro. O que fazes?', options: ['Não volto atrás', 'Volto depressa', 'Peço a um colega que o vá buscar', 'Volto pelo outro lado'], correct: 0 },
+      { q: 'Um colega caiu e está no chão. Qual é a primeira coisa a fazer?', options: ['Ver se a zona é segura', 'Levantá-lo logo do chão', 'Dar-lhe água a beber', 'Mudá-lo de sítio'], correct: 0 },
+      { q: 'Num acidente grave, para quem ligas?', options: ['112 e o encarregado', 'Só para a família', 'Para o escritório, no dia seguinte', 'Para ninguém'], correct: 0 },
+      { q: 'Não sabes primeiros socorros. Mudas o ferido de sítio?', options: ['Só se houver um perigo imediato, como fogo', 'Sim, para o pôr confortável', 'Sim, para o sentar', 'Sim, para o levar na carrinha'], correct: 0 },
+      { q: 'Quando toca o alarme, o que fazes ao trabalho?', options: ['Paro e deixo a zona segura, se puder', 'Acabo primeiro o que estou a fazer', 'Largo tudo como está, ligado, e corro', 'Espero um pouco para ver se é a sério'], correct: 0 }] },
   // The last part is a game: tap the hazards in a picture (sql/58). Where they are is only on the server.
   { title: 'Encontra o perigo: a refinaria', kind: 'hunt', scene: 'obra-1',
     body: 'Agora és tu. Nesta zona de trabalho há sete perigos. Toca em cada um. Olha bem antes de tocar: muitos toques ao calhas e começas de novo.', q: [] }];
@@ -4534,31 +4629,40 @@ function botFace(look, cls) {
 }
 // Safety signs, drawn here (no files, no network): blue = mandatory, green = safe way, red = fire / prohibited.
 const PICTO = {
-  capacete: ['Capacete', 'must', '<path d="M5 15a7 7 0 0 1 14 0M3.5 15h17v2.5h-17zM12 8V6"/>'],
-  botas: ['Botas de segurança', 'must', '<path d="M8 4h5v9l6 3v3H5v-4l3-2z"/>'],
-  oculos: ['Óculos', 'must', '<circle cx="7" cy="13" r="3.2"/><circle cx="17" cy="13" r="3.2"/><path d="M10.2 13h3.6M3.8 13 3 9M20.2 13l.8-4"/>'],
-  luvas: ['Luvas', 'must', '<path d="M8 21v-7l-3-3.5 1.2-1.2L9 11V5.5a1.2 1.2 0 0 1 2.4 0V10V4.5a1.2 1.2 0 0 1 2.4 0V10V5.5a1.2 1.2 0 0 1 2.4 0v7l1.6-1.6 1.1 1.1-3 5V21z"/>'],
-  colete: ['Colete refletor', 'must', '<path d="M8.5 3 4 7v14h6v-9h4v9h6V7l-4.5-4L13 7h-2zM4 15h6M14 15h6"/>'],
-  auditiva: ['Proteção auditiva', 'must', '<path d="M6 14v-2a6 6 0 0 1 12 0v2M4 14h4v6H4zM16 14h4v6h-4z"/>'],
-  arnes: ['Arnês', 'must', '<circle cx="12" cy="4.5" r="1.8"/><path d="M8 21l1-8h6l1 8M8 9h8M9 9l3 4 3-4M12 2.7V1"/>'],
-  saida: ['Saída de emergência', 'safe', '<circle cx="11" cy="4.5" r="1.7"/><path d="M6 21l3.5-6 2.5 2v4M5 11l3-3h3.5l2.5 3.5 2.5.5M9 8.5l-1.2 5.5M17.5 3h3v18h-3"/>'],
-  encontro: ['Ponto de encontro', 'safe', '<path d="M3 3l5 5M21 3l-5 5M3 21l5-5M21 21l-5-5M3 3h4M3 3v4M21 3h-4M21 3v4M3 21h4M3 21v-4M21 21h-4M21 21v-4"/><circle cx="12" cy="12" r="2.4"/>'],
-  socorro: ['Primeiros socorros', 'safe', '<path d="M12 5v14M5 12h14" stroke-width="4"/>'],
-  extintor: ['Extintor', 'fire', '<path d="M9 9h6v12H9zM12 9V6M10 6h4.5l3 2.5M12 3.5V6"/>'],
-  alarme: ['Alarme', 'fire', '<path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4zM10 20.5a2 2 0 0 0 4 0"/>'],
-  fumar: ['Proibido fumar', 'no', '<path d="M4 13h11v3H4zM17 13v3M19 13v3M17 10c0-2 2-1.5 2-4"/>'],
+  capacete: ['Capacete obrigatório', 'iso', null, 'M014'],
+  botas: ['Botas de segurança', 'iso', null, 'M008'],
+  oculos: ['Óculos de proteção', 'iso', null, 'M004'],
+  luvas: ['Luvas de proteção', 'iso', null, 'M009'],
+  colete: ['Colete refletor', 'iso', null, 'M015'],
+  auditiva: ['Proteção auditiva', 'iso', null, 'M003'],
+  arnes: ['Arnês obrigatório', 'iso', null, 'M018'],
+  saida: ['Saída de emergência', 'iso', null, 'E001'],
+  encontro: ['Ponto de encontro', 'iso', null, 'E007'],
+  socorro: ['Primeiros socorros', 'iso', null, 'E003'],
+  extintor: ['Extintor', 'iso', null, 'F001'],
+  alarme: ['Botão de alarme', 'iso', null, 'F005'],
+  fumar: ['Proibido fumar', 'iso', null, 'P002'],
   cartao: ['O teu cartão', 'card', '<path d="M3 7h12v10H3zM6 14h4M18 9a4 4 0 0 1 0 6M20.5 6.5a7.5 7.5 0 0 1 0 11"/>'],
   autorizacao: ['Autorização de trabalho', 'card', '<path d="M7 3h7l4 4v14H7zM14 3v4h4M9.5 12h6M9.5 15.5h6M9.5 19l1.5-1.5 1.5 1.5 3-3"/>'],
   stop: ['Parar o trabalho', 'stopk', '<path d="M8 20v-8.5l-1.6-2a1.1 1.1 0 0 1 1.7-1.4L9.5 10V4.8a1.1 1.1 0 0 1 2.2 0V10V3.8a1.1 1.1 0 0 1 2.2 0V10V4.8a1.1 1.1 0 0 1 2.2 0V10V6.5a1.1 1.1 0 0 1 2.2 0V14c0 3.3-2 6-5 6z"/>'],
-  queda: ['Risco de queda', 'warn', '<circle cx="13" cy="7" r="1.6"/><path d="M7 11.5l4-1.5 3 3 3-.5M11 10l-1 5-3 2.5M10 15l3.5 1.5L14 20M4 20h6"/>'],
+  queda: ['Risco de queda', 'iso', null, 'W008'],
   andaime: ['Andaime verificado', 'safe', '<path d="M5 21V4M19 21V4M5 9h14M5 15h14M5 9l14 6M5 4h14"/>'],
-  gas: ['Gases perigosos', 'warn', '<path d="M7 18c-2 0-3-1.5-3-3 0-2 1.6-3 3-3 .3-2.5 2.2-4 4.5-4 2.6 0 4.2 1.8 4.5 4 1.8 0 3 1.3 3 3s-1.2 3-3 3z"/>'],
-  quimico: ['Produto perigoso', 'ghs', '<path d="M9 4h6M10 4v5l-5 9h14l-5-9V4M8 14h8"/>'],
-  inflamavel: ['Inflamável', 'ghs', '<path d="M12 4c1 3 4.5 5 4.5 9.5A4.5 4.5 0 0 1 7.5 13.5c0-2 1-3.2 2-4 0 1.5.8 2.5 1.8 2.8C11 9.5 11 6.5 12 4z"/><path d="M6 20h12"/>'],
-  cadeado: ['Bloqueio com cadeado', 'must', '<rect x="6" y="11" width="12" height="9" rx="2"/><path d="M8.5 11V8a3.5 3.5 0 0 1 7 0v3M12 14.5v2.5"/>'],
-  '112': ['Ligar 112', 'fire', '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>'],
+  gas: ['Atmosfera perigosa', 'iso', null, 'W041'],
+  quimico: ['Substância tóxica', 'iso', null, 'W016'],
+  inflamavel: ['Inflamável', 'iso', null, 'W021'],
+  cadeado: ['Desligar e bloquear', 'iso', null, 'M021'],
+  '112': ['Telefone de emergência', 'iso', null, 'E004'],
+  // v104: more official signs for the bot's scripts (ISO 7010, signs/).
+  mascara: ['Proteção respiratória', 'iso', null, 'M017'], eletrico: ['Risco elétrico', 'iso', null, 'W012'], cargasuspensa: ['Cargas suspensas', 'iso', null, 'W015'],
+  quente: ['Superfície quente', 'iso', null, 'W017'], empilhador: ['Empilhadores', 'iso', null, 'W014'], escorregadio: ['Piso escorregadio', 'iso', null, 'W011'],
+  corrosivo: ['Substância corrosiva', 'iso', null, 'W023'], quedaobjetos: ['Queda de objetos', 'iso', null, 'W035'], detetor: ['Detetor de gás', 'iso', null, 'M048'],
+  ventilar: ['Ventilar antes de entrar', 'iso', null, 'M056'], vigilante: ['Entrar só com vigilante', 'iso', null, 'M058'], lavarmaos: ['Lavar as mãos', 'iso', null, 'M011'],
+  lavaolhos: ['Lava-olhos', 'iso', null, 'E011'], chama: ['Proibido fogo e chama', 'iso', null, 'P003'], semacesso: ['Proibida a entrada', 'iso', null, 'P080'],
+  andaimeincompleto: ['Andaime incompleto: não usar', 'iso', null, 'P025'],
 };
 const picto = (k) => { const p = PICTO[k];
+  // The official sign (ISO 7010, public domain drawings in signs/), as it is on the site's doors.
+  if (p[3]) return `<figure class="picto iso"><img src="signs/${p[3]}.svg" alt="" width="64" height="64" decoding="async"><figcaption>${esc(p[0])}</figcaption></figure>`;
   const inner = p[1] === 'ghs' ? `<g transform="rotate(-45 12 12)">${p[2]}</g>` : p[2];
   return `<figure class="picto ${p[1]}"><svg viewBox="0 0 24 24" aria-hidden="true">${inner}${p[1] === 'no' ? '<path class="slash" d="M4.5 4.5l15 15"/>' : ''}</svg><figcaption>${esc(p[0])}</figcaption></figure>`; };
 // A line of the script: its signs, and the words without the [tags].
@@ -4678,6 +4782,8 @@ async function onbBot(x, items) {
   $('#bgo').onclick = async () => {
     const { error } = await sb.rpc('mini_induction_open', { p_item: x.id });
     if (error) return toast(friendly(error));
+    // This attempt's questions, drawn on the server from the part's bank (sql/128), answers shuffled.
+    if (x.ask) { const qz = await sb.rpc('mini_induction_quiz', { p_item: x.id }); if (qz.error) return toast(friendly(qz.error)); x = { ...x, questions: qz.data.questions }; }
     act.innerHTML = '<p class="small muted bot-hint">Toca numa mensagem para a ouvir outra vez.</p>'; act3d('Wave');
     for (const l of lines) if (!(await speak(l))) return;
     const answers = [];
@@ -4716,7 +4822,7 @@ async function onbBot(x, items) {
     }
     const bad = (res.wrong || []).map((i) => i + 1);
     act3d('No');
-    await speak({ signs: [], text: `Ainda não. ${bad.length === 1 ? 'A pergunta ' + bad[0] + ' não está certa' : 'As perguntas ' + bad.join(' e ') + ' não estão certas'}. Vamos ouvir outra vez, com atenção.` });
+    await speak({ signs: [], text: `Ainda não. ${bad.length === 1 ? 'A pergunta ' + bad[0] + ' não está certa' : 'As perguntas ' + bad.join(' e ') + ' não estão certas'}. Vamos ouvir outra vez, com atenção. Da próxima vez faço-te outras perguntas.` });
     act.innerHTML = `<button class="btn big" id="bagain">${ic('play')}Ouvir outra vez</button><button class="btn ghost wide" id="back">Voltar à lista</button>`;
     $('#back').onclick = () => { live = false; Voice.stop(); showOnboarding(); };
     $('#bagain').onclick = async () => { live = false; Voice.stop(); const r2 = await sb.rpc('mini_onboarding'); if (r2.error) return toast(friendly(r2.error));
