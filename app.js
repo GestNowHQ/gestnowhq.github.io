@@ -12927,7 +12927,8 @@ async function accidentReport() {
       ${c.accident_phone ? `<a class="btn small" href="${esc(tel(c.accident_phone))}">${ic('phone')}<span data-nt>${esc(c.accident_phone)}</span></a>` : ''}</div>` : ''}
     ${c.steps ? `<p class="ac-steps" data-nt>${esc(c.steps)}</p>` : ''}
     ${acc.map((x) => `<div class="contact"><div class="grow"><b data-nt>${esc(x.topic)}</b><small data-nt>${esc(x.name || x.email || '')}</small></div>
-      ${x.phone ? `<a class="btn ghost small" href="${esc(tel(x.phone))}">${ic('phone')}${esc(t_('Ligar'))}</a>` : ''}</div>`).join('')}`, t_('Fechar'), (d) => { const c = d.querySelector('button[value=cancel]'); if (c) c.hidden = true; });
+      ${x.phone ? `<a class="btn ghost small" href="${esc(tel(x.phone))}">${ic('phone')}${esc(t_('Ligar'))}</a>` : ''}</div>`).join('')}
+    ${!c.insurer && !c.policy && !c.steps && !acc.length ? `<p class="small muted">${esc(t_('A empresa ainda não escreveu o seguro nem quem contactar em caso de acidente. Liga ao teu encarregado.'))}</p>` : ''}`, t_('Fechar'), (d) => { const c = d.querySelector('button[value=cancel]'); if (c) c.hidden = true; });
 }
 function viewContacts() {
   if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
