@@ -6200,4 +6200,5 @@
 "Ambiente": "Environment",
 "Acidente": "Accident",
 "Registo de segurança": "Safety record",
-"SOS": "SOS"}
+"SOS": "SOS",
+"Só tu podes assinar este orçamento, e quem o faz não o pode assinar. Antes de enviar, junta outro administrador (no cartão do cliente) ou escreve uma regra em «Quem assina» com outra pessoa.": "Only you can sign this estimate, and whoever makes it cannot sign it. Before sending, add another administrator (on the client card) or write a rule in «Who signs» with someone else."}

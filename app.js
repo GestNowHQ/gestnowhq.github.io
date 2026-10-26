@@ -8136,8 +8136,13 @@ function renderEstimate() {
 // «Quem assina»: the same for an estimate made here and one archived from another tool.
 function estSignCard(e, t, ready) {
   const edit = e.can_edit; const reqOk = e.requirements.every((q) => q.got >= q.need); const file = e.source === 'file';
+  // v102: whoever made it never signs it; if the rules leave nobody else, say so before sending (Diogo hit this dead end)
+  const stuck = e.mine && ['draft', 'review'].includes(e.status)
+    && e.requirements.some((q) => (q.approvers || []).filter((a) => a !== state.me.user_id).length < q.need);
+  if (stuck) ready = false;
   return `<div class="sec-h"><h2>Quem assina</h2></div>
-      <div class="card orc-sign">${e.requirements.map((q) => `<div class="orc-req ${q.got >= q.need ? 'ok' : ''}"><div class="grow"><b>${esc(q.label)}</b>
+      <div class="card orc-sign">${stuck ? `<div class="result warn">${ic('warn')}<span>${esc(t_('Só tu podes assinar este orçamento, e quem o faz não o pode assinar. Antes de enviar, junta outro administrador (no cartão do cliente) ou escreve uma regra em «Quem assina» com outra pessoa.'))}</span></div>` : ''}
+        ${e.requirements.map((q) => `<div class="orc-req ${q.got >= q.need ? 'ok' : ''}"><div class="grow"><b>${esc(q.label)}</b>
           <small>${q.need === q.approvers.length && q.need > 1 ? 'Todos' : q.need + ' de ' + q.approvers.length}: ${esc((q.names || []).join(', ') || 'ninguém definido')}</small></div>
           <span class="orc-cnt">${q.got}/${q.need}</span></div>`).join('')}
         ${e.signatures.length ? `<ul class="orc-sigs">${e.signatures.map((s) => `<li>${s.approve ? chip('ok', 'Aprovou') : chip('bad', 'Recusou')} <b>${esc(s.name)}</b>${s.for ? ` <small>por ${esc(s.for)} (delegação)</small>` : ''}
