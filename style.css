@@ -2460,3 +2460,15 @@ ul.ct-miss li { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; p
 .sh-per .row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: end; }
 .sh-per .sh-x { flex: none; margin-bottom: 4px; }
 @media (min-width: 1100px) { .fr-bar { bottom: 12px; } }
+/* v101 Rotinas do encarregado, Quem contactar, Acidente */
+.me-acc { margin-top: 16px; }
+.rt-row { display: flex; align-items: flex-start; gap: 10px; }
+.rt-row .grow { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rt-row.late { box-shadow: inset 3px 0 0 var(--bad, #dc2626); padding-left: 10px; }
+.rt-row.done { opacity: .75; }
+.rt-off { opacity: .55; }
+button.card.rt-site { display: block; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.rt-late { margin: 6px 0; padding-left: 18px; color: var(--bad, #dc2626); font-size: var(--t-sm, 14px); }
+.ct-card .acts { margin-top: 8px; flex-wrap: wrap; }
+#ctbody > .btn.danger, #mycontacts > .btn.danger { margin-bottom: 12px; }
+.ac-steps { white-space: pre-line; background: var(--surface-2); border-radius: var(--r-md, 10px); padding: 10px 12px; }

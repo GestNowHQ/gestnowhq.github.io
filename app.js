@@ -160,6 +160,24 @@ const ERRORS = [
   [/more than 16 hours in one day/i, 'Mais de 16 horas num dia: confirma as horas.'],
   [/saída has not happened yet/i, 'A saída ainda não aconteceu: escreve-a quando saíres.'],
   [/already validated this day/i, 'O encarregado já confirmou este dia: pede-lhe para mudar.'],
+  // Rotinas, contactos e acidente (sql/122)
+  [/write what has to be done/i, 'Escreve o que tem de ser feito.'],
+  [/choose how often/i, 'Escolhe quando: todos os dias, semanas, meses ou no início da obra.'],
+  [/choose the time/i, 'Escolhe a hora.'],
+  [/choose the day of the week/i, 'Escolhe o dia da semana.'],
+  [/choose the day of the month/i, 'Escolhe o dia do mês.'],
+  [/choose how many days after the start/i, 'Escolhe quantos dias depois do início da obra (0 a 60).'],
+  [/at most 100 routines/i, 'No máximo 100 rotinas.'],
+  [/this company already has routines/i, 'A empresa já tem rotinas: os exemplos só entram numa lista vazia.'],
+  [/this routine is not due in that period/i, 'Esta rotina não tem prazo nesse período. Atualiza o ecrã.'],
+  [/already marked as done/i, 'Já estava marcada como feita.'],
+  [/write the subject/i, 'Escreve o assunto.'],
+  [/write an email or a phone/i, 'Escreve um email ou um telefone.'],
+  [/the email is not valid/i, 'O email não está certo.'],
+  [/the phone is not valid/i, 'O telefone não está certo: só números, espaços e + no início.'],
+  [/at most 60 contacts/i, 'No máximo 60 contactos.'],
+  [/write who got hurt/i, 'Escreve quem se magoou.'],
+  [/write in a few words what happened/i, 'Escreve em poucas palavras o que aconteceu.'],
   // Frentes do chefe e pedidos ao Secretariado (sql/119-121)
   [/at most 6 periods/i, 'No máximo 6 períodos num dia.'],
   [/choose the site of period (\d+)/i, 'Escolhe a obra do período $1.'],
@@ -1109,7 +1127,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '100';
+const APP_VERSION = '101';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['reunioes', 'emergencia', 'lmra', 'seguranca'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -1124,7 +1142,7 @@ function tabsFor(role) {
   return TABS[role] || TABS.supervisor;
 }
 const OFFLINE_VIEWS = ['picar', 'minhas', 'material', 'reunioes', 'relatos', 'emergencia'];   // v89: they keep a copy
-const MORE_ORDER = ['inicio', 'empresa', 'onbtextos', 'equipa', 'material', 'picar', 'emergencia', 'relatos', 'reunioes', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'andaimes', 'processo', 'clientes', 'custos', 'progresso', 'frentes'];
+const MORE_ORDER = ['inicio', 'empresa', 'onbtextos', 'equipa', 'material', 'picar', 'emergencia', 'relatos', 'reunioes', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'andaimes', 'processo', 'clientes', 'custos', 'progresso', 'frentes', 'rotinas', 'contactos'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -1146,11 +1164,11 @@ const MENU_GROUPS = [
   ['Recursos Humanos', ['trabalhadores', 'onbtextos', 'acolhimento', 'viagens', 'alojamento']],
   ['Frota', ['frota']],
   ['QSA · Qualidade, Segurança e Ambiente', ['relatos', 'seguranca', 'reunioes', 'lmra', 'emergencia', 'qualidade', 'processo']],
-  ['Produção (Obra)', ['painel', 'obras', 'naobra', 'picar', 'frentes', 'progresso', 'material', 'andaimes', 'equipa', 'producao']],
+  ['Produção (Obra)', ['painel', 'obras', 'naobra', 'picar', 'frentes', 'rotinas', 'progresso', 'material', 'andaimes', 'equipa', 'producao']],
   ['Compras e Armazém', ['armazem', 'compras']],
   ['Comercial', ['comercial']],
   ['Orçamentação', ['orcamentos']],
-  ['Eu', ['minhas']],
+  ['Eu', ['minhas', 'contactos']],
 ];
 // What each screen needs, to place it under the department that gives it (the visibility itself is set in boot).
 const VIEW_NEEDS = {
@@ -1161,7 +1179,7 @@ const VIEW_NEEDS = {
   emergencia: () => can('seguranca.emergencia'), acolhimento: () => can('acolhimento.gerir'),
   obras: () => can('obras.gerir') || can('obras.ver_detalhes') || can('obras.area'), painel: () => canSiteDetails(), naobra: () => canSiteDetails() || can('ponto.picar'),
   equipa: () => canSiteDetails(), picar: () => can('ponto.picar'), horas: () => can('horas.ver') || can('horas.validar_obra'),
-  andaimes: () => canScaffolds(), producao: () => canProd(), progresso: () => canProgress(), frentes: () => canFronts(), material: () => canSiteMaterial(), armazem: () => canWh(), compras: () => canBuy(), frota: () => canFleet(),
+  andaimes: () => canScaffolds(), producao: () => canProd(), progresso: () => canProgress(), frentes: () => canFronts(), rotinas: () => canRoutines(), contactos: () => true, material: () => canSiteMaterial(), armazem: () => canWh(), compras: () => canBuy(), frota: () => canFleet(),
   orcamentos: () => canEstimates(), qualidade: () => canQuality(), comercial: () => canSales(), premios: () => canAwards(), custos: () => canCosts(),
 };
 // v73 (Diogo 2026-10-21): «o standard da gestão serve para todas as empresas, mas o administrador de cada empresa adapta».
@@ -1180,7 +1198,7 @@ function menuGroups(shown) {
       if (views.length) out.push([d.name, views]);
     }
   } finally { me.perms = saved; }
-  out.push(['Eu', ['minhas']]);
+  out.push(['Eu', ['minhas', 'contactos']]);
   return out;
 }
 // Icons drawn for the menu so no two screens share one (M-3): added to the page's sprite once.
@@ -1197,9 +1215,11 @@ const ENC_ICONS = {
   coins: '<path d="M9 9.5c3.3 0 6-1.1 6-2.5S12.3 4.5 9 4.5 3 5.6 3 7s2.7 2.5 6 2.5zM3 7v4c0 1.4 2.7 2.5 6 2.5M3 11v4c0 1.4 2.7 2.5 6 2.5M15 13.5c3.3 0 6-1.1 6-2.5s-2.7-2.5-6-2.5-6 1.1-6 2.5 2.7 2.5 6 2.5zM9 11v4c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5v-4M9 15v4c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5v-4"/>',
   sheet: '<path d="M9 3h6v3H9zM9 4.5H6v16.5h12V4.5h-3M9 11h6M9 14.5h6M9 18h3"/>',
   fronts: '<path d="M5 21V3M5 4h9l-2 3 2 3H5M15 21v-8M15 13h5l-1.5 2 1.5 2h-5M3 21h18"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  todo: '<path d="M4 6l2 2 3-3M4 13l2 2 3-3M12 7h8M12 14h8M4 19.5h.01M12 19.5h8"/>',
   medal: '<path d="M12 14a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM9.5 13.3 8 21l4-2 4 2-1.5-7.7M10 9l1.5 1.5L14.5 7.5"/>',
 };
-const MENU_ICON = { painel: 'gauge', producao: 'chart', seguranca: 'hhat', equipa: 'crew', minhas: 'myclock', naobra: 'gate', qualidade: 'medal', clientes: 'firms', comercial: 'target', premios: 'trophy', custos: 'coins', progresso: 'sheet', frentes: 'fronts' };
+const MENU_ICON = { painel: 'gauge', producao: 'chart', seguranca: 'hhat', equipa: 'crew', minhas: 'myclock', naobra: 'gate', qualidade: 'medal', clientes: 'firms', comercial: 'target', premios: 'trophy', custos: 'coins', progresso: 'sheet', frentes: 'fronts', rotinas: 'todo' };
 (function encIcons() {
   const ns = 'http://www.w3.org/2000/svg'; const sp = document.createElementNS(ns, 'svg');
   sp.setAttribute('width', '0'); sp.setAttribute('height', '0'); sp.setAttribute('aria-hidden', 'true'); sp.style.position = 'absolute';
@@ -1405,6 +1425,8 @@ async function boot() {
   nav.querySelector('[data-view=custos]').hidden = worker || state.offline || !canCosts();
   nav.querySelector('[data-view=progresso]').hidden = worker || state.offline || !canProgress();
   nav.querySelector('[data-view=frentes]').hidden = worker || state.offline || !canFronts();
+  nav.querySelector('[data-view=rotinas]').hidden = worker || state.offline || !canRoutines();
+  nav.querySelector('[data-view=contactos]').hidden = worker || state.offline;
   nav.querySelector('[data-view=equipa]').hidden = me.role !== 'supervisor' || !canSiteDetails();
   nav.querySelector('[data-view=lmra]').hidden = worker || state.offline || !canLmra();
   nav.querySelector('[data-view=reunioes]').hidden = worker || !canMeet();   // v89: these three open without network (kept copy)
@@ -1874,7 +1896,7 @@ function go(view) {
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
      ficha: viewWorker, obras: viewSites, area: viewArea, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients, cliente: viewClient, precos: viewPrices, empresa: viewCompanyRules, inicio: viewHome,
      processo: viewProcess, orcamentos: viewEstimates, comercial: viewSales, premios: viewAwards, custos: viewCosts, lmra: viewLmra, reunioes: viewMeetings, relatos: viewHazards, material: viewSiteMaterial, emergencia: viewEmergency,
-     armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, producao: viewProd, progresso: viewProgress, frentes: viewFronts, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
+     armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, producao: viewProd, progresso: viewProgress, frentes: viewFronts, rotinas: viewRoutines, contactos: viewContacts, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
   checkEmergencyBar(); encBadges();
 }
 
@@ -2191,12 +2213,14 @@ function viewTeam() {
     <div id="tlist">${skel(4)}</div>
     </div><aside class="enc-side">
     <div class="team-acts"><button class="btn big ghost" id="tval">${ic('ok')}<span>Validar a semana</span></button>
+      ${canRoutines() ? `<button class="btn big ghost" id="trt">${ic('todo')}<span>Rotinas</span></button>` : ''}
       ${canFronts() ? `<button class="btn big ghost" id="tfr">${ic('pin')}<span>Frentes</span></button>` : ''}
       ${canProgress() ? `<button class="btn big ghost" id="tprog">${ic('sheet')}<span>Folha de produção</span></button>` : ''}
       ${canSiteMaterial() ? `<button class="btn big ghost" id="tmat">${ic('box')}<span>Material da obra</span></button>` : ''}
       ${can('equipa.avisar') ? `<button class="btn big ghost" id="tnote">${ic('bell')}<span>Mandar aviso à equipa</span></button>` : ''}
       ${canMeet() && can('seguranca.reuniao') ? `<button class="btn big ghost" id="tmeet">${ic('team')}Reunião de segurança</button>` : ''}
       ${canLmra() ? `<button class="btn big ghost" id="tlmra">${ic('shield')}LMRA</button>` : ''}${canEmergency() ? `<button class="btn big danger" id="temer">${ic('warn')}Emergência</button>` : ''}
+      ${state.me.collaborator_id ? `<button class="btn big danger" id="tacc">${ic('warn')}<span>Acidente de trabalho</span></button>` : ''}
       <button class="btn ghost wide look" id="tlook">${ic('card')}<span><b>O colaborador quer ver as horas</b><small>Ele encosta o cartão dele ao teu telemóvel</small></span></button></div>
     <div id="treq"></div></aside></div>`;
   bindSiteSelect('tsite', loadTeam);
@@ -2207,6 +2231,8 @@ function viewTeam() {
   if ($('#tmat')) $('#tmat').onclick = () => go('material');
   if ($('#tnote')) $('#tnote').onclick = () => teamNotice(currentSite(), 'notice');
   if ($('#tfr')) $('#tfr').onclick = () => go('frentes');
+  if ($('#trt')) { $('#trt').onclick = () => go('rotinas'); routinesBadge(); }
+  if ($('#tacc')) $('#tacc').onclick = () => accidentReport();
   if ($('#tprog')) { $('#tprog').onclick = () => go('progresso'); progressBadge(); }
   if ($('#temer')) $('#temer').onclick = () => go('emergencia');
   $('#tlook').onclick = () => cardGlance(currentSite() && currentSite().id);
@@ -4629,6 +4655,8 @@ async function onbHunt(x, items) {
 // from the Acolhimento screen, and once by itself when someone finishes the onboarding.
 const TOUR_TEXT = {
   frentes: 'Frentes: põe a equipa na frente certa, por grupos e a partir de uma hora. As horas de cada pessoa dividem-se sozinhas pelas frentes. As frentes novas pede-as ao Secretariado.',
+  rotinas: 'Rotinas do encarregado: o que tem de ser feito todos os dias, semanas, meses e no início da obra, com prazo. Quem passa o prazo recebe um aviso; o escritório vê os atrasos de todas as obras.',
+  contactos: 'Quem contactar: a quem ligar ou escrever para cada assunto, e o botão para comunicar um acidente de trabalho.',
   equipa: 'A minha equipa: quem está na obra agora, quem ainda não chegou e o que tens de validar.',
   picar: 'Picar: o leitor de cartões. Cada pessoa encosta o cartão à entrada e à saída.',
   painel: 'Dashboard de obra: todas as obras num só ecrã, com o que precisa de atenção, vistas pela produção, faturação e secretariado.',
@@ -5044,7 +5072,7 @@ const MINE_STATE = { registered: 'por validar', supervisor_validated: 'validado 
 // (confirm the week, a document out of date), then one big tile per thing that is theirs. Each tile opens its screen;
 // the phone's back button comes back here. Built for gloves and sunlight: big targets, few words.
 const ME_TABS = {
-  folha: ['sheet', 'Folha de horas'], obras: ['pin', 'As minhas obras'], horas: ['clock', 'As minhas horas'], progresso: ['sheet', 'Progresso do dia'], pedidos: ['calendar', 'Pedidos'], diarias: ['card', 'Diárias'], despesas: ['cart', 'Despesas'],
+  folha: ['sheet', 'Folha de horas'], obras: ['pin', 'As minhas obras'], contactos: ['phone', 'Quem contactar'], horas: ['clock', 'As minhas horas'], progresso: ['sheet', 'Progresso do dia'], pedidos: ['calendar', 'Pedidos'], diarias: ['card', 'Diárias'], despesas: ['cart', 'Despesas'],
   viagens: ['plane', 'Viagens'], dormir: ['home', 'Onde durmo'], andaimes: ['scaffold', 'Posso subir?'], docs: ['doc', 'Os meus documentos'],
   epi: ['shield', 'EPI e ferramentas'], reunioes: ['team', 'Reuniões de segurança'], relatos: ['warn', 'Os meus relatos'], contrato: ['lock', 'O meu contrato'] };
 function viewMine() {
@@ -5053,7 +5081,9 @@ function viewMine() {
   if (!state.mineMonth) state.mineMonth = isoDay(new Date()).slice(0, 7);
   const tab = state.mineTab || 'home';
   if (tab !== 'home' && ME_TABS[tab]) return meScreen(tab);
-  app.innerHTML = `<div class="me-home"><div id="mehero">${skel(1)}</div><div id="meact"></div><div class="me-tiles" id="metiles"></div></div>`;
+  app.innerHTML = `<div class="me-home"><div id="mehero">${skel(1)}</div><div id="meact"></div><div class="me-tiles" id="metiles"></div>
+    <button class="btn danger wide me-acc" id="meacc">${ic('warn')}${esc(t_('Acidente de trabalho: comunicar já'))}</button></div>`;
+  $('#meacc').onclick = () => accidentReport();
   loadMeHome();
   state.timer = setInterval(() => { if (state.view === 'minhas' && (state.mineTab || 'home') === 'home' && document.visibilityState === 'visible') loadMeHome(true); }, 60000);
 }
@@ -5197,6 +5227,7 @@ function meTiles(d, s, papers) {
     state.timeMode === 'sheet' ? tile('folha', 'Entrada, almoço e saída', 'go') : '',
     tile('horas', t.worked ? `${fmtMin(t.worked)} este mês${pend ? ` · ${pend} por validar` : ''}` : 'Semana, mês e cada picagem', '', s.weeks_to_confirm ? String(s.weeks_to_confirm) : ''),
     tile('obras', 'Onde trabalhas, a morada e o encarregado'),
+    tile('contactos', 'RH, horas, segurança, material'),
     tile('progresso', 'O que fizeste, para o encarregado', 'go'),
     tile('pedidos', s.requests_pending ? `${s.requests_pending} à espera de resposta` : 'Férias e faltas', '', s.disputes_open ? String(s.disputes_open) : ''),
     tile('diarias', s.per_diem ? `${euro(s.per_diem.net)} · semana de ${fmtDate(s.per_diem.week_start).slice(0, 5)}` : 'Ainda sem diárias'),
@@ -5363,6 +5394,7 @@ function meScreen(tab) {
     progresso: () => '<div id="myprog"></div>',
     folha: () => '<div id="mysheet"></div>',
     obras: () => '<div id="mysites"></div>',
+    contactos: () => '<div id="mycontacts"></div>',
     pedidos: () => '<div id="minereq"></div>',
     diarias: () => '<div id="pdmine"></div>',
     despesas: () => '<div id="myexp"></div>',
@@ -5386,6 +5418,7 @@ function meScreen(tab) {
   if (tab === 'progresso') loadMyProgress();
   if (tab === 'folha') loadMySheet();
   if (tab === 'obras') loadMySites();
+  if (tab === 'contactos') loadContacts('#mycontacts');
   if (tab === 'pedidos') loadMyRequests();
   if (tab === 'diarias') loadMyPerDiems().then(fallback('#pdmine', 'card', 'Ainda sem diárias', 'As diárias aparecem aqui quando o escritório as emitir, à quinta-feira.'));
   if (tab === 'despesas') loadMyExpenses().then(fallback('#myexp', 'card', 'Sem despesas', 'Quando pagares algo para a obra, entrega aqui o talão.'));
@@ -12662,6 +12695,232 @@ async function picFronts() {
 }
 const picFrontOf = (site, collab) => (((state.picFr || {})[site] || {}).m || {})[collab] || '';
 
+// ---- Rotinas do encarregado (v101, sql/122, Diogo 2026-10-26): what a team leader must do every day, week, month and
+// at the start of a site, each with its deadline on the site's clock. The app reminds him when one passes its deadline
+// and the office sees, site by site, what is late. Each company writes its own; «Juntar exemplos» gives a start.
+const canRoutines = () => ['rotinas.fazer', 'rotinas.gerir', 'horas.validar_obra'].some(can);
+const RT_CAD = { daily: 'Todos os dias', weekly: 'Todas as semanas', monthly: 'Todos os meses', site_start: 'No início da obra' };
+const RT_DAYS = ['', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'domingo'];
+const RT_ST = { late: ['bad', 'atrasada'], today: ['warn', 'para hoje'], next: ['', 'a seguir'], done: ['val', 'feita'] };
+const rtWhen = (r) => r.cadence === 'daily' ? t_('até às {x}', r.time)
+  : r.cadence === 'weekly' ? t_('{x} até às {x}', t_(RT_DAYS[r.weekday]), r.time)
+  : r.cadence === 'monthly' ? (r.monthday === 0 ? t_('último dia útil, até às {x}', r.time) : t_('dia {x}, até às {x}', r.monthday, r.time))
+  : t_('{x} dia(s) depois do início, até às {x}', r.start_days, r.time);
+function viewRoutines() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
+  if (!canRoutines()) return viewClock();   // code guard as well as the database's
+  const office = can('rotinas.gerir');
+  const R = state.rt || (state.rt = { tab: office ? 'obras' : 'obra' });
+  if (!office) R.tab = 'obra';
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Produção (Obra)</p><h1>Rotinas do encarregado</h1></div></div>
+    ${office ? `<div class="chips" role="tablist">${[['obras', 'Todas as obras'], ['obra', 'Uma obra'], ['editar', 'Escrever as rotinas']].map(([k, lb]) =>
+      `<button class="chip" data-rtt="${k}" aria-pressed="${R.tab === k}">${esc(t_(lb))}</button>`).join('')}</div>` : ''}
+    <div id="rtbody">${skel(3)}</div>`;
+  app.querySelectorAll('[data-rtt]').forEach((b) => b.onclick = () => { R.tab = b.dataset.rtt; viewRoutines(); });
+  if (R.tab === 'obras') loadRoutinesOverview();
+  else if (R.tab === 'editar') loadRoutinesEdit();
+  else loadSiteRoutines();
+}
+let rtSeq = 0;
+async function loadSiteRoutines() {
+  const box = $('#rtbody'); if (!box) return;
+  box.innerHTML = `<div class="card">${siteSelect('rts')}</div><div id="rtlist">${skel(3)}</div>`;
+  bindSiteSelect('rts', loadSiteRoutines);
+  const site = currentSite(); const list = $('#rtlist');
+  if (!site) { list.innerHTML = ''; return; }
+  const seq = ++rtSeq; const tz = siteTz(site.id);
+  const { data, error } = await sb.rpc('mini_site_routines', { p_project: site.id });
+  if (seq !== rtSeq || !list.isConnected) return;
+  if (error) { list.innerHTML = `<div class="card">${esc(friendly(error))}</div>`; return; }
+  const items = data.items || [];
+  if (!items.length) {
+    list.innerHTML = `<div class="card">${empty('check', 'Ainda sem rotinas', can('rotinas.gerir') ? 'Escreve-as em «Escrever as rotinas», ou junta os exemplos.' : 'O escritório escreve as rotinas da empresa. Aparecem aqui com o prazo de cada uma.')}</div>`;
+    return;
+  }
+  const late = items.filter((x) => x.status === 'late').length;
+  const due = (x) => { const d = localDay(x.due_at, tz); const today = localDay(new Date().toISOString(), tz);
+    return d === today ? t_('hoje às {x}', fmtHour(x.due_at, tz)) : `${dayLabel(d)} ${fmtHour(x.due_at, tz)}`; };
+  list.innerHTML = `${late ? `<div class="pg-state warn">${ic('warn')}<span><b>${esc(t_('{x} rotina(s) atrasada(s)', late))}</b>${esc(t_('Faz e marca como feita: o escritório vê os atrasos.'))}</span></div>` : ''}
+    <div class="card">${items.map((x) => `<div class="day wk rt-row ${x.status}">
+      <div class="grow"><b data-nt>${esc(x.title)}</b>
+        ${x.detail ? `<small class="muted" data-nt>${esc(x.detail)}</small>` : ''}
+        <small><span>${esc(t_(RT_CAD[x.cadence]))}</span> · <span>${esc(t_('prazo'))}</span> <span data-nt>${esc(due(x))}</span></small>
+        ${x.status === 'done' ? `<small class="muted"><span>Feita por</span> <span data-nt>${esc(x.done_by || '—')} · ${esc(fmtTime(x.done_at, tz))}${x.note ? ' · ' + esc(x.note) : ''}</span></small>` : ''}</div>
+      ${chip(RT_ST[x.status][0], RT_ST[x.status][1])}
+      ${data.can_do && x.status !== 'done' ? `<button class="btn small" data-rtdo="${esc(x.routine_id)}" data-per="${esc(x.period)}">${ic('ok')}Feita</button>` : ''}</div>`).join('')}</div>`;
+  list.querySelectorAll('[data-rtdo]').forEach((b) => b.onclick = async () => {
+    const x = items.find((i) => i.routine_id === b.dataset.rtdo);
+    const fd = await askSheet(t_('Marcar como feita'), `<p data-nt><b>${esc(x.title)}</b></p>
+      <label for="rtn">${esc(t_('Nota (opcional)'))}</label><input id="rtn" name="note" maxlength="500" placeholder="${esc(t_('ex.: enviado ao escritório às 08:40'))}">`, t_('Feita'));
+    if (!fd) return;
+    b.disabled = true;
+    const { error: e } = await sb.rpc('mini_routine_check', { p_routine: x.routine_id, p_project: site.id, p_period: x.period, p_note: fd.get('note') || null });
+    if (e) { b.disabled = false; return toast(friendly(e)); }
+    toast(t_('Rotina marcada como feita.')); loadSiteRoutines();
+  });
+}
+async function loadRoutinesOverview() {
+  const box = $('#rtbody'); if (!box) return;
+  const { data, error } = await sb.rpc('mini_routines_overview');
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = `<div class="card">${esc(friendly(error))}</div>`; return; }
+  const sites = data || [];
+  const late = sites.reduce((a, s) => a + (s.late || 0), 0);
+  if (!sites.some((s) => s.total)) { box.innerHTML = `<div class="card">${empty('check', 'Ainda sem rotinas', 'Escreve-as em «Escrever as rotinas», ou junta os exemplos.')}</div>`; return; }
+  box.innerHTML = `<div class="kpis k2"><div class="kpi ${late ? 'bad' : ''}"><b class="tnum">${late}</b><span>${esc(t_('atrasadas'))}</span></div>
+      <div class="kpi"><b class="tnum">${sites.reduce((a, s) => a + (s.today || 0), 0)}</b><span>${esc(t_('para hoje'))}</span></div></div>
+    ${sites.map((s) => `<button class="card rt-site" data-rtsite="${esc(s.id)}"><div class="wk"><span class="chip code" data-nt>${esc(s.code)}</span>
+        <b class="grow" data-nt>${esc(s.title)}</b>${s.late ? chip('bad', t_('{x} atrasada(s)', s.late)) : s.total ? chip('val', t_('em dia')) : ''}</div>
+      ${s.supervisor ? `<small class="muted"><span>Encarregado</span>: <span data-nt>${esc(s.supervisor)}</span></small>` : ''}
+      ${(s.late_items || []).length ? `<ul class="rt-late">${s.late_items.map((i) => `<li data-nt>${esc(i.title)}</li>`).join('')}</ul>` : ''}
+      <small class="muted">${esc(t_('{x} de {x} feitas neste período', s.done, s.total))}</small></button>`).join('')}`;
+  box.querySelectorAll('[data-rtsite]').forEach((b) => b.onclick = () => { store(SITE_KEY, b.dataset.rtsite); state.rt.tab = 'obra'; viewRoutines(); });
+}
+async function loadRoutinesEdit() {
+  const box = $('#rtbody'); if (!box) return;
+  const { data, error } = await sb.rpc('mini_routines');
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = `<div class="card">${esc(friendly(error))}</div>`; return; }
+  const list = data || [];
+  box.innerHTML = `<p class="small muted">${esc(t_('As rotinas valem para todas as obras da empresa. O prazo conta no relógio de cada obra; os dias de descanso da obra não contam.'))}</p>
+    ${list.length ? '' : `<div class="card">${empty('check', 'Ainda sem rotinas', 'Começa pelos exemplos e muda o que não servir.')}
+      <p><button class="btn wide" id="rtex">${ic('plus')}${esc(t_('Juntar exemplos'))}</button></p></div>`}
+    <div class="card">${list.map((r) => `<div class="day wk ${r.active ? '' : 'rt-off'}"><div class="grow"><b data-nt>${esc(r.title)}</b>
+        <small>${esc(t_(RT_CAD[r.cadence]))} · ${esc(rtWhen(r))}${r.active ? '' : ' · ' + esc(t_('desligada'))}</small></div>
+      <button class="btn small ghost" data-rted="${esc(r.id)}">${esc(t_('Mudar'))}</button></div>`).join('') || `<p class="muted small">${esc(t_('Nenhuma rotina.'))}</p>`}
+      <p><button class="btn ghost wide" id="rtnew">${ic('plus')}${esc(t_('Nova rotina'))}</button></p></div>`;
+  if ($('#rtex')) $('#rtex').onclick = async () => {
+    const { error: e } = await sb.rpc('mini_routine_examples');
+    if (e) return toast(friendly(e));
+    toast(t_('Exemplos juntos. Muda o que não servir.')); loadRoutinesEdit();
+  };
+  $('#rtnew').onclick = () => routineEdit(null);
+  box.querySelectorAll('[data-rted]').forEach((b) => b.onclick = () => routineEdit(list.find((r) => r.id === b.dataset.rted)));
+}
+async function routineEdit(r) {
+  r = r || { cadence: 'daily', time: '09:00', weekday: 1, monthday: 0, start_days: 5, active: true };
+  const fd = await askSheet(r.id ? t_('Mudar a rotina') : t_('Nova rotina'), `
+    <label for="rtt">${esc(t_('O que tem de ser feito'))} *</label><input id="rtt" name="title" required minlength="3" maxlength="120" value="${esc(r.title || '')}">
+    <label for="rtd">${esc(t_('Como (opcional)'))}</label><textarea id="rtd" name="detail" maxlength="600" rows="2">${esc(r.detail || '')}</textarea>
+    <label for="rtc">${esc(t_('Quando'))}</label><select id="rtc" name="cadence">${Object.entries(RT_CAD).map(([k, v]) => `<option value="${k}" ${r.cadence === k ? 'selected' : ''}>${esc(t_(v))}</option>`).join('')}</select>
+    <div class="row">
+      <div data-rtw="weekly"><label for="rtw">${esc(t_('Dia da semana'))}</label><select id="rtw" name="weekday">${RT_DAYS.slice(1).map((d, i) => `<option value="${i + 1}" ${r.weekday === i + 1 ? 'selected' : ''}>${esc(t_(d))}</option>`).join('')}</select></div>
+      <div data-rtw="monthly"><label for="rtm">${esc(t_('Dia do mês'))}</label><select id="rtm" name="monthday"><option value="0">${esc(t_('Último dia útil'))}</option>${Array.from({ length: 28 }, (_, i) => `<option value="${i + 1}" ${r.monthday === i + 1 ? 'selected' : ''}>${i + 1}</option>`).join('')}</select></div>
+      <div data-rtw="site_start"><label for="rts2">${esc(t_('Dias depois do início'))}</label><input id="rts2" name="start_days" type="number" min="0" max="60" value="${esc(String(r.start_days ?? 5))}"></div>
+      <div><label for="rth">${esc(t_('Até às'))}</label><input id="rth" name="time" type="time" required value="${esc(r.time || '09:00')}"></div></div>
+    ${r.id ? `<label class="check"><input type="checkbox" name="active" ${r.active ? 'checked' : ''}> ${esc(t_('Em uso'))}</label>` : ''}`, t_('Guardar'), (d) => {
+    const c = d.querySelector('#rtc');
+    const sync = () => d.querySelectorAll('[data-rtw]').forEach((w) => { w.hidden = w.dataset.rtw !== c.value; });
+    c.onchange = sync; sync();
+    if (r.monthday === 0) d.querySelector('#rtm').value = '0';
+  });
+  if (!fd) return;
+  const p = { title: fd.get('title'), detail: fd.get('detail'), cadence: fd.get('cadence'), time: fd.get('time'),
+    weekday: +fd.get('weekday'), monthday: +fd.get('monthday'), start_days: +fd.get('start_days') };
+  if (r.id) p.active = fd.get('active') === 'on';
+  const { error } = await sb.rpc('mini_routine_save', { p_id: r.id || null, p });
+  if (error) return toast(friendly(error));
+  toast(t_('Rotina guardada.')); loadRoutinesEdit();
+}
+// Equipa: the late count on the «Rotinas» button
+async function routinesBadge() {
+  const b = $('#trt'); const site = currentSite(); if (!b || !site) return;
+  const { data } = await sb.rpc('mini_site_routines', { p_project: site.id }).then((r) => r, () => ({}));
+  const n = data ? (data.items || []).filter((x) => x.status === 'late').length : 0;
+  if (n && b.isConnected) b.insertAdjacentHTML('beforeend', `<span class="me-badge">${n}</span>`);
+}
+
+// ---- Quem contactar (v101): each company writes who to call for what. Everyone in the company sees it, workers too.
+async function loadContacts(sel) {
+  const box = $(sel); if (!box) return;
+  box.innerHTML = skel(2);
+  const { data, error } = await sb.rpc('mini_company_contacts');
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = `<div class="card">${esc(friendly(error))}</div>`; return; }
+  state.contacts = data;
+  const tel = (n) => `tel:${String(n).replace(/[^\d+]/g, '')}`;
+  const list = data.contacts || [];
+  // reporting needs a worker card (the report names who reported); the office without one gets the notice instead
+  box.innerHTML = `${state.me.collaborator_id ? `<button class="btn danger big wide" data-acc>${ic('warn')}${esc(t_('Acidente de trabalho: comunicar já'))}</button>` : ''}
+    ${list.length ? list.map((c) => `<div class="card ct-card"><p class="eyebrow" style="margin:0" data-nt>${esc(c.topic)}</p>
+        ${c.about ? `<p class="small muted" style="margin:2px 0 8px" data-nt>${esc(c.about)}</p>` : ''}
+        ${c.name ? `<b data-nt>${esc(c.name)}</b>` : ''}
+        <div class="acts">${c.phone ? `<a class="btn small" href="${esc(tel(c.phone))}">${ic('phone')}<span data-nt>${esc(c.phone)}</span></a>` : ''}
+          ${c.email ? `<a class="btn small ghost" href="mailto:${esc(c.email)}"><span data-nt>${esc(c.email)}</span></a>` : ''}
+          ${data.can_edit ? `<button class="btn small ghost" data-cted="${esc(c.id)}">${esc(t_('Mudar'))}</button>` : ''}</div></div>`).join('')
+      : `<div class="card">${empty('helmet', 'Ainda sem contactos', data.can_edit ? 'Escreve quem contactar para cada assunto: RH, horas e diárias, segurança, material, viaturas.' : 'O escritório ainda não escreveu os contactos.')}</div>`}
+    ${data.insurer || data.policy ? `<div class="card"><p class="eyebrow" style="margin:0">${esc(t_('Seguro de acidentes de trabalho'))}</p>
+      <b data-nt>${esc(data.insurer || '')}</b>${data.policy ? `<p class="small" style="margin:2px 0"><span>${esc(t_('Apólice'))}</span> <span data-nt>${esc(data.policy)}</span></p>` : ''}</div>` : ''}
+    ${data.can_edit ? `<div class="acts"><button class="btn ghost" id="ctnew">${ic('plus')}${esc(t_('Novo contacto'))}</button>
+      <button class="btn ghost" id="ctins">${ic('shield')}${esc(t_('Seguro e passos em caso de acidente'))}</button></div>` : ''}`;
+  box.querySelectorAll('[data-acc]').forEach((b) => b.onclick = () => accidentReport());
+  if ($('#ctnew')) $('#ctnew').onclick = () => contactEdit(null, () => loadContacts(sel));
+  if ($('#ctins')) $('#ctins').onclick = () => accidentInfoEdit(data, () => loadContacts(sel));
+  box.querySelectorAll('[data-cted]').forEach((b) => b.onclick = () => contactEdit(list.find((c) => c.id === b.dataset.cted), () => loadContacts(sel)));
+}
+async function contactEdit(c, after) {
+  c = c || {};
+  const fd = await askSheet(c.id ? t_('Mudar o contacto') : t_('Novo contacto'), `
+    <label for="ctt">${esc(t_('Assunto'))} *</label><input id="ctt" name="topic" required minlength="2" maxlength="80" value="${esc(c.topic || '')}" placeholder="${esc(t_('ex.: Recursos Humanos'))}">
+    <label for="cta">${esc(t_('Para quê'))}</label><input id="cta" name="about" maxlength="200" value="${esc(c.about || '')}" placeholder="${esc(t_('ex.: Baixas, férias e faltas'))}">
+    <label for="ctn">${esc(t_('Nome'))}</label><input id="ctn" name="name" maxlength="120" value="${esc(c.name || '')}">
+    <div class="row"><div><label for="ctp">${esc(t_('Telefone'))}</label><input id="ctp" name="phone" type="tel" maxlength="20" value="${esc(c.phone || '')}"></div>
+      <div><label for="cte">${esc(t_('Email'))}</label><input id="cte" name="email" type="email" maxlength="160" value="${esc(c.email || '')}"></div></div>
+    <label class="check"><input type="checkbox" name="acc" ${c.on_accident ? 'checked' : ''}> ${esc(t_('Mostrar logo a seguir a comunicar um acidente'))}</label>
+    ${c.id ? `<label class="check"><input type="checkbox" name="active" checked> ${esc(t_('Em uso'))}</label>` : ''}`, t_('Guardar'));
+  if (!fd) return;
+  const p = { topic: fd.get('topic'), about: fd.get('about'), name: fd.get('name'), phone: fd.get('phone'), email: fd.get('email'), on_accident: fd.get('acc') === 'on' };
+  if (c.id) p.active = fd.get('active') === 'on';
+  const { error } = await sb.rpc('mini_company_contact_save', { p_id: c.id || null, p });
+  if (error) return toast(friendly(error));
+  toast(t_('Contacto guardado.')); if (after) after();
+}
+async function accidentInfoEdit(d, after) {
+  const fd = await askSheet(t_('Seguro e passos em caso de acidente'), `
+    <label for="aci">${esc(t_('Seguradora'))}</label><input id="aci" name="insurer" maxlength="120" value="${esc(d.insurer || '')}">
+    <div class="row"><div><label for="acp">${esc(t_('Apólice'))}</label><input id="acp" name="policy" maxlength="60" value="${esc(d.policy || '')}"></div>
+      <div><label for="act">${esc(t_('Telefone da seguradora'))}</label><input id="act" name="phone" type="tel" maxlength="20" value="${esc(d.accident_phone || '')}"></div></div>
+    <label for="acs">${esc(t_('O que fazer (aparece a quem comunica um acidente)'))}</label><textarea id="acs" name="steps" maxlength="1000" rows="4">${esc(d.steps || '')}</textarea>`, t_('Guardar'));
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_accident_info_set', { p: { insurer: fd.get('insurer'), policy: fd.get('policy'), phone: fd.get('phone'), steps: fd.get('steps') } });
+  if (error) return toast(friendly(error));
+  toast(t_('Guardado.')); if (after) after();
+}
+// The accident button: 112 first when it is serious, then two lines and send. The office, safety and the site's
+// encarregado get a notice at once; the screen then shows the insurance and who to call.
+async function accidentReport() {
+  if (state.offline || navigator.onLine === false) { toast(t_('Sem rede: liga ao 112 se for grave e depois ao escritório.')); return; }
+  const [{ data: st }, { data: ct }] = await Promise.all([sb.rpc('mini_hazard_sites').then((r) => r, () => ({})), sb.rpc('mini_company_contacts').then((r) => r, () => ({}))]);
+  const sites = (st && st.sites) || [];
+  const now = new Date(); const hm = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+  const fd = await askSheet(t_('Acidente de trabalho'), `
+    <a class="btn danger big wide" href="tel:112">${ic('phone')}${esc(t_('Se for grave, liga já ao 112'))}</a>
+    ${sites.length > 1 ? `<label for="axs">${esc(t_('Obra'))}</label><select id="axs" name="site">${sites.map((s) => `<option value="${esc(s.id)}" ${s.id === (st.default || '') ? 'selected' : ''}>${esc(s.code)} · ${esc(s.title)}</option>`).join('')}</select>`
+      : sites.length ? `<input type="hidden" name="site" value="${esc(sites[0].id)}"><p class="small muted" data-nt>${esc(sites[0].code)} · ${esc(sites[0].title)}</p>` : ''}
+    <label for="axw">${esc(t_('Quem se magoou'))} *</label><input id="axw" name="who" required minlength="2" maxlength="120" value="${esc(state.me.role === 'worker' ? ((ct && ct.me) || '') : '')}">
+    <label for="axt">${esc(t_('O que aconteceu'))} *</label><textarea id="axt" name="text" required minlength="3" maxlength="2000" rows="3" placeholder="${esc(t_('ex.: cortou a mão esquerda ao desmontar uma flange'))}"></textarea>
+    <label for="axh">${esc(t_('A que horas'))}</label><input id="axh" name="at" type="time" value="${hm}">
+    <p class="small muted">${esc(t_('O escritório, a segurança e o encarregado são avisados logo.'))}</p>`, t_('Comunicar'));
+  if (!fd) return;
+  const [h, m] = String(fd.get('at') || hm).split(':').map(Number); const at = new Date(); at.setHours(h, m, 0, 0);
+  if (at > new Date()) at.setDate(at.getDate() - 1);
+  const { data, error } = await sb.rpc('mini_report_accident', { p: { id: uuid(), site: fd.get('site') || null, who: fd.get('who'), text: fd.get('text'), at: at.toISOString() } });
+  if (error) return toast(friendly(error));
+  const c = ct || {}; const tel = (n) => `tel:${String(n).replace(/[^\d+]/g, '')}`;
+  const acc = (c.contacts || []).filter((x) => x.on_accident);
+  await askSheet(t_('Acidente comunicado'), `<p>${ic('ok')} <b>${esc(t_('Comunicado com o n.º {x}.', data.ref))}</b> ${esc(t_('O escritório, a segurança e o encarregado foram avisados.'))}</p>
+    ${c.insurer || c.policy ? `<div class="card"><p class="eyebrow" style="margin:0">${esc(t_('Seguro de acidentes de trabalho'))}</p><b data-nt>${esc(c.insurer || '')}</b>
+      ${c.policy ? `<p class="small" style="margin:2px 0"><span>${esc(t_('Apólice'))}</span> <span data-nt>${esc(c.policy)}</span></p>` : ''}
+      ${c.accident_phone ? `<a class="btn small" href="${esc(tel(c.accident_phone))}">${ic('phone')}<span data-nt>${esc(c.accident_phone)}</span></a>` : ''}</div>` : ''}
+    ${c.steps ? `<p class="ac-steps" data-nt>${esc(c.steps)}</p>` : ''}
+    ${acc.map((x) => `<div class="contact"><div class="grow"><b data-nt>${esc(x.topic)}</b><small data-nt>${esc(x.name || x.email || '')}</small></div>
+      ${x.phone ? `<a class="btn ghost small" href="${esc(tel(x.phone))}">${ic('phone')}${esc(t_('Ligar'))}</a>` : ''}</div>`).join('')}`, t_('Fechar'), (d) => { const c = d.querySelector('button[value=cancel]'); if (c) c.hidden = true; });
+}
+function viewContacts() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Eu</p><h1>Quem contactar</h1></div></div><div id="ctbody"></div>`;
+  loadContacts('#ctbody');
+}
 // ---- the encarregado and the gestor de obra (Produção › Folha de produção)
 function viewProgress() {
   if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
@@ -13561,6 +13820,7 @@ function noticeRoute(x) {
   if (/^(hazard_sif|incident_)/.test(k)) return view('relatos');
   if (k === 'hazard_answer') return mine('relatos');
   if (k === 'front_request' || k === 'front_answer') return view('frentes');
+  if (k === 'routine_late') return view('rotinas');
   return () => false;
 }
 async function showNotices() {
