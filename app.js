@@ -160,6 +160,7 @@ const ERRORS = [
   [/more than 16 hours in one day/i, 'Mais de 16 horas num dia: confirma as horas.'],
   [/saída has not happened yet/i, 'A saída ainda não aconteceu: escreve-a quando saíres.'],
   [/already validated this day/i, 'O encarregado já confirmou este dia: pede-lhe para mudar.'],
+  [/this would change (\S+) which is already validated/i, 'Isto mexia no dia $1, que já está validado. Nada foi mudado: fala com o encarregado.'],
   [/choose how hours are recorded/i, 'Escolhe como se registam as horas.'],
   // Área da fábrica (sql/104)
   [/choose the GPS rule/i, 'Escolhe a regra do GPS.'],
@@ -1086,7 +1087,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '96';
+const APP_VERSION = '97';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['reunioes', 'emergencia', 'lmra', 'seguranca'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -4846,7 +4847,10 @@ async function loadHours(from, to) {
   const returned = Object.fromEntries(((back && back.data) || []).map((b) => [b.work_day_id, b.reason]));
   // days with written times (folha de horas, or added by hand): «declarado», never in the bulk «Validar» (sql/106)
   const declared = Object.fromEntries(((decl && decl.data) || []).map((x) => [x.work_day_id, x.by_worker]));
-  if (!data.length) { el.innerHTML = `<div class="card">${empty('calendar', 'Sem horas nesta semana', 'As horas aparecem aqui quando as pessoas picarem nesta obra.')}</div>`; return []; }
+  if (!data.length) {
+    if (!state.timeMode) { const tm = await sb.rpc('mini_time_mode').then((r) => r, () => ({})); if (tm && tm.data) state.timeMode = tm.data.mode; }
+    el.innerHTML = `<div class="card">${empty('calendar', 'Sem horas nesta semana', state.timeMode === 'sheet' ? 'As horas aparecem aqui quando as pessoas as escreverem na folha de horas.' : 'As horas aparecem aqui quando as pessoas picarem nesta obra.')}</div>`; return [];
+  }
   const byWorker = {};
   for (const r of data) (byWorker[r.collaborator_id] = byWorker[r.collaborator_id] || []).push(r);
   const me = state.me && state.me.collaborator_id;

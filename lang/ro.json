@@ -5974,4 +5974,6 @@
 "Faltam validar {x} dia(s). Depois seguem para aprovação: {x}.": "Mai sunt de validat {x} zi(le). Apoi merg la aprobare: {x}.",
 "Validaste tudo. {x} dia(s) à espera de aprovação: {x}.": "Ai validat tot. {x} zi(le) așteaptă aprobarea: {x}.",
 "Aprovado: {x}. Falta o fecho do mês.": "Aprobat: {x}. Mai trebuie închisă luna.",
-"aprovado": "aprobat"}
+"aprovado": "aprobat",
+"Isto mexia no dia $1, que já está validado. Nada foi mudado: fala com o encarregado.": "Asta ar schimba ziua $1, deja validată. Nu s-a schimbat nimic: vorbește cu șeful de echipă.",
+"As horas aparecem aqui quando as pessoas as escreverem na folha de horas.": "Orele apar aici când persoanele le scriu în foaia de pontaj."}
