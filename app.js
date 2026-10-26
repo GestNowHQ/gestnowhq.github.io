@@ -53,6 +53,16 @@ const REASON_PREFIX = {
   'skill_missing:': 'Falta a competência: ',
 };
 const ERRORS = [
+  // v103 (sql/125): hourly rate changes
+  [/rate: a change is already waiting/i, 'Já há uma mudança do valor hora à espera de aprovação.'],
+  [/rate: write the reason/i, 'Escreve o motivo da mudança.'],
+  [/rate: write why/i, 'Escreve porquê.'],
+  [/rate: days up to (\S+) were already sent to payroll/i, 'Os dias até $1 já foram enviados para salários. Escolhe uma data a seguir.'],
+  [/rate: start day too far back/i, 'A data é antiga demais: no máximo, o início do mês passado.'],
+  [/rate: invalid start day/i, 'Escolhe a data a partir da qual conta o valor.'],
+  [/rate: this change is no longer waiting/i, 'Este pedido já foi decidido.'],
+  [/you cannot change your own pay/i, 'Não podes mudar o teu próprio valor hora.'],
+  [/two-person rule: change_hourly_rate/i, 'Mudar um valor hora precisa da aprovação de outra pessoa: usa «Mudar o valor hora» na ficha.'],
   // Relatos de perigo (sql/112)
   [/say what happened/i, 'Escolhe o que foi: quase acidente, condição perigosa ou pequeno ferimento.'],
   [/write in a few words what you saw/i, 'Escreve em poucas palavras o que viste.'],
@@ -3246,7 +3256,7 @@ async function viewWorker() {
     ${can('pessoas.atribuir_obras') ? `<div class="card"><h2 style="margin-top:0">Obras</h2>
       ${activeSites().map((s) => `<label class="check"><input type="checkbox" data-site="${esc(s.id)}" ${w.site_ids.includes(s.id) ? 'checked' : ''}>
         ${esc(s.title)} (${esc(s.cost_center_code)})</label>`).join('') || '<p class="muted">Sem obras abertas.</p>'}
-      <p class="small muted">Só pode picar nas obras marcadas.</p></div>` : ''}
+      <p class="small muted">Só pode picar nas obras marcadas.</p><div id="fsites"></div></div>` : can('pessoas.ver') ? '<div class="card"><h2 style="margin-top:0">Obras</h2><div id="fsites"></div></div>' : ''}
     ${can('contas.gerir') ? `<div class="card"><h2 style="margin-top:0">Conta na app</h2>${login ? `
       <p>${esc(login.email)} · ${esc(ROLE_NAMES[login.role] || login.role)} ·
         ${login.is_active ? chip('ok', 'ligada', 'ok') : chip('', 'desligada')}</p>
@@ -3290,6 +3300,7 @@ async function viewWorker() {
     if (error) { cb.checked = !cb.checked; return toast(friendly(error)); }
     toast(cb.checked ? 'Pode picar nesta obra a partir de hoje.' : data === 'amanha'
       ? 'Foi posto nesta obra hoje: só deixa de poder picar a partir de amanhã.' : 'Já não pode picar nesta obra.');
+    loadWorkerSites(id);
   });
   if ($('#login')) $('#login').onsubmit = async (e) => {
     e.preventDefault(); const f = new FormData(e.target); const how = (e.submitter && e.submitter.value) || 'email';
@@ -3401,7 +3412,7 @@ async function loadWorkerProfile(id, editing) {
         </dl>${p.notes ? `<p class="small"><b>Observações:</b> ${esc(p.notes)}</p>` : ''}`
       : '<p class="small muted">Os dados pessoais só aparecem a quem tem a permissão «dados pessoais» (Recursos Humanos).</p>'}`;
     if ($('#fedit')) $('#fedit').onclick = () => loadWorkerProfile(id, true);
-    loadWorkerRate(id); loadWorkerKit(id);
+    loadWorkerRate(id); loadWorkerKit(id); loadWorkerSites(id);
     return;
   }
   const inp = (name, label, val, extra = '') => `<div><label>${esc(label)}</label><input name="${name}" value="${esc(val ?? '')}" ${extra}></div>`;
@@ -3439,24 +3450,68 @@ async function loadWorkerProfile(id, editing) {
 }
 
 // The hourly rate on the card: read with the salary permissions, changed only with salarios.configurar (never one's own).
-// It feeds the site's team in the Dashboard de obra and the pay estimate in «As minhas horas».
+// v103 (sql/125): every rate has a «a partir de» day and stays in the history; changing a rate that already existed is
+// asked by one person and approved by another. Costs use the rate in force on each day.
+const RATE_ST = { pending: ['warn', 'à espera de aprovação'], approved: ['ok', 'aprovado'], rejected: ['bad', 'recusado'], cancelled: ['', 'retirado'] };
 async function loadWorkerRate(id) {
   const box = $('#frate'); if (!box) return;
   const { data, error } = await sb.rpc('mini_worker_rate', { p_collab: id });
   if (!box.isConnected) return;
   if (error) { box.remove(); return; }
-  const n2 = (x) => x == null ? '' : Number(x).toFixed(2);
+  const H = data.history || []; const wait = H.find((x) => x.status === 'pending');
+  const when = (x) => x.at ? new Date(x.at).toLocaleDateString(LOC) : '';
+  const vals = (x) => `${euro(x.base)}/h${x.overtime ? ' · ' + t_('extra') + ' ' + euro(x.overtime) + '/h' : ''}`;
+  const row = (x) => `<li class="rt-h ${esc(x.status)}"><div class="wk"><b class="grow" data-nt>${esc(vals(x))}</b>${x.in_force ? chip('ok', 'em vigor', 'ok') : chip(RATE_ST[x.status][0], RATE_ST[x.status][1])}</div>
+      <small><span>${esc(t_('a partir de {x}', fmtDate(x.from)))}</span>${x.reason ? ` · <span data-nt>${esc(x.reason)}</span>` : ''}</small>
+      ${x.asked_by ? `<small class="muted"><span>Pedido por</span> <span data-nt>${esc(x.asked_by)} · ${esc(when({ at: x.asked_at }))}</span></small>` : ''}
+      ${x.decided_by && x.status !== 'pending' && (x.origin === 'change' || x.decided_by !== x.asked_by) ? `<small class="muted"><span>${x.status === 'rejected' ? 'Recusado por' : x.status === 'cancelled' ? 'Retirado' : 'Aprovado por'}</span> <span data-nt>${esc(x.decided_by)} · ${esc(when({ at: x.decided_at }))}${x.note ? ' · ' + esc(x.note) : ''}</span></small>` : ''}
+      ${x.status === 'pending' && x.can_decide ? `<div class="row-b"><button class="btn small" data-rok="${esc(x.id)}">${ic('ok')}Aprovar</button><button class="btn small ghost" data-rno="${esc(x.id)}">Recusar</button></div>` : ''}
+      ${x.status === 'pending' && x.mine ? `<div class="row-b"><span class="small muted grow">Outra pessoa com acesso aos salários tem de aprovar.</span><button class="btn small ghost" data-rcan="${esc(x.id)}">Retirar</button></div>` : ''}</li>`;
   box.innerHTML = `<h3>Valor à hora</h3><dl class="kv"><div><dt>Normal</dt><dd>${data.rate == null ? '<span class="muted">por definir</span>' : esc(euro(data.rate)) + '/h'}</dd></div>
       <div><dt>Extra</dt><dd>${data.overtime_rate == null ? '<span class="muted">pelas regras da lei</span>' : esc(euro(data.overtime_rate)) + '/h'}</dd></div></dl>
-    ${data.can_edit ? `<form id="rform" class="row" style="align-items:end"><div><label>Normal (€/h)</label><input name="rate" type="number" min="0" max="500" step="0.01" inputmode="decimal" value="${n2(data.rate)}"></div>
-      <div><label>Extra (€/h, opcional)</label><input name="ot" type="number" min="0" max="1000" step="0.01" inputmode="decimal" value="${n2(data.overtime_rate)}"></div>
-      <div><button class="btn small">Guardar valor</button></div></form>` : ''}`;
-  if ($('#rform')) $('#rform').onsubmit = async (e) => {
-    e.preventDefault(); const f = new FormData(e.target); const num = (k) => (f.get(k) || '').trim() === '' ? null : Number(f.get(k));
-    const { error: se } = await sb.rpc('mini_set_worker_rate', { p_collab: id, p_rate: num('rate'), p_overtime_rate: num('ot') });
-    if (se) return toast(friendly(se));
-    toast('Valor à hora guardado.'); loadWorkerRate(id);
+    ${data.can_edit && !wait ? `<button class="btn small" id="rnew">${ic('edit')}${data.rate == null ? 'Pôr o valor hora' : 'Mudar o valor hora'}</button>` : ''}
+    ${H.length ? `<details class="fold" id="rhist" ${wait ? 'open' : ''}><summary><span>Histórico do valor hora<span class="sub">${esc(t_('{x} registo(s)', H.length))}</span></span></summary><ul class="rt-hist">${H.map(row).join('')}</ul></details>` : ''}`;
+  const again = () => loadWorkerRate(id);
+  if ($('#rnew')) $('#rnew').onclick = async () => {
+    const fd = await askSheet(data.rate == null ? t_('Pôr o valor hora') : t_('Mudar o valor hora'), `<div class="row"><div><label for="rb">Normal (€/h) *</label><input id="rb" name="base" type="number" min="0.01" max="500" step="0.01" inputmode="decimal" required value="${data.rate ?? ''}"></div>
+        <div><label for="ro">Extra (€/h)</label><input id="ro" name="ot" type="number" min="0.01" max="1000" step="0.01" inputmode="decimal" placeholder="${esc(t_('vazio = regras da lei'))}" value="${data.overtime_rate ?? ''}"></div></div>
+      <label for="rf">A partir de *</label><input id="rf" name="from" type="date" required value="${esc(data.today)}">
+      <label for="rr">Motivo${data.needs_second ? ' *' : ''}</label><input id="rr" name="reason" maxlength="300" ${data.needs_second ? 'required minlength="5"' : ''} placeholder="${esc(t_('ex.: aumento combinado com a pessoa'))}">
+      <p class="small muted">${data.needs_second ? 'Outra pessoa com acesso aos salários aprova. Até lá conta o valor de agora. ' : ''}Os dias antes da data ficam com o valor antigo. Os dias já enviados para salários nunca mudam.</p>`, data.needs_second ? t_('Pedir aprovação') : t_('Guardar'));
+    if (!fd) return;
+    const num = (v) => (v === null || String(v).trim() === '' ? null : Number(String(v).replace(',', '.')));
+    const { data: r, error: e } = await sb.rpc('mini_rate_change', { p_collab: id, p_base: num(fd.get('base')), p_overtime: num(fd.get('ot')), p_from: fd.get('from'), p_reason: fd.get('reason') || null });
+    if (e) { toast(friendly(e)); return; }
+    toast(r.pending ? (r.deciders ? t_('Pedido enviado. Fica à espera da aprovação de outra pessoa.') : t_('Pedido guardado, mas ninguém mais tem acesso aos salários para o aprovar.')) : t_('Valor à hora guardado.'));
+    again();
   };
+  box.querySelectorAll('[data-rok]').forEach((b) => b.onclick = async () => {
+    b.disabled = true; const { error: e } = await sb.rpc('mini_rate_decide', { p_id: b.dataset.rok, p_ok: true });
+    if (e) { b.disabled = false; return toast(friendly(e)); } toast(t_('Novo valor hora aprovado.')); again();
+  });
+  box.querySelectorAll('[data-rno]').forEach((b) => b.onclick = async () => {
+    const fd = await askSheet(t_('Recusar o novo valor hora'), `<label for="rn">Porquê? *</label><input id="rn" name="n" required minlength="3" maxlength="300">`, t_('Recusar'));
+    if (!fd) return; const { error: e } = await sb.rpc('mini_rate_decide', { p_id: b.dataset.rno, p_ok: false, p_note: fd.get('n') });
+    if (e) return toast(friendly(e)); toast(t_('Pedido recusado.')); again();
+  });
+  box.querySelectorAll('[data-rcan]').forEach((b) => b.onclick = async () => {
+    b.disabled = true; const { error: e } = await sb.rpc('mini_rate_decide', { p_id: b.dataset.rcan, p_ok: false });
+    if (e) { b.disabled = false; return toast(friendly(e)); } toast(t_('Pedido retirado.')); again();
+  });
+}
+
+// v103 (sql/126): every site the person was on, from when to when, who put them there or took them off, days worked.
+async function loadWorkerSites(id) {
+  const box = $('#fsites'); if (!box) return;
+  const { data, error } = await sb.rpc('mini_worker_sites_history', { p_collab: id });
+  if (!box.isConnected) return;
+  if (error || !data.length) { box.innerHTML = error ? '' : '<p class="small muted">Ainda não esteve em nenhuma obra.</p>'; return; }
+  const per = (x) => x.to ? t_('de {x} a {x}', fmtDate(x.from), fmtDate(x.to)) : t_('desde {x}', fmtDate(x.from));
+  box.innerHTML = `<details class="fold" ${data.length <= 3 ? 'open' : ''}><summary><span>Histórico das obras<span class="sub">${esc(t_('{x} obra(s)', new Set(data.map((x) => x.code)).size))}</span></span></summary>
+    <ul class="rt-hist">${data.map((x) => `<li><div class="wk"><span class="grow"><span class="chip code" data-nt>${esc(x.code || '')}</span> <b data-nt>${esc(x.title)}</b></span>${x.open ? chip('ok', 'atual', 'ok') : chip('', 'saiu')}</div>
+      <small><span>${esc(per(x))}</span> · <span>${esc(t_('{x} dia(s) com horas', x.days))}</span>${x.last_day ? ` · <span>${esc(t_('último: {x}', fmtDate(x.last_day)))}</span>` : ''}</small>
+      ${x.added_by ? `<small class="muted"><span>Posto por</span> <span data-nt>${esc(x.added_by)}</span></small>` : ''}
+      ${x.removed && x.removed.by ? `<small class="muted"><span>Tirado por</span> <span data-nt>${esc(x.removed.by)} · ${esc(new Date(x.removed.at).toLocaleDateString(LOC))}</span></small>` : ''}</li>`).join('')}</ul></details>`;
 }
 
 // Who already has this NIF? Only admin and HR can ask: the NIF is never sent to the app in lists.
@@ -13838,7 +13893,7 @@ function noticeRoute(x) {
   if (k === 'week_to_confirm') return mine('horas');
   if (k === 'contract_unsigned') return mine('contrato');
   if (/^(document|doc)_/.test(k) && state.me.role === 'worker') return mine('docs');
-  if (l.collaborator_id && state.me.role !== 'worker' && viewOpen('trabalhadores') && /^(document|doc|onboarding|contract|suspended|perstat)/.test(k))
+  if (l.collaborator_id && state.me.role !== 'worker' && viewOpen('trabalhadores') && /^(document|doc|onboarding|contract|suspended|perstat|rate_change)/.test(k))
     return () => { state.worker = l.collaborator_id; go('ficha'); return true; };
   if (/^scaffold_/.test(k)) return view('andaimes');
   if (/^(tool|ppe|calibration|critical_item|stock)/.test(k)) return view('armazem');
