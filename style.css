@@ -2526,3 +2526,30 @@ button.card.rt-site { display: block; width: 100%; text-align: left; font: inher
 .home-more { margin: 4px 0 8px; }
 .home-ver { text-align: center; margin: 16px 0 4px; }
 #dtour { margin-top: 8px; }
+
+/* v108: Secretariado for the whole month (days with no record, summary per person, holidays, cost per site and front) */
+.miss-p { padding: 12px 0; border-top: var(--bw) solid var(--line); }
+.miss-p:first-of-type { border-top: 0; }
+.miss-days { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 0 52px; }
+.miss-run { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 12px; border-radius: 10px; font: inherit; font-size: var(--t-sm);
+  font-weight: 600; color: var(--warn); background: var(--warn-bg); border: var(--bw) solid color-mix(in srgb, var(--warn-fill) 45%, transparent); cursor: pointer; }
+.miss-run .i { width: 16px; height: 16px; }
+button.miss-run:hover { filter: brightness(.97); }
+button.miss-run.on { outline: 2px solid var(--accent); outline-offset: 1px; }
+span.miss-run { cursor: default; }
+.miss-form { margin: 12px 0 0 52px; padding: 14px; border-radius: 12px; background: var(--surface-2); }
+.miss-form .chips.reasons { margin-bottom: 8px; }
+@media (max-width: 520px) { .miss-days, .miss-form { margin-left: 0; } }
+.ot-why { display: flex; gap: 6px; align-items: flex-start; margin: 6px 0 0; }
+.ot-why .i { width: 14px; height: 14px; flex: none; margin-top: 2px; }
+.ot-why-t { font-weight: 500; white-space: nowrap; }
+#psum table.grid td.num, #psum table.grid th.num { white-space: nowrap; }
+#psum tr.look td { background: color-mix(in srgb, var(--warn-bg) 55%, transparent); }
+.site-cost { margin-bottom: 12px; }
+.site-cost .hrs { font-size: 20px; }
+table.grid.mini { margin-top: 12px; font-size: var(--t-sm); }
+table.grid.mini td, table.grid.mini th { padding: 8px 10px; }
+#psum table.grid { font-size: var(--t-sm); }
+#psum table.grid th { white-space: normal; vertical-align: bottom; }
+#psum table.grid td, #psum table.grid th { padding: 10px 8px; }
+#psum table.grid td.name { min-width: 150px; }
