@@ -5976,4 +5976,11 @@
 "Aprovado: {x}. Falta o fecho do mês.": "Approved: {x}. The month still has to be closed.",
 "aprovado": "approved",
 "Isto mexia no dia $1, que já está validado. Nada foi mudado: fala com o encarregado.": "This would change $1, which is already confirmed. Nothing was changed: talk to the supervisor.",
-"As horas aparecem aqui quando as pessoas as escreverem na folha de horas.": "Hours show here when people write them in the timesheet."}
+"As horas aparecem aqui quando as pessoas as escreverem na folha de horas.": "Hours show here when people write them in the timesheet.",
+"picagens do cartão": "card taps",
+"escrito na folha pelo trabalhador": "written in the timesheet by the worker",
+"escrito pelo trabalhador, sem cartão": "written by the worker, no card",
+"Validado na obra por {x}": "Confirmed on site by {x}",
+"Aprovado por {x}": "Approved by {x}",
+"Validados na obra, sem avisos: horas escritas pelo trabalhador na folha e confirmadas na obra, sem extra longa, sem descanso nem feriado.": "Confirmed on site, no warnings: hours written by the worker in the timesheet and confirmed on site, no long overtime, no rest day or holiday.",
+"Validados na obra, sem avisos: só picagens do cartão, nenhuma à mão, sem extra longa, sem descanso nem feriado.": "Confirmed on site, no warnings: card taps only, none by hand, no long overtime, no rest day or holiday."}

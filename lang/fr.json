@@ -5976,4 +5976,11 @@
 "Aprovado: {x}. Falta o fecho do mês.": "Approuvé : {x}. Reste la clôture du mois.",
 "aprovado": "approuvé",
 "Isto mexia no dia $1, que já está validado. Nada foi mudado: fala com o encarregado.": "Cela modifierait le jour $1, déjà validé. Rien n’a été changé : parle au chef d’équipe.",
-"As horas aparecem aqui quando as pessoas as escreverem na folha de horas.": "Les heures s'affichent ici quand les personnes les écrivent dans la feuille d'heures."}
+"As horas aparecem aqui quando as pessoas as escreverem na folha de horas.": "Les heures s'affichent ici quand les personnes les écrivent dans la feuille d'heures.",
+"picagens do cartão": "pointages par badge",
+"escrito na folha pelo trabalhador": "écrit dans la feuille par le travailleur",
+"escrito pelo trabalhador, sem cartão": "écrit par le travailleur, sans badge",
+"Validado na obra por {x}": "Validé sur le chantier par {x}",
+"Aprovado por {x}": "Approuvé par {x}",
+"Validados na obra, sem avisos: horas escritas pelo trabalhador na folha e confirmadas na obra, sem extra longa, sem descanso nem feriado.": "Validés sur le chantier, sans alerte : heures écrites par le travailleur dans la feuille et confirmées sur le chantier, sans longues heures sup., sans repos ni jour férié.",
+"Validados na obra, sem avisos: só picagens do cartão, nenhuma à mão, sem extra longa, sem descanso nem feriado.": "Validés sur le chantier, sans alerte : seulement des pointages par badge, aucun à la main, sans longues heures sup., sans repos ni jour férié."}

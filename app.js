@@ -1087,7 +1087,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '97';
+const APP_VERSION = '98';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['reunioes', 'emergencia', 'lmra', 'seguranca'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -6003,9 +6003,12 @@ const tapKind = (reason) => (/^sem rede/.test(reason || '') ? 'sem rede, chegou 
   : reason === 'número do cartão escrito à mão' ? 'cartão escrito à mão' : 'à mão');
 async function loadOffice(from, to) {
   const el = $('#list'); if (!el) return;
-  const [{ data, error }, man, per, decl] = await Promise.all([sb.rpc('mini_hours_office', { p_from: from, p_to: to }),
+  const [{ data, error }, man, per, decl, who, tm] = await Promise.all([sb.rpc('mini_hours_office', { p_from: from, p_to: to }),
     sb.rpc('mini_manual_taps', { p_from: from, p_to: to }), dayPeriods(from, to),
-    sb.rpc('mini_declared_days', { p_project: null, p_from: from, p_to: to }).then((r) => r, () => ({}))]);
+    sb.rpc('mini_declared_days', { p_project: null, p_from: from, p_to: to }).then((r) => r, () => ({})),
+    sb.rpc('mini_hours_office_who', { p_from: from, p_to: to }).then((r) => r, () => ({})),
+    state.timeMode ? null : sb.rpc('mini_time_mode').then((r) => r, () => ({}))]);
+  if (tm && tm.data) state.timeMode = tm.data.mode;
   if (!el.isConnected) return; // the month changed while this one was loading: its newer list wins
   if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; $('#sum').innerHTML = ''; return; }
   const manual = {};
@@ -6013,7 +6016,9 @@ async function loadOffice(from, to) {
   const me = state.me && state.me.collaborator_id;
   const n = (st) => data.filter((r) => r.status === st).length;
   const declared = new Set(((decl && decl.data) || []).filter((x) => x.by_worker).map((x) => x.work_day_id));
-  for (const r of data) { r.flags = dayFlags(r, manual[r.work_day_id]); r.declared = declared.has(r.work_day_id); }
+  const whoBy = Object.fromEntries(((who && who.data) || []).map((x) => [x.work_day_id, x]));
+  // v98: written by the worker is normal in a «folha de horas» company; with the card it is an exception to look at
+  for (const r of data) { r.declared = declared.has(r.work_day_id); r.who = whoBy[r.work_day_id] || {}; r.flags = dayFlags(r, manual[r.work_day_id]); }
   const open = (r) => ['registered', 'supervisor_validated'].includes(r.status);
   const noExit = (r) => open(r) && r.anomalies.some((a) => a === 'missing_out' || a === 'open_shift') && !onlyOpenToday(r, siteTz(r.project_id));
   // Approve by exception: the office looks only at the days with a reason to look; the rest go in one tap.
@@ -6044,12 +6049,12 @@ async function loadOffice(from, to) {
       ${look.length ? byWorker(look).map((rows) => card(rows, true)).join('')
         : `<div class="card">${empty('check', 'Nada para rever', 'Não há dias com problemas, picagens à mão ou horas fora do normal.')}</div>`}
       <div class="sec-h"><h2>Sem problemas</h2>${chip(clean.length ? 'ok' : '', String(clean.length))}</div>
-      <div class="card">${clean.length ? `<p class="small muted" style="margin-top:0">Validados na obra, sem avisos: picagens do cartão, sem extra longa, sem descanso nem feriado.</p>
+      <div class="card">${clean.length ? `<p class="small muted" style="margin-top:0">${state.timeMode === 'sheet'
+          ? 'Validados na obra, sem avisos: horas escritas pelo trabalhador na folha e confirmadas na obra, sem extra longa, sem descanso nem feriado.'
+          : 'Validados na obra, sem avisos: só picagens do cartão, nenhuma à mão, sem extra longa, sem descanso nem feriado.'}</p>
         <p><button class="btn big acc" id="approveClean">${ic('ok')}Aprovar ${clean.length} dia(s) sem problemas</button></p>
-        <details class="fold"><summary><span>Ver os ${clean.length} dia(s)<span class="sub">${byWorker(clean).length} pessoa(s)</span></span></summary><div>
-          ${byWorker(clean).map((rows) => `<div class="day"><div class="day-h"><span class="d">${esc(rows[0].full_name)}</span>
-            <span class="hrs">${esc(fmtMin(rows.reduce((a, r) => a + r.worked_minutes, 0)))}</span></div>
-            <div class="per small">${rows.map((r) => `${esc(dayLabel(r.shift_date))} ${esc(r.project_code)} ${esc(fmtMin(r.worked_minutes))}`).join(' · ')}</div></div>`).join('')}</div></details>`
+        <details class="fold" open><summary><span>Ver os ${clean.length} dia(s)<span class="sub">${byWorker(clean).length} pessoa(s)</span></span></summary><div>
+          ${byWorker(clean).map((rows) => card(rows, false)).join('')}</div></details>`
         : '<p class="muted" style="margin:0">Nenhum dia à espera de aprovação simples.</p>'}</div>
       <details class="fold card" style="margin-top:16px"><summary><span>Todos os dias do mês<span class="sub">${data.length} dia(s), todos os estados</span></span></summary><div id="alldays"></div></details>`;
     const all = el.querySelector('details.fold.card');
@@ -6215,21 +6220,26 @@ function dayFlags(r, manual) {
   if (r.special_day_minutes && r.overtime_approved === false) f.push(['info', 'chefe não aprovou']);
   else if (r.overtime_minutes > 120) f.push(['info', `${fmtMin(r.overtime_minutes)} extra${r.overtime_approved ? ' aprovadas' : ''}`]);
   if (r.worked_minutes > 12 * 60) f.push(['warn', 'mais de 12 h no dia']);
+  if (r.declared && state.timeMode !== 'sheet') f.push(['warn', 'escrito pelo trabalhador, sem cartão']);
   return f;
 }
 // One day in the office lists: site, periods, status, why it is here, who validated, and the actions.
 function officeDay(r, manual, per, me, withFlags, noExit) {
   const tz = siteTz(r.project_id); const list = periodsOf(r, per[r.work_day_id], tz);
   const mine = r.collaborator_id === me;
+  const at = (iso) => iso ? new Date(iso).toLocaleString(LOC, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: DEFAULT_TZ }) : '';
+  const who = r.who || {};
   return `<div class="day"><div class="day-h"><span class="d">${esc(dayLabel(r.shift_date))}</span><span class="chip code">${esc(r.project_code)}</span>
       <span class="hrs">${esc(fmtMin(r.worked_minutes))}</span></div>
+    ${r.project_title ? `<div class="small muted" data-nt>${esc(r.project_title)}</div>` : ''}
     <div class="per">${periodsHtml(list) || '<span class="muted">sem picagens</span>'}</div>
-    <div class="tags">${OFFICE_STATUS[r.status] || chip('', r.status)}${r.declared ? chip('', 'declarado pelo trabalhador', 'doc') : ''}
+    <div class="tags">${OFFICE_STATUS[r.status] || chip('', r.status)}${r.declared ? chip('', 'escrito na folha pelo trabalhador', 'doc') : (manual || []).length ? '' : chip('', 'picagens do cartão', 'card')}
       ${r.overtime_minutes && !(withFlags && r.flags.some(([, t]) => / extra|extra /.test(t))) ? chip(r.overtime_approved ? 'info' : r.overtime_approved === false ? '' : 'warn', `${fmtMin(r.overtime_minutes)} extra ${r.overtime_approved ? 'aprovadas' : r.overtime_approved === false ? 'recusadas' : 'por decidir'}`) : ''}</div>
     ${r.special_day_minutes ? `<div class="tags">${chip(r.overtime_approved ? 'info' : r.overtime_approved === false ? '' : 'warn', `${fmtMin(r.special_day_minutes)} em ${r.is_holiday ? 'feriado' : 'dia de descanso'} ${r.overtime_approved ? 'aprovadas pelo chefe' : r.overtime_approved === false ? 'não aprovadas' : 'por aprovar'}`)}</div>` : ''}
     ${withFlags && r.flags.length ? `<div class="why">${r.flags.map(([k, t]) => chip(k, t, k === 'anom' || k === 'warn' ? 'warn' : '')).join('')}</div>` : ''}
     ${!withFlags && r.anomalies.length ? `<div class="why">${chip(onlyOpenToday(r, tz) ? 'warn' : 'anom', r.anomalies.map((a) => anomalyText(a, r.shift_date, tz)).join(', '), onlyOpenToday(r, tz) ? 'clock' : 'warn')}</div>` : ''}
-    ${r.supervisor_name && r.status !== 'registered' ? `<div class="note">validado por ${esc(r.supervisor_name)}</div>` : ''}
+    ${r.supervisor_name && r.status !== 'registered' ? `<div class="note">${esc(t_('Validado na obra por {x}', r.supervisor_name))}${who.supervisor_at ? ` · ${esc(at(who.supervisor_at))}` : ''}</div>` : ''}
+    ${who.approver_name && ['hr_validated', 'sent_to_payroll'].includes(r.status) ? `<div class="note">${esc(t_('Aprovado por {x}', who.approver_name))}${who.approver_at ? ` · ${esc(at(who.approver_at))}` : ''}</div>` : ''}
     ${r.returned_reason ? `<div class="note">Devolvido: ${esc(r.returned_reason)}</div>` : ''}
     ${(manual || []).map((m) => `<div class="note"><span class="chip warn">${esc(tapKind(m.reason))}</span> ${m.direction === 'in' ? 'Entrada' : 'Saída'} ${esc(fmtHour(m.effective_time, tz))}, por ${esc(m.added_by || '?')}: ${esc(m.reason || '')}</div>`).join('')}
     ${mine ? '' : `<div class="acts noprint">
