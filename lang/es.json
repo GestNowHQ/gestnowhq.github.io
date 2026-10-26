@@ -6289,5 +6289,14 @@
 "Procurar ecrã, pessoa ou obra":"Buscar pantalla, persona u obra",
 "Voltar aos departamentos":"Volver a los departamentos",
 "1 ecrã":"1 pantalla",
-"{x} ecrãs":"{x} pantallas"
+"{x} ecrãs":"{x} pantallas",
+"Precisa de ti hoje":"Te necesita hoy",
+"‹ Início":"‹ Inicio",
+"Departamento":"Departamento",
+"Mais {x} assunto(s)":"{x} asunto(s) más",
+"{x}: {x} à espera":"{x}: {x} en espera",
+"{x} dia(s) por aprovar":"{x} día(s) por aprobar",
+"{x} reclamação(ões) de horas":"{x} reclamación(es) de horas",
+"{x} pessoa(s) com documento caducado":"{x} persona(s) con documento caducado",
+"{x} pessoa(s) com documento a caducar":"{x} persona(s) con documento a punto de caducar"
 }

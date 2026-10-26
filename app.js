@@ -1150,10 +1150,12 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '106';
-const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
-  hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['reunioes', 'emergencia', 'lmra', 'seguranca'],
-  project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
+const APP_VERSION = '107';
+// v107 (Diogo 2026-10-26): «Início» = what is urgent + the departments. The bottom bar keeps only Início, the field tools of
+// the encarregado (Equipa, Picar) or of the safety officer (Emergência), Procurar and Eu. Everything else is in its department.
+const TABS = { supervisor: ['inicio', 'equipa', 'picar', 'minhas'], admin: ['inicio', 'minhas'],
+  hr: ['inicio', 'minhas'], hse: ['inicio', 'emergencia', 'minhas'],
+  project_manager: ['inicio', 'minhas'], finance: ['inicio', 'minhas'], worker: ['minhas'] };
 // v67 pyramid (Diogo 2026-10-20): the GestNow owner starts on his clients; an admin starts on the dashboard, not on Picar.
 // Picar stays in the menu (group Obra) for the office, and is the encarregado's tool.
 // v70 (Diogo 2026-10-20): on «Os meus clientes» the owner runs a business, not a site: only «Clientes» shows.
@@ -1161,7 +1163,7 @@ const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['pica
 const PLATFORM_VIEWS = ['clientes', 'cliente', 'precos'];
 const ownerDesk = () => isOwner() && PLATFORM_VIEWS.includes(state.view);
 function tabsFor(role) {
-  if (role === 'admin') return isOwner() ? (ownerDesk() ? ['clientes'] : ['clientes', 'inicio', 'horas', 'secretariado']) : ['inicio', 'painel', 'horas', 'secretariado'];
+  if (role === 'admin' && ownerDesk()) return ['clientes'];   // inside a client company, «‹ Os meus clientes» is on Início
   return TABS[role] || TABS.supervisor;
 }
 const OFFLINE_VIEWS = ['picar', 'minhas', 'material', 'reunioes', 'relatos', 'emergencia'];   // v89: they keep a copy
@@ -1266,10 +1268,15 @@ function layoutNav(role) {
   // a department with none of its profile's usual screens (the angariador): its own screens become the tabs
   if (!first.length) first = groups.flatMap((g) => g[1]).filter((v) => all.includes(v) && shown(v) && v !== 'minhas').slice(0, 3);
   const moreBtn = nav.querySelector('button[data-more]');
+  // v107: with Início on the bar, the departments are there: no «Mais» on the phone; «Procurar» goes before «Eu»
+  const door = !isWide() && first.includes('inicio');
+  moreBtn.hidden = door;
+  const findBtn = nav.querySelector('button[data-find]'); findBtn.hidden = !door || role === 'worker';
   nav.querySelectorAll('.enc-mh').forEach((h) => h.remove());
   sheet.querySelectorAll('hr').forEach((h) => h.remove());
   const head = (t) => Object.assign(document.createElement('h3'), { className: 'enc-mh', textContent: t });
   for (const v of first) tabs.insertBefore(btn(v), moreBtn);
+  tabs.insertBefore(findBtn, first.includes('minhas') ? btn('minhas') : moreBtn);
   // Phone: the role's tabs at the bottom, the rest in the sheet by group. Computer: everything in the left column, by group.
   const place = isWide() ? (el) => tabs.insertBefore(el, moreBtn) : (el) => sheet.appendChild(el);
   sheet.querySelectorAll('.mdtop, .mdbar, .mdeps, .mclone').forEach((x) => x.remove());
@@ -1345,6 +1352,12 @@ function showDept(g) {
 }
 // the waiting counts of a department's screens add up on its tile; copies show their screen's count
 function deptBadges() {
+  // v107: the tiles on Início and on a department's page follow the same counts
+  app.querySelectorAll('[data-open]').forEach((c) => { const n = navBadge(c.dataset.open); if (n) c.dataset.badge = n > 99 ? '99+' : String(n); else delete c.dataset.badge; });
+  if (app.querySelector('[data-dept]')) for (const d of navDeps()) {
+    const tile = [...app.querySelectorAll('[data-dept]')].find((x) => x.dataset.dept === d.title); if (!tile) continue;
+    const n = d.views.reduce((a, v) => a + navBadge(v), 0); if (n) tile.dataset.badge = n > 99 ? '99+' : String(n); else delete tile.dataset.badge;
+  }
   const sheet = document.getElementById('more'); if (!sheet || !sheet._deps) return;
   sheet.querySelectorAll('[data-cv]').forEach((c) => { const b = nav.querySelector(`button[data-view="${c.dataset.cv}"]`); if (b && b.dataset.badge) c.dataset.badge = b.dataset.badge; else delete c.dataset.badge; });
   for (const d of sheet._deps) {
@@ -1524,7 +1537,7 @@ async function boot() {
   nav.querySelector('[data-view=empresa]').hidden = worker || state.offline || !canCompanyRules();
   nav.querySelector('[data-view=onbtextos]').hidden = worker || state.offline || !canPeople();
   nav.querySelector('[data-view=clientes]').hidden = worker || state.offline || !isOwner();
-  nav.querySelector('[data-view=inicio]').hidden = worker || state.offline || !canHome();
+  nav.querySelector('[data-view=inicio]').hidden = worker || state.offline;   // v107: everyone's front door (the urgent list needs canHome)
   nav.querySelector('[data-view=processo]').hidden = worker || state.offline || !canProcess();
   nav.querySelector('[data-view=orcamentos]').hidden = worker || state.offline || !canEstimates();
   nav.querySelector('[data-view=comercial]').hidden = worker || state.offline || !canSales();
@@ -1995,13 +2008,13 @@ function go(view) {
   state.view = view; state.staleAt = null; showNet();   // v89: each screen says again if it shows a kept copy
   if (state.navDesk !== ownerDesk()) layoutNav(state.me.role);   // owner moved between his clients and a company
   app.classList.toggle('wide', view === 'secretariado' || view === 'painel');
-  const tab = view === 'ficha' ? 'trabalhadores' : view === 'fichaepi' ? 'armazem' : view === 'cliente' || view === 'precos' ? 'clientes' : view === 'area' ? 'obras' : view;
+  const tab = view === 'departamento' ? 'inicio' : view === 'ficha' ? 'trabalhadores' : view === 'fichaepi' ? 'armazem' : view === 'cliente' || view === 'precos' ? 'clientes' : view === 'area' ? 'obras' : view;
   nav.querySelectorAll('button[data-view], button[data-cv]').forEach((b) => b.classList.toggle('on', (b.dataset.view || b.dataset.cv) === tab));
   const cur = nav.querySelector(`button[data-view="${tab}"]`);
   nav.querySelector('button[data-more]').classList.toggle('on', !!cur && cur.parentElement.id === 'more');
   window.scrollTo(0, 0);
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
-     ficha: viewWorker, obras: viewSites, area: viewArea, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients, cliente: viewClient, precos: viewPrices, empresa: viewCompanyRules, inicio: viewHome,
+     ficha: viewWorker, obras: viewSites, area: viewArea, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients, cliente: viewClient, precos: viewPrices, empresa: viewCompanyRules, inicio: viewHome, departamento: viewDept,
      processo: viewProcess, orcamentos: viewEstimates, comercial: viewSales, premios: viewAwards, custos: viewCosts, lmra: viewLmra, reunioes: viewMeetings, relatos: viewHazards, material: viewSiteMaterial, emergencia: viewEmergency,
      armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, producao: viewProd, progresso: viewProgress, frentes: viewFronts, rotinas: viewRoutines, contactos: viewContacts, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
   checkEmergencyBar(); encBadges();
@@ -2011,49 +2024,110 @@ function go(view) {
 // The company's home: what waits for someone (each line opens the screen where it is solved), then its sites
 // (each card opens that site's dashboard, level 3). The owner reaches it from «Os meus clientes».
 const canHome = () => can('obras.ver_detalhes');
+// v107 (Diogo 2026-10-26): «Início» is the front door for every office and site login: first what needs this person today
+// (at most 3, the rest one tap away), then the screens used lately, then the departments as tiles. A tile opens that
+// department's page with all its screens. The sites with their lights are in Produção › Dashboard (not mixed in here).
+// Same groups and permissions as the menu (menuGroups): each person sees only the departments that give them a screen.
+function navDeps() {
+  const btn = (v) => nav.querySelector(`button[data-view="${v}"]`);
+  const shown = (v) => { const b = btn(v); return !!b && !b.hidden && !b.classList.contains('enc-off'); };
+  // Horas is used by two departments: the encarregado validates it (Produção), the office approves it (Secretariado)
+  const also = { 'Produção (Obra)': ['picar', 'horas'] };   // [after this screen, add this one]
+  const add = (title, views) => { const a = also[title]; if (!a || views.includes(a[1])) return views; const i = views.indexOf(a[0]); return i < 0 ? [...views, a[1]] : [...views.slice(0, i + 1), a[1], ...views.slice(i + 1)]; };
+  const deps = menuGroups(shown).map(([title, views]) => ({ title, views: add(title, views).filter((v, i, a) => v !== 'inicio' && shown(v) && a.indexOf(v) === i) }))
+    .filter((d) => d.views.length);
+  if (state.me.role === 'admin' || isOwner()) return deps;
+  // a department whose screens all show in another of this person's departments is not theirs (the encarregado and Secretariado)
+  return deps.filter((d) => !d.views.every((v) => deps.some((o) => o !== d && o.views.includes(v))));
+}
+const navBtn = (v) => nav.querySelector(`button[data-view="${v}"]`);
+const navIcon = (v) => ((navBtn(v) && navBtn(v).querySelector('use') && navBtn(v).querySelector('use').getAttribute('href')) || '#i-more').slice(3);
+const navLabel = (v) => (navBtn(v) ? navBtn(v).textContent.trim() : v);
+const navBadge = (v) => parseInt((navBtn(v) || { dataset: {} }).dataset.badge, 10) || 0;
+function deptTiles(deps) {
+  return `<div class="mdeps home-deps">${deps.map((d) => {
+    const [name, sub] = d.title.split(' · '); const n = d.views.length; const w = d.views.reduce((a, v) => a + navBadge(v), 0);
+    return `<button type="button" class="mdep" data-dept="${esc(d.title)}"${w ? ` data-badge="${w > 99 ? '99+' : w}"` : ''}><svg class="i" aria-hidden="true"><use href="#i-${esc(DEPT_ICON[d.title] || navIcon(d.views[0]))}"/></svg>`
+      + `<span class="grow"><b>${esc(name)}</b><small>${sub ? esc(sub) : n === 1 ? '1 ecrã' : `${n} ecrãs`}</small></span>${ic('go', 'mgo')}</button>`;
+  }).join('')}</div>`;
+}
+function toolTiles(views) {
+  return `<div class="mrow home-tools">${views.map((v) => { const w = navBadge(v);
+    return `<button type="button" data-open="${esc(v)}"${w ? ` data-badge="${w > 99 ? '99+' : w}"` : ''}><svg class="i" aria-hidden="true"><use href="#i-${esc(navIcon(v))}"/></svg><span>${esc(navLabel(v))}</span></button>`; }).join('')}</div>`;
+}
+function bindTiles(box) {
+  box.querySelectorAll('[data-dept]').forEach((b) => b.onclick = () => { state.dept = b.dataset.dept; go('departamento'); });
+  box.querySelectorAll('[data-open]').forEach((b) => b.onclick = () => openFromMenu(b.dataset.open));
+}
+function openFromMenu(v) {
+  recentMenu(v);
+  if (v === 'orcamentos' && state.orc) { state.orc.id = null; state.orc.mode = 'list'; }
+  if (v === 'minhas') state.mineTab = 'home';
+  if (v === 'comercial' && state.sales) state.sales.sel = null;
+  go(v);
+}
 async function viewHome() {
   if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
-  if (!canHome()) return viewClock();   // code guard as well as the database's
-  app.innerHTML = `<div id="home">${skel(4)}</div>`;
-  const { data, error } = await sb.rpc('mini_company_home');
-  const box = $('#home'); if (!box || !box.isConnected || state.view !== 'inicio') return;
-  if (error) { box.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
-  const n = (v) => Number(v || 0).toLocaleString(LOC);
-  const W = data.waiting || {};
-  const items = [
-    ['to_validate', 'clock', 'dia(s) por validar na obra', 'O encarregado valida em Horas.', 'horas', 'warn', can('horas.validar_obra')],
-    ['to_approve', 'ok', 'dia(s) por aprovar', 'Aprovas no Secretariado.', 'secretariado', 'warn', can('horas.aprovar')],
-    ['disputes', 'warn', 'reclamação(ões) de horas', 'Responde no Secretariado.', 'secretariado', 'warn', can('horas.aprovar')],
-    ['docs_expired', 'doc', 'pessoa(s) com documento caducado', 'Não podem entrar na obra até renovar.', 'trabalhadores', 'bad', can('pessoas.ver')],
-    ['docs_expiring', 'doc', 'pessoa(s) com documento a caducar', 'Nos próximos 30 dias.', 'trabalhadores', 'warn', can('pessoas.ver')],
-    ['joining', 'users', 'pessoa(s) a fazer a entrada', 'Contrato, documentos e acolhimento.', 'trabalhadores', 'info', can('pessoas.ver')],
-  ].filter((x) => x[6] && Number(W[x[0]]));
-  const sites = data.sites || [];
-  const inside = sites.reduce((t, s) => t + Number(s.inside_now || 0), 0);
-  const L = { red: ['bad', 'Documento caducado na equipa'], amber: ['warn', 'Dias à espera'], green: ['ok', 'Em dia'] };
-  box.innerHTML = `
+  if (state.me.role === 'worker') return go('minhas');
+  const deps = navDeps();
+  const recent = load(RECENT_KEY + '.' + state.me.user_id, []).filter((v) => navBtn(v) && !navBtn(v).hidden && v !== 'inicio' && navBtn(v).parentElement.id !== 'tabs').slice(0, 3);
+  app.innerHTML = `
     ${isOwner() ? `<button class="btn ghost small home-back" id="hback">‹ Os meus clientes</button>` : ''}
-    <div class="ph"><div><p class="ph-k">Início${data.test ? ' · empresa de teste' : ''}</p><h1>${esc(data.company || '')}</h1></div></div>
-    <div class="ov-tiles home-tiles"><div><b>${n(sites.length)}</b><span>obra(s) a decorrer</span></div><div><b>${n(inside)}</b><span>na obra agora</span></div>
-      <div><b>${n(data.people)}</b><span>pessoas</span></div><div><b>${n(items.length)}</b><span>assunto(s) à espera</span></div></div>
-    <div class="sec-h"><h2 class="eyebrow">À tua espera</h2></div>
-    ${items.length ? `<div class="home-wait">${items.map(([k, icon, label, help, view, kind]) => `<button class="home-w ${kind}" data-go="${esc(view)}">
-        <span class="home-wi">${ic(icon)}</span><span class="grow"><b>${n(W[k])} ${esc(label)}</b><small>${esc(help)}</small></span>${ic('go')}</button>`).join('')}</div>`
-      : `<div class="card home-ok">${ic('ok')}<div><b>Tudo em dia</b><small>Não há nada à tua espera.</small></div></div>`}
-    <div class="sec-h"><h2 class="eyebrow">Obras (${n(sites.length)})</h2>${can('obras.gerir') ? '<button class="btn ghost small" id="hsites">Todas as obras</button>' : ''}</div>
-    ${sites.length ? `<div class="clients">${sites.map((s) => { const [k, t] = L[s.light] || L.green; return `<article class="card client ov-card ${k}" data-site="${esc(s.id)}" tabindex="0" role="button" aria-label="Abrir ${esc(s.title)}">
-        <div class="cl-top"><span class="ov-light ${k}" aria-hidden="true"></span><div class="grow"><b>${esc(s.title)}</b>
-          <small>${esc([s.client, s.code].filter(Boolean).join(' · '))}</small></div><span class="ov-go" aria-hidden="true">${ic('go')}</span></div>
-        <p class="small ${k === 'ok' ? 'muted' : ''} home-st">${esc(t)}${Number(s.waiting_days) ? ` · ${n(s.waiting_days)} dia(s)` : ''}${Number(s.doc_problems) ? ` · ${n(s.doc_problems)} pessoa(s)` : ''}${s.last_tap ? ` · última picagem ${esc(fmtTime(s.last_tap, siteTz(s.id)))}` : ''}</p>
-        <div class="cl-stats ov-stats"><span><b>${n(s.inside_now)}</b>na obra agora</span><span><b>${n(s.placed)}</b>colocadas</span><span><b>${n(s.waiting_days)}</b>dias à espera</span></div></article>`; }).join('')}</div>`
-      : `<div class="card">${empty('helmet', 'Ainda não há obras a decorrer', can('obras.gerir') ? 'Abre a primeira em Obras.' : 'Quando houver, aparecem aqui.')}</div>`}`;
+    <div class="ph"><div><p class="ph-k">Início</p><h1 id="hco">${esc((state.platform && state.platform.tenant) || '')}</h1></div></div>
+    <div class="sec-h"><h2 class="eyebrow">Precisa de ti hoje</h2></div>
+    <div id="hwait">${skel(1)}</div>
+    ${recent.length ? `<div class="sec-h"><h2 class="eyebrow">Usados há pouco</h2></div>${toolTiles(recent)}` : ''}
+    <div class="sec-h"><h2 class="eyebrow">Departamentos</h2></div>
+    ${deptTiles(deps)}
+    <p class="small muted home-ver">Versão ${APP_VERSION}</p>`;
   if ($('#hback')) $('#hback').onclick = () => go('clientes');
-  if ($('#hsites')) $('#hsites').onclick = () => go('obras');
+  bindTiles(app);
+  homeWaiting();
+}
+// «Precisa de ti hoje»: what the company waits on (sql/90, for whoever sees the sites), else what this login's own screens count
+async function homeWaiting() {
+  const box = $('#hwait'); if (!box) return;
+  let items = []; let company = '';
+  if (canHome()) {
+    const { data, error } = await sb.rpc('mini_company_home');
+    if (!box.isConnected || state.view !== 'inicio') return;
+    if (error) { box.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
+    company = data.company || ''; const W = data.waiting || {};
+    items = [
+      ['to_validate', 'clock', 'dia(s) por validar na obra', 'O encarregado valida em Horas.', 'horas', 'warn', can('horas.validar_obra')],
+      ['to_approve', 'ok', 'dia(s) por aprovar', 'Aprovas no Secretariado.', 'secretariado', 'warn', can('horas.aprovar')],
+      ['disputes', 'warn', 'reclamação(ões) de horas', 'Responde no Secretariado.', 'secretariado', 'warn', can('horas.aprovar')],
+      ['docs_expired', 'doc', 'pessoa(s) com documento caducado', 'Não podem entrar na obra até renovar.', 'trabalhadores', 'bad', can('pessoas.ver')],
+      ['docs_expiring', 'doc', 'pessoa(s) com documento a caducar', 'Nos próximos 30 dias.', 'trabalhadores', 'warn', can('pessoas.ver')],
+      ['joining', 'users', 'pessoa(s) a fazer a entrada', 'Contrato, documentos e acolhimento.', 'trabalhadores', 'info', can('pessoas.ver')],
+    ].filter((x) => x[6] && Number(W[x[0]])).map(([k, icon, label, help, view, kind]) => ({ n: Number(W[k]), icon, label, help, view, kind }));
+  } else {
+    await encBadges(true);
+    if (!box.isConnected || state.view !== 'inicio') return;
+    items = [...nav.querySelectorAll('button[data-view][data-badge]')].filter((b) => !b.hidden)
+      .map((b) => ({ n: parseInt(b.dataset.badge, 10) || 0, icon: navIcon(b.dataset.view), label: 'à espera', help: b.title || '', view: b.dataset.view, kind: 'warn', name: navLabel(b.dataset.view) }));
+  }
+  if (company && $('#hco')) $('#hco').textContent = company;
+  const n = (v) => Number(v || 0).toLocaleString(LOC);
+  const row = (x) => `<button class="home-w ${x.kind}" data-go="${esc(x.view)}"><span class="home-wi">${ic(x.icon)}</span>
+    <span class="grow"><b>${x.name ? `${esc(x.name)}: ` : ''}${n(x.n)} ${esc(x.label)}</b>${x.help ? `<small>${esc(x.help)}</small>` : ''}</span>${ic('go')}</button>`;
+  box.innerHTML = items.length
+    ? `<div class="home-wait">${items.slice(0, 3).map(row).join('')}</div>${items.length > 3 ? `<details class="fold home-more"><summary><span>Mais ${n(items.length - 3)} assunto(s)</span></summary><div class="home-wait">${items.slice(3).map(row).join('')}</div></details>` : ''}`
+    : `<div class="card home-ok">${ic('ok')}<div><b>Tudo em dia</b><small>Não há nada à tua espera.</small></div></div>`;
   box.querySelectorAll('[data-go]').forEach((b) => b.onclick = () => go(b.dataset.go));
-  box.querySelectorAll('[data-site]').forEach((c) => {
-    const open = () => { state.panelSite = c.dataset.site; go('painel'); };
-    c.onclick = open; c.onkeydown = (e) => { if (e.key === 'Enter') open(); };
-  });
+}
+// A department's page: all its screens (the bottom-bar ones too), with «‹ Início»
+function viewDept() {
+  if (!state.ready) return boot();
+  const d = navDeps().find((x) => x.title === state.dept);
+  if (!d) return go('inicio');
+  const [name, sub] = d.title.split(' · ');
+  app.innerHTML = `<button class="btn ghost small home-back" id="dback">‹ Início</button>
+    <div class="ph"><div><p class="ph-k">${sub ? esc(sub) : 'Departamento'}</p><h1>${esc(name)}</h1></div></div>
+    ${toolTiles(d.views)}${d.title === 'Eu' ? `<button class="btn ghost" id="dtour">${ic('bot')}Visita guiada</button>` : ''}`;
+  $('#dback').onclick = () => go('inicio');
+  if ($('#dtour')) $('#dtour').onclick = () => startTour();
+  bindTiles(app);
 }
 
 // ------------------------------------------------------------------ Clientes (the GestNow owner's console, sql/59)
