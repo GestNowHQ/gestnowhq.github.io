@@ -160,6 +160,11 @@ const ERRORS = [
   [/more than 16 hours in one day/i, 'Mais de 16 horas num dia: confirma as horas.'],
   [/saída has not happened yet/i, 'A saída ainda não aconteceu: escreve-a quando saíres.'],
   [/already validated this day/i, 'O encarregado já confirmou este dia: pede-lhe para mudar.'],
+  [/choose the front you worked on/i, 'Escolhe a frente onde trabalhaste.'],
+  [/choose a front of this site/i, 'Essa frente não é desta obra, ou já foi arquivada. Escolhe outra.'],
+  [/this company does not record hours by front/i, 'Esta empresa não conta as horas por frente.'],
+  [/write the name of the front/i, 'Escreve o nome da frente.'],
+  [/that front is not on this site/i, 'Essa frente não é desta obra.'],
   [/this would change (\S+) which is already validated/i, 'Isto mexia no dia $1, que já está validado. Nada foi mudado: fala com o encarregado.'],
   [/choose how hours are recorded/i, 'Escolhe como se registam as horas.'],
   // Área da fábrica (sql/104)
@@ -1087,7 +1092,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '98';
+const APP_VERSION = '99';
 const TABS = { supervisor: ['equipa', 'picar', 'horas', 'naobra'], admin: ['picar', 'painel', 'horas', 'secretariado'],
   hr: ['secretariado', 'horas', 'naobra', 'trabalhadores'], hse: ['reunioes', 'emergencia', 'lmra', 'seguranca'],
   project_manager: ['picar', 'painel', 'horas', 'obras'], finance: ['picar', 'naobra', 'horas', 'obras'], worker: ['minhas'] };
@@ -4839,9 +4844,11 @@ async function loadHours(from, to) {
   const el = $('#list'); const site = currentSite(); if (!el) return [];
   if (!site) { el.innerHTML = `<div class="card">${empty('helmet', 'Sem obras abertas', 'Abre uma obra em Obras.')}</div>`; return []; }
   const seq = ++hoursSeq; const tz = siteTz(site.id);
-  const [{ data, error }, back, per, decl] = await Promise.all([sb.rpc('mini_hours', { p_project: site.id, p_from: from, p_to: to }),
+  const [{ data, error }, back, per, decl, fr] = await Promise.all([sb.rpc('mini_hours', { p_project: site.id, p_from: from, p_to: to }),
     sb.rpc('mini_returned_days', { p_project: site.id, p_from: from, p_to: to }), dayPeriods(from, to, site.id),
-    sb.rpc('mini_declared_days', { p_project: site.id, p_from: from, p_to: to }).then((r) => r, () => ({}))]);
+    sb.rpc('mini_declared_days', { p_project: site.id, p_from: from, p_to: to }).then((r) => r, () => ({})),
+    sb.rpc('mini_day_fronts', { p_project: site.id, p_from: from, p_to: to }).then((r) => r, () => ({}))]);
+  state.dayFronts = Object.fromEntries(((fr && fr.data) || []).filter((x) => (x.fronts || []).length).map((x) => [x.work_day_id, x.fronts]));
   if (seq !== hoursSeq || !$('#list')) return [];   // a newer week or site was asked meanwhile
   if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return []; }
   const returned = Object.fromEntries(((back && back.data) || []).map((b) => [b.work_day_id, b.reason]));
@@ -4885,7 +4892,8 @@ async function loadHours(from, to) {
         <span class="hrs">${esc(fmtMin(r.worked_minutes))}</span></div>
       <div class="per">${periodsHtml(list) || '<span class="muted">sem picagens</span>'}</div>
       ${list.length ? dayline(list.join(' · '), r.shift_date === today ? { now: (nowP.hour % 24) * 60 + nowP.minute } : {}) : ''}
-      ${r.overtime_minutes || r.special_day_minutes || r.has_manual || returned[r.work_day_id] || declared[r.work_day_id] ? `<div class="tags">
+      ${r.overtime_minutes || r.special_day_minutes || r.has_manual || returned[r.work_day_id] || declared[r.work_day_id] || (state.dayFronts || {})[r.work_day_id] ? `<div class="tags">
+        ${((state.dayFronts || {})[r.work_day_id] || []).map((f) => chip('', f, 'pin')).join('')}
         ${declared[r.work_day_id] ? (r.status === 'registered' ? chip('warn', 'escrito pelo trabalhador: confirma as horas', 'doc') : chip('', 'escrito pelo trabalhador', 'doc')) : ''}
         ${r.overtime_minutes ? chip(r.overtime_approved === false ? '' : 'info', `${fmtMin(r.overtime_minutes)} extra${r.overtime_approved === false ? ' (recusadas)' : ''}`) : ''}
         ${r.special_day_minutes ? chip(r.overtime_approved ? 'info' : r.overtime_approved === false ? '' : 'warn', `${fmtMin(r.special_day_minutes)} em descanso ou feriado${r.overtime_approved ? ' (aprovadas)' : r.overtime_approved === false ? ' (não aprovadas)' : ': por aprovar'}`) : ''}
@@ -5041,10 +5049,12 @@ window.addEventListener('popstate', () => {
 });
 async function loadMeHome(quiet) {
   const ym = isoDay(new Date()).slice(0, 7);
-  const [home, sum, papers, tm, mt, nt, hzq] = await Promise.all([sb.rpc('mini_my_home', { p_month: ym + '-01' }), sb.rpc('mini_my_summary'),
+  const [home, sum, papers, tm, mt, nt, hzq, mo] = await Promise.all([sb.rpc('mini_my_home', { p_month: ym + '-01' }), sb.rpc('mini_my_summary'),
     state.mePapers === false ? Promise.resolve({ error: true }) : sb.rpc('mini_my_papers').then((r) => r, () => ({ error: true })),
     sb.rpc('mini_time_mode').then((r) => r, () => ({})), sb.rpc('mini_my_meetings').then((r) => r, () => ({})), sb.rpc('mini_my_team_messages').then((r) => r, () => ({})),
-    sb.rpc('mini_my_hazards').then((r) => r, () => ({}))]);
+    sb.rpc('mini_my_hazards').then((r) => r, () => ({})),
+    sb.rpc('mini_my_month', { p_month: ym + '-01' }).then((r) => r, () => ({}))]);
+  state.meMonth = (mo && mo.data) || null;   // v99 (sql/117): the month in big, and the days with no hours at all
   // v89: once per session with network, the screens behind the tiles are kept on the phone for a site without signal
   if (!state.prefetched && navigator.onLine !== false && !home.cached) {
     state.prefetched = true;
@@ -5060,7 +5070,7 @@ async function loadMeHome(quiet) {
   if (home.error) { hero.innerHTML = `<div class="card">${esc(friendly(home.error))}</div>`; return; }
   if (papers.error) state.mePapers = false;   // the function is not there yet (sql/80): no tile
   const d = home.data; const s = sum.data || null; state.mineData = d;
-  hero.innerHTML = meHero(d, s); state.meSum = s;
+  hero.innerHTML = meHero(d, s) + meMonthKpis(); state.meSum = s;
   if (quiet && $('#metiles').dataset.on) return;
   $('#meact').innerHTML = s ? meActions(s) : '';
   $('#metiles').innerHTML = meTiles(d, s, papers.error ? null : papers.data);
@@ -5074,6 +5084,19 @@ async function loadMeHome(quiet) {
     const m = (state.meNotes || []).find((x) => x.id === b.dataset.gotit); if (m) m.read = new Date().toISOString();
     $('#meact').innerHTML = meActions(state.meSum || {}); loadMeHome();
   });
+}
+// v99: the month in two numbers, as the worker thinks of it: what I did, and what is still not confirmed.
+function meMonthKpis() {
+  const m = state.meMonth; if (!m) return '';
+  const miss = (m.missing || []).length;
+  const wait = Number(m.waiting || 0) + Number(m.office || 0);
+  return `<div class="kpis k2 me-month">
+    <button class="kpi big" data-me="horas"><b>${esc(fmtMin(m.month).replace('h00', 'h'))}</b><span>${esc(t_('Horas deste mês'))}</span></button>
+    <button class="kpi ${wait ? 'warn' : 'ok'}" data-me="horas"><b>${esc(fmtMin(wait).replace('h00', 'h'))}</b>
+      <span>${esc(wait ? t_('Por validar') : t_('Tudo validado'))}</span></button>
+    ${miss ? `<button class="kpi bad wide" data-me="horas"><b>${miss}</b><span>${esc(state.timeMode === 'sheet'
+      ? (miss === 1 ? t_('dia sem horas escritas') : t_('dias sem horas escritas'))
+      : (miss === 1 ? t_('dia sem picagens') : t_('dias sem picagens')))}</span></button>` : ''}</div>`;
 }
 // The week as a ring: hours so far against the contract's week.
 function meRing(done, target) {
@@ -5174,12 +5197,23 @@ async function meConfirmWeek(week, label, after) {
   if (error) return toast(friendly(error));
   toast('Semana confirmada. Obrigado.'); if (after) after();
 }
+// ---- Frentes de obra (sql/118): off unless the company switched them on and the site has open fronts.
+const frontsOn = () => !!(state.meFronts && state.meFronts.on && Object.keys(state.meFronts.sites || {}).length);
+const frontsOf = (project) => (state.meFronts && state.meFronts.sites && state.meFronts.sites[project]) || [];
+const frontOf = (project, day) => (state.meFronts && state.meFronts.days && state.meFronts.days[`${project}|${day}`]) || '';
+const frontOpts = (project, chosen) => {
+  const list = frontsOf(project);
+  return `<option value="">${esc(t_('Escolhe a frente…'))}</option>` + list.map((f) =>
+    `<option value="${esc(f.id)}" ${f.name === chosen ? 'selected' : ''}>${esc(f.name)}</option>`).join('');
+};
 // ---- Folha de horas (sql/106): in a company that records hours on paper-like sheets, the worker writes entrada,
 // almoço and saída on their own phone; the encarregado confirms. Each day shows whether it was written or tapped.
 async function loadMySheet() {
   const box = $('#mysheet'); if (!box) return;
   box.innerHTML = skel(3);
-  const { data, error } = await sb.rpc('mini_my_timesheet');
+  const [{ data, error }, fr] = await Promise.all([sb.rpc('mini_my_timesheet'),
+    sb.rpc('mini_my_fronts').then((r) => r, () => ({}))]);
+  state.meFronts = (fr && fr.data) || null;   // v99 (sql/118): work fronts, where the company records them
   if (!box.isConnected) return;
   if (error) { box.innerHTML = `<div class="card">${esc(friendly(error))}</div>`; return; }
   state.timeMode = data.mode; state.docNames = data.doc_names || {};
@@ -5198,7 +5232,8 @@ async function loadMySheet() {
           for (let i = 0; i < t.length; i += 2) pairs.push(`${hm(t[i].at, e.tz)}${t[i + 1] ? ' – ' + hm(t[i + 1].at, e.tz) : ' – …'}`);
           const written = t.some((x) => x.written);
           return `<div class="sh-row"><span class="chip code" data-nt>${esc(e.code)}</span><span class="grow" data-nt>${esc(pairs.join(' · '))}</span>
-            ${e.locked ? chip('val', 'confirmado', 'ok') : chip('warn', 'por confirmar')}${written ? chip('', 'escrito') : chip('info', 'picado')}</div>`;
+            ${e.locked ? chip('val', 'confirmado', 'ok') : chip('warn', 'por confirmar')}${written ? chip('', 'escrito') : chip('info', 'picado')}
+            ${frontOf(e.project, d.date) ? chip('', frontOf(e.project, d.date), 'pin') : ''}</div>`;
         }).join('') || '<p class="muted small" style="margin:4px 0">Sem horas neste dia.</p>'}
         ${sites.length && anyOpen && (d.blocked || []).length ? `<div class="sh-block" role="alert">${ic('warn')}<div><b>${esc(t('Não podes escrever horas neste dia'))}</b>
             <span>${esc((d.blocked || []).map(reasonText).join(' · '))}</span>
@@ -5216,6 +5251,7 @@ async function writeSheetDay(day, data) {
   const fd = await askSheet(`Horas de ${day === data.today ? 'hoje' : dayLabel(day)}`, `
     ${sites.length > 1 ? `<label for="shs">Obra</label><select id="shs" name="site">${sites.map((x) => `<option value="${esc(x.id)}" ${e0 && e0.project === x.id ? 'selected' : ''}>${esc(x.code)} · ${esc(x.title)}</option>`).join('')}</select>`
       : `<input type="hidden" name="site" value="${esc(sites[0].id)}"><p class="small muted" data-nt>${esc(sites[0].code)} · ${esc(sites[0].title)}</p>`}
+    ${frontsOn() ? `<label for="shf">${esc(t_('Frente'))}</label><select id="shf" name="front" required>${frontOpts(e0 ? e0.project : (sites[0] || {}).id, frontOf(e0 && e0.project, day))}</select>` : ''}
     <div class="row"><div><label for="shi">Entrada</label><input id="shi" name="in" type="time" required value="${esc(v(0, '08:00'))}"></div>
       <div><label for="sho">Saída</label><input id="sho" name="out" type="time" required value="${esc(four ? v(3, '17:00') : t.length === 2 ? v(1, '17:00') : '17:00')}"></div></div>
     <label class="check"><input type="checkbox" name="lunch" id="shl" ${t.length === 2 ? '' : 'checked'}> Parei para almoçar</label>
@@ -5224,11 +5260,17 @@ async function writeSheetDay(day, data) {
     <p class="small muted">Uma saída antes da entrada conta como o dia seguinte (turno da noite).</p>`, 'Guardar', (dlg) => {
     const c = dlg.querySelector('#shl'); const r = dlg.querySelector('#shlr');
     const sync = () => { r.hidden = !c.checked; }; c.onchange = sync; sync();
+    const ss = dlg.querySelector('#shs'); const ff = dlg.querySelector('#shf');
+    if (ss && ff) ss.onchange = () => { ff.innerHTML = frontOpts(ss.value, ''); };
   });
   if (!fd) return;
   const lunch = fd.get('lunch') === 'on';
-  const { data: res, error } = await sb.rpc('mini_my_timesheet_save', { p_project: fd.get('site'), p_day: day, p_in: fd.get('in'),
-    p_lunch_out: lunch ? fd.get('lo') : null, p_lunch_in: lunch ? fd.get('li') : null, p_out: fd.get('out') });
+  const front = frontsOn() ? fd.get('front') || null : null;
+  const { data: res, error } = front
+    ? await sb.rpc('mini_my_timesheet_save_at', { p_project: fd.get('site'), p_day: day, p_in: fd.get('in'),
+      p_lunch_out: lunch ? fd.get('lo') : null, p_lunch_in: lunch ? fd.get('li') : null, p_out: fd.get('out'), p_front: front })
+    : await sb.rpc('mini_my_timesheet_save', { p_project: fd.get('site'), p_day: day, p_in: fd.get('in'),
+      p_lunch_out: lunch ? fd.get('lo') : null, p_lunch_in: lunch ? fd.get('li') : null, p_out: fd.get('out') });
   if (error) { toast(friendly(error)); return; }
   toast(`Guardado: ${fmtMin(res.worked || 0)} neste dia. O encarregado vai confirmar.`);
   loadMySheet();
@@ -5366,7 +5408,9 @@ async function loadMyPapers() {
 }
 async function loadMine(quiet) {
   const ym = state.mineMonth;
-  const { data: d, error } = await sb.rpc('mini_my_home', { p_month: ym + '-01' });
+  const [{ data: d, error }, mo] = await Promise.all([sb.rpc('mini_my_home', { p_month: ym + '-01' }),
+    sb.rpc('mini_my_month', { p_month: ym + '-01' }).then((r) => r, () => ({}))]);
+  state.meMonth = (mo && mo.data) || null;   // v99 (sql/117): working days with no hours at all
   const el = $('#mine'); if (!el || ym !== state.mineMonth) return;
   if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
   state.mineData = d;
@@ -5391,7 +5435,7 @@ async function loadMine(quiet) {
     ${(t.special || t.night) ? `<p class="small muted mine-extra">${t.special ? esc(fmtMin(t.special)) + ' em descanso ou feriado' : ''}${t.special && t.night ? ' · ' : ''}${t.night ? esc(fmtMin(t.night)) + ' à noite' : ''}</p>` : ''}
     <div class="card cal-card"><div class="sec-h" style="margin-top:0"><h2>Calendário</h2><span class="small muted">Toca num dia para ver tudo</span></div>
       ${mineCalendar(d)}
-      <div class="cal-legend"><span><i class="ok"></i>validado</span><span><i class="todo"></i>por validar</span><span><i class="bad"></i>falta picagem</span><span><i class="off"></i>folga ou feriado</span></div></div>
+      <div class="cal-legend"><span><i class="ok"></i>validado</span><span><i class="todo"></i>por validar</span><span><i class="bad"></i>falta picagem</span><span><i class="miss"></i>dia sem horas</span><span><i class="off"></i>folga ou feriado</span></div></div>
     <div class="card">${d.days.map((r) => { const tz = r.tz || DEFAULT_TZ; return `<button class="day mday" data-day="${esc(r.date)}">
       <div class="day-h"><span class="d">${esc(dayLabel(r.date))}</span><span class="chip code">${esc(r.code)}</span>
         <span class="hrs">${esc(fmtMin(r.worked))}</span></div>
@@ -5571,14 +5615,15 @@ function mineCalendar(d) {
   const from = new Date(d.from + 'T12:00:00'); const lead = (from.getDay() + 6) % 7;
   const last = Number(d.to.slice(8, 10)); const today = (d.today || {}).date;
   const by = {}; for (const r of d.days) { const x = by[r.date] || (by[r.date] = { w: 0, k: [] }); x.w += r.worked; x.k.push(r); }
+  const miss = new Set((state.meMonth && state.meMonth.missing) || []);   // v99: a working day of yours with nothing on it
   const cells = [];
   for (let i = 0; i < lead; i++) cells.push('<span class="cd pad"></span>');
   for (let n = 1; n <= last; n++) {
     const iso = d.from.slice(0, 8) + String(n).padStart(2, '0'); const x = by[iso];
     const wd = (lead + n - 1) % 7;
-    const k = !x ? (wd >= 5 ? 'off' : '') : x.k.some((r) => r.anomalies.length && !(r.anomalies.every((a) => a === 'open_shift') && iso >= today)) ? 'bad' : x.k.some((r) => r.holiday || r.rest) && x.w ? 'off' : x.k.every((r) => r.status !== 'registered') ? 'ok' : 'todo';
+    const k = !x ? (miss.has(iso) ? 'miss' : wd >= 5 ? 'off' : '') : x.k.some((r) => r.anomalies.length && !(r.anomalies.every((a) => a === 'open_shift') && iso >= today)) ? 'bad' : x.k.some((r) => r.holiday || r.rest) && x.w ? 'off' : x.k.every((r) => r.status !== 'registered') ? 'ok' : 'todo';
     cells.push(x ? `<button class="cd ${k}${iso === today ? ' today' : ''}" data-day="${iso}"><b>${n}</b><small>${esc(fmtMin(x.w).replace('h00', 'h'))}</small></button>`
-      : iso < today ? `<button class="cd ${k} me-none" data-day="${iso}" aria-label="${esc(dayLabel(iso))}: sem horas"><b>${n}</b></button>`
+      : iso < today ? `<button class="cd ${k} ${miss.has(iso) ? '' : 'me-none'}" data-day="${iso}" aria-label="${esc(dayLabel(iso))}: ${esc(miss.has(iso) ? t_('estavas na obra e não há horas') : t_('sem horas'))}"><b>${n}</b>${miss.has(iso) ? '<small>!</small>' : ''}</button>`
       : `<span class="cd ${k}${iso === today ? ' today' : ''}"><b>${n}</b></span>`);
   }
   return `<div class="cal-h">${['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((x) => `<span>${x}</span>`).join('')}</div><div class="cal">${cells.join('')}</div>`;
@@ -5831,6 +5876,7 @@ function viewCompanyRules() {
   if (!canCompanyRules()) return viewClock();   // code guard as well as the database's
   app.innerHTML = `<div class="ph"><div><p class="ph-k">Administração</p><h1>Acessos e regras</h1></div></div>
     ${can('contas.gerir') ? `<div class="sec-h"><h2 class="eyebrow">Registo das horas</h2></div><div class="card" id="timeco">${skel(1)}</div>
+    <div class="sec-h"><h2 class="eyebrow">Horas por frente de obra</h2></div><div class="card" id="frco">${skel(1)}</div>
     <div class="sec-h"><h2 class="eyebrow">GPS no Picar</h2></div><div class="card" id="gpsco">${skel(1)}</div>` : ''}
     ${can('contas.gerir') ? `<div class="sec-h"><h2 class="eyebrow">Quem tem acesso a quê</h2></div>
     <p class="small muted">Toca numa pessoa para escolher os departamentos dela. Cada pessoa só vê as áreas dos seus departamentos.</p>
@@ -5855,7 +5901,7 @@ function viewCompanyRules() {
       if (e) { x.checked = !x.checked; return toast(friendly(e)); }
       toast(x.checked ? 'Os colaboradores passam a ver a estimativa do que vão ganhar.' : 'A estimativa deixou de aparecer aos colaboradores.'); };
   });
-  if (can('contas.gerir')) { loadTimeMode(); loadCompanyGps(); loadLogins(); loadDepartments(); }
+  if (can('contas.gerir')) { loadTimeMode(); loadCompanyFronts(); loadCompanyGps(); loadLogins(); loadDepartments(); }
 }
 // The company's GPS rule (sql/105): every site follows it unless the site has its own rule (Obras › Área da fábrica).
 // Turning it off is allowed (a test, a client that does not want it) but asked twice and kept in the history.
@@ -5886,6 +5932,21 @@ async function loadTimeMode() {
     toast(mode === 'sheet' ? 'A empresa passou à folha de horas.' : 'A empresa passou ao cartão.');
     loadTimeMode();
   });
+}
+// v99 (sql/118): hours by work front. Off until a client asks for it, because it makes the worker pick one every day.
+async function loadCompanyFronts() {
+  const box = $('#frco'); if (!box) return;
+  const { data, error } = await sb.rpc('mini_fronts_on');
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  box.innerHTML = `<label class="check prof"><input type="checkbox" id="fron" ${data.on ? 'checked' : ''}><span><b>${esc(t_('Contar as horas por frente de obra'))}</b>
+    <small>${esc(t_('Quem escreve as horas escolhe a frente (fornalha, coluna, permutadores). As frentes criam-se em Obras, em cada obra.'))}</small></span></label>`;
+  $('#fron').onchange = async () => {
+    const x = $('#fron');
+    const { error: e } = await sb.rpc('mini_fronts_on_set', { p_on: x.checked });
+    if (e) { x.checked = !x.checked; return toast(friendly(e)); }
+    toast(x.checked ? t_('As horas passam a contar por frente. Cria as frentes de cada obra em Obras.') : t_('As horas deixam de contar por frente.'));
+  };
 }
 const coName = (k) => (GPS_CO.find((r) => r[0] === k) || GPS_CO[0])[1];
 async function loadCompanyGps() {
@@ -6003,12 +6064,14 @@ const tapKind = (reason) => (/^sem rede/.test(reason || '') ? 'sem rede, chegou 
   : reason === 'número do cartão escrito à mão' ? 'cartão escrito à mão' : 'à mão');
 async function loadOffice(from, to) {
   const el = $('#list'); if (!el) return;
-  const [{ data, error }, man, per, decl, who, tm] = await Promise.all([sb.rpc('mini_hours_office', { p_from: from, p_to: to }),
+  const [{ data, error }, man, per, decl, who, fr, tm] = await Promise.all([sb.rpc('mini_hours_office', { p_from: from, p_to: to }),
     sb.rpc('mini_manual_taps', { p_from: from, p_to: to }), dayPeriods(from, to),
     sb.rpc('mini_declared_days', { p_project: null, p_from: from, p_to: to }).then((r) => r, () => ({})),
     sb.rpc('mini_hours_office_who', { p_from: from, p_to: to }).then((r) => r, () => ({})),
+    sb.rpc('mini_day_fronts', { p_project: null, p_from: from, p_to: to }).then((r) => r, () => ({})),
     state.timeMode ? null : sb.rpc('mini_time_mode').then((r) => r, () => ({}))]);
   if (tm && tm.data) state.timeMode = tm.data.mode;
+  state.dayFronts = Object.fromEntries(((fr && fr.data) || []).filter((x) => (x.fronts || []).length).map((x) => [x.work_day_id, x.fronts]));
   if (!el.isConnected) return; // the month changed while this one was loading: its newer list wins
   if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; $('#sum').innerHTML = ''; return; }
   const manual = {};
@@ -6232,6 +6295,7 @@ function officeDay(r, manual, per, me, withFlags, noExit) {
   return `<div class="day"><div class="day-h"><span class="d">${esc(dayLabel(r.shift_date))}</span><span class="chip code">${esc(r.project_code)}</span>
       <span class="hrs">${esc(fmtMin(r.worked_minutes))}</span></div>
     ${r.project_title ? `<div class="small muted" data-nt>${esc(r.project_title)}</div>` : ''}
+    ${(state.dayFronts || {})[r.work_day_id] ? `<div class="tags">${(state.dayFronts[r.work_day_id]).map((f) => chip('', f, 'pin')).join('')}</div>` : ''}
     <div class="per">${periodsHtml(list) || '<span class="muted">sem picagens</span>'}</div>
     <div class="tags">${OFFICE_STATUS[r.status] || chip('', r.status)}${r.declared ? chip('', 'escrito na folha pelo trabalhador', 'doc') : (manual || []).length ? '' : chip('', 'picagens do cartão', 'card')}
       ${r.overtime_minutes && !(withFlags && r.flags.some(([, t]) => / extra|extra /.test(t))) ? chip(r.overtime_approved ? 'info' : r.overtime_approved === false ? '' : 'warn', `${fmtMin(r.overtime_minutes)} extra ${r.overtime_approved ? 'aprovadas' : r.overtime_approved === false ? 'recusadas' : 'por decidir'}`) : ''}</div>
@@ -7015,6 +7079,8 @@ async function loadSiteDetails(id) {
       <div id="pdown" ${d.per_diem_amount != null && Number(d.per_diem_amount) > 0 ? '' : 'hidden'}><label for="pdamt">Valor por dia (€)</label>
         <input id="pdamt" name="amt" type="number" min="0.01" max="1000" step="0.01" inputmode="decimal" value="${d.per_diem_amount != null && Number(d.per_diem_amount) > 0 ? Number(d.per_diem_amount).toFixed(2) : ''}"></div>
       <p><button class="btn ghost wide">Guardar diária</button></p></form>` : ''}
+    <h3>${esc(t_('Frentes de obra'))}</h3>
+    <div id="sdfronts">${skel(1)}</div>
     <h3>Dias de descanso</h3>
     <p class="small muted" style="margin-top:0">Depende do cliente. As horas feitas nestes dias só entram na folha se o chefe de equipa as aprovar.</p>
     ${canRestDays() ? `<form id="restf"><div class="chips reasons" role="group" aria-label="Dias de descanso">${WEEKDAYS.map(([n, l]) =>
@@ -7063,11 +7129,50 @@ async function loadSiteDetails(id) {
     if (e2) return toast(friendly(e2));
     toast('Feriado acrescentado.'); loadSiteDetails(id);
   };
+  loadSiteFronts(id);
   box.querySelectorAll('[data-delhol]').forEach((b) => b.onclick = async () => {
     if (!confirm('Tirar este feriado? As horas desse dia passam a contar como dia normal.')) return;
     const { error: e2 } = await sb.rpc('mini_remove_site_holiday', { p_holiday: b.dataset.delhol });
     if (e2) return toast(friendly(e2));
     toast('Feriado tirado.'); loadSiteDetails(id);
+  });
+}
+
+// v99 (sql/118): the fronts of a site. They only matter once the company counts hours by front; an archived front keeps
+// the hours already written on it and stops being offered.
+async function loadSiteFronts(id) {
+  const box = $('#sdfronts'); if (!box) return;
+  const [{ data, error }, on] = await Promise.all([sb.rpc('mini_fronts', { p_project: id }), sb.rpc('mini_fronts_on').then((r) => r, () => ({}))]);
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  const fronts = data || []; const live = fronts.filter((f) => f.is_active);
+  const off = !(on && on.data && on.data.on);
+  box.innerHTML = `<p class="small muted" style="margin-top:0">${esc(off
+      ? t_('Esta empresa ainda não conta as horas por frente. Liga-o em Administração › Acessos e regras.')
+      : t_('Quem escreve as horas nesta obra escolhe uma destas frentes.'))}</p>
+    ${fronts.length ? fronts.map((f) => `<div class="day wk"><span class="chip code" data-nt>${esc(f.code)}</span>
+        <div class="grow">${esc(f.name)}${f.is_active ? '' : ` <span class="small muted">· ${esc(t_('arquivada'))}</span>`}</div>
+        ${canSetSite() ? `<button class="btn small ghost" data-frname="${esc(f.id)}" data-n="${esc(f.name)}">${esc(t_('Mudar o nome'))}</button>
+          <button class="btn small ghost" data-frarc="${esc(f.id)}" data-on="${f.is_active ? '1' : ''}">${esc(f.is_active ? t_('Arquivar') : t_('Voltar a usar'))}</button>` : ''}</div>`).join('')
+      : `<p class="muted small">${esc(t_('Ainda sem frentes nesta obra.'))}</p>`}
+    ${canSetSite() ? `<p><button class="btn ghost wide" id="frnew">${ic('plus')}${esc(t_('Acrescentar frente'))}</button></p>` : ''}
+    ${live.length ? '' : ''}`;
+  const save = async (fid, name) => {
+    const fd = await askSheet(fid ? t_('Mudar o nome da frente') : t_('Nova frente'),
+      `<label for="frn">${esc(t_('Nome'))} *</label><input id="frn" name="name" required minlength="2" maxlength="120" value="${esc(name || '')}"
+        placeholder="${esc(t_('ex.: Fornalha'))}"><p class="small muted">${esc(t_('O código (FR-01, FR-02…) é dado pela app.'))}</p>`, t_('Guardar'));
+    if (!fd) return;
+    const { error: e } = await sb.rpc('mini_save_front', { p_id: fid, p_project: id, p_name: fd.get('name') });
+    if (e) return toast(friendly(e));
+    toast(t_('Frente guardada.')); loadSiteFronts(id);
+  };
+  if ($('#frnew')) $('#frnew').onclick = () => save(null, '');
+  box.querySelectorAll('[data-frname]').forEach((b) => b.onclick = () => save(b.dataset.frname, b.dataset.n));
+  box.querySelectorAll('[data-frarc]').forEach((b) => b.onclick = async () => {
+    const { error: e } = await sb.rpc('mini_set_front_active', { p_id: b.dataset.frarc, p_active: !b.dataset.on });
+    if (e) return toast(friendly(e));
+    toast(b.dataset.on ? t_('Frente arquivada. As horas já escritas ficam como estão.') : t_('Frente outra vez em uso.'));
+    loadSiteFronts(id);
   });
 }
 
