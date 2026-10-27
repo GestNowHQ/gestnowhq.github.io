@@ -6395,4 +6395,9 @@
 "Resumo do mês: uma linha por pessoa com dias, horas normais, extra, descanso, ausências e custo, e os feriados das obras.": "Resumen del mes: una línea por persona con días, horas normales, extra, descanso, ausencias y coste, y los festivos de las obras.",
 "Pedidos e reclamações: quem não concorda com um dia e os pedidos de férias ou ausência, de todas as obras.": "Solicitudes y reclamaciones: quién no está de acuerdo con un día y las solicitudes de vacaciones o ausencia, de todas las obras.",
 "Salários e Primavera: a folha Excel do mês, o ficheiro do Relógio de Ponto e o registo de tempos para a ACT.": "Nóminas y Primavera: la hoja Excel del mes, el fichero de control horario y el registro de jornada para la inspección.",
-"{x} pedido(s) ou reclamação(ões) à espera de resposta": "{x} solicitud(es) o reclamación(es) esperando respuesta"}
+"{x} pedido(s) ou reclamação(ões) à espera de resposta": "{x} solicitud(es) o reclamación(es) esperando respuesta",
+"Obras: dados e regras": "Obras: datos y reglas",
+"Toca numa obra para mudar os dados e as regras dela. O dia a dia das obras está no Dashboard.": "Toca una obra para cambiar sus datos y reglas. El día a día de las obras está en el Dashboard.",
+"Dados e regras da obra": "Datos y reglas de la obra",
+"Prazo e horas": "Plazo y horas",
+"Prazo, horas e equipas da obra": "Plazo, horas y equipos de la obra"}

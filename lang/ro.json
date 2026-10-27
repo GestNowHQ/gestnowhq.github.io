@@ -6395,4 +6395,9 @@
 "Resumo do mês: uma linha por pessoa com dias, horas normais, extra, descanso, ausências e custo, e os feriados das obras.": "Rezumatul lunii: un rând pe persoană cu zile, ore normale, suplimentare, odihnă, absențe și cost, plus sărbătorile șantierelor.",
 "Pedidos e reclamações: quem não concorda com um dia e os pedidos de férias ou ausência, de todas as obras.": "Cereri și reclamații: cine nu e de acord cu o zi și cererile de concediu sau absență, de pe toate șantierele.",
 "Salários e Primavera: a folha Excel do mês, o ficheiro do Relógio de Ponto e o registo de tempos para a ACT.": "Salarii și Primavera: foaia Excel a lunii, fișierul de pontaj și registrul de timp pentru inspecția muncii.",
-"{x} pedido(s) ou reclamação(ões) à espera de resposta": "{x} cerere(i) sau reclamație(i) în așteptarea unui răspuns"}
+"{x} pedido(s) ou reclamação(ões) à espera de resposta": "{x} cerere(i) sau reclamație(i) în așteptarea unui răspuns",
+"Obras: dados e regras": "Șantiere: date și reguli",
+"Toca numa obra para mudar os dados e as regras dela. O dia a dia das obras está no Dashboard.": "Atinge un șantier pentru a-i schimba datele și regulile. Ziua de zi a șantierelor este în Dashboard.",
+"Dados e regras da obra": "Datele și regulile șantierului",
+"Prazo e horas": "Termen și ore",
+"Prazo, horas e equipas da obra": "Termenul, orele și echipele șantierului"}

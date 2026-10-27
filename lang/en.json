@@ -6395,4 +6395,9 @@
 "Resumo do mês: uma linha por pessoa com dias, horas normais, extra, descanso, ausências e custo, e os feriados das obras.": "Month summary: one line per person with days, normal hours, overtime, rest, absences and cost, and the sites' public holidays.",
 "Pedidos e reclamações: quem não concorda com um dia e os pedidos de férias ou ausência, de todas as obras.": "Requests and complaints: who disagrees with a day and the requests for holidays or absence, from every site.",
 "Salários e Primavera: a folha Excel do mês, o ficheiro do Relógio de Ponto e o registo de tempos para a ACT.": "Payroll and Primavera: the month's Excel sheet, the time clock file and the time record for the labour inspectorate.",
-"{x} pedido(s) ou reclamação(ões) à espera de resposta": "{x} request(s) or complaint(s) waiting for a reply"}
+"{x} pedido(s) ou reclamação(ões) à espera de resposta": "{x} request(s) or complaint(s) waiting for a reply",
+"Obras: dados e regras": "Sites: details and rules",
+"Toca numa obra para mudar os dados e as regras dela. O dia a dia das obras está no Dashboard.": "Tap a site to change its details and rules. The sites' day to day is in the Dashboard.",
+"Dados e regras da obra": "Site details and rules",
+"Prazo e horas": "Schedule and hours",
+"Prazo, horas e equipas da obra": "Site schedule, hours and crews"}
