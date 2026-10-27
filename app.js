@@ -1157,7 +1157,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '110';
+const APP_VERSION = '111';
 // v107 (Diogo 2026-10-26): «Início» = what is urgent + the departments. The bottom bar keeps only Início, the field tools of
 // the encarregado (Equipa, Picar) or of the safety officer (Emergência), Procurar and Eu. Everything else is in its department.
 const TABS = { supervisor: ['inicio', 'equipa', 'picar', 'minhas'], admin: ['inicio', 'minhas'],
@@ -1174,7 +1174,7 @@ function tabsFor(role) {
   return TABS[role] || TABS.supervisor;
 }
 const OFFLINE_VIEWS = ['picar', 'minhas', 'material', 'reunioes', 'relatos', 'emergencia'];   // v89: they keep a copy
-const MORE_ORDER = ['inicio', 'empresa', 'onbtextos', 'equipa', 'material', 'picar', 'emergencia', 'relatos', 'reunioes', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'diarias', 'andaimes', 'processo', 'clientes', 'custos', 'progresso', 'frentes', 'rotinas', 'contactos'];
+const MORE_ORDER = ['inicio', 'empresa', 'onbtextos', 'equipa', 'material', 'picar', 'emergencia', 'relatos', 'reunioes', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'faltas', 'mesresumo', 'reclamacoes', 'salarios', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'diarias', 'andaimes', 'processo', 'clientes', 'custos', 'progresso', 'frentes', 'rotinas', 'contactos'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -1182,7 +1182,7 @@ const isWide = () => WIDE.matches;
 WIDE.addEventListener('change', () => {
   if (!state.ready || !state.me) return;
   layoutNav(state.me.role);
-  if (state.view === 'secretariado') viewOffice();
+  if (OFFICE_VIEWS[state.view]) reOffice();
 });
 // «Mais» grouped under headings (founder-approved v48): each screen once, each icon with one meaning. «Processo» left the
 // menu (the «?» button and the search still open it); «Produção» is reached from the Dashboard when this login sees it.
@@ -1192,7 +1192,7 @@ WIDE.addEventListener('change', () => {
 // one department, QSA (sql/99); «controlo da app para garantir a ISO 9001» = Processo.
 const MENU_GROUPS = [
   ['Administração', ['inicio', 'empresa', 'premios', 'clientes']],
-  ['Secretariado', ['secretariado', 'horas', 'diarias', 'despesas', 'custos']],
+  ['Secretariado', ['secretariado', 'faltas', 'mesresumo', 'reclamacoes', 'horas', 'diarias', 'salarios', 'despesas', 'custos']],
   ['Recursos Humanos', ['trabalhadores', 'onbtextos', 'acolhimento', 'viagens', 'alojamento']],
   ['Frota', ['frota']],
   ['QSA · Qualidade, Segurança e Ambiente', ['relatos', 'seguranca', 'reunioes', 'lmra', 'emergencia', 'qualidade', 'processo']],
@@ -1205,7 +1205,7 @@ const MENU_GROUPS = [
 // What each screen needs, to place it under the department that gives it (the visibility itself is set in boot).
 const VIEW_NEEDS = {
   inicio: () => canHome(), empresa: () => canCompanyRules(), processo: () => canProcess(),
-  secretariado: () => canOffice(), despesas: () => canExpenses(), viagens: () => canTravel(), alojamento: () => canHousing(),
+  secretariado: () => canApprove(), despesas: () => canExpenses(), viagens: () => canTravel(), alojamento: () => canHousing(),
   trabalhadores: () => can('pessoas.ver') || can('pessoas.gerir'), onbtextos: () => canPeople(),
   seguranca: () => ['seguranca.lmra', 'seguranca.parar_obra', 'seguranca.emergencia'].some(can), lmra: () => canLmra(), reunioes: () => canMeet(), relatos: () => canHazards(),
   emergencia: () => can('seguranca.emergencia'), acolhimento: () => can('acolhimento.gerir'),
@@ -1213,6 +1213,7 @@ const VIEW_NEEDS = {
   equipa: () => canSiteDetails(), picar: () => can('ponto.picar'), horas: () => can('horas.ver') || can('horas.validar_obra'),
   andaimes: () => canScaffolds(), producao: () => canProd(), progresso: () => canProgress(), frentes: () => canFronts(), rotinas: () => canRoutines(), contactos: () => true, material: () => canSiteMaterial(), armazem: () => canWh(), compras: () => canBuy(), frota: () => canFleet(),
   orcamentos: () => canEstimates(), qualidade: () => canQuality(), comercial: () => canSales(), premios: () => canAwards(), custos: () => canCosts(), diarias: () => canPerDiems(),
+  faltas: () => canApprove(), mesresumo: () => canApprove(), reclamacoes: () => canApprove(), salarios: () => canPayroll(),
 };
 // v73 (Diogo 2026-10-21): «o standard da gestão serve para todas as empresas, mas o administrador de cada empresa adapta».
 // Administrators (and the owner) see the standard groups. Everyone else sees THEIR departments as the menu headings,
@@ -1532,7 +1533,7 @@ async function boot() {
     store(ME_KEY, { ...state.me });
   }
   state.ready = true; touch();
-  nav.querySelector('[data-view=secretariado]').hidden = !canOffice();
+  nav.querySelector('[data-view=secretariado]').hidden = !canApprove();
   // The worker profile sees only their own hours; anyone with a person behind the login has them under Mais.
   const worker = me.role === 'worker';
   nav.querySelectorAll('button[data-view]').forEach((b) => { if (b.dataset.view !== 'minhas' && b.dataset.view !== 'secretariado') b.hidden = worker; });
@@ -1551,6 +1552,7 @@ async function boot() {
   nav.querySelector('[data-view=premios]').hidden = worker || state.offline || !canAwards();
   nav.querySelector('[data-view=custos]').hidden = worker || state.offline || !canCosts();
   nav.querySelector('[data-view=diarias]').hidden = worker || state.offline || !canPerDiems();
+  for (const v of ['faltas', 'mesresumo', 'reclamacoes', 'salarios']) nav.querySelector(`[data-view=${v}]`).hidden = worker || state.offline || !VIEW_NEEDS[v]();
   nav.querySelector('[data-view=progresso]').hidden = worker || state.offline || !canProgress();
   nav.querySelector('[data-view=frentes]').hidden = worker || state.offline || !canFronts();
   nav.querySelector('[data-view=rotinas]').hidden = worker || state.offline || !canRoutines();
@@ -2028,7 +2030,7 @@ function go(view) {
   window.scrollTo(0, 0);
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
      ficha: viewWorker, obras: viewSites, area: viewArea, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients, cliente: viewClient, precos: viewPrices, empresa: viewCompanyRules, inicio: viewHome, departamento: viewDept,
-     processo: viewProcess, orcamentos: viewEstimates, comercial: viewSales, premios: viewAwards, custos: viewCosts, diarias: viewPerDiemOffice, lmra: viewLmra, reunioes: viewMeetings, relatos: viewHazards, material: viewSiteMaterial, emergencia: viewEmergency,
+     processo: viewProcess, orcamentos: viewEstimates, comercial: viewSales, premios: viewAwards, custos: viewCosts, diarias: viewPerDiemOffice, faltas: viewOfficeAbsences, mesresumo: viewOfficeSummary, reclamacoes: viewOfficeRequests, salarios: viewOfficePayroll, lmra: viewLmra, reunioes: viewMeetings, relatos: viewHazards, material: viewSiteMaterial, emergencia: viewEmergency,
      armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, producao: viewProd, progresso: viewProgress, frentes: viewFronts, rotinas: viewRoutines, contactos: viewContacts, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
   checkEmergencyBar(); encBadges();
 }
@@ -2134,8 +2136,8 @@ async function homeWaiting() {
     company = data.company || ''; const W = data.waiting || {};
     items = [
       ['to_validate', 'clock', 'dia(s) por validar na obra', 'O encarregado valida em Horas.', 'horas', 'warn', can('horas.validar_obra')],
-      ['to_approve', 'ok', 'dia(s) por aprovar', 'Aprovas no Secretariado.', 'secretariado', 'warn', can('horas.aprovar')],
-      ['disputes', 'warn', 'reclamação(ões) de horas', 'Responde no Secretariado.', 'secretariado', 'warn', can('horas.aprovar')],
+      ['to_approve', 'ok', 'dia(s) por aprovar', 'Aprovas em Secretariado › Aprovar o mês.', 'secretariado', 'warn', can('horas.aprovar')],
+      ['disputes', 'warn', 'reclamação(ões) de horas', 'Responde em Pedidos e reclamações.', 'reclamacoes', 'warn', can('horas.aprovar')],
       ['docs_expired', 'doc', 'pessoa(s) com documento caducado', 'Não podem entrar na obra até renovar.', 'trabalhadores', 'bad', can('pessoas.ver')],
       ['docs_expiring', 'doc', 'pessoa(s) com documento a caducar', 'Nos próximos 30 dias.', 'trabalhadores', 'warn', can('pessoas.ver')],
       ['joining', 'users', 'pessoa(s) a fazer a entrada', 'Contrato, documentos e acolhimento.', 'trabalhadores', 'info', can('pessoas.ver')],
@@ -5044,7 +5046,11 @@ const TOUR_TEXT = {
   armazem: 'Armazém: EPIs, farda e ferramentas. Quem recebe assina com o cartão; os tamanhos vêm da ficha.',
   horas: 'Horas: as horas da equipa, dia a dia, para corrigir e validar.',
   minhas: 'Eu: o teu dia, a tua semana, as tuas horas, pedidos, diárias, documentos, EPI e onde dormes. Se um dia estiver mal, dizes aqui.',
-  secretariado: 'Secretaria: o mês de toda a gente, fechar o mês e tirar o ficheiro para os salários.',
+  secretariado: 'Aprovar o mês: os dias validados na obra que precisam de ti, aprovar os sem problemas e fechar o mês.',
+  faltas: 'Faltas e ausências: os dias de trabalho sem horas nem ausência (diz o que foi) e as férias, baixas e faltas do mês.',
+  mesresumo: 'Resumo do mês: uma linha por pessoa com dias, horas normais, extra, descanso, ausências e custo, e os feriados das obras.',
+  reclamacoes: 'Pedidos e reclamações: quem não concorda com um dia e os pedidos de férias ou ausência, de todas as obras.',
+  salarios: 'Salários e Primavera: a folha Excel do mês, o ficheiro do Relógio de Ponto e o registo de tempos para a ACT.',
   seguranca: 'Segurança: os documentos de cada pessoa, e o que impede alguém de entrar na obra.',
   trabalhadores: 'Pessoas: as fichas, os cartões e os documentos de cada colaborador.',
   acolhimento: 'Acolhimento: as conversas, os vídeos e os manuais que cada pessoa nova tem de fazer.',
@@ -6298,43 +6304,89 @@ function monthRange(ym) {
   const [y, m] = ym.split('-').map(Number);
   return { from: `${ym}-01`, to: isoDay(new Date(y, m, 0, 12)) };
 }
+// v111 (Diogo 2026-10-27 «Sim faz a divisão por mosaicos»): the Secretariado screen held nine blocks one under the other;
+// now each job is its own tile in the department: Aprovar o mês, Faltas e ausências, Resumo do mês, Pedidos e reclamações,
+// Salários e Primavera. The month is shared (state.officeMonth) and the cost per site moved to Custos das obras.
+const canApprove = () => can('horas.aprovar');
+const canPayroll = () => can('salarios.exportar');
+const OFFICE_VIEWS = { secretariado: () => viewOffice(), faltas: () => viewOfficeAbsences(), mesresumo: () => viewOfficeSummary(),
+  reclamacoes: () => viewOfficeRequests(), salarios: () => viewOfficePayroll() };
+const reOffice = () => (OFFICE_VIEWS[state.view] || viewOffice)();
+function officeHead(title, month) {
+  if (!state.officeMonth) state.officeMonth = isoDay(new Date()).slice(0, 7);
+  return `<div class="ph"><div><p class="ph-k">Secretariado</p><h1>${esc(title)}</h1></div>
+    ${month ? `<div class="monthnav noprint"><button class="iconbtn" id="mprev" aria-label="Mês anterior">‹</button><label for="month">Mês</label><input type="month" id="month" value="${esc(state.officeMonth)}"><button class="iconbtn" id="mnext" aria-label="Mês seguinte">›</button></div>` : ''}</div>`;
+}
+function officeMonthNav() {
+  const m = $('#month'); if (!m) return;
+  m.onchange = (e) => { if (e.target.value) { state.officeMonth = e.target.value; reOffice(); } };
+  const step = (n) => { const [y, mo] = state.officeMonth.split('-').map(Number); const d = new Date(Date.UTC(y, mo - 1 + n, 1)); state.officeMonth = d.toISOString().slice(0, 7); reOffice(); };
+  $('#mprev').onclick = () => step(-1); $('#mnext').onclick = () => step(1);
+}
+// The month's summary data alone (faltas, resumo): no need for the day lists
+async function officeMonthLoad(from, to) {
+  const { data, error } = await sb.rpc('mini_office_month', { p_from: from, p_to: to });
+  if (error) { const b = $('#omiss') || $('#osum'); if (b && b.isConnected) b.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
+  state.officeMon = data || null;
+  officeMonthViews(state.officeMon, from, to);
+}
 function viewOffice() {
   if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
-  if (!canOffice()) return viewClock();   // code guard as well as the database's
-  if (!state.officeMonth) state.officeMonth = isoDay(new Date()).slice(0, 7);
+  if (!canApprove()) return canOffice() ? go(canPayroll() ? 'salarios' : 'diarias') : viewClock();   // code guard as well as the database's
+  const head = officeHead('Aprovar o mês', true);
+  const { from, to } = monthRange(state.officeMonth);
+  const main = `<div class="noprint"><p class="small muted">A obra valida, tu aprovas, no fim do mês fechas.</p>
+      ${more('Em que reparar', '<p>Olha com atenção para as picagens marcadas «à mão», «sem rede, chegou tarde» e «próprio cartão»: aparecem a amarelo no dia.</p>')}
+      <div id="encflow"></div><div id="sum">${skel(1)}</div></div>
+    <div id="list">${skel(3)}</div>`;
+  // Computer mode: the month's days on the left, closing the month on the right.
+  app.innerHTML = head + (isWide() ? `<div class="office-grid"><div class="office-main">${main}</div>
+      <aside class="office-side"><div id="checklist"></div></aside></div>` : main);
+  officeMonthNav();
+  loadOffice(from, to);
+}
+function viewOfficeAbsences() {
+  if (!state.ready) return boot();
+  if (!canApprove()) return viewClock();
+  app.innerHTML = officeHead('Faltas e ausências', true) + `<p class="small muted">Os dias de trabalho sem horas nem ausência, e as férias, baixas e faltas do mês.</p><div id="omiss">${skel(2)}</div>`;
+  officeMonthNav();
+  const { from, to } = monthRange(state.officeMonth); officeMonthLoad(from, to);
+}
+function viewOfficeSummary() {
+  if (!state.ready) return boot();
+  if (!canApprove()) return viewClock();
+  app.innerHTML = officeHead('Resumo do mês', true) + `<div id="osum">${skel(3)}</div>`;
+  officeMonthNav();
+  const { from, to } = monthRange(state.officeMonth); officeMonthLoad(from, to);
+}
+function viewOfficeRequests() {
+  if (!state.ready) return boot();
+  if (!canApprove()) return viewClock();
+  app.innerHTML = officeHead('Pedidos e reclamações', false) + `<p class="small muted">Trabalhadores que não concordam com um dia e pedidos de férias ou ausência, de todas as obras.</p><div id="offreq">${skel(2)}</div>`;
+  loadPending('#offreq', null);
+}
+function viewOfficePayroll() {
+  if (!state.ready) return boot();
+  if (!canPayroll()) return viewClock();
+  const head = officeHead('Salários e Primavera', true);
   const { from, to } = monthRange(state.officeMonth);
   const sites = state.sites;
-  const main = `<div class="ph"><div><p class="ph-k">Escritório · todas as obras</p><h1>Secretariado</h1></div>
-    <div class="monthnav noprint"><button class="iconbtn" id="mprev" aria-label="Mês anterior">‹</button><label for="month">Mês</label><input type="month" id="month" value="${esc(state.officeMonth)}"><button class="iconbtn" id="mnext" aria-label="Mês seguinte">›</button></div></div>
-    <div class="noprint">
-      ${can('horas.aprovar') ? `<p class="small muted">A obra valida, tu aprovas, no fim do mês fechas.</p>
-      ${more('Em que reparar', '<p>Olha com atenção para as picagens marcadas «à mão», «sem rede, chegou tarde» e «próprio cartão»: aparecem a amarelo no dia.</p>')}
-      <div id="encflow"></div><div id="sum">${skel(1)}</div>` : ''}</div>
-    ${can('horas.aprovar') ? `<div id="omiss"></div><div id="list">${skel(3)}</div><div id="osum"></div>` : ''}`;
-  const side = `${can('horas.aprovar') ? '<div id="offreq" class="noprint"></div>' : ''}${can('salarios.exportar') ? `<div class="card noprint"><h2 style="margin-top:0">Salários</h2>
+  app.innerHTML = head + `<div class="card noprint"><h2 style="margin-top:0">Salários</h2>
       <p class="small muted">Folha Excel do mês e ficheiro para o Primavera.</p>
       ${more('O que leva a folha', '<p>Uma linha por pessoa e obra, com as horas normais, as extra aprovadas, as noturnas e as de descanso ou feriado, mais um resumo por pessoa. Abre no Excel, no Google Sheets ou no telemóvel.</p>')}
       <div class="acts"><button class="btn wide" id="sheet">Descarregar a folha do mês (Excel)</button>
         <button class="btn ghost wide" id="prim">Ficheiro para o Primavera (Relógio de Ponto)</button></div>
       ${more('Sobre o ficheiro do Primavera', '<p>Horas extra aprovadas, uma linha por pessoa, dia e tipo (1.ª hora, seguintes, descanso, feriado, e os mesmos acima das 100 h do ano). As noturnas não vão neste ficheiro. No Primavera: Recursos Humanos › Alterações Mensais › Relógio de Ponto. O "Nº de trabalhador" tem de ser o número do funcionário no Primavera.</p>')}
-</div>` : ''}
-    ${can('salarios.exportar') ? `<div class="card noprint"><h2 style="margin-top:0">Registo de tempos (ACT)</h2>
+      <p class="small muted">Fecha primeiro o mês em «Aprovar o mês».</p></div>
+    <div class="card noprint"><h2 style="margin-top:0">Registo de tempos (ACT)</h2>
       <p class="small muted">Registo legal das entradas e saídas de uma obra. Guardar 5 anos.</p>
       ${more('Porquê', '<p>Código do Trabalho, art. 202. Mostra-o se a inspeção pedir.</p>')}
       <label for="actsite">Obra</label><select id="actsite">${sites.map((s) => `<option value="${esc(s.id)}">${esc(s.title)} (${esc(s.cost_center_code)})</option>`).join('')}</select>
-      <div class="acts"><button class="btn ghost wide" id="act">Descarregar o registo do mês (Excel)</button></div></div>` : ''}
-`;
-  // Computer mode: the month's days on the left, closing the month and the exports on the right.
-  app.innerHTML = isWide() ? `<div class="office-grid"><div class="office-main">${main}</div>
-      <aside class="office-side">${can('horas.aprovar') ? '<div id="checklist"></div>' : ''}${side}</aside></div>` : main + side;
-  const on = (sel, ev, fn) => { const x = $(sel); if (x) x[ev] = fn; };
-  on('#month', 'onchange', (e) => { if (e.target.value) { state.officeMonth = e.target.value; viewOffice(); } });
-  const step = (n) => { const [y, m] = state.officeMonth.split('-').map(Number); const d = new Date(Date.UTC(y, m - 1 + n, 1)); state.officeMonth = d.toISOString().slice(0, 7); viewOffice(); };
-  on('#mprev', 'onclick', () => step(-1)); on('#mnext', 'onclick', () => step(1));
-  on('#sheet', 'onclick', () => downloadPayroll(from, to));
-  on('#prim', 'onclick', () => downloadPrimavera(from, to));
-  on('#act', 'onclick', () => downloadAct($('#actsite').value, from, to));
-  if (can('horas.aprovar')) { loadOffice(from, to); loadPending('#offreq', null); }
+      <div class="acts"><button class="btn ghost wide" id="act">Descarregar o registo do mês (Excel)</button></div></div>`;
+  officeMonthNav();
+  $('#sheet').onclick = () => downloadPayroll(from, to);
+  $('#prim').onclick = () => downloadPrimavera(from, to);
+  $('#act').onclick = () => downloadAct($('#actsite').value, from, to);
 }
 // v110 (Diogo 2026-10-27: «As diárias são controladas pelo secretário»): Diárias is its own screen in Secretariado,
 // next to Horas, Despesas and Custos das obras (it was a card at the bottom of the Secretariado screen).
@@ -6801,9 +6853,11 @@ function otWhyShort(r) {
 }
 // The month for the office: days with no record (say what they were), one line per person, the sites' holidays, the cost.
 function officeMonthViews(om, from, to) {
-  const top = $('#omiss'); const bottom = $('#osum');
-  if (!top || !bottom) return;
-  if (!om) { top.innerHTML = ''; bottom.innerHTML = ''; return; }
+  const top = $('#omiss'); const bottom = $('#osum'); const costBox = $('#ctlab');
+  if (!top && !bottom && !costBox) return;
+  if (!om) { for (const b of [top, bottom, costBox]) if (b) b.innerHTML = ''; return; }
+  if (costBox) officeSiteCost(om, costBox);
+  if (!top) return officePeople(om, bottom);
   const me = state.me && state.me.collaborator_id;
   // the person's missing days in runs: the next working day continues the run (a weekend in between does not break it)
   const byPerson = {};
@@ -6819,7 +6873,7 @@ function officeMonthViews(om, from, to) {
   const short = (iso) => iso.slice(8, 10) + '/' + iso.slice(5, 7);
   const runText = (r) => r.n === 1 ? `${dayLabel(r.from)} · ${r.code}` : `${short(r.from)} a ${short(r.to)} · ${r.n} dias · ${r.code}`;
   const absences = om.absences || [];
-  top.innerHTML = `<div class="sec-h"><h2>Dias sem registo</h2>${chip(om.missing.length ? 'warn' : 'ok', String(om.missing.length))}</div>
+  top.innerHTML = `<div class="sec-h" style="margin-top:0"><h2>Dias sem registo</h2>${chip(om.missing.length ? 'warn' : 'ok', String(om.missing.length))}</div>
     <div class="card" id="misscard">${om.missing.length ? `<p class="small muted" style="margin-top:0">Dias de trabalho em que a pessoa estava numa obra e não tem horas nem ausência. Não contam fins de semana, descanso da obra nem feriados. Toca nos dias e diz o que foi.</p>
       ${Object.entries(byPerson).map(([id, p]) => `<div class="miss-p" data-p="${esc(id)}"><div class="wk">${avatar(p.name)}<div class="grow"><b>${esc(p.name)}</b>
           <div class="small muted">${p.number ? 'nº ' + esc(p.number) + ' · ' : ''}${p.days.length} dia(s) sem registo</div></div></div>
@@ -6836,9 +6890,16 @@ function officeMonthViews(om, from, to) {
     if (!confirm('Tirar esta ausência? Os dias voltam a aparecer como dias sem registo.')) return;
     const { error } = await sb.rpc('mini_office_absence_cancel', { p_id: b.dataset.unabs });
     if (error) return toast(friendly(error));
-    toast('Ausência tirada.'); viewOffice();
+    toast('Ausência tirada.'); reOffice();
   });
-  // one line per person
+  if (bottom) officePeople(om, bottom);
+}
+const pdEst = (x) => (x.pd_est ? ' *' : '');
+const costOf = (x) => (x.labour == null && x.per_diem == null ? '–' : eur(x.cost));
+// one line per person, and the sites' holidays
+function officePeople(om, bottom) {
+  if (!bottom) return;
+  const me = state.me && state.me.collaborator_id;
   const people = om.people || [];
   const cost = om.cost_on;
   const absText = (o) => Object.entries(o || {}).map(([k, n]) => `${t_(ABS_ALL[k] || k)} ${n}`).join(', ');
@@ -6846,8 +6907,6 @@ function officeMonthViews(om, from, to) {
   const wide = isWide();
   const nights = people.some((p) => p.night);
   const pds = cost && people.some((p) => p.per_diem != null);
-  const pdEst = (x) => (x.pd_est ? ' *' : '');
-  const costOf = (x) => (x.labour == null && x.per_diem == null ? '–' : eur(x.cost));
   const row = (p) => wide ? `<tr${p.missing || p.ot_open ? ' class="look"' : ''}>
       <td class="name"><b title="${esc(p.job || '')}">${esc(p.name)}</b><div class="small muted">${p.number ? 'nº ' + esc(p.number) : ''}</div></td>
       <td>${p.sites.map((c) => `<span class="chip code">${esc(c)}</span>`).join(' ')}</td>
@@ -6860,8 +6919,7 @@ function officeMonthViews(om, from, to) {
       <div class="tags">${p.sites.map((c) => chip('code', c)).join('')}${p.missing ? chip('warn', `${p.missing} dia(s) sem registo`) : ''}${absText(p.absent) ? chip('', absText(p.absent)) : ''}
         ${cost ? (p.no_rate ? chip('warn', 'sem valor hora') : chip('info', costOf(p))) : ''}${cost && p.per_diem != null ? chip('', `${t_('diárias')} ${eur(p.per_diem)}${pdEst(p)}`) : ''}${p.pending ? chip('reg', `${p.pending} por aprovar`) : ''}</div></div>`;
   const holidays = om.holidays || [];
-  const sites = (om.sites || []).filter((x) => x.worked > 0);
-  bottom.innerHTML = `<div class="sec-h"><h2>Resumo do mês por pessoa</h2>${chip('', String(people.length))}</div>
+  bottom.innerHTML = `<div class="sec-h" style="margin-top:0"><h2>Por pessoa</h2>${chip('', String(people.length))}</div>
     <div class="card${wide ? ' tbl-card' : ''}" id="psum">${!people.length ? '<p class="muted" style="margin:0">Ninguém com horas neste mês.</p>' : wide ? `<div class="tbl-wrap"><table class="grid"><thead><tr>
         <th>Pessoa</th><th>Obras</th><th class="num">Dias</th><th class="num">Normais</th><th class="num">Extra</th><th class="num">Descanso e feriado</th>
         ${nights ? '<th class="num">Noturnas</th>' : ''}<th>Ausências (dias)</th><th class="num">Sem registo</th>${cost ? `<th class="num">Custo</th>` : ''}</tr></thead>
@@ -6875,7 +6933,14 @@ function officeMonthViews(om, from, to) {
     <div class="card">${holidays.length ? holidays.map((h) => `<div class="day wk"><span class="chip code">${esc(fmtDate(h.day))}</span><span class="chip code">${esc(h.code)}</span><div class="grow">${esc(h.name)}</div></div>`).join('')
       : '<p class="muted" style="margin:0">Nenhum feriado neste mês nas obras.</p>'}
       <p class="small muted">Cada obra conta os feriados do seu país, da região e do concelho. Muda-os em Obras › a obra › Detalhes.</p></div>
-    ${cost ? `<div class="sec-h"><h2>Custo do mês por obra${om.fronts_on ? ' e frente' : ''}</h2></div>
+    ${cost ? `<p class="small muted">${ic('coins')}<span>O custo de cada obra${om.fronts_on ? ' e frente' : ''} está em Custos das obras.</span></p>` : ''}`;
+}
+// v111: labour and per diems of each site and front, for the month (shown in Custos das obras)
+function officeSiteCost(om, box) {
+  if (!om.cost_on) { box.innerHTML = ''; return; }
+  const sites = (om.sites || []).filter((x) => x.worked > 0);
+  box.innerHTML = `<h2>Mão de obra e diárias${om.fronts_on ? ' por frente' : ''}</h2>
+    <p class="small muted">Horas × valor hora de cada dia, mais as diárias. * = semana ainda por emitir, estimativa com o valor da obra.</p>
     ${sites.length ? sites.map((x) => { const fr = x.fronts || []; const fpd = fr.some((f) => Number(f.per_diem)); const tot = fr.reduce((a, f) => a + (Number(f.cost) || 0), 0);
       return `<div class="card site-cost"><div class="wk"><span class="chip code">${esc(x.code)}</span><div class="grow"><b>${esc(x.title)}</b>
           <div class="small muted">${x.people} pessoa(s) · ${esc(fmtMin(x.worked))}${x.ot ? ` · ${esc(fmtMin(x.ot))} extra` : ''}</div></div><b class="hrs">${esc(costOf(x))}</b></div>
@@ -6884,7 +6949,7 @@ function officeMonthViews(om, from, to) {
         ${fr.length ? `<table class="grid mini"><thead><tr><th>Frente</th><th class="num">Horas</th><th class="num">Custo</th><th class="num">%</th></tr></thead><tbody>
           ${fr.map((f) => `<tr><td>${esc(f.name || 'Sem frente')}</td><td class="num">${f.minutes ? esc(fmtMin(f.minutes)) : ''}</td><td class="num">${esc(eur(f.cost))}${fpd && Number(f.per_diem) ? `<div class="pd-sub">${esc(t_('diárias'))} ${esc(eur(f.per_diem))}</div>` : ''}</td>
             <td class="num">${tot ? Math.round(f.cost * 100 / tot) : 0} %</td></tr>`).join('')}</tbody></table>` : ''}</div>`; }).join('')
-      : '<div class="card"><p class="muted" style="margin:0">Sem horas neste mês.</p></div>'}` : ''}`;
+      : '<div class="card"><p class="muted" style="margin:0">Sem horas neste mês.</p></div>'}`;
 }
 function missForm(box, collab, day, last, btn) {
   const f = box.querySelector('.miss-form');
@@ -6912,7 +6977,7 @@ function missForm(box, collab, day, last, btn) {
       p_doc: String(d.get('doc') || '').trim() || null, p_note: String(d.get('note') || '').trim() || null });
     btn.disabled = false;
     if (error) return toast(friendly(error));
-    toast(`Registado: ${ABS_ALL[k]}.`); viewOffice();
+    toast(`Registado: ${ABS_ALL[k]}.`); reOffice();
   };
   form.querySelector('[name=kind]').focus();
 }
@@ -7028,6 +7093,11 @@ async function encBadges(force) {
       set('secretariado', n, `${n} dia(s) validados na obra à espera de aprovação`);
     }));
   }
+  if (canApprove()) jobs.push(sb.rpc('mini_pending_requests', {}).then(({ data, error }) => {
+    if (error || !data) return;
+    const n = (data.disputes || []).length + (data.absences || []).length;
+    set('reclamacoes', n, `${n} pedido(s) ou reclamação(ões) à espera de resposta`);
+  }));
   if (can('horas.validar_obra') && canSiteDetails()) {
     jobs.push(sb.rpc('mini_control_room').then(({ data, error }) => {
       if (error || !data || !Array.isArray(data.sites)) return;
@@ -11170,6 +11240,7 @@ async function ctLoad() {
     <h2>Obras</h2>
     <p class="small muted">Cada custo está na obra onde aconteceu: horas, ajudas de custo, alojamento, viagens, frota, ferramentas, material e despesas. Toca numa obra para ver o detalhe.</p>
     <div class="stack">${d.sites.map(ctSiteCard).join('') || `<div class="card">${empty('box', 'Sem obras neste mês', 'Quando houver horas ou despesas numa obra, aparecem aqui.')}</div>`}</div>
+    ${canApprove() ? '<div id="ctlab"></div>' : ''}
     <h2>Fim do mês</h2>
     <div class="card ct-erp">
       <div class="row-b"><h3>${ic('doc')} Pacote para o Primavera</h3></div>
@@ -11196,6 +11267,7 @@ async function ctLoad() {
   if ($('#ctpack')) $('#ctpack').onclick = () => ctPack(from, to);
   if ($('#ctrp')) $('#ctrp').onclick = () => downloadPrimavera(from, to);
   if ($('#ctlink')) { $('#ctlink').onclick = () => ctLink(); ctLinkStatus(); }
+  if ($('#ctlab')) sb.rpc('mini_office_month', { p_from: from, p_to: to }).then(({ data }) => { const b = $('#ctlab'); if (b && b.isConnected && data && C.ym === from.slice(0, 7)) officeSiteCost(data, b); }, () => {});
 }
 const ctShift = (ym, n) => { const [y, m] = ym.split('-').map(Number); const x = new Date(Date.UTC(y, m - 1 + n, 1)); return x.toISOString().slice(0, 7); };
 function ctSiteCard(s) {
@@ -14487,7 +14559,7 @@ var Live = (() => {   // var: boot() runs before this line is reached; it checks
     if (v === 'equipa' && has('taps', 'hours', 'requests')) return loadTeam();
     if (v === 'naobra' && has('taps')) return loadOnSite();
     if (v === 'minhas' && (state.mineTab || 'home') === 'home' && has('taps', 'hours', 'requests', 'onboarding')) return loadMeHome(true);
-    if ((v === 'secretariado' || v === 'horas' || v === 'painel' || v === 'acolhimento') && has('taps', 'hours', 'requests', 'onboarding')) freshBar();
+    if ((v === 'secretariado' || v === 'faltas' || v === 'reclamacoes' || v === 'horas' || v === 'painel' || v === 'acolhimento') && has('taps', 'hours', 'requests', 'onboarding')) freshBar();
   }
   // Screens with a filter or a month open get a «new data» bar instead of being redrawn under the person's eyes.
   function freshBar() {
