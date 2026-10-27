@@ -1157,7 +1157,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '109';
+const APP_VERSION = '110';
 // v107 (Diogo 2026-10-26): «Início» = what is urgent + the departments. The bottom bar keeps only Início, the field tools of
 // the encarregado (Equipa, Picar) or of the safety officer (Emergência), Procurar and Eu. Everything else is in its department.
 const TABS = { supervisor: ['inicio', 'equipa', 'picar', 'minhas'], admin: ['inicio', 'minhas'],
@@ -1174,7 +1174,7 @@ function tabsFor(role) {
   return TABS[role] || TABS.supervisor;
 }
 const OFFLINE_VIEWS = ['picar', 'minhas', 'material', 'reunioes', 'relatos', 'emergencia'];   // v89: they keep a copy
-const MORE_ORDER = ['inicio', 'empresa', 'onbtextos', 'equipa', 'material', 'picar', 'emergencia', 'relatos', 'reunioes', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'andaimes', 'processo', 'clientes', 'custos', 'progresso', 'frentes', 'rotinas', 'contactos'];
+const MORE_ORDER = ['inicio', 'empresa', 'onbtextos', 'equipa', 'material', 'picar', 'emergencia', 'relatos', 'reunioes', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'diarias', 'andaimes', 'processo', 'clientes', 'custos', 'progresso', 'frentes', 'rotinas', 'contactos'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -1192,7 +1192,7 @@ WIDE.addEventListener('change', () => {
 // one department, QSA (sql/99); «controlo da app para garantir a ISO 9001» = Processo.
 const MENU_GROUPS = [
   ['Administração', ['inicio', 'empresa', 'premios', 'clientes']],
-  ['Secretariado', ['secretariado', 'horas', 'despesas', 'custos']],
+  ['Secretariado', ['secretariado', 'horas', 'diarias', 'despesas', 'custos']],
   ['Recursos Humanos', ['trabalhadores', 'onbtextos', 'acolhimento', 'viagens', 'alojamento']],
   ['Frota', ['frota']],
   ['QSA · Qualidade, Segurança e Ambiente', ['relatos', 'seguranca', 'reunioes', 'lmra', 'emergencia', 'qualidade', 'processo']],
@@ -1212,7 +1212,7 @@ const VIEW_NEEDS = {
   obras: () => can('obras.gerir') || can('obras.ver_detalhes') || can('obras.area'), painel: () => canSiteDetails(), naobra: () => canSiteDetails() || can('ponto.picar'),
   equipa: () => canSiteDetails(), picar: () => can('ponto.picar'), horas: () => can('horas.ver') || can('horas.validar_obra'),
   andaimes: () => canScaffolds(), producao: () => canProd(), progresso: () => canProgress(), frentes: () => canFronts(), rotinas: () => canRoutines(), contactos: () => true, material: () => canSiteMaterial(), armazem: () => canWh(), compras: () => canBuy(), frota: () => canFleet(),
-  orcamentos: () => canEstimates(), qualidade: () => canQuality(), comercial: () => canSales(), premios: () => canAwards(), custos: () => canCosts(),
+  orcamentos: () => canEstimates(), qualidade: () => canQuality(), comercial: () => canSales(), premios: () => canAwards(), custos: () => canCosts(), diarias: () => canPerDiems(),
 };
 // v73 (Diogo 2026-10-21): «o standard da gestão serve para todas as empresas, mas o administrador de cada empresa adapta».
 // Administrators (and the owner) see the standard groups. Everyone else sees THEIR departments as the menu headings,
@@ -1550,6 +1550,7 @@ async function boot() {
   nav.querySelector('[data-view=comercial]').hidden = worker || state.offline || !canSales();
   nav.querySelector('[data-view=premios]').hidden = worker || state.offline || !canAwards();
   nav.querySelector('[data-view=custos]').hidden = worker || state.offline || !canCosts();
+  nav.querySelector('[data-view=diarias]').hidden = worker || state.offline || !canPerDiems();
   nav.querySelector('[data-view=progresso]').hidden = worker || state.offline || !canProgress();
   nav.querySelector('[data-view=frentes]').hidden = worker || state.offline || !canFronts();
   nav.querySelector('[data-view=rotinas]').hidden = worker || state.offline || !canRoutines();
@@ -2012,6 +2013,11 @@ function go(view) {
   else if (state.offline && !OFFLINE_VIEWS.includes(view)) { toast('Sem rede: este ecrã precisa de rede. Podes picar, ver o material, as reuniões e relatar perigos.'); view = 'picar'; }
   stopNfc(); gpsStop(); clearInterval(state.timer); clearInterval(state.tick); hideFlash(); openMore(false); Voice.stop(); dropRobots();
   if (state.uiEl && window.GNUI) { window.GNUI.unmount(state.uiEl); state.uiEl = null; }
+  // v110: «‹ <página>» only on a screen opened from a department page or from Início; any other way in clears it
+  const back = state.backNext; state.backNext = null;
+  if (view === 'departamento' || view === 'inicio') state.back = null;
+  else if (back) { state.back = back; try { history.pushState({ gnBack: 1 }, ''); } catch (_) {} }
+  else if (view !== state.view) state.back = null;
   state.view = view; state.staleAt = null; showNet();   // v89: each screen says again if it shows a kept copy
   if (state.navDesk !== ownerDesk()) layoutNav(state.me.role);   // owner moved between his clients and a company
   app.classList.toggle('wide', view === 'secretariado' || view === 'painel');
@@ -2022,7 +2028,7 @@ function go(view) {
   window.scrollTo(0, 0);
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
      ficha: viewWorker, obras: viewSites, area: viewArea, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients, cliente: viewClient, precos: viewPrices, empresa: viewCompanyRules, inicio: viewHome, departamento: viewDept,
-     processo: viewProcess, orcamentos: viewEstimates, comercial: viewSales, premios: viewAwards, custos: viewCosts, lmra: viewLmra, reunioes: viewMeetings, relatos: viewHazards, material: viewSiteMaterial, emergencia: viewEmergency,
+     processo: viewProcess, orcamentos: viewEstimates, comercial: viewSales, premios: viewAwards, custos: viewCosts, diarias: viewPerDiemOffice, lmra: viewLmra, reunioes: viewMeetings, relatos: viewHazards, material: viewSiteMaterial, emergencia: viewEmergency,
      armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, producao: viewProd, progresso: viewProgress, frentes: viewFronts, rotinas: viewRoutines, contactos: viewContacts, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
   checkEmergencyBar(); encBadges();
 }
@@ -2063,11 +2069,37 @@ function toolTiles(views) {
     return `<button type="button" data-open="${esc(v)}"${w ? ` data-badge="${w > 99 ? '99+' : w}"` : ''}><svg class="i" aria-hidden="true"><use href="#i-${esc(navIcon(v))}"/></svg><span>${esc(navLabel(v))}</span></button>`; }).join('')}</div>`;
 }
 function bindTiles(box) {
-  box.querySelectorAll('[data-dept]').forEach((b) => b.onclick = () => { state.dept = b.dataset.dept; go('departamento'); });
+  box.querySelectorAll('[data-dept]').forEach((b) => b.onclick = () => { state.dept = b.dataset.dept; try { history.pushState({ gnDept: 1 }, ''); } catch (_) {} go('departamento'); });
   box.querySelectorAll('[data-open]').forEach((b) => b.onclick = () => openFromMenu(b.dataset.open));
 }
+// v110 (Diogo 2026-10-27): a screen opened from a department page (or from Início) has «‹ <that page>» on top, and the
+// phone's back button returns there: the next screen of the same department is one tap away, not a trip through Início.
+const backFrom = () => (state.view === 'departamento' && state.dept ? { dept: state.dept } : state.view === 'inicio' ? { home: true } : null);
+function backBar() {
+  const b = state.back; if (!b) return null;
+  const el = document.createElement('div'); el.id = 'backbar';
+  el.innerHTML = `<button type="button" class="btn ghost small home-back">‹ <span>${esc(b.home ? 'Início' : b.dept.split(' · ')[0])}</span></button>`;
+  el.firstChild.onclick = () => { if (history.state && history.state.gnBack) history.back(); else goBack(); };
+  return el;
+}
+function goBack() {
+  const b = state.back; state.back = null; if (!b) return;
+  document.querySelectorAll('dialog[open]').forEach((d) => d.close());
+  if (b.dept) { state.dept = b.dept; go('departamento'); } else go('inicio');
+}
+// views draw #app when their data arrives: the bar goes back on top each time, while the screen has one
+new MutationObserver(() => {
+  if (state.back && !app.querySelector(':scope > #backbar')) { const el = backBar(); if (el) app.prepend(el); }
+  else if (!state.back) { const el = app.querySelector(':scope > #backbar'); if (el) el.remove(); }
+}).observe(app, { childList: true });
+window.addEventListener('popstate', () => {
+  if (state.view === 'minhas' && (state.mineTab || 'home') !== 'home') return;   // «Eu» goes back to its own home first
+  if (state.back) goBack();
+  else if (state.view === 'departamento') go('inicio');   // the phone's back button on a department page
+});
 function openFromMenu(v) {
   recentMenu(v);
+  state.backNext = backFrom();
   if (v === 'orcamentos' && state.orc) { state.orc.id = null; state.orc.mode = 'list'; }
   if (v === 'minhas') state.mineTab = 'home';
   if (v === 'comercial' && state.sales) state.sales.sel = null;
@@ -2121,7 +2153,7 @@ async function homeWaiting() {
   box.innerHTML = items.length
     ? `<div class="home-wait">${items.slice(0, 3).map(row).join('')}</div>${items.length > 3 ? `<details class="fold home-more"><summary><span>Mais ${n(items.length - 3)} assunto(s)</span></summary><div class="home-wait">${items.slice(3).map(row).join('')}</div></details>` : ''}`
     : `<div class="card home-ok">${ic('ok')}<div><b>Tudo em dia</b><small>Não há nada à tua espera.</small></div></div>`;
-  box.querySelectorAll('[data-go]').forEach((b) => b.onclick = () => go(b.dataset.go));
+  box.querySelectorAll('[data-go]').forEach((b) => b.onclick = () => { state.backNext = backFrom(); go(b.dataset.go); });
 }
 // A department's page: all its screens (the bottom-bar ones too), with «‹ Início»
 function viewDept() {
@@ -2132,7 +2164,7 @@ function viewDept() {
   app.innerHTML = `<button class="btn ghost small home-back" id="dback">‹ Início</button>
     <div class="ph"><div><p class="ph-k">${sub ? esc(sub) : 'Departamento'}</p><h1>${esc(name)}</h1></div></div>
     ${toolTiles(d.views)}${d.title === 'Eu' ? `<button class="btn ghost" id="dtour">${ic('bot')}Visita guiada</button>` : ''}`;
-  $('#dback').onclick = () => go('inicio');
+  $('#dback').onclick = () => { if (history.state && history.state.gnDept) history.back(); else go('inicio'); };
   if ($('#dtour')) $('#dtour').onclick = () => startTour();
   bindTiles(app);
 }
@@ -5005,6 +5037,7 @@ const TOUR_TEXT = {
   andaimes: 'Andaimes: pedir, montar, inspecionar (verde, amarelo, vermelho) e desmontar. Quem está na obra vê se pode subir e avisa de um estrago com fotografia.',
   qualidade: 'Qualidade: não conformidades com fotografia, o plano de inspeção de cada obra com os pontos de paragem, parar um trabalho e o Data Book.',
   despesas: 'Despesas: tira uma foto ao talão, escolhe a obra e entrega. A Produção aprova, o custo vai para a obra e o Secretariado reembolsa.',
+  diarias: 'Diárias: à quinta escolhes quem recebe a diária da semana e emites para pagamento. As faltas depois de paga descontam-se na seguinte.',
   viagens: 'Viagens: pedes a viagem de avião, comboio ou autocarro, o RH aprova e marca, e a pessoa vê o bilhete no telemóvel. O custo vai para a obra.',
   frota: 'Frota: cada viatura com semáforo: seguro, inspeção, IUC, revisão e contrato de aluguer. Entregas e devoluções com km.',
   compras: 'Compras: pedes o que falta; acima do limite o Secretariado aprova; depois encomenda-se e regista-se o que chega.',
@@ -6285,11 +6318,6 @@ function viewOffice() {
         <button class="btn ghost wide" id="prim">Ficheiro para o Primavera (Relógio de Ponto)</button></div>
       ${more('Sobre o ficheiro do Primavera', '<p>Horas extra aprovadas, uma linha por pessoa, dia e tipo (1.ª hora, seguintes, descanso, feriado, e os mesmos acima das 100 h do ano). As noturnas não vão neste ficheiro. No Primavera: Recursos Humanos › Alterações Mensais › Relógio de Ponto. O "Nº de trabalhador" tem de ser o número do funcionário no Primavera.</p>')}
 </div>` : ''}
-    ${can('diarias.emitir') ? `<div class="card noprint" id="pdcard"><h2 style="margin-top:0">Diárias</h2>
-      <p class="small muted">Pagas à quinta, adiantadas, para a semana toda. Escolhe quem e emite para pagamento.</p>
-      <div id="pdbody">${skel(2)}</div>
-      ${can('diarias.decidir_faltas') ? `<details class="fold" id="pdcases"><summary><span>Faltas nas diárias pagas<span class="sub">Descontar ou justificar, em todas as obras</span></span></summary><div data-pdcases="all"><div id="pdcasebox">${skel(1)}</div></div></details>` : ''}
-</div>` : ''}
     ${can('salarios.exportar') ? `<div class="card noprint"><h2 style="margin-top:0">Registo de tempos (ACT)</h2>
       <p class="small muted">Registo legal das entradas e saídas de uma obra. Guardar 5 anos.</p>
       ${more('Porquê', '<p>Código do Trabalho, art. 202. Mostra-o se a inspeção pedir.</p>')}
@@ -6306,9 +6334,22 @@ function viewOffice() {
   on('#sheet', 'onclick', () => downloadPayroll(from, to));
   on('#prim', 'onclick', () => downloadPrimavera(from, to));
   on('#act', 'onclick', () => downloadAct($('#actsite').value, from, to));
-  on('#pdcases', 'ontoggle', () => { if ($('#pdcases').open) loadPdCases('#pdcasebox'); });
   if (can('horas.aprovar')) { loadOffice(from, to); loadPending('#offreq', null); }
-  if (can('diarias.emitir')) loadPerDiems();
+}
+// v110 (Diogo 2026-10-27: «As diárias são controladas pelo secretário»): Diárias is its own screen in Secretariado,
+// next to Horas, Despesas and Custos das obras (it was a card at the bottom of the Secretariado screen).
+const canPerDiems = () => can('diarias.emitir');
+function viewPerDiemOffice() {
+  if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
+  if (!canPerDiems()) return viewClock();
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Secretariado</p><h1>Diárias</h1></div></div>
+    <div class="card noprint" id="pdcard"><p class="small muted" style="margin-top:0">Pagas à quinta, adiantadas, para a semana toda. Escolhe quem e emite para pagamento.</p>
+      <div id="pdbody">${skel(2)}</div>
+      ${canPdCases() ? `<details class="fold" id="pdcases"><summary><span>Faltas nas diárias pagas<span class="sub">Descontar ou justificar, em todas as obras</span></span></summary><div data-pdcases="all"><div id="pdcasebox">${skel(1)}</div></div></details>` : ''}
+      ${can('diarias.configurar') ? `<details class="fold" id="pdcfg"><summary><span>Valores e regra da empresa<span class="sub">Portugal, estrangeiro, mínimo de horas</span></span></summary><div id="pdform">${skel(1)}</div></details>` : ''}</div>`;
+  if ($('#pdcases')) $('#pdcases').ontoggle = () => { if ($('#pdcases').open) loadPdCases('#pdcasebox'); };
+  if ($('#pdcfg')) $('#pdcfg').ontoggle = () => { if ($('#pdcfg').open) showPerDiemSettings(); };
+  loadPerDiems();
 }
 
 
