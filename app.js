@@ -1157,7 +1157,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '112';
+const APP_VERSION = '113';
 // v107 (Diogo 2026-10-26): «Início» = what is urgent + the departments. The bottom bar keeps only Início, the field tools of
 // the encarregado (Equipa, Picar) or of the safety officer (Emergência), Procurar and Eu. Everything else is in its department.
 const TABS = { supervisor: ['inicio', 'equipa', 'picar', 'minhas'], admin: ['inicio', 'minhas'],
@@ -2016,7 +2016,17 @@ function go(view) {
   stopNfc(); gpsStop(); clearInterval(state.timer); clearInterval(state.tick); hideFlash(); openMore(false); Voice.stop(); dropRobots();
   if (state.uiEl && window.GNUI) { window.GNUI.unmount(state.uiEl); state.uiEl = null; }
   // v110: «‹ <página>» only on a screen opened from a department page or from Início; any other way in clears it
-  const back = state.backNext; state.backNext = null;
+  let back = state.backNext; state.backNext = null;
+  // v113: a button inside a screen that opens another screen (Dashboard › «Abrir a Produção», Produção › Validar horas…)
+  // gives «‹ <that screen>» too; going to a screen already in the chain goes back to it instead of growing a loop
+  const click = state.clickFrom; state.clickFrom = null;
+  if (!back && click && click.view === state.view && view !== state.view && Date.now() - click.at < 1500
+      && !['departamento', 'inicio'].includes(state.view)) {
+    let chain = state.back;
+    for (let c = chain; c; c = c.back) if (c.view === view) { chain = c.back; back = chain || null; break; }
+    if (chain === state.back) back = { view: state.view, label: click.label, back: state.back };
+    if (!back) state.back = null;
+  }
   if (view === 'departamento' || view === 'inicio') state.back = null;
   else if (back) { state.back = back; try { history.pushState({ gnBack: 1 }, ''); } catch (_) {} }
   else if (view !== state.view) state.back = null;
@@ -2080,15 +2090,24 @@ const backFrom = () => (state.view === 'departamento' && state.dept ? { dept: st
 function backBar() {
   const b = state.back; if (!b) return null;
   const el = document.createElement('div'); el.id = 'backbar';
-  el.innerHTML = `<button type="button" class="btn ghost small home-back">‹ <span>${esc(b.home ? 'Início' : b.dept.split(' · ')[0])}</span></button>`;
+  const label = b.home ? 'Início' : b.dept ? b.dept.split(' · ')[0] : b.label || 'Voltar';
+  el.innerHTML = `<button type="button" class="btn ghost small home-back">‹ <span>${esc(label)}</span></button>`;
   el.firstChild.onclick = () => { if (history.state && history.state.gnBack) history.back(); else goBack(); };
   return el;
 }
 function goBack() {
   const b = state.back; state.back = null; if (!b) return;
   document.querySelectorAll('dialog[open]').forEach((d) => d.close());
-  if (b.dept) { state.dept = b.dept; go('departamento'); } else go('inicio');
+  if (b.view) { state.backNext = b.back || null; go(b.view); }
+  else if (b.dept) { state.dept = b.dept; go('departamento'); } else go('inicio');
 }
+// v113: remember which screen a tap came from (not the bottom bar, the top bar or the «‹» bar itself)
+document.addEventListener('click', (e) => {
+  if (!state.ready || e.target.closest('#nav, header.top, #backbar')) { state.clickFrom = null; return; }
+  const h1 = app.querySelector('h1');
+  const label = (h1 && h1.textContent.trim()) || (nav.querySelector(`button[data-view="${state.view}"] span`) || {}).textContent || '';
+  state.clickFrom = { view: state.view, at: Date.now(), label: label.slice(0, 40) };
+}, true);
 // views draw #app when their data arrives: the bar goes back on top each time, while the screen has one
 new MutationObserver(() => {
   if (state.back && !app.querySelector(':scope > #backbar')) { const el = backBar(); if (el) app.prepend(el); }
@@ -7913,7 +7932,7 @@ function dashLinks() {
   const bar = Object.assign(document.createElement('div'), { id: 'encdl', className: 'enc-dashlinks noprint' });
   bar.innerHTML = `${canFronts() ? `<button class="btn ghost small" id="tofr">${ic('fronts')}${esc(t_('Frentes de obra'))}${ic('go')}</button>` : ''}
     ${canProd() ? `<button class="btn ghost small" id="toprod">${ic('chart')}Abrir a Produção${ic('go')}</button>` : ''}`;
-  app.prepend(bar);
+  const bb = app.querySelector(':scope > #backbar'); if (bb) bb.after(bar); else app.prepend(bar);   // v113: «‹» stays on top
   if (bar.querySelector('#toprod')) bar.querySelector('#toprod').onclick = () => go('producao');
   if (bar.querySelector('#tofr')) bar.querySelector('#tofr').onclick = () => go('frentes');
 }
