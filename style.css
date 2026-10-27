@@ -1261,6 +1261,10 @@ body.onboarding .top { display: none; }
   transition: transform .15s var(--ease), box-shadow .15s var(--ease), border-color .15s; }
 .proc-node:hover { transform: translateY(-1px); box-shadow: var(--sh-2); }
 .proc-node b { font-size: var(--t-sm); line-height: 1.25; }
+/* v112: a step card also carries the global .step class (inline-flex row): keep it stacked, Passo / title / department */
+.proc-node.step { display: grid; align-items: initial; gap: 3px; }
+.proc-node.step b { min-width: 0; text-align: left; }
+.proc-node b, .proc-node small { overflow-wrap: anywhere; }
 .proc-node small { font-size: var(--t-xs); color: var(--ink-2); }
 .proc-node small em { font-style: normal; font-weight: 700; color: var(--nuc); }
 .proc-k { display: flex; align-items: center; gap: 8px; font-size: var(--t-xs); color: var(--ink-2); font-variant-numeric: tabular-nums; }
