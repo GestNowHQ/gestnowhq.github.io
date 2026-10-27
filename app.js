@@ -1157,7 +1157,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '113';
+const APP_VERSION = '114';
 // v107 (Diogo 2026-10-26): «Início» = what is urgent + the departments. The bottom bar keeps only Início, the field tools of
 // the encarregado (Equipa, Picar) or of the safety officer (Emergência), Procurar and Eu. Everything else is in its department.
 const TABS = { supervisor: ['inicio', 'equipa', 'picar', 'minhas'], admin: ['inicio', 'minhas'],
@@ -1196,7 +1196,7 @@ const MENU_GROUPS = [
   ['Recursos Humanos', ['trabalhadores', 'onbtextos', 'acolhimento', 'viagens', 'alojamento']],
   ['Frota', ['frota']],
   ['QSA · Qualidade, Segurança e Ambiente', ['relatos', 'seguranca', 'reunioes', 'lmra', 'emergencia', 'qualidade', 'processo']],
-  ['Produção (Obra)', ['painel', 'obras', 'naobra', 'picar', 'frentes', 'rotinas', 'progresso', 'material', 'andaimes', 'equipa', 'producao']],
+  ['Produção (Obra)', ['painel', 'naobra', 'progresso', 'frentes', 'rotinas', 'material', 'andaimes', 'picar', 'obras', 'equipa', 'producao']],
   ['Compras e Armazém', ['armazem', 'compras']],
   ['Comercial', ['comercial']],
   ['Orçamentação', ['orcamentos']],
@@ -2057,7 +2057,7 @@ function navDeps() {
   const btn = (v) => nav.querySelector(`button[data-view="${v}"]`);
   const shown = (v) => { const b = btn(v); return !!b && !b.hidden && !b.classList.contains('enc-off'); };
   // Horas is used by two departments: the encarregado validates it (Produção), the office approves it (Secretariado)
-  const also = { 'Produção (Obra)': ['picar', 'horas'] };   // [after this screen, add this one]
+  const also = { 'Produção (Obra)': ['naobra', 'horas'] };   // v114: by daily use, Horas right after Na obra   // [after this screen, add this one]
   const add = (title, views) => { const a = also[title]; if (!a || views.includes(a[1])) return views; const i = views.indexOf(a[0]); return i < 0 ? [...views, a[1]] : [...views.slice(0, i + 1), a[1], ...views.slice(i + 1)]; };
   const deps = menuGroups(shown).map(([title, views]) => ({ title, views: add(title, views).filter((v, i, a) => v !== 'inicio' && shown(v) && a.indexOf(v) === i) }))
     .filter((d) => d.views.length);
@@ -7726,14 +7726,14 @@ function viewSites() {
   const label = { execution: chip('ok', 'em curso', 'ok'), lead: chip('', 'rascunho') };
   // the address usually ends with the country already: never write it twice
   const addr = (s) => String(s.address || '').replace(/[,·\s]*(Portugal|Espanha|España|Spain|França|France)\s*$/i, '');
-  app.innerHTML = `<div class="ph"><div><p class="ph-k">${state.sites.filter((x) => x.status === 'execution').length} em curso · ${state.sites.length} no total</p><h1>Obras</h1></div></div>
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">${state.sites.filter((x) => x.status === 'execution').length} em curso · ${state.sites.length} no total</p><h1>Obras: dados e regras</h1></div></div>
+    ${state.sites.length && canSiteDetails() ? '<p class="small muted">Toca numa obra para mudar os dados e as regras dela. O dia a dia das obras está no Dashboard.</p>' : ''}
     ${state.sites.length ? `<div class="list sites">${state.sites.map((s) => `<div class="card${canSiteDetails() ? ' link' : ''}" data-id="${esc(s.id)}" ${canSiteDetails() ? 'role="button" tabindex="0"' : ''}>
       <div class="wk"><span class="av a${s.country === 'ES' ? 7 : s.country === 'FR' ? 3 : 0}" aria-hidden="true">${ic('crane')}</span><div class="grow"><div class="nm">${esc(s.title)}</div>
         <div class="sub">${esc(addr(s))}${s.municipality && s.municipality.toLowerCase() !== addr(s).toLowerCase() ? (addr(s) ? ' · ' : '') + 'concelho ' + esc(s.municipality) : ''}</div></div></div>
       <div class="tags"><span class="chip code">${esc(s.cost_center_code)}</span>${label[s.status] || chip('', s.status)}${flag(s.country, s.id)}${noArea(s) ? chip('bad', 'Sem área da fábrica', 'warn') : ''}</div>
       ${noArea(s) ? '<p class="small bad-t">As entradas nesta obra são recusadas até a área da fábrica estar desenhada.</p>' : ''}
-      ${canSiteDetails() || canArea() ? `<p class="site-go">${canSiteDetails() ? `<button class="btn ghost small" data-panel="${esc(s.id)}">${ic('crane')}Abrir no dashboard</button>` : ''}
-        ${canArea() ? `<button class="btn ${noArea(s) ? '' : 'ghost '}small" data-area="${esc(s.id)}">${ic('map')}${noArea(s) ? 'Desenhar a área da fábrica' : 'Área da fábrica'}</button>` : ''}</p>` : ''}</div>`).join('')}</div>`
+      ${canArea() ? `<p class="site-go">${canArea() ? `<button class="btn ${noArea(s) ? '' : 'ghost '}small" data-area="${esc(s.id)}">${ic('map')}${noArea(s) ? 'Desenhar a área da fábrica' : 'Área da fábrica'}</button>` : ''}</p>` : ''}</div>`).join('')}</div>`
       : `<div class="card">${empty('helmet', 'Ainda não há obras', 'Abre a primeira obra aqui em baixo.')}</div>`}
     ${can('obras.gerir') ? `<details class="fold" ${state.sites.length ? '' : 'open'}><summary><span>+ Abrir obra<span class="sub">Cliente, código e nome</span></span></summary><div>
     <form id="f"><div class="row"><div><label>Cliente *</label><input name="client" required placeholder="ex.: Refinaria de Sines"></div>
@@ -7742,13 +7742,15 @@ function viewSites() {
       <label>Morada</label><input name="addr">
       <p class="small muted">Abre logo pronta para picar. Depois atribui-lhe os trabalhadores.</p>
       <p><button class="btn wide">Abrir obra</button></p></form></div></details>` : ''}
-    ${canSiteDetails() && state.sites.length ? `<h2>País, concelho e feriados da obra</h2><div class="card" id="sitecfg">
+    ${canSiteDetails() && state.sites.length ? `<h2>Dados e regras da obra</h2><div class="card" id="sitecfg">
       <p class="small muted">O país dá os feriados nacionais e a hora; o concelho, o feriado municipal.</p>
       ${more('Mais', '<p>Portugal: hora de Lisboa. Espanha: hora de Madrid. França: hora de Paris. Os feriados nacionais contam sozinhos; aqui só se põem os municipais e regionais.</p>')}
       <label for="cfgsite">Obra</label><select id="cfgsite">${state.sites.map((s) => `<option value="${esc(s.id)}" ${currentSite() && currentSite().id === s.id ? 'selected' : ''}>${esc(s.title)} (${esc(s.cost_center_code)})</option>`).join('')}</select>
       <div id="cfgbody">${skel(1)}</div></div>` : ''}`;
   if (canSiteDetails()) app.querySelectorAll('.list .card.link').forEach((c) => {
-    const open = () => { state.panelSite = c.dataset.id; go('painel'); };
+    // v114: the card picks the site to set up below (the Dashboard opens the site's day to day)
+    const open = () => { const sel = $('#cfgsite'); if (!sel) return; sel.value = c.dataset.id; loadSiteDetails(c.dataset.id);
+      app.querySelectorAll('.list .card.link').forEach((x) => x.classList.toggle('sel', x === c)); $('#sitecfg').scrollIntoView({ behavior: 'smooth', block: 'start' }); };
     c.onclick = (e) => { if (!e.target.closest('a,select,input,[data-area]')) open(); };
     c.onkeydown = (e) => { if (e.target === c && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); open(); } };
   });
@@ -7925,17 +7927,8 @@ function loadUI() {
   });
   return uiLoading;
 }
-// v48: Produção left the menu for whoever opens the Dashboard; it is one tap from here.
-// v102: the site's fronts are one tap from its page too (Diogo looked for them in the site and found nothing).
-function dashLinks() {
-  if ((!canProd() && !canFronts()) || $('#encdl')) return;
-  const bar = Object.assign(document.createElement('div'), { id: 'encdl', className: 'enc-dashlinks noprint' });
-  bar.innerHTML = `${canFronts() ? `<button class="btn ghost small" id="tofr">${ic('fronts')}${esc(t_('Frentes de obra'))}${ic('go')}</button>` : ''}
-    ${canProd() ? `<button class="btn ghost small" id="toprod">${ic('chart')}Abrir a Produção${ic('go')}</button>` : ''}`;
-  const bb = app.querySelector(':scope > #backbar'); if (bb) bb.after(bar); else app.prepend(bar);   // v113: «‹» stays on top
-  if (bar.querySelector('#toprod')) bar.querySelector('#toprod').onclick = () => go('producao');
-  if (bar.querySelector('#tofr')) bar.querySelector('#tofr').onclick = () => go('frentes');
-}
+// v114 (Diogo 2026-10-27 «Sim»): the Dashboard has no «Abrir a Produção» (that screen repeated the Dashboard) and no
+// «Frentes de obra» (the Frentes tile in Produção (Obra) is the one place for the day's fronts).
 async function viewSitePanel() {
   if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   // The tab opens the control room (all sites); a site's button in Obras opens that site directly.
@@ -7953,11 +7946,9 @@ async function viewSitePanel() {
       sites: activeSites().map((x) => ({ id: x.id, title: x.title, code: x.cost_center_code })),
       onSite: (sid) => { store(SITE_KEY, sid); } };
     ui.mountPainel(host, api, chosen || undefined);
-    dashLinks();
     return;
   }
   app.innerHTML = `<div class="noprint">${siteSelect('psite')}</div><div id="pnl" style="margin-top:14px">${skel(4)}</div>`;
-  dashLinks();
   bindSiteSelect('psite', () => { $('#pnl').innerHTML = skel(4); loadSitePanel($('#psite').value); });
   loadSitePanel(id);
 }
@@ -12988,6 +12979,7 @@ const canProd = () => mod('projects') && (can('obras.gerir') || can('horas.valid
 function viewProd() {
   if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canProd()) return viewClock();   // code guard as well as the database's
+  if (canSiteDetails()) return go('painel');   // v114: who sees the Dashboard has it all there; this stays only for a login without it
   app.innerHTML = `<div class="ph"><div><p class="ph-k">Direção de obra e encarregados</p><h1>Produção</h1></div></div>
     <div id="prtop">${skel(1)}</div><div id="prbody"></div>`;
   loadProd();

@@ -6395,4 +6395,9 @@
 "Resumo do mês: uma linha por pessoa com dias, horas normais, extra, descanso, ausências e custo, e os feriados das obras.": "Résumé du mois : une ligne par personne avec jours, heures normales, supplémentaires, repos, absences et coût, et les jours fériés des chantiers.",
 "Pedidos e reclamações: quem não concorda com um dia e os pedidos de férias ou ausência, de todas as obras.": "Demandes et réclamations : qui n'est pas d'accord avec une journée et les demandes de congé ou d'absence, de tous les chantiers.",
 "Salários e Primavera: a folha Excel do mês, o ficheiro do Relógio de Ponto e o registo de tempos para a ACT.": "Salaires et Primavera : la feuille Excel du mois, le fichier de pointage et le registre des temps pour l'inspection du travail.",
-"{x} pedido(s) ou reclamação(ões) à espera de resposta": "{x} demande(s) ou réclamation(s) en attente de réponse"}
+"{x} pedido(s) ou reclamação(ões) à espera de resposta": "{x} demande(s) ou réclamation(s) en attente de réponse",
+"Obras: dados e regras": "Chantiers : données et règles",
+"Toca numa obra para mudar os dados e as regras dela. O dia a dia das obras está no Dashboard.": "Touchez un chantier pour modifier ses données et ses règles. Le quotidien des chantiers est dans le tableau de bord.",
+"Dados e regras da obra": "Données et règles du chantier",
+"Prazo e horas": "Délais et heures",
+"Prazo, horas e equipas da obra": "Délais, heures et équipes du chantier"}
