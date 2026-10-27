@@ -1157,7 +1157,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '108';
+const APP_VERSION = '109';
 // v107 (Diogo 2026-10-26): «Início» = what is urgent + the departments. The bottom bar keeps only Início, the field tools of
 // the encarregado (Equipa, Picar) or of the safety officer (Emergência), Procurar and Eu. Everything else is in its department.
 const TABS = { supervisor: ['inicio', 'equipa', 'picar', 'minhas'], admin: ['inicio', 'minhas'],
@@ -6804,40 +6804,44 @@ function officeMonthViews(om, from, to) {
   const sum = (k) => people.reduce((a, p) => a + (Number(p[k]) || 0), 0);
   const wide = isWide();
   const nights = people.some((p) => p.night);
+  const pds = cost && people.some((p) => p.per_diem != null);
+  const pdEst = (x) => (x.pd_est ? ' *' : '');
+  const costOf = (x) => (x.labour == null && x.per_diem == null ? '–' : eur(x.cost));
   const row = (p) => wide ? `<tr${p.missing || p.ot_open ? ' class="look"' : ''}>
       <td class="name"><b title="${esc(p.job || '')}">${esc(p.name)}</b><div class="small muted">${p.number ? 'nº ' + esc(p.number) : ''}</div></td>
       <td>${p.sites.map((c) => `<span class="chip code">${esc(c)}</span>`).join(' ')}</td>
       <td class="num">${p.days}</td><td class="num">${esc(fmtMin(p.normal))}</td><td class="num">${p.ot ? esc(fmtMin(p.ot)) : ''}</td>
       <td class="num">${p.rest + p.holiday ? esc(fmtMin(p.rest + p.holiday)) : ''}</td>${nights ? `<td class="num">${p.night ? esc(fmtMin(p.night)) : ''}</td>` : ''}
       <td class="small">${esc(absText(p.absent))}</td><td class="num">${p.missing ? chip('warn', String(p.missing)) : ''}</td>
-      ${cost ? `<td class="num">${p.no_rate ? chip('warn', 'sem valor hora') : esc(eur(p.cost))}</td>` : ''}</tr>`
+      ${cost ? `<td class="num">${p.no_rate ? chip('warn', 'sem valor hora') : esc(costOf(p))}${p.per_diem != null ? `<div class="pd-sub">${esc(t_('diárias'))} ${esc(eur(p.per_diem))}${pdEst(p)}</div>` : ''}</td>` : ''}</tr>`
     : `<div class="day"><div class="day-h"><span class="d">${esc(p.name)}</span>${p.number ? `<span class="small muted">nº ${esc(p.number)}</span>` : ''}<span class="hrs">${esc(fmtMin(p.worked))}</span></div>
       <div class="small">${p.days} dia(s) · ${esc(fmtMin(p.normal))} normais${p.ot ? ` · ${esc(fmtMin(p.ot))} extra` : ''}${p.rest + p.holiday ? ` · ${esc(fmtMin(p.rest + p.holiday))} descanso/feriado` : ''}${p.night ? ` · ${esc(fmtMin(p.night))} noturnas` : ''}</div>
       <div class="tags">${p.sites.map((c) => chip('code', c)).join('')}${p.missing ? chip('warn', `${p.missing} dia(s) sem registo`) : ''}${absText(p.absent) ? chip('', absText(p.absent)) : ''}
-        ${cost ? (p.no_rate ? chip('warn', 'sem valor hora') : chip('info', eur(p.cost))) : ''}${p.pending ? chip('reg', `${p.pending} por aprovar`) : ''}</div></div>`;
+        ${cost ? (p.no_rate ? chip('warn', 'sem valor hora') : chip('info', costOf(p))) : ''}${cost && p.per_diem != null ? chip('', `${t_('diárias')} ${eur(p.per_diem)}${pdEst(p)}`) : ''}${p.pending ? chip('reg', `${p.pending} por aprovar`) : ''}</div></div>`;
   const holidays = om.holidays || [];
   const sites = (om.sites || []).filter((x) => x.worked > 0);
   bottom.innerHTML = `<div class="sec-h"><h2>Resumo do mês por pessoa</h2>${chip('', String(people.length))}</div>
     <div class="card${wide ? ' tbl-card' : ''}" id="psum">${!people.length ? '<p class="muted" style="margin:0">Ninguém com horas neste mês.</p>' : wide ? `<div class="tbl-wrap"><table class="grid"><thead><tr>
         <th>Pessoa</th><th>Obras</th><th class="num">Dias</th><th class="num">Normais</th><th class="num">Extra</th><th class="num">Descanso e feriado</th>
-        ${nights ? '<th class="num">Noturnas</th>' : ''}<th>Ausências (dias)</th><th class="num">Sem registo</th>${cost ? '<th class="num">Custo</th>' : ''}</tr></thead>
+        ${nights ? '<th class="num">Noturnas</th>' : ''}<th>Ausências (dias)</th><th class="num">Sem registo</th>${cost ? `<th class="num">Custo</th>` : ''}</tr></thead>
       <tbody>${people.map(row).join('')}</tbody>
       <tfoot><tr><td colspan="2">${people.length} pessoa(s)</td><td class="num">${sum('days')}</td><td class="num">${esc(fmtMin(sum('normal')))}</td><td class="num">${esc(fmtMin(sum('ot')))}</td>
         <td class="num">${esc(fmtMin(sum('rest') + sum('holiday')))}</td>${nights ? `<td class="num">${esc(fmtMin(sum('night')))}</td>` : ''}<td></td><td class="num">${sum('missing') || ''}</td>
-        ${cost ? `<td class="num">${esc(eur(sum('cost')))}</td>` : ''}</tr></tfoot></table></div>`
+        ${cost ? `<td class="num">${esc(eur(sum('cost')))}${pds ? `<div class="pd-sub">${esc(t_('diárias'))} ${esc(eur(sum('per_diem')))}</div>` : ''}</td>` : ''}</tr></tfoot></table></div>`
       : people.map(row).join('')}
-      <p class="small muted"><span>Extra: só as aprovadas pelo chefe de equipa.</span> ${cost ? `<span>Custo: horas × valor hora de cada dia.</span>${om.burden ? ` <span>Inclui ${esc(String(om.burden).replace('.', ','))} % de encargos da empresa.</span>` : ''}` : ''}</p></div>
+      <p class="small muted"><span>Extra: só as aprovadas pelo chefe de equipa.</span> ${cost ? `<span>Mão de obra: horas × valor hora de cada dia.</span>${pds ? ` <span>Diárias: as semanas emitidas; * = semana ainda por emitir, estimativa com o valor da obra por dia trabalhado.</span>` : ''}${om.burden ? ` <span>Inclui ${esc(String(om.burden).replace('.', ','))} % de encargos da empresa.</span>` : ''}` : ''}</p></div>
     <div class="sec-h"><h2>Feriados deste mês</h2>${chip('', String(holidays.length))}</div>
     <div class="card">${holidays.length ? holidays.map((h) => `<div class="day wk"><span class="chip code">${esc(fmtDate(h.day))}</span><span class="chip code">${esc(h.code)}</span><div class="grow">${esc(h.name)}</div></div>`).join('')
       : '<p class="muted" style="margin:0">Nenhum feriado neste mês nas obras.</p>'}
       <p class="small muted">Cada obra conta os feriados do seu país, da região e do concelho. Muda-os em Obras › a obra › Detalhes.</p></div>
     ${cost ? `<div class="sec-h"><h2>Custo do mês por obra${om.fronts_on ? ' e frente' : ''}</h2></div>
-    ${sites.length ? sites.map((x) => { const fr = x.fronts || []; const tot = fr.reduce((a, f) => a + (Number(f.cost) || 0), 0);
+    ${sites.length ? sites.map((x) => { const fr = x.fronts || []; const fpd = fr.some((f) => Number(f.per_diem)); const tot = fr.reduce((a, f) => a + (Number(f.cost) || 0), 0);
       return `<div class="card site-cost"><div class="wk"><span class="chip code">${esc(x.code)}</span><div class="grow"><b>${esc(x.title)}</b>
-          <div class="small muted">${x.people} pessoa(s) · ${esc(fmtMin(x.worked))}${x.ot ? ` · ${esc(fmtMin(x.ot))} extra` : ''}</div></div><b class="hrs">${x.cost == null ? '–' : esc(eur(x.cost))}</b></div>
+          <div class="small muted">${x.people} pessoa(s) · ${esc(fmtMin(x.worked))}${x.ot ? ` · ${esc(fmtMin(x.ot))} extra` : ''}</div></div><b class="hrs">${esc(costOf(x))}</b></div>
+        ${x.per_diem != null ? `<p class="small muted" style="margin:6px 0 0"><span>${esc(t_('Mão de obra'))} ${esc(x.labour == null ? '–' : eur(x.labour))}</span> · <span>${esc(t_('Diárias'))} ${esc(eur(x.per_diem))}${pdEst(x)}</span></p>` : ''}
         ${x.no_rate ? `<p class="small">${chip('warn', `${x.no_rate} pessoa(s) sem valor hora: fora do custo`)}</p>` : ''}
         ${fr.length ? `<table class="grid mini"><thead><tr><th>Frente</th><th class="num">Horas</th><th class="num">Custo</th><th class="num">%</th></tr></thead><tbody>
-          ${fr.map((f) => `<tr><td>${esc(f.name || 'Sem frente')}</td><td class="num">${esc(fmtMin(f.minutes))}</td><td class="num">${esc(eur(f.cost))}</td>
+          ${fr.map((f) => `<tr><td>${esc(f.name || 'Sem frente')}</td><td class="num">${f.minutes ? esc(fmtMin(f.minutes)) : ''}</td><td class="num">${esc(eur(f.cost))}${fpd && Number(f.per_diem) ? `<div class="pd-sub">${esc(t_('diárias'))} ${esc(eur(f.per_diem))}</div>` : ''}</td>
             <td class="num">${tot ? Math.round(f.cost * 100 / tot) : 0} %</td></tr>`).join('')}</tbody></table>` : ''}</div>`; }).join('')
       : '<div class="card"><p class="muted" style="margin:0">Sem horas neste mês.</p></div>'}` : ''}`;
 }
