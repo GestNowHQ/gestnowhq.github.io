@@ -53,6 +53,36 @@ const REASON_PREFIX = {
   'skill_missing:': 'Falta a competência: ',
 };
 const ERRORS = [
+  // Resíduos (sql/132)
+  [/say how much/i, 'Diz quanto (maior que zero).'],
+  [/container not found/i, 'Contentor não encontrado.'],
+  [/this container is switched off/i, 'Este contentor está desligado.'],
+  [/choose what goes in the container/i, 'Escolhe o tipo de resíduo que o contentor leva.'],
+  [/give the container a name/i, 'Dá um nome ao contentor (2 a 120 letras).'],
+  [/that sticker is already on another container/i, 'Esse autocolante já está noutro contentor.'],
+  [/the LER code must have 6 digits/i, 'O código LER tem 6 algarismos (ex.: 15 02 02*).'],
+  [/give the waste a name/i, 'Dá um nome ao resíduo.'],
+  [/that waste type already exists/i, 'Esse tipo de resíduo já existe.'],
+  [/waste type not found/i, 'Tipo de resíduo não encontrado.'],
+  [/this item was already put away/i, 'Isto já foi arrumado.'],
+  [/give the company a name/i, 'Dá um nome à empresa.'],
+  [/company not found/i, 'Empresa não encontrada.'],
+  [/choose the waste/i, 'Escolhe o resíduo.'],
+  [/give the weight in kg/i, 'Escreve o peso em kg.'],
+  [/choose the transporter/i, 'Escolhe quem transporta.'],
+  [/choose where it goes/i, 'Escolhe o destino.'],
+  [/hazardous waste needs a licensed transporter and destination/i, 'Resíduo perigoso: o transportador e o destino têm de ter licença registada.'],
+  [/the licence of (.+) ran out on (\S+)/i, 'A licença de $1 caducou a $2. Atualiza-a em Configurar › Empresas.'],
+  [/choose the operation \(R or D code\)/i, 'Escolhe a operação (código R ou D).'],
+  [/write the e-GAR number first/i, 'Escreve primeiro o n.º da e-GAR.'],
+  [/this saída was cancelled/i, 'Esta saída foi anulada.'],
+  [/saída not found/i, 'Saída não encontrada.'],
+  [/file not allowed for this saída/i, 'Este ficheiro não pode ir para esta saída.'],
+  [/at most 10 files per saída/i, 'No máximo 10 ficheiros por saída.'],
+  [/choose at most two years/i, 'Escolhe no máximo dois anos.'],
+  [/the value is not valid/i, 'Valor inválido.'],
+  [/^date is not valid$/i, 'Data inválida (até hoje, no máximo um ano para trás).'],
+  [/waste records are never/i, 'Os registos de resíduos nunca se apagam: desliga ou anula.'],
   // v103 (sql/125): hourly rate changes
   [/rate: a change is already waiting/i, 'Já há uma mudança do valor hora à espera de aprovação.'],
   [/rate: write the reason/i, 'Escreve o motivo da mudança.'],
@@ -1049,7 +1079,7 @@ const RC_PREFIX = 'gn.rc.';
 const OFFLINE_READS = new Set(['mini_my_home', 'mini_my_summary', 'mini_my_papers', 'mini_time_mode', 'mini_my_meetings', 'mini_my_team_messages',
   'mini_my_hazards', 'mini_hazard_sites', 'mini_my_weeks', 'mini_my_day', 'mini_my_day_more', 'mini_my_day_disputes', 'mini_my_documents', 'mini_my_kit',
   'mini_wh_my_tools', 'mini_my_per_diems', 'mini_my_requests', 'mini_my_glances', 'mini_my_stay', 'mini_my_travels', 'mini_my_timesheet', 'mini_progress_my',
-  'mini_meeting_get', 'mini_meetings', 'mini_cases', 'mini_case_get', 'mini_case_scan', 'mini_site_material', 'mini_hazards', 'mini_hazard']);
+  'mini_meeting_get', 'mini_meetings', 'mini_cases', 'mini_case_get', 'mini_case_scan', 'mini_site_material', 'mini_hazards', 'mini_hazard', 'mini_waste_home']);
 const rpcRaw = sb.rpc.bind(sb);
 const rcKey = (fn, args) => `${RC_PREFIX}${(state.me && state.me.user_id) || '-'}.${fn}.${JSON.stringify(args || {})}`;
 function rcTrim() {   // the phone is full: the oldest half goes
@@ -1157,7 +1187,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '116';
+const APP_VERSION = '117';
 // v107 (Diogo 2026-10-26): «Início» = what is urgent + the departments. The bottom bar keeps only Início, the field tools of
 // the encarregado (Equipa, Picar) or of the safety officer (Emergência), Procurar and Eu. Everything else is in its department.
 const TABS = { supervisor: ['inicio', 'equipa', 'picar', 'minhas'], admin: ['inicio', 'minhas'],
@@ -1173,8 +1203,8 @@ function tabsFor(role) {
   if (role === 'admin' && ownerDesk()) return ['clientes'];   // inside a client company, «‹ Os meus clientes» is on Início
   return TABS[role] || TABS.supervisor;
 }
-const OFFLINE_VIEWS = ['picar', 'minhas', 'material', 'reunioes', 'relatos', 'emergencia'];   // v89: they keep a copy
-const MORE_ORDER = ['inicio', 'empresa', 'onbtextos', 'equipa', 'material', 'picar', 'emergencia', 'relatos', 'reunioes', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'faltas', 'mesresumo', 'reclamacoes', 'salarios', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'docscliente', 'despesas', 'diarias', 'andaimes', 'processo', 'clientes', 'custos', 'progresso', 'frentes', 'rotinas', 'contactos'];
+const OFFLINE_VIEWS = ['picar', 'minhas', 'material', 'reunioes', 'relatos', 'emergencia', 'residuos'];   // v89: they keep a copy
+const MORE_ORDER = ['inicio', 'empresa', 'onbtextos', 'equipa', 'material', 'picar', 'emergencia', 'relatos', 'reunioes', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'faltas', 'mesresumo', 'reclamacoes', 'salarios', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'residuos', 'compras', 'frota', 'alojamento', 'viagens', 'docscliente', 'despesas', 'diarias', 'andaimes', 'processo', 'clientes', 'custos', 'progresso', 'frentes', 'rotinas', 'contactos'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -1197,7 +1227,7 @@ const MENU_GROUPS = [
   ['Frota', ['frota']],
   ['QSA · Qualidade, Segurança e Ambiente', ['relatos', 'seguranca', 'reunioes', 'lmra', 'emergencia', 'qualidade', 'processo']],
   ['Produção (Obra)', ['painel', 'naobra', 'progresso', 'frentes', 'rotinas', 'material', 'andaimes', 'picar', 'obras', 'equipa', 'producao']],
-  ['Compras e Armazém', ['armazem', 'compras']],
+  ['Compras e Armazém', ['armazem', 'residuos', 'compras']],
   ['Comercial', ['comercial']],
   ['Orçamentação', ['orcamentos']],
   ['Eu', ['minhas', 'contactos']],
@@ -1222,7 +1252,7 @@ const VIEW_NEEDS = {
   emergencia: () => can('seguranca.emergencia'), acolhimento: () => can('acolhimento.gerir'),
   obras: () => can('obras.gerir') || can('obras.ver_detalhes') || can('obras.area'), painel: () => canSiteDetails(), naobra: () => canSiteDetails() || can('ponto.picar'),
   equipa: () => canSiteDetails(), picar: () => can('ponto.picar'), horas: () => can('horas.ver') || can('horas.validar_obra'),
-  andaimes: () => canScaffolds(), producao: () => canProd(), progresso: () => canProgress(), frentes: () => canFronts(), rotinas: () => canRoutines(), contactos: () => true, material: () => canSiteMaterial(), armazem: () => canWh(), compras: () => canBuy(), frota: () => canFleet(),
+  andaimes: () => canScaffolds(), producao: () => canProd(), progresso: () => canProgress(), frentes: () => canFronts(), rotinas: () => canRoutines(), contactos: () => true, material: () => canSiteMaterial(), armazem: () => canWh(), residuos: () => canWaste(), compras: () => canBuy(), frota: () => canFleet(),
   orcamentos: () => canEstimates(), qualidade: () => canQuality(), comercial: () => canSales(), premios: () => canAwards(), custos: () => canCosts(), diarias: () => canPerDiems(),
   faltas: () => canApprove(), mesresumo: () => canApprove(), reclamacoes: () => canApprove(), salarios: () => canPayroll(),
 };
@@ -1262,9 +1292,10 @@ const ENC_ICONS = {
   plus: '<path d="M12 5v14M5 12h14"/>',
   todo: '<path d="M4 6l2 2 3-3M4 13l2 2 3-3M12 7h8M12 14h8M4 19.5h.01M12 19.5h8"/>',
   clientdocs: '<path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5zM8.5 13l2.5 2.5 4.5-4.5"/>',
+  recycle: '<path d="M7 19H4.8a1.8 1.8 0 0 1-1.6-.9 1.8 1.8 0 0 1 0-1.8l4-6.8M11 19h8.2a1.8 1.8 0 0 0 1.6-.9 1.8 1.8 0 0 0 0-1.8l-1.2-2.1M14 16l-3 3 3 3M8.3 13.6 7.2 9.5l-4.1 1.1M9.3 5.8l1.1-1.9A1.8 1.8 0 0 1 12 3a1.8 1.8 0 0 1 1.5.9l4 6.8M13.4 9.6l4.1 1.1 1.1-4.1"/>',
   medal: '<path d="M12 14a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM9.5 13.3 8 21l4-2 4 2-1.5-7.7M10 9l1.5 1.5L14.5 7.5"/>',
 };
-const MENU_ICON = { painel: 'gauge', producao: 'chart', seguranca: 'hhat', equipa: 'crew', minhas: 'myclock', naobra: 'gate', qualidade: 'medal', clientes: 'firms', comercial: 'target', premios: 'trophy', custos: 'coins', progresso: 'sheet', frentes: 'fronts', rotinas: 'todo', docscliente: 'clientdocs' };
+const MENU_ICON = { painel: 'gauge', producao: 'chart', seguranca: 'hhat', equipa: 'crew', minhas: 'myclock', naobra: 'gate', qualidade: 'medal', clientes: 'firms', comercial: 'target', premios: 'trophy', custos: 'coins', progresso: 'sheet', frentes: 'fronts', rotinas: 'todo', docscliente: 'clientdocs', residuos: 'recycle' };
 (function encIcons() {
   const ns = 'http://www.w3.org/2000/svg'; const sp = document.createElementNS(ns, 'svg');
   sp.setAttribute('width', '0'); sp.setAttribute('height', '0'); sp.setAttribute('aria-hidden', 'true'); sp.style.position = 'absolute';
@@ -1581,6 +1612,7 @@ async function boot() {
   nav.querySelector('[data-view=material]').hidden = worker || !canSiteMaterial();
   nav.querySelector('[data-view=emergencia]').hidden = worker || !canEmergency();
   nav.querySelector('[data-view=armazem]').hidden = worker || state.offline || !canWh();
+  nav.querySelector('[data-view=residuos]').hidden = worker || !canWaste();   // v117: opens without network (kept copy, entradas wait)
   nav.querySelector('[data-view=compras]').hidden = worker || state.offline || !canBuy();
   nav.querySelector('[data-view=frota]').hidden = worker || state.offline || !canFleet();
   nav.querySelector('[data-view=alojamento]').hidden = worker || state.offline || !canHousing();
@@ -2059,7 +2091,7 @@ function go(view) {
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
      ficha: viewWorker, obras: viewSites, area: viewArea, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients, cliente: viewClient, precos: viewPrices, empresa: viewCompanyRules, inicio: viewHome, departamento: viewDept,
      processo: viewProcess, orcamentos: viewEstimates, comercial: viewSales, premios: viewAwards, custos: viewCosts, diarias: viewPerDiemOffice, faltas: viewOfficeAbsences, mesresumo: viewOfficeSummary, reclamacoes: viewOfficeRequests, salarios: viewOfficePayroll, lmra: viewLmra, reunioes: viewMeetings, relatos: viewHazards, material: viewSiteMaterial, emergencia: viewEmergency,
-     armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, docscliente: viewClientDocs, producao: viewProd, progresso: viewProgress, frentes: viewFronts, rotinas: viewRoutines, contactos: viewContacts, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
+     armazem: viewWarehouse, residuos: viewWaste, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, docscliente: viewClientDocs, producao: viewProd, progresso: viewProgress, frentes: viewFronts, rotinas: viewRoutines, contactos: viewContacts, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
   checkEmergencyBar(); encBadges();
 }
 
@@ -5081,6 +5113,7 @@ const TOUR_TEXT = {
   frota: 'Frota: cada viatura com semáforo: seguro, inspeção, IUC, revisão e contrato de aluguer. Entregas e devoluções com km.',
   compras: 'Compras: pedes o que falta; acima do limite o Secretariado aprova; depois encomenda-se e regista-se o que chega.',
   armazem: 'Armazém: EPIs, farda e ferramentas. Quem recebe assina com o cartão; os tamanhos vêm da ficha.',
+  residuos: 'Resíduos: o lixo da oficina e do escritório, os EPI gastos e as pilhas. Cada contentor com o seu código LER, cada recolha com a empresa licenciada e a e-GAR.',
   horas: 'Horas: as horas da equipa, dia a dia, para corrigir e validar.',
   minhas: 'Eu: o teu dia, a tua semana, as tuas horas, pedidos, diárias, documentos, EPI e onde dormes. Se um dia estiver mal, dizes aqui.',
   secretariado: 'Aprovar o mês: os dias validados na obra que precisam de ti, aprovar os sem problemas e fechar o mês.',
@@ -7162,6 +7195,11 @@ async function encBadges(force) {
       set('horas', n, `${n} dia(s) por validar na obra`);
     }));
   }
+  if (canWaste()) jobs.push(sb.rpc('mini_waste_home').then(({ data, error }) => {
+    if (error || !data) return;
+    const n = (data.alerts || []).filter((a) => a.sev === 'bad').length + (data.inbox || []).length;
+    set('residuos', n, `${n} resíduo(s) à espera: avisos graves e coisas por arrumar`);
+  }));
   await Promise.all(jobs.map((j) => j.catch(() => {})));
   deptBadges();
   if (state.view === 'secretariado' && state.encOfficeData && $('#encflow')) encOfficeFlow(state.encOfficeData);
@@ -10227,12 +10265,13 @@ async function loadWarehouse() {
       <button class="kpi ${h.inspections_due ? 'warn' : ''}" data-tab="ferramentas"><b>${h.inspections_due}</b><span>inspeções a vencer</span></button>
       <div class="kpi ${h.ppe_due ? 'info' : ''}"><b>${h.ppe_due}</b><span>EPI a trocar em 30 dias</span></div></div>
     <div class="wh-bar">${h.warehouses.length > 1 ? `<select id="whsel" aria-label="Armazém">${h.warehouses.map((w) => `<option value="${esc(w.id)}" ${w.id === W.wid ? 'selected' : ''}>${esc(w.name)}${w.site ? ' (' + esc(w.site) + ')' : ''}</option>`).join('')}</select>` : `<span class="muted small">${esc(h.warehouses[0].name)}</span>`}
-      ${h.can_manage ? '<button class="btn ghost small" id="whadd">+ Armazém</button>' : ''}</div>
+      ${h.can_manage ? '<button class="btn ghost small" id="whadd">+ Armazém</button>' : ''}${canWaste() ? `<button class="btn ghost small" id="whwaste">${ic('recycle')}Resíduos</button>` : ''}</div>
     <div class="seg wh-tabs" role="tablist">${tabs.map(([k, l]) => `<button role="tab" data-whtab="${k}" aria-selected="${W.tab === k}">${l}</button>`).join('')}</div>`;
   top.querySelectorAll('[data-whtab]').forEach((b) => b.onclick = () => { W.tab = b.dataset.whtab; stopNfc(); loadWarehouse(); });
   top.querySelectorAll('button.kpi[data-tab]').forEach((b) => b.onclick = () => { W.tab = b.dataset.tab; stopNfc(); loadWarehouse(); });
   if ($('#whsel')) $('#whsel').onchange = (e) => { W.wid = e.target.value; W.cart = []; loadWarehouse(); };
   if ($('#whadd')) $('#whadd').onclick = addWarehouse;
+  if ($('#whwaste')) $('#whwaste').onclick = () => go('residuos');
   ({ entregar: whIssue, stock: whStock, ferramentas: whTools, obras: whSiteRequests, maloes: whCases }[W.tab] || whStock)();
 }
 async function addWarehouse() {
@@ -14965,6 +15004,493 @@ async function loadMyClimb() {
   $('#myclimbf').onsubmit = (e) => { e.preventDefault(); climbCheck(String(new FormData(e.target).get('r')).trim()); };
 }
 
+// ------------------------------------------------------------------ Resíduos (sql/132): o lixo da oficina, do escritório, os EPI e as pilhas
+// Diogo 2026-10-29: «gestão de resíduos da oficina e escritórios e EPIs que vão para o lixo e pilhas usadas, feita pelo
+// responsável do armazém». Each type has its LER code (* = perigoso); each container holds one type. «Pôr no contentor» is
+// one sheet (or a tap of the phone on the container's sticker) and works without network: it waits on the phone and goes
+// later, kept once. PPE swapped at the counter and tools written off land in «Por arrumar» by themselves. A saída records
+// the licensed transporter and destination, the R/D operation, the weight and the e-GAR, with photo/PDF proofs; the summary
+// gives the month per type and per site, and the year in the shape of the MIRR (annual waste map). Nothing is ever deleted.
+const canWaste = () => mod('warehouse') && ['residuos.ver', 'residuos.registar', 'residuos.gerir'].some(can);
+const WS_GRP = { oficina: 'Oficina', escritorio: 'Escritório', epi: 'EPI', pilhas: 'Pilhas e baterias', obra: 'Obra', outro: 'Outro' };
+const WS_UNIT = { kg: 'kg', l: 'litros', un: 'unidades' };
+const WS_REASON = { worn: 'Gasto', damaged: 'Danificado', expired: 'Fora de prazo', fall_arrest_event: 'Depois de uma queda', worn_out: 'Gasta', obsolete: 'Obsoleta' };
+const WS_EGAR = { por_emitir: ['bad', 'e-GAR por emitir'], emitida: ['warn', 'e-GAR emitida'], confirmada: ['ok', 'Confirmada pelo destino'] };
+const WS_ROLE = { transporte: 'Transporta', destino: 'Recebe (destino)', ambos: 'Transporta e recebe' };
+// The usual operations (Anexos I e II do Regime Geral de Gestão de Resíduos); the operator's licence says which it does.
+const WS_OPS = [['R13', 'R13 · Armazenagem antes de valorização'], ['R12', 'R12 · Preparação para valorização (triagem)'], ['R03', 'R3 · Reciclagem de papel, plástico, madeira'],
+  ['R04', 'R4 · Reciclagem de metais'], ['R05', 'R5 · Reciclagem de outros materiais (vidro, entulho)'], ['R09', 'R9 · Refinação de óleos usados'], ['R01', 'R1 · Valorização energética'],
+  ['D15', 'D15 · Armazenagem antes de eliminação'], ['D13', 'D13 · Mistura antes de eliminação'], ['D09', 'D9 · Tratamento físico-químico'], ['D10', 'D10 · Incineração em terra'], ['D01', 'D1 · Aterro']];
+const WS_CLOSE = ['Voltou para o stock (ainda serve)', 'O trabalhador não devolveu', 'Foi para reparação', 'Devolvido ao fornecedor'];
+const wsNum = (n) => Number(n || 0).toLocaleString(LOC, { maximumFractionDigits: 2 });
+const wsAgo = (iso) => { const d = Math.floor((Date.now() - new Date(iso)) / 864e5); return d <= 0 ? 'hoje' : d === 1 ? 'ontem' : `há ${d} dias`; };
+const wsLer = (x) => `${String(x.ler).replace(/ /g, '\u00a0')}${x.haz ? '*' : ''}`;   // «15 02 02*» never breaks in two
+function viewWaste() {
+  if (!state.ready) return boot();   // never a screen before login
+  if (!canWaste()) return viewClock();   // code guard as well as the database's
+  if (!state.ws) state.ws = { tab: 'contentores' };
+  const dept = (menuBase().find(([, vs]) => vs.includes('residuos')) || ['Compras e Armazém'])[0].split(' · ')[0];
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">${esc(dept)}</p><h1>Resíduos</h1></div></div>
+    <p class="small muted ws-lead">O lixo da oficina e do escritório, os EPI que já não servem e as pilhas: em que contentor está, quando sai, com quem e com que e-GAR.</p>
+    <div id="wstop">${skel(2)}</div><div id="wsbody"></div>`;
+  wsLoad();
+}
+async function wsLoad() {
+  const top = $('#wstop'); if (!top) return;
+  const { data: h, error } = await sb.rpc('mini_waste_home');
+  if (!top.isConnected) return;
+  if (error) { top.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
+  const S = state.ws; S.home = h;
+  if (S.tab === 'config' && !h.can_manage) S.tab = 'contentores';
+  const al = h.alerts || []; const bad = al.filter((a) => a.sev === 'bad').length;
+  const full = al.filter((a) => a.k === 'full').length; const noEgar = al.filter((a) => a.k === 'egar').length;
+  const waiting = outboxMine().filter((x) => x.fn === 'mini_waste_deposit').length;
+  top.innerHTML = `<div class="fl-sum">
+      <button type="button" class="fl-n ${bad ? 'bad' : al.length ? 'warn' : 'ok'}" data-wsgo="alerts"><b>${al.length}</b><span>${al.length === 1 ? 'aviso' : 'avisos'}</span></button>
+      <button type="button" class="fl-n ${h.inbox.length ? 'warn' : 'zero'}" data-wsgo="arrumar"><b>${h.inbox.length}</b><span>por arrumar</span></button>
+      <button type="button" class="fl-n ${full ? 'warn' : 'zero'}" data-wsgo="contentores"><b>${full}</b><span>contentores cheios</span></button>
+      <button type="button" class="fl-n ${noEgar ? 'bad' : 'zero'}" data-wsgo="saidas"><b>${noEgar}</b><span>saídas sem e-GAR</span></button></div>
+    ${waiting ? `<p class="small ws-wait">${ic('cloud')} ${esc(pl(waiting, 'entrada guardada', 'entradas guardadas'))} no telemóvel: vão quando houver rede.</p>` : ''}
+    ${al.length ? `<section class="card ws-alerts" id="wsalerts"><h2 style="margin-top:0">O que precisa de ti</h2><ul class="plain">${al.map(wsAlertLine).join('')}</ul></section>` : ''}
+    ${h.can_log ? `<button class="btn big wide" id="wsput">${ic('box')}Pôr resíduos no contentor</button>` : ''}
+    <div class="seg ws-tabs" role="tablist">${[['contentores', 'Contentores'], ['arrumar', `Por arrumar${h.inbox.length ? ' (' + h.inbox.length + ')' : ''}`], ['saidas', 'Saídas'], ['resumo', 'Resumo'],
+      h.can_manage && ['config', 'Configurar']].filter(Boolean).map(([k, l]) => `<button role="tab" data-wstab="${k}" aria-selected="${S.tab === k}">${esc(l)}</button>`).join('')}</div>`;
+  top.querySelectorAll('[data-wstab]').forEach((b) => b.onclick = () => { S.tab = b.dataset.wstab; wsLoad(); });
+  top.querySelectorAll('[data-wsgo]').forEach((b) => b.onclick = () => {
+    if (b.dataset.wsgo === 'alerts') { const a = $('#wsalerts'); if (a) a.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+    S.tab = b.dataset.wsgo; wsLoad(); });
+  top.querySelectorAll('[data-wsa]').forEach((b) => b.onclick = () => wsAlertAct(b.dataset.wsa, b.dataset.id));
+  if ($('#wsput')) $('#wsput').onclick = () => wsDeposit(null, null);
+  const body = $('#wsbody');
+  ({ contentores: wsPoints, arrumar: wsInbox, saidas: wsShips, resumo: wsSummary, config: wsConfig }[S.tab] || wsPoints)(body, h);
+}
+function wsAlertLine(a) {
+  const m = state.ws.home.can_manage; const c = state.ws.home.can_log;
+  const btn = (act, id, label) => `<button class="btn ghost small" type="button" data-wsa="${act}" data-id="${esc(id || '')}">${esc(label)}</button>`;
+  const [txt, act] = a.k === 'full' ? [`${a.name}: ${a.pct} % cheio. Marca a recolha.`, m && btn('ship', a.point, 'Registar saída')]
+    : a.k === 'old' ? [`${a.name}: ${a.haz ? 'resíduo perigoso ' : ''}guardado há ${a.days} dias (máximo ${a.max}).`, m && btn('ship', a.point, 'Registar saída')]
+    : a.k === 'egar' ? [`Saída de ${fmtDate(a.on)} (${wsLer(a)}, ${wsNum(a.kg)} kg) sem e-GAR.`, m && btn('egar', a.ship, 'Pôr a e-GAR')]
+    : a.k === 'unconfirmed' ? [`e-GAR de ${fmtDate(a.on)} (${wsLer(a)}) ainda não confirmada pelo destino.`, m && btn('egar', a.ship, 'Abrir')]
+    : a.k === 'licence' ? [`${a.name}: a licença ${a.until < isoDay(new Date()) ? 'caducou a' : 'acaba a'} ${fmtDate(a.until)}.`, m && btn('carrier', a.carrier, 'Atualizar')]
+    : [`${pl(a.n, 'coisa', 'coisas')} por arrumar há mais de 7 dias.`, c && btn('inbox', '', 'Ver')];
+  return `<li class="ws-al ${a.sev}"><span class="dot">${ic(a.sev === 'bad' ? 'warn' : 'info')}</span><span class="grow">${esc(txt)}</span>${act || ''}</li>`;
+}
+function wsAlertAct(act, id) {
+  const h = state.ws.home;
+  if (act === 'ship') return wsShipForm(h.points.find((p) => p.id === id) || null);
+  if (act === 'egar') { const x = h.shipments.find((s) => s.id === id); return x ? wsShipDetail(x) : (state.ws.tab = 'saidas', wsLoad()); }
+  if (act === 'carrier') return wsCarrierForm(h.carriers.find((c) => c.id === id));
+  state.ws.tab = 'arrumar'; wsLoad();
+}
+// ---- Contentores
+function wsFill(p) {
+  const st = p.state || {}; const full = state.ws.home.settings.full_pct;
+  const pct = st.pct == null ? null : Number(st.pct);
+  const cls = pct == null ? '' : pct >= 100 ? 'bad' : pct >= full ? 'warn' : '';
+  const seen = st.seen && (!st.last || st.seen >= st.last);
+  const what = !st.n && !seen ? 'Vazio' : pct == null ? `${wsNum(st.qty)} ${t_(WS_UNIT[p.unit])} desde a última recolha`
+    : seen ? `Nível visto: ${pct} % (${t_(wsAgo(st.seen))})` : `${wsNum(st.qty)} ${t_(WS_UNIT[p.unit])} de ${wsNum(p.capacity)} (${pct} %)`;
+  const age = st.since ? Math.floor((Date.now() - new Date(st.since)) / 864e5) : null;
+  const old = age != null && age > p.days - (p.haz ? 15 : 30);
+  return `<div class="prog ws-prog ${cls}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct || 0}" aria-label="Cheio"><i style="width:${Math.min(100, pct || 0)}%"></i></div>
+    <p class="small"><span>${esc(what)}</span>${st.since ? ` <span class="${old ? 'ws-old' : 'muted'}">${esc(`· 1.ª entrada ${wsAgo(st.since)}`)}</span>${p.haz ? ` <span class="muted">${esc(`· máx. ${p.days} dias`)}</span>` : ''}` : ''}</p>`;
+}
+function wsPoints(body, h) {
+  const act = h.points.filter((p) => p.active); const off = h.points.filter((p) => !p.active);
+  const groups = []; for (const p of act) { const k = p.site || ''; let g = groups.find((x) => x.k === k); if (!g) groups.push(g = { k, items: [] }); g.items.push(p); }
+  const card = (p) => `<article class="card ws-pt${p.active ? '' : ' off'}" data-pt="${esc(p.id)}">
+      <div class="wk"><span class="ho-ic ${p.haz ? 'ws-haz' : ''}">${ic('recycle')}</span><div class="grow"><div class="nm" data-nt>${esc(p.name)}</div>
+        <div class="sub" data-nt>${esc(p.type_name)}</div></div></div>
+      <div class="ws-chips">${chip('reg', 'LER ' + wsLer(p))}${p.haz ? chip('bad', 'Perigoso', 'warn') : ''}${p.place ? `<span class="small muted" data-nt>${ic('pin')}${esc(p.place)}</span>` : ''}${p.tag ? chip('info', 'Autocolante', 'tap') : ''}</div>
+      ${p.active ? wsFill(p) : `<p class="small muted">Desligado: já não recebe entradas.</p>`}
+      <div class="acts ws-acts">${p.active && h.can_log ? `<button class="btn small" data-wsp="put">${ic('in')}Pôr</button><button class="btn ghost small" data-wsp="level">Nível</button>` : ''}
+        ${h.can_manage && p.active ? `<button class="btn ghost small" data-wsp="ship">${ic('out')}Saída</button>` : ''}${h.can_manage ? `<button class="btn ghost small" data-wsp="edit">Editar</button>` : ''}</div></article>`;
+  body.innerHTML = `${h.can_manage ? '<button class="btn ghost wide" id="wsnewpt">+ Novo contentor</button>' : ''}
+    ${groups.length ? groups.map((g) => `<h3 class="ws-h">${g.k ? `Obra ${esc(g.k)}` : 'Sede e oficina'}</h3><div class="list">${g.items.map(card).join('')}</div>`).join('')
+      : `<div class="card">${empty('box', 'Ainda sem contentores', h.can_manage ? 'Carrega em «+ Novo contentor»: cada contentor recebe um só tipo de resíduo (ex.: «Pilhão» para pilhas, «Bidão EPI usado»).' : 'O responsável do armazém cria os contentores.')}</div>`}
+    ${off.length ? `<details class="ws-off"><summary>${esc(pl(off.length, 'contentor desligado', 'contentores desligados'))}</summary><div class="list">${off.map(card).join('')}</div></details>` : ''}`;
+  if ($('#wsnewpt')) $('#wsnewpt').onclick = () => wsPointForm(null);
+  body.querySelectorAll('[data-pt]').forEach((c) => {
+    const p = h.points.find((x) => x.id === c.dataset.pt);
+    c.querySelectorAll('[data-wsp]').forEach((b) => b.onclick = () => ({ put: () => wsDeposit(p, null), level: () => wsLevel(p), ship: () => wsShipForm(p), edit: () => wsPointForm(p) }[b.dataset.wsp])());
+  });
+}
+const wsSiteOpts = (sel, none = 'Nenhuma (sede e oficina)') => `<option value="">${esc(none)}</option>${(state.ws.home.sites || []).map((s) => `<option value="${esc(s.id)}" ${s.id === sel ? 'selected' : ''}>${esc(s.code)} · ${esc(s.title)}</option>`).join('')}`;
+const wsTypeOpts = (sel, onlyActive = true) => {
+  const ts = state.ws.home.types.filter((t) => t.active || (!onlyActive) || t.id === sel);
+  return Object.entries(WS_GRP).map(([g, l]) => { const xs = ts.filter((t) => t.grp === g); return xs.length ? `<optgroup label="${esc(l)}">${xs.map((t) =>
+    `<option value="${esc(t.id)}" data-unit="${esc(t.unit)}" ${t.id === sel ? 'selected' : ''}>${esc(wsLer(t))} · ${esc(t.name)}</option>`).join('')}</optgroup>` : ''; }).join('');
+};
+async function wsPointForm(p) {
+  const h = state.ws.home;
+  const fd = await askSheet(p ? 'Editar contentor' : 'Novo contentor', `
+    <label for="wpn">Nome *</label><input id="wpn" name="name" required minlength="2" maxlength="120" value="${esc(p ? p.name : '')}" placeholder="ex.: Pilhão escritório, Tambor trapos oficina">
+    <label for="wpt">O que leva (um só tipo) *</label><select id="wpt" name="type" required><option value="">—</option>${wsTypeOpts(p && p.type)}</select>
+    <div class="row"><div><label for="wpc">Capacidade</label><input id="wpc" name="capacity" type="number" min="0.1" step="0.1" inputmode="decimal" value="${esc(p && p.capacity != null ? p.capacity : '')}" placeholder="ex.: 60"></div>
+      <div><label for="wpu">Em</label><select id="wpu" name="unit">${Object.entries(WS_UNIT).map(([k, l]) => `<option value="${k}" ${(p ? p.unit : '') === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div></div>
+    <label for="wps">Fica numa obra?</label><select id="wps" name="site">${wsSiteOpts(p && p.site_id)}</select>
+    <label for="wpl">Onde está</label><input id="wpl" name="place" maxlength="160" value="${esc(p && p.place ? p.place : '')}" placeholder="ex.: Oficina, junto à bancada 1">
+    <label for="wpg">Autocolante NFC ou código (opcional)</label><div class="wh-addrow"><input id="wpg" name="tag" maxlength="64" value="${esc(p && p.tag ? p.tag : '')}" placeholder="Encosta o telemóvel ao autocolante">
+      ${'NDEFReader' in window ? `<button class="btn ghost small" type="button" id="wpgr">${ic('tap')}Ler</button>` : ''}</div>
+    <p class="small muted">Com autocolante, quem deita fora encosta o telemóvel e o contentor fica escolhido.</p>
+    ${p ? `<label class="check"><input type="checkbox" name="active" ${p.active ? 'checked' : ''}> Contentor em uso (desligado fica no histórico)</label>` : ''}`, 'Guardar', (d) => {
+    const t = d.querySelector('#wpt'); const u = d.querySelector('#wpu');
+    t.onchange = () => { const o = t.selectedOptions[0]; if (o && o.dataset.unit && !p) u.value = o.dataset.unit; };
+    const r = d.querySelector('#wpgr'); if (r) r.onclick = () => wsReadTag(d, (uid) => { d.querySelector('#wpg').value = uid; toast('Autocolante lido.'); });
+  });
+  wsStopTag();
+  if (!fd) return;
+  const body = { id: p ? p.id : null, name: String(fd.get('name')).trim(), type: fd.get('type'), capacity: fd.get('capacity') || null, unit: fd.get('unit'),
+    site: fd.get('site') || null, place: String(fd.get('place') || '').trim(), tag: normUid(fd.get('tag')) || null };
+  if (p) body.active = fd.get('active') === 'on';
+  const { error } = await sb.rpc('mini_waste_point_save', { p: body });
+  if (error) return toast(friendly(error));
+  toast(p ? 'Contentor guardado.' : 'Contentor criado.'); state.ws.tab = 'contentores'; wsLoad();
+}
+// The container's sticker (NFC): its serial number picks it. One reader at a time; closed with the sheet.
+async function wsReadTag(d, onUid) {
+  wsStopTag();
+  try {
+    const ctrl = new AbortController(); const r = new NDEFReader(); await r.scan({ signal: ctrl.signal }); state.wsNfc = ctrl;
+    r.onreading = (ev) => { const uid = normUid(ev.serialNumber); if (uid && d.open) onUid(uid); };
+    d.addEventListener('close', wsStopTag);
+  } catch (err) { toast(err.name === 'NotAllowedError' ? 'Dá permissão ao NFC no Chrome.' : 'O NFC não arrancou: ' + err.message); }
+}
+function wsStopTag() { if (state.wsNfc) { state.wsNfc.abort(); state.wsNfc = null; } }
+// «Pôr no contentor»: from a container card (p), from «Por arrumar» (item), or from the big button (choose or tap).
+async function wsDeposit(p, item) {
+  const h = state.ws.home; const pts = h.points.filter((x) => x.active);
+  if (!pts.length) return toast(h.can_manage ? 'Cria primeiro um contentor (separador «Contentores»).' : 'Ainda não há contentores. Fala com o armazém.');
+  const pick = p || (item && item.type && pts.find((x) => x.type === item.type)) || null;
+  const nfc = !p && 'NDEFReader' in window && pts.some((x) => x.tag);
+  const fd = await askSheet(item ? 'Arrumar no contentor' : 'Pôr no contentor', `
+    ${item ? `<p class="small"><b>${esc(item.label)}</b> <span class="muted">${esc(WS_REASON[item.reason] || '')}</span></p>` : ''}
+    ${nfc ? `<button class="tapzone" type="button" id="wsnfc"><span class="ring">${ic('tap')}</span><b>Encosta ao autocolante do contentor</b><span class="small">Ou escolhe na lista.</span></button>` : ''}
+    <label for="wdp">Contentor *</label><select id="wdp" name="point" required ${p ? 'disabled' : ''}><option value="">—</option>${pts.map((x) =>
+      `<option value="${esc(x.id)}" data-unit="${esc(x.unit)}" ${pick && pick.id === x.id ? 'selected' : ''}>${esc(x.name)} (${esc(wsLer(x))}${x.site ? ' · ' + esc(x.site) : ''})</option>`).join('')}</select>
+    ${p ? `<input type="hidden" name="point" value="${esc(p.id)}">` : ''}
+    <label for="wdq">Quanto * <span class="ws-unit" id="wdu">${esc(WS_UNIT[(pick || {}).unit] || '')}</span></label>
+    <input id="wdq" name="qty" type="number" min="0.01" max="100000" step="0.01" inputmode="decimal" required value="${item ? 1 : ''}">
+    <label for="wds">De que obra veio?</label><select id="wds" name="site">${wsSiteOpts(item ? item.site_id : (pick && pick.site_id), 'Sede, oficina ou escritório')}</select>
+    <label for="wdn">Nota</label><input id="wdn" name="note" maxlength="300" placeholder="ex.: limpeza da oficina, arquivo de 2019">
+    <label for="wdf">Fotografia (opcional)</label><input id="wdf" name="photo" type="file" accept="image/*" capture="environment">
+    <p class="small muted">Sem rede fica guardado no telemóvel e segue quando houver rede.</p>`, 'Registar', (d) => {
+    const s = d.querySelector('#wdp'); const u = d.querySelector('#wdu');
+    const unit = () => { const o = s.selectedOptions[0]; u.textContent = o && o.dataset.unit ? t_(WS_UNIT[o.dataset.unit]) : ''; };
+    s.onchange = unit;
+    const z = d.querySelector('#wsnfc');
+    if (z) z.onclick = () => { z.classList.add('reading'); wsReadTag(d, (uid) => {
+      const hit = pts.find((x) => x.tag && normUid(x.tag) === uid);
+      if (!hit) { beep(false); return toast('Este autocolante não é de nenhum contentor.'); }
+      beep(true); s.value = hit.id; unit(); const q = d.querySelector('#wdq'); q.focus(); toast(`Contentor: ${hit.name}.`); }); };
+  });
+  wsStopTag();
+  if (!fd) return;
+  const point = pts.find((x) => x.id === fd.get('point'));
+  if (!point) return toast('Escolhe o contentor.');
+  const qty = Number(fd.get('qty'));
+  const pl0 = { ref: uuid(), point: point.id, qty, site: fd.get('site') || null, note: String(fd.get('note') || '').trim() || null, inbox: item ? item.id : null, at: new Date().toISOString() };
+  const f = fd.get('photo');
+  if (f && f.size && navigator.onLine !== false && !state.offline) {
+    try {
+      const ph = await shrinkPhoto(f); const ext = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[ph.type];
+      if (ext && ph.size <= FILE_MAX) {
+        const path = `${state.me.tenant_id}/entradas/${uuid()}.${ext}`;
+        const up = await sb.storage.from('residuos').upload(path, ph, { contentType: ph.type, upsert: false });
+        if (!up.error) pl0.photo = path;
+      }
+    } catch (_) { /* the entrada goes without the photo */ }
+  }
+  const r = await callOrQueue('mini_waste_deposit', { p: pl0 }, t_('Resíduo'));
+  if (r.error) return toast(friendly(r.error));
+  if (r.queued) toast('Sem rede: a entrada ficou guardada no telemóvel e segue quando houver rede.');
+  else {
+    const pct = r.data && r.data.state ? r.data.state.pct : null;
+    toast(`Registado: ${wsNum(qty)} ${t_(WS_UNIT[point.unit])} em ${point.name}.`);
+    if (pct != null && pct >= h.settings.full_pct) setTimeout(() => toast(`${point.name} está a ${pct} %: marca a recolha.`, 'bad'), 1800);
+  }
+  wsLoad();
+}
+async function wsLevel(p) {
+  const fd = await askSheet(`Nível de ${p.name}`, `<p class="small muted">Olha para o contentor e diz como está. Conta mais do que as entradas registadas.</p>
+    <div class="chips reasons" role="radiogroup">${[0, 25, 50, 75, 90, 100].map((v) => `<label class="chip"><input type="radio" name="pct" value="${v}" required>${v === 100 ? 'Cheio' : v === 0 ? 'Vazio' : v + ' %'}</label>`).join('')}</div>`, 'Guardar');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_waste_level', { p_point: p.id, p_pct: Number(fd.get('pct')) });
+  if (error) return toast(friendly(error));
+  toast('Nível guardado.'); wsLoad();
+}
+// ---- Por arrumar
+function wsInbox(body, h) {
+  body.innerHTML = h.inbox.length ? `<p class="small muted">Saíram do uso noutro sítio da app: EPI trocado ao balcão e ferramentas abatidas. Cada um vai para um contentor ou fecha com o motivo.</p>
+    <div class="list">${h.inbox.map((i) => `<article class="card ws-in" data-in="${esc(i.id)}"><div class="wk"><span class="ho-ic">${ic(i.kind === 'tool' ? 'key' : 'shield')}</span>
+      <div class="grow"><div class="nm" data-nt>${esc(i.label)}</div><div class="sub"><span>${esc(i.kind === 'tool' ? 'Ferramenta abatida' : 'EPI trocado')}</span> · <span>${esc(WS_REASON[i.reason] || i.reason || '')}</span> · <span>${esc(wsAgo(i.at))}</span>${i.site ? ` · <span>${esc('Obra ' + i.site)}</span>` : ''}</div></div></div>
+      ${h.can_log ? `<div class="acts ws-acts"><button class="btn small" data-wi="put">${ic('in')}Pôr no contentor</button><button class="btn ghost small" data-wi="close">Não vai para o lixo</button></div>` : ''}</article>`).join('')}</div>`
+    : `<div class="card">${empty('ok', 'Nada por arrumar', 'Quando o armazém troca um EPI gasto ou abate uma ferramenta, o que sai aparece aqui para ir para o contentor certo.')}</div>`;
+  body.querySelectorAll('[data-in]').forEach((c) => {
+    const it = h.inbox.find((x) => x.id === c.dataset.in);
+    c.querySelectorAll('[data-wi]').forEach((b) => b.onclick = () => (b.dataset.wi === 'put' ? wsDeposit(null, it) : wsInboxClose(it)));
+  });
+}
+async function wsInboxClose(it) {
+  const fd = await askSheet('Não vai para o lixo', `<p class="small"><b>${esc(it.label)}</b></p><label>Porquê? *</label><div class="chips reasons" role="radiogroup">
+      ${WS_CLOSE.map((r, i) => `<label class="chip"><input type="radio" name="r" value="${esc(r)}" ${i ? '' : 'required'}>${esc(r)}</label>`).join('')}
+      <label class="chip"><input type="radio" name="r" value="">Outro motivo</label></div>
+    <input name="x" id="wix" placeholder="Escreve o motivo" hidden maxlength="300"><p class="small muted">Fica no histórico com o teu nome.</p>`, 'Fechar', (d) => {
+    const x = d.querySelector('#wix');
+    d.querySelectorAll('input[name=r]').forEach((r) => r.onchange = () => { x.hidden = r.value !== ''; x.required = r.value === ''; if (!x.hidden) x.focus(); });
+  });
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_waste_inbox_close', { p_item: it.id, p_note: String(fd.get('r') || fd.get('x') || '').trim() });
+  if (error) return toast(friendly(error));
+  toast('Fechado.'); wsLoad();
+}
+// ---- Saídas
+function wsShipCard(x) {
+  const [k, l] = WS_EGAR[x.egar_state] || ['reg', x.egar_state];
+  return `<button type="button" class="card link ws-ship${x.status === 'anulada' ? ' off' : ''}" data-sh="${esc(x.id)}">
+    <div class="wk"><span class="ho-ic ${x.haz ? 'ws-haz' : ''}">${ic('out')}</span><div class="grow"><div class="nm" data-nt>${esc(x.type_name)}</div>
+      <div class="sub"><span>${esc(fmtDate(x.on))}</span> · <b>${esc(wsNum(x.kg))} kg</b>${x.weighed ? '' : ` <span>${esc('(estimado)')}</span>`}${x.site ? ` · <span>${esc('Obra ' + x.site)}</span>` : ''}</div></div></div>
+    <div class="ws-chips">${chip('reg', 'LER ' + wsLer(x))}${x.haz ? chip('bad', 'Perigoso') : ''}${x.status === 'anulada' ? chip('reg', 'Anulada') : chip(k, l)}${x.egar ? `<span class="small muted">${esc(x.egar)}</span>` : ''}</div>
+    <p class="small muted"><span data-nt>${esc(x.transporter)} → ${esc(x.operator)} · ${esc(x.op)}${x.cost ? ' · ' + esc(eur2(x.cost)) : ''}</span>${x.files.length ? ` · <span>${esc(pl(x.files.length, 'prova', 'provas'))}</span>` : ''}</p></button>`;
+}
+function wsShips(body, h) {
+  body.innerHTML = `${h.can_manage ? '<button class="btn ghost wide" id="wsnewsh">+ Registar saída (recolha)</button>' : ''}
+    ${h.shipments.length ? `<div class="list">${h.shipments.map(wsShipCard).join('')}</div>`
+      : `<div class="card">${empty('box', 'Ainda sem saídas', 'Cada recolha fica aqui: quem levou, para onde, quanto pesou e a e-GAR.')}</div>`}`;
+  if ($('#wsnewsh')) $('#wsnewsh').onclick = () => wsShipForm(null);
+  body.querySelectorAll('[data-sh]').forEach((b) => b.onclick = () => wsShipDetail(h.shipments.find((x) => x.id === b.dataset.sh)));
+}
+async function wsShipForm(p) {
+  const h = state.ws.home;
+  if (!h.can_manage) return;
+  const trs = h.carriers.filter((c) => c.active && c.role !== 'destino'); const ops = h.carriers.filter((c) => c.active && c.role !== 'transporte');
+  if (!trs.length || !ops.length) { toast('Junta primeiro as empresas licenciadas (Configurar › Empresas).'); state.ws.tab = 'config'; return wsLoad(); }
+  const today = isoDay(new Date());
+  const cOpt = (list) => list.map((c) => `<option value="${esc(c.id)}" ${c.expired ? 'disabled' : ''}>${esc(c.name)}${c.licence ? ' · ' + esc(c.licence) : ' · sem licença'}${c.expired ? ' (licença caducada)' : ''}</option>`).join('');
+  const st = p && p.state ? p.state : {};
+  const fd = await askSheet('Registar saída', `
+    ${p ? `<p class="small" data-nt><b>${esc(p.name)}</b> · ${esc(wsLer(p))} ${esc(p.type_name)}</p><input type="hidden" name="point" value="${esc(p.id)}">`
+      : `<label for="wst">Resíduo *</label><select id="wst" name="type" required><option value="">—</option>${wsTypeOpts(null, false)}</select>
+        <label for="wsp">Do contentor</label><select id="wsp" name="point"><option value="">Nenhum em especial</option></select>`}
+    <div class="row"><div><label for="wsd">Dia *</label><input id="wsd" name="on" type="date" required value="${today}" max="${today}"></div>
+      <div><label for="wsk">Peso (kg) *</label><input id="wsk" name="kg" type="number" min="0.1" step="0.1" inputmode="decimal" required value="${p && p.unit === 'kg' && st.qty ? esc(st.qty) : ''}"></div></div>
+    <label class="check"><input type="checkbox" name="weighed"> Peso da balança ou da e-GAR (não estimado)</label>
+    <label for="wstr">Quem transporta *</label><select id="wstr" name="transporter" required><option value="">—</option>${cOpt(trs)}</select>
+    <label for="wsop">Para onde vai (destino licenciado) *</label><select id="wsop" name="operator" required><option value="">—</option>${cOpt(ops)}</select>
+    <label for="wso">Operação *</label><select id="wso" name="op" required><option value="">—</option>${WS_OPS.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('')}</select>
+    <label for="wse">N.º da e-GAR</label><input id="wse" name="egar" maxlength="40" placeholder="ex.: PT20260000123456">
+    <p class="small muted">Se ainda não tens o número, grava sem: fica o aviso até o pores.</p>
+    <div class="row"><div><label for="wsc">Custo (€)</label><input id="wsc" name="cost" type="number" min="0" step="0.01" inputmode="decimal"></div>
+      <div><label for="wss">Obra</label><select id="wss" name="site">${wsSiteOpts(p && p.site_id, 'Sede e oficina')}</select></div></div>
+    ${p ? '<label class="check"><input type="checkbox" name="empties" checked> O contentor ficou vazio</label>' : ''}
+    <label for="wsn">Nota</label><input id="wsn" name="note" maxlength="500">`, 'Registar saída', (d) => {
+    const t = d.querySelector('#wst'); const ps = d.querySelector('#wsp');
+    if (t) t.onchange = () => { ps.innerHTML = `<option value="">Nenhum em especial</option>${h.points.filter((x) => x.active && x.type === t.value).map((x) => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('')}`; };
+  });
+  if (!fd) return;
+  const body = { point: fd.get('point') || null, type: fd.get('type') || null, on: fd.get('on'), kg: fd.get('kg'), weighed: fd.get('weighed') === 'on', transporter: fd.get('transporter'),
+    operator: fd.get('operator'), op: fd.get('op'), egar: String(fd.get('egar') || '').trim() || null, cost: fd.get('cost') || null, site: fd.get('site') || null,
+    empties: p ? fd.get('empties') === 'on' : false, note: String(fd.get('note') || '').trim() || null };
+  const { data, error } = await sb.rpc('mini_waste_ship', { p: body });
+  if (error) return toast(friendly(error));
+  toast(data.egar ? 'Saída registada.' : 'Saída registada. Falta a e-GAR: fica o aviso.');
+  state.ws.tab = 'saidas'; await wsLoad(); wsShipDetail(data);
+}
+const WS_LOG = { created: 'Registada', changed: 'Alterada', cancelled: 'Anulada', file: 'Prova junta' };
+async function wsShipDetail(x) {
+  const h = state.ws.home; const m = h.can_manage && x.status === 'ativa';
+  const [k, l] = WS_EGAR[x.egar_state] || ['reg', x.egar_state];
+  const fd = await askSheet(`Saída de ${fmtDate(x.on)}`, `
+    <div class="ws-chips">${chip('reg', 'LER ' + wsLer(x))}${x.haz ? chip('bad', 'Perigoso') : ''}${x.status === 'anulada' ? chip('reg', 'Anulada') : chip(k, l)}</div>
+    <dl class="ws-dl"><dt>Resíduo</dt><dd>${esc(x.type_name)}</dd><dt>Peso</dt><dd><span>${esc(wsNum(x.kg))} kg</span>${x.weighed ? '' : ` <span>${esc('(estimado)')}</span>`}${x.received_kg ? ` <span>${esc(`· recebido ${wsNum(x.received_kg)} kg`)}</span>` : ''}</dd>
+      <dt>Transporte</dt><dd data-nt>${esc(x.transporter)}</dd><dt>Destino</dt><dd data-nt>${esc(x.operator)} · ${esc(x.op)}</dd>
+      ${x.point_name ? `<dt>Contentor</dt><dd><span data-nt>${esc(x.point_name)}</span>${x.emptied ? ` <span>${esc('(esvaziado)')}</span>` : ''}</dd>` : ''}${x.site ? `<dt>Obra</dt><dd>${esc(x.site)}</dd>` : ''}
+      ${x.cost ? `<dt>Custo</dt><dd>${esc(eur2(x.cost))}</dd>` : ''}<dt>Registada por</dt><dd data-nt>${esc(x.by || '')}</dd>${x.note ? `<dt>Nota</dt><dd data-nt>${esc(x.note)}</dd>` : ''}
+      ${x.cancel_reason ? `<dt>Anulada</dt><dd data-nt>${esc(x.cancel_reason)}</dd>` : ''}</dl>
+    <h3>Provas (e-GAR, guia, fotografias)</h3><div id="wsfiles">${x.files.length ? x.files.map((f) => `<button type="button" class="chip" data-f="${esc(f.path)}">${ic('doc')}${esc(f.name || 'Ficheiro')}</button>`).join(' ') : '<p class="small muted">Ainda sem provas.</p>'}</div>
+    ${m ? `<label for="wsfa" class="btn ghost small ws-file">${ic('camera')}Juntar foto ou PDF<input id="wsfa" type="file" accept="image/*,application/pdf" hidden></label>
+      <h3>e-GAR</h3><label for="wse2">N.º da e-GAR</label><input id="wse2" name="egar" maxlength="40" value="${esc(x.egar || '')}">
+      <label for="wsr">Peso recebido no destino (kg)</label><input id="wsr" name="received_kg" type="number" min="0.1" step="0.1" inputmode="decimal" value="${esc(x.received_kg || '')}">
+      <label class="check"><input type="checkbox" name="confirm" ${x.egar_state === 'confirmada' ? 'checked disabled' : ''}> O destino confirmou a receção na e-GAR</label>
+      <label for="wsn2">Nota</label><input id="wsn2" name="note" maxlength="500">` : ''}
+    <details class="ws-log"><summary>Histórico desta saída</summary><div id="wslog"><p class="small muted">A carregar…</p></div></details>
+    ${m ? '<button class="btn ghost small ws-cancel" value="anular" formnovalidate>Anular esta saída</button>' : ''}`, m ? 'Guardar' : 'Fechar', (d) => {
+    d.querySelectorAll('[data-f]').forEach((b) => b.onclick = () => openDocFile(b.dataset.f, 'residuos', { title: b.textContent.trim() }));
+    const lg = d.querySelector('.ws-log');
+    lg.addEventListener('toggle', async () => {
+      if (!lg.open || lg.dataset.done) return; lg.dataset.done = '1';
+      const { data, error } = await sb.rpc('mini_waste_history', { p: { ship: x.id, from: isoDay(new Date(Date.now() - 730 * 864e5)), to: isoDay(new Date()) } });
+      const box = d.querySelector('#wslog'); if (!box) return;
+      box.innerHTML = error ? `<p class="small">${esc(friendly(error))}</p>` : `<ul class="plain small">${data.log.map((e) => `<li><span>${esc(fmtTime(e.at))}</span> · <span>${esc(WS_LOG[e.action] || e.action)}</span> · <span data-nt>${esc(e.by || '')}</span></li>`).join('')}</ul>`;
+    });
+    const fa = d.querySelector('#wsfa');
+    if (fa) fa.onchange = async () => {
+      const f0 = fa.files[0]; if (!f0) return;
+      const pdf = f0.type === 'application/pdf'; const f = pdf ? f0 : await shrinkPhoto(f0);
+      const ext = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'application/pdf': 'pdf' }[f.type];
+      if (!ext) return toast('Só aceito fotografias ou PDF.');
+      if (f.size > FILE_MAX) return toast('O ficheiro é grande demais (máximo 10 MB).');
+      const path = `${state.me.tenant_id}/${x.id}/${uuid()}.${ext}`;
+      const up = await sb.storage.from('residuos').upload(path, f, { contentType: f.type, upsert: false });
+      if (up.error) return toast(friendly(up.error));
+      const { error } = await sb.rpc('mini_waste_file_add', { p_ship: x.id, p_file: path, p_name: f0.name || (pdf ? 'Guia.pdf' : 'Fotografia'), p_sha256: await sha256Hex(f) });
+      if (error) return toast(friendly(error));
+      x.files.push({ path, name: f0.name }); const box = d.querySelector('#wsfiles');
+      box.innerHTML = x.files.map((g) => `<button type="button" class="chip" data-f="${esc(g.path)}">${ic('doc')}${esc(g.name || 'Ficheiro')}</button>`).join(' ');
+      box.querySelectorAll('[data-f]').forEach((b) => b.onclick = () => openDocFile(b.dataset.f, 'residuos', { title: b.textContent.trim() }));
+      toast('Prova junta.');
+    };
+  });
+  if (!fd || !m) { if (state.view === 'residuos') wsLoad(); return; }
+  if (fd.get('_v') === 'anular') {
+    const why = prompt(t_('Porque é que anulas esta saída? (fica no histórico)'));
+    if (!why) return;
+    const { error } = await sb.rpc('mini_waste_ship_cancel', { p_ship: x.id, p_reason: why });
+    if (error) return toast(friendly(error));
+    toast('Saída anulada.'); return wsLoad();
+  }
+  const p = { egar: String(fd.get('egar') || '').trim() || null, received_kg: fd.get('received_kg') || null, note: String(fd.get('note') || '').trim() || null };
+  if (fd.get('confirm') === 'on') p.state = 'confirmada';
+  const { error } = await sb.rpc('mini_waste_ship_update', { p_ship: x.id, p });
+  if (error) return toast(friendly(error));
+  toast(p.state ? 'Confirmada pelo destino.' : 'Guardado.'); wsLoad();
+}
+// ---- Resumo: the month per type and per site, the last entradas, Excel of the month and the year (MIRR)
+async function wsSummary(body) {
+  const S = state.ws; if (!S.month) S.month = isoDay(new Date()).slice(0, 7);
+  body.innerHTML = skel(3);
+  const { from, to } = monthRange(S.month);
+  const [{ data: m, error }, { data: hist }] = await Promise.all([sb.rpc('mini_waste_month', { p_month: from }), sb.rpc('mini_waste_history', { p: { from, to } })]);
+  if (!body.isConnected) return;
+  if (error) { body.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
+  S.monthData = m; S.hist = hist;
+  const y = Number(S.month.slice(0, 4));
+  const tot = m.types.reduce((a, x) => a + Number(x.out_kg || 0), 0); const haz = m.types.filter((x) => x.haz).reduce((a, x) => a + Number(x.out_kg || 0), 0);
+  const cost = m.types.reduce((a, x) => a + Number(x.cost || 0), 0);
+  body.innerHTML = `<div class="card"><div class="wk"><label for="wsm" class="grow">Mês</label><input id="wsm" type="month" value="${esc(S.month)}"></div>
+      <div class="fl-sum"><div class="fl-n"><b>${esc(wsNum(tot))}</b><span>kg saíram</span></div><div class="fl-n ${haz ? 'warn' : 'zero'}"><b>${esc(wsNum(haz))}</b><span>kg perigosos</span></div>
+        <div class="fl-n"><b>${esc(eur2(cost))}</b><span>custo das recolhas</span></div></div></div>
+    <section class="card tbl-card"><h2 style="margin-top:0">Por tipo de resíduo</h2>${m.types.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>LER</th><th>Resíduo</th><th class="num">Entradas</th><th class="num">Saiu (kg)</th><th class="num">Custo</th></tr></thead>
+      <tbody>${m.types.map((x) => `<tr><td>${esc(wsLer(x))}</td><td><span data-nt>${esc(x.name)}</span>${x.haz ? ' ' + chip('bad', 'Perigoso') : ''}</td><td class="num"><span>${esc(wsNum(x.in_qty))}</span> <span>${esc(WS_UNIT[x.unit])}</span> <small class="muted">(${x.in_n})</small></td>
+        <td class="num">${esc(wsNum(x.out_kg))}</td><td class="num">${esc(eur2(x.cost))}</td></tr>`).join('')}</tbody></table></div>` : empty('ok', 'Sem movimento neste mês', '')}</section>
+    ${m.sites.length ? `<section class="card tbl-card"><h2 style="margin-top:0">Por obra</h2><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Obra</th><th class="num">Entradas</th><th class="num">Saiu (kg)</th><th class="num">Perigosos (kg)</th><th class="num">Custo</th></tr></thead>
+      <tbody>${m.sites.map((x) => `<tr><td>${x.site ? esc(x.site) : esc('Sede e oficina')}</td><td class="num">${x.in_n}</td><td class="num">${esc(wsNum(x.out_kg))}</td><td class="num">${esc(wsNum(x.haz_kg))}</td><td class="num">${esc(eur2(x.cost))}</td></tr>`).join('')}</tbody></table></div></section>` : ''}
+    <div class="acts"><button class="btn" id="wsxm">${ic('doc')}Excel do mês</button>
+      <div class="wk"><select id="wsy" aria-label="Ano">${[y, y - 1, y - 2].map((v) => `<option ${v === y ? 'selected' : ''}>${v}</option>`).join('')}</select>
+        <button class="btn ghost" id="wsxy">${ic('doc')}Mapa anual (MIRR) em Excel</button></div></div>
+    <p class="small muted">O mapa anual junta as saídas do ano por código LER, operação e destino, em toneladas, para o MIRR no SILiAmb (entrega até 31 de março do ano seguinte).</p>
+    <section class="card"><h2 style="margin-top:0">Entradas do mês</h2>${(hist && hist.deposits.length) ? `<ul class="plain ws-hist">${hist.deposits.map((d) => `<li><span class="grow"><b><span>${esc(wsNum(d.qty))}</span> <span>${esc(WS_UNIT[d.unit])}</span></b> <span data-nt>· ${esc(d.point)}</span>
+        <span class="small muted" data-nt>· ${esc(fmtTime(d.at))} · ${esc(d.by || '')}${d.site ? ' · ' + esc(d.site) : ''}${d.from_inbox ? ' · ' + esc(d.from_inbox) : ''}</span></span>
+        ${d.offline ? chip('reg', 'enviada sem rede') : ''}${d.photo ? `<button class="btn ghost small" data-ph="${esc(d.photo)}">${ic('camera')}</button>` : ''}</li>`).join('')}</ul>` : '<p class="small muted">Sem entradas neste mês.</p>'}</section>`;
+  $('#wsm').onchange = (e) => { S.month = e.target.value || S.month; wsSummary(body); };
+  body.querySelectorAll('[data-ph]').forEach((b) => b.onclick = () => openDocFile(b.dataset.ph, 'residuos', { title: 'Fotografia' }));
+  $('#wsxm').onclick = () => wsExcelMonth(from, to);
+  $('#wsxy').onclick = () => wsExcelYear(Number($('#wsy').value));
+}
+function wsExcelMonth(from, to) {
+  const S = state.ws; const m = S.monthData; const hist = S.hist || { deposits: [], shipments: [] };
+  excelExport(async () => m, (X) => {
+    const doc = xlDoc([], 'Resíduos do mês', `Período: ${periodLabel(from, to)}`, null);
+    const wb = xlBook(X, doc);
+    const a = xlSheet(wb, 'Por tipo', doc, [{ h: 'Código LER', t: 'text', w: 12 }, { h: 'Resíduo', t: 'text', w: 30, max: 60 }, { h: 'Perigoso', t: 'text', w: 9 },
+      { h: 'Entradas', t: 'n', w: 9 }, { h: 'Quantidade entrada', t: 'h', w: 11 }, { h: 'Unidade', t: 'text', w: 9 }, { h: 'Saiu (kg)', t: 'h', w: 11 }, { h: 'Recolhas', t: 'n', w: 9 }, { h: 'Custo', t: 'eur', w: 11 }]);
+    let r = a.head + 1;
+    for (const x of m.types) xlRow(a, r++, [wsLer(x), x.name, x.haz ? 'sim' : 'não', x.in_n, Number(x.in_qty), WS_UNIT[x.unit], Number(x.out_kg), x.out_n, Number(x.cost)]);
+    xlFit(a, a.head + 1, r - 1);
+    const b = xlSheet(wb, 'Por obra', doc, [{ h: 'Obra', t: 'text', w: 12 }, { h: 'Nome', t: 'text', w: 26, max: 50 }, { h: 'Entradas', t: 'n', w: 9 }, { h: 'Saiu (kg)', t: 'h', w: 11 }, { h: 'Perigosos (kg)', t: 'h', w: 12 }, { h: 'Custo', t: 'eur', w: 11 }]);
+    r = b.head + 1;
+    for (const x of m.sites) xlRow(b, r++, [x.site || 'Sede', x.title || 'Sede e oficina', x.in_n, Number(x.out_kg), Number(x.haz_kg), Number(x.cost)]);
+    const c = xlSheet(wb, 'Saídas', doc, [{ h: 'Data', t: 'date', w: 11 }, { h: 'Código LER', t: 'text', w: 12 }, { h: 'Resíduo', t: 'text', w: 26, max: 50 }, { h: 'Peso (kg)', t: 'h', w: 10 },
+      { h: 'Pesado', t: 'text', w: 8 }, { h: 'Transportador', t: 'text', w: 22, max: 40 }, { h: 'Destino', t: 'text', w: 22, max: 40 }, { h: 'Operação', t: 'text', w: 9 }, { h: 'e-GAR', t: 'text', w: 18 },
+      { h: 'Estado e-GAR', t: 'text', w: 16 }, { h: 'Obra', t: 'text', w: 9 }, { h: 'Custo', t: 'eur', w: 10 }]);
+    r = c.head + 1;
+    for (const x of hist.shipments.filter((s) => s.status === 'ativa')) xlRow(c, r++, [xlDate(x.on), wsLer(x), x.type_name, Number(x.kg), x.weighed ? 'sim' : 'estimado', x.transporter, x.operator, x.op, x.egar || '', (WS_EGAR[x.egar_state] || [])[1] || '', x.site || '', Number(x.cost || 0)]);
+    xlFit(c, c.head + 1, r - 1);
+    return { wb, name: `gestnow-residuos-${from.slice(0, 7)}.xlsx`, msg: 'Excel descarregado.' };
+  });
+}
+function wsExcelYear(year) {
+  excelExport(async () => { const r = await sb.rpc('mini_waste_year', { p_year: year }); if (r.error) { toast(friendly(r.error)); return null; } return r.data; }, (X, y) => {
+    const doc = xlDoc([y.company], `Mapa anual de resíduos ${y.year} (para o MIRR)`, `NIF ${y.nif || '—'} · N.º APA ${y.apa || '— (põe em Resíduos › Configurar)'}`, null);
+    const wb = xlBook(X, doc);
+    const a = xlSheet(wb, 'Mapa ' + y.year, doc, [{ h: 'Código LER', t: 'text', w: 12 }, { h: 'Resíduo', t: 'text', w: 30, max: 60 }, { h: 'Perigoso', t: 'text', w: 9 }, { h: 'Operação', t: 'text', w: 9 },
+      { h: 'Destino', t: 'text', w: 24, max: 40 }, { h: 'NIF destino', t: 'text', w: 12 }, { h: 'Licença destino', t: 'text', w: 16 }, { h: 'Transportador', t: 'text', w: 24, max: 40 },
+      { h: 'NIF transportador', t: 'text', w: 12 }, { h: 'Toneladas', t: 'h', w: 11 }, { h: 'Recolhas', t: 'n', w: 9 }, { h: 'Com e-GAR', t: 'n', w: 9 }, { h: 'Sem e-GAR', t: 'n', w: 9 }, { h: 'Por confirmar', t: 'n', w: 10 }]);
+    a.ws.getColumn(10).numFmt = '0.000';
+    let r = a.head + 1;
+    for (const l of y.lines) xlRow(a, r++, [l.ler, l.name, l.haz ? 'sim' : 'não', l.op, l.operator, l.operator_nif || '', l.operator_licence || '', l.transporter, l.transporter_nif || '', Number(l.tonnes), l.n, l.egar_n, l.no_egar, l.not_confirmed]);
+    for (let i = a.head + 1; i < r; i++) a.ws.getCell(i, 10).numFmt = '0.000';
+    xlFit(a, a.head + 1, r - 1);
+    const miss = y.lines.reduce((s, l) => s + l.no_egar + l.not_confirmed, 0);
+    return { wb, name: `gestnow-mapa-residuos-${y.year}.xlsx`, msg: miss ? t('Mapa pronto, com {x} recolha(s) sem e-GAR ou por confirmar.', miss) : 'Mapa pronto.' };
+  });
+}
+// ---- Configurar (residuos.gerir): the company's rules, the licensed companies and the waste types
+function wsConfig(body, h) {
+  const s = h.settings;
+  const grp = Object.entries(WS_GRP).map(([g, l]) => [l, h.types.filter((t) => t.grp === g)]).filter(([, xs]) => xs.length);
+  body.innerHTML = `<section class="card"><h2 style="margin-top:0">Regras da empresa</h2>
+      <form id="wsrules"><label for="wsa">N.º da empresa no registo de resíduos (APA / SILiAmb)</label><input id="wsa" name="apa" maxlength="40" value="${esc(s.apa || '')}" placeholder="ex.: APA00123456">
+      <div class="row"><div><label for="wsh">Perigosos: máximo guardado (dias)</label><input id="wsh" name="haz_days" type="number" min="7" max="1095" value="${s.haz_days}"></div>
+        <div><label for="wsnh">Não perigosos (dias)</label><input id="wsnh" name="nonhaz_days" type="number" min="7" max="1095" value="${s.nonhaz_days}"></div></div>
+      <label for="wsf">Aviso de contentor cheio a partir de (%)</label><input id="wsf" name="full_pct" type="number" min="50" max="100" value="${s.full_pct}">
+      <p class="small muted">Os prazos de armazenagem dependem da licença e da lei de cada país: confirma com o técnico de ambiente. Um tipo de resíduo pode ter o seu próprio prazo.</p>
+      <button class="btn">Guardar regras</button></form></section>
+    <section class="card"><h2 style="margin-top:0">Empresas licenciadas</h2><p class="small muted">Quem transporta e quem recebe os resíduos (operador de gestão de resíduos), com a licença e a validade.</p>
+      ${h.carriers.length ? `<ul class="plain ws-car">${h.carriers.map((c) => `<li class="${c.active ? '' : 'off'}"><span class="grow"><b data-nt>${esc(c.name)}</b><br><span class="small muted"><span>${esc(WS_ROLE[c.role])}</span>${c.nif ? ` · <span data-nt>NIF ${esc(c.nif)}</span>` : ''} · ${c.licence ? `<span data-nt>${esc(c.licence)}</span>` : `<span>${esc('sem licença')}</span>`}</span>
+        ${c.until ? (c.expired ? chip('bad', 'Licença caducou a ' + fmtDate(c.until)) : chip(c.until <= isoDay(new Date(Date.now() + 30 * 864e5)) ? 'warn' : 'ok', 'Licença até ' + fmtDate(c.until))) : ''}${c.active ? '' : chip('reg', 'Desligada')}</span>
+        <button class="btn ghost small" data-car="${esc(c.id)}">Editar</button></li>`).join('')}</ul>` : '<p class="small">Ainda nenhuma. Sem elas não dá para registar saídas.</p>'}
+      <button class="btn ghost" id="wsnewcar">+ Empresa</button></section>
+    <section class="card"><h2 style="margin-top:0">Tipos de resíduo (código LER)</h2><p class="small muted">A lista habitual já vem feita. O asterisco (*) quer dizer perigoso. Desliga os que não usas; junta os que faltam.</p>
+      ${grp.map(([l, xs]) => `<h3>${esc(l)}</h3><ul class="plain ws-types">${xs.map((t) => `<li class="${t.active ? '' : 'off'}"><span class="grow">${chip(t.haz ? 'bad' : 'reg', wsLer(t))} <span data-nt>${esc(t.name)}</span>
+        <span class="small muted"><span>${esc(WS_UNIT[t.unit])}</span>${t.haz || t.max_days ? ` <span>${esc(`· máx. ${t.days} dias`)}</span>` : ''}</span>${t.active ? '' : ' ' + chip('reg', 'Desligado')}</span>
+        <button class="btn ghost small" data-ty="${esc(t.id)}">Editar</button></li>`).join('')}</ul>`).join('')}
+      <button class="btn ghost" id="wsnewty">+ Tipo de resíduo</button></section>`;
+  $('#wsrules').onsubmit = async (e) => {
+    e.preventDefault(); const f = new FormData(e.target);
+    const { error } = await sb.rpc('mini_waste_settings_save', { p: { apa: String(f.get('apa') || '').trim(), haz_days: Number(f.get('haz_days')), nonhaz_days: Number(f.get('nonhaz_days')), full_pct: Number(f.get('full_pct')) } });
+    if (error) return toast(friendly(error));
+    toast('Regras guardadas.'); wsLoad();
+  };
+  $('#wsnewcar').onclick = () => wsCarrierForm(null);
+  $('#wsnewty').onclick = () => wsTypeForm(null);
+  body.querySelectorAll('[data-car]').forEach((b) => b.onclick = () => wsCarrierForm(h.carriers.find((c) => c.id === b.dataset.car)));
+  body.querySelectorAll('[data-ty]').forEach((b) => b.onclick = () => wsTypeForm(h.types.find((t) => t.id === b.dataset.ty)));
+}
+async function wsCarrierForm(c) {
+  const fd = await askSheet(c ? 'Editar empresa' : 'Nova empresa licenciada', `
+    <label for="wcn">Nome *</label><input id="wcn" name="name" required minlength="2" maxlength="160" value="${esc(c ? c.name : '')}">
+    <label for="wcr">Faz *</label><select id="wcr" name="role" required>${Object.entries(WS_ROLE).map(([k, l]) => `<option value="${k}" ${(c ? c.role : 'ambos') === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>
+    <div class="row"><div><label for="wcf">NIF</label><input id="wcf" name="nif" maxlength="20" value="${esc(c && c.nif ? c.nif : '')}"></div>
+      <div><label for="wcu">Licença válida até</label><input id="wcu" name="until" type="date" value="${esc(c && c.until ? c.until : '')}"></div></div>
+    <label for="wcl">N.º da licença ou registo</label><input id="wcl" name="licence" maxlength="80" value="${esc(c && c.licence ? c.licence : '')}" placeholder="Obrigatório para resíduos perigosos">
+    <label for="wcc">Contacto</label><input id="wcc" name="contact" maxlength="160" value="${esc(c && c.contact ? c.contact : '')}" placeholder="telefone ou e-mail">
+    ${c ? `<label class="check"><input type="checkbox" name="active" ${c.active ? 'checked' : ''}> Ainda trabalhamos com esta empresa</label>` : ''}`, 'Guardar');
+  if (!fd) return;
+  const p = { id: c ? c.id : null, name: String(fd.get('name')).trim(), role: fd.get('role'), nif: String(fd.get('nif') || '').trim(), until: fd.get('until') || null,
+    licence: String(fd.get('licence') || '').trim(), contact: String(fd.get('contact') || '').trim() };
+  if (c) p.active = fd.get('active') === 'on';
+  const { error } = await sb.rpc('mini_waste_carrier_save', { p });
+  if (error) return toast(friendly(error));
+  toast('Empresa guardada.'); wsLoad();
+}
+async function wsTypeForm(t) {
+  const fd = await askSheet(t ? 'Editar tipo de resíduo' : 'Novo tipo de resíduo', `
+    <label for="wtl">Código LER *</label><input id="wtl" name="ler" required maxlength="10" value="${esc(t ? wsLer(t) : '')}" placeholder="ex.: 15 02 02*">
+    <p class="small muted">6 algarismos, da Lista Europeia de Resíduos. Com * no fim é perigoso.</p>
+    <label for="wtn">Nome *</label><input id="wtn" name="name" required minlength="2" maxlength="160" value="${esc(t ? t.name : '')}">
+    <div class="row"><div><label for="wtg">Grupo</label><select id="wtg" name="grp">${Object.entries(WS_GRP).map(([k, l]) => `<option value="${k}" ${(t ? t.grp : 'outro') === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
+      <div><label for="wtu">Conta em</label><select id="wtu" name="unit">${Object.entries(WS_UNIT).map(([k, l]) => `<option value="${k}" ${(t ? t.unit : 'kg') === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div></div>
+    <label for="wtd">Prazo máximo guardado (dias)</label><input id="wtd" name="max_days" type="number" min="7" max="1095" value="${esc(t && t.max_days ? t.max_days : '')}" placeholder="Vazio = regra da empresa">
+    ${t ? `<label class="check"><input type="checkbox" name="active" ${t.active ? 'checked' : ''}> Em uso</label>` : ''}`, 'Guardar');
+  if (!fd) return;
+  const p = { id: t ? t.id : null, ler: String(fd.get('ler')).trim(), name: String(fd.get('name')).trim(), grp: fd.get('grp'), unit: fd.get('unit'), max_days: fd.get('max_days') || null };
+  if (t) p.active = fd.get('active') === 'on';
+  const { error } = await sb.rpc('mini_waste_type_save', { p });
+  if (error) return toast(friendly(error));
+  toast('Tipo de resíduo guardado.'); wsLoad();
+}
+
 // ------------------------------------------------------------------ Avisos (sql/83): the bell, and the screens that change by themselves
 // The database writes a notice for a role or a person (documents to expire, a week to confirm, a contract unsigned,
 // a tool overdue…). The bell shows the ones for this login; each one is read per person, and a tap opens where it
@@ -15004,6 +15530,7 @@ function noticeRoute(x) {
   if (k === 'hazard_answer') return mine('relatos');
   if (k === 'front_request' || k === 'front_answer') return view('frentes');
   if (k === 'routine_late') return view('rotinas');
+  if (/^waste/.test(k)) return view('residuos');
   if (/^client_docs/.test(k)) return () => { if (!viewOpen('docscliente')) return false; state.cdocs = { tab: 'curso', ltab: 'pessoas', sel: new Set(), list: l.list_id || null }; go('docscliente'); return true; };
   return () => false;
 }
