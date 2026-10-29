@@ -1157,7 +1157,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '114';
+const APP_VERSION = '115';
 // v107 (Diogo 2026-10-26): «Início» = what is urgent + the departments. The bottom bar keeps only Início, the field tools of
 // the encarregado (Equipa, Picar) or of the safety officer (Emergência), Procurar and Eu. Everything else is in its department.
 const TABS = { supervisor: ['inicio', 'equipa', 'picar', 'minhas'], admin: ['inicio', 'minhas'],
@@ -1279,7 +1279,10 @@ function layoutNav(role) {
   // v107: with Início on the bar, the departments are there: no «Mais» on the phone; «Procurar» goes before «Eu»
   const door = !isWide() && first.includes('inicio');
   moreBtn.hidden = door;
-  const findBtn = nav.querySelector('button[data-find]'); findBtn.hidden = !door || role === 'worker';
+  // v115: THE «Procurar» of the bar, never the sheet's big one (.mfind also has data-find): each rebuild of the menu
+  // (owner between clients and a company, width, profile) used to move one more copy into the bar (Diogo 2026-10-29)
+  tabs.querySelectorAll(':scope > .mfind').forEach((b) => b.remove());
+  const findBtn = nav.querySelector('button[data-find]:not(.mfind)'); findBtn.hidden = !door || role === 'worker';
   nav.querySelectorAll('.enc-mh').forEach((h) => h.remove());
   sheet.querySelectorAll('hr').forEach((h) => h.remove());
   const head = (t) => Object.assign(document.createElement('h3'), { className: 'enc-mh', textContent: t });
