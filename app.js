@@ -1157,7 +1157,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '115';
+const APP_VERSION = '116';
 // v107 (Diogo 2026-10-26): «Início» = what is urgent + the departments. The bottom bar keeps only Início, the field tools of
 // the encarregado (Equipa, Picar) or of the safety officer (Emergência), Procurar and Eu. Everything else is in its department.
 const TABS = { supervisor: ['inicio', 'equipa', 'picar', 'minhas'], admin: ['inicio', 'minhas'],
@@ -1174,7 +1174,7 @@ function tabsFor(role) {
   return TABS[role] || TABS.supervisor;
 }
 const OFFLINE_VIEWS = ['picar', 'minhas', 'material', 'reunioes', 'relatos', 'emergencia'];   // v89: they keep a copy
-const MORE_ORDER = ['inicio', 'empresa', 'onbtextos', 'equipa', 'material', 'picar', 'emergencia', 'relatos', 'reunioes', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'faltas', 'mesresumo', 'reclamacoes', 'salarios', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'despesas', 'diarias', 'andaimes', 'processo', 'clientes', 'custos', 'progresso', 'frentes', 'rotinas', 'contactos'];
+const MORE_ORDER = ['inicio', 'empresa', 'onbtextos', 'equipa', 'material', 'picar', 'emergencia', 'relatos', 'reunioes', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'faltas', 'mesresumo', 'reclamacoes', 'salarios', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'compras', 'frota', 'alojamento', 'viagens', 'docscliente', 'despesas', 'diarias', 'andaimes', 'processo', 'clientes', 'custos', 'progresso', 'frentes', 'rotinas', 'contactos'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -1193,7 +1193,7 @@ WIDE.addEventListener('change', () => {
 const MENU_GROUPS = [
   ['Administração', ['inicio', 'empresa', 'premios', 'clientes']],
   ['Secretariado', ['secretariado', 'faltas', 'mesresumo', 'reclamacoes', 'horas', 'diarias', 'salarios', 'despesas', 'custos']],
-  ['Recursos Humanos', ['trabalhadores', 'onbtextos', 'acolhimento', 'viagens', 'alojamento']],
+  ['Recursos Humanos', ['trabalhadores', 'onbtextos', 'acolhimento', 'docscliente', 'viagens', 'alojamento']],
   ['Frota', ['frota']],
   ['QSA · Qualidade, Segurança e Ambiente', ['relatos', 'seguranca', 'reunioes', 'lmra', 'emergencia', 'qualidade', 'processo']],
   ['Produção (Obra)', ['painel', 'naobra', 'progresso', 'frentes', 'rotinas', 'material', 'andaimes', 'picar', 'obras', 'equipa', 'producao']],
@@ -1202,10 +1202,21 @@ const MENU_GROUPS = [
   ['Orçamentação', ['orcamentos']],
   ['Eu', ['minhas', 'contactos']],
 ];
+// v116 (Diogo 2026-10-29: «se um dia houver alteração, é só mudar ... para o secretariado»): a company can move some
+// screens to another department heading (Administração › Acessos e regras). Only to a heading that exists.
+const MOVABLE = { docscliente: ['Recursos Humanos', 'Secretariado', 'Administração', 'QSA · Qualidade, Segurança e Ambiente', 'Produção (Obra)'] };
+function menuBase() {
+  const mp = state.menuPlace || {};
+  const moves = Object.entries(mp).filter(([v, to]) => MOVABLE[v] && MENU_GROUPS.some(([t]) => t === to));
+  if (!moves.length) return MENU_GROUPS;
+  const g = MENU_GROUPS.map(([t, vs]) => [t, vs.filter((v) => !moves.some(([m]) => m === v))]);
+  for (const [v, to] of moves) g.find(([t]) => t === to)[1].push(v);
+  return g;
+}
 // What each screen needs, to place it under the department that gives it (the visibility itself is set in boot).
 const VIEW_NEEDS = {
   inicio: () => canHome(), empresa: () => canCompanyRules(), processo: () => canProcess(),
-  secretariado: () => canApprove(), despesas: () => canExpenses(), viagens: () => canTravel(), alojamento: () => canHousing(),
+  secretariado: () => canApprove(), despesas: () => canExpenses(), viagens: () => canTravel(), alojamento: () => canHousing(), docscliente: () => canClientDocs(),
   trabalhadores: () => can('pessoas.ver') || can('pessoas.gerir'), onbtextos: () => canPeople(),
   seguranca: () => ['seguranca.lmra', 'seguranca.parar_obra', 'seguranca.emergencia'].some(can), lmra: () => canLmra(), reunioes: () => canMeet(), relatos: () => canHazards(),
   emergencia: () => can('seguranca.emergencia'), acolhimento: () => can('acolhimento.gerir'),
@@ -1221,12 +1232,12 @@ const VIEW_NEEDS = {
 function menuGroups(shown) {
   const me = state.me || {};
   const depts = (me.depts || []).filter((d) => d.kind !== 'admin' && d.kind !== 'worker' && Array.isArray(d.permissions));
-  if (me.role === 'admin' || isOwner() || !depts.length) return MENU_GROUPS;
+  if (me.role === 'admin' || isOwner() || !depts.length) return menuBase();
   const saved = me.perms; const used = new Set(); const out = [];
   try {
     for (const d of depts) {
       me.perms = d.permissions;
-      const views = MENU_GROUPS.flatMap((g) => g[1]).filter((v) => !used.has(v) && shown(v) && VIEW_NEEDS[v] && VIEW_NEEDS[v]());
+      const views = menuBase().flatMap((g) => g[1]).filter((v) => !used.has(v) && shown(v) && VIEW_NEEDS[v] && VIEW_NEEDS[v]());
       views.forEach((v) => used.add(v));
       if (views.length) out.push([d.name, views]);
     }
@@ -1250,9 +1261,10 @@ const ENC_ICONS = {
   fronts: '<path d="M5 21V3M5 4h9l-2 3 2 3H5M15 21v-8M15 13h5l-1.5 2 1.5 2h-5M3 21h18"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   todo: '<path d="M4 6l2 2 3-3M4 13l2 2 3-3M12 7h8M12 14h8M4 19.5h.01M12 19.5h8"/>',
+  clientdocs: '<path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5zM8.5 13l2.5 2.5 4.5-4.5"/>',
   medal: '<path d="M12 14a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM9.5 13.3 8 21l4-2 4 2-1.5-7.7M10 9l1.5 1.5L14.5 7.5"/>',
 };
-const MENU_ICON = { painel: 'gauge', producao: 'chart', seguranca: 'hhat', equipa: 'crew', minhas: 'myclock', naobra: 'gate', qualidade: 'medal', clientes: 'firms', comercial: 'target', premios: 'trophy', custos: 'coins', progresso: 'sheet', frentes: 'fronts', rotinas: 'todo' };
+const MENU_ICON = { painel: 'gauge', producao: 'chart', seguranca: 'hhat', equipa: 'crew', minhas: 'myclock', naobra: 'gate', qualidade: 'medal', clientes: 'firms', comercial: 'target', premios: 'trophy', custos: 'coins', progresso: 'sheet', frentes: 'fronts', rotinas: 'todo', docscliente: 'clientdocs' };
 (function encIcons() {
   const ns = 'http://www.w3.org/2000/svg'; const sp = document.createElementNS(ns, 'svg');
   sp.setAttribute('width', '0'); sp.setAttribute('height', '0'); sp.setAttribute('aria-hidden', 'true'); sp.style.position = 'absolute';
@@ -1531,6 +1543,8 @@ async function boot() {
     if (acc) { state.me.perms = acc.permissions || []; state.me.depts = acc.departments || []; state.me.profiles = acc.profiles || state.me.profiles; }
     const { data: pw } = await sb.rpc('platform_whoami');
     state.platform = pw || null;
+    // v116: where the company put each movable screen in the menu (Administração › Acessos e regras, sql/131)
+    try { const { data: mp } = await sb.rpc('mini_menu_place'); state.menuPlace = (mp && typeof mp === 'object') ? mp : {}; } catch (_) { state.menuPlace = {}; }
     sb.rpc('mini_hours_approver').then(({ data }) => { state.approver = data || null; }, () => {});   // v96: who approves the hours (sql/114)
     await loadModules();
     store(ME_KEY, { ...state.me });
@@ -1571,6 +1585,7 @@ async function boot() {
   nav.querySelector('[data-view=frota]').hidden = worker || state.offline || !canFleet();
   nav.querySelector('[data-view=alojamento]').hidden = worker || state.offline || !canHousing();
   nav.querySelector('[data-view=viagens]').hidden = worker || state.offline || !canTravel();
+  nav.querySelector('[data-view=docscliente]').hidden = worker || state.offline || !canClientDocs();
   nav.querySelector('[data-view=producao]').hidden = worker || state.offline || !canProd();
   nav.querySelector('[data-view=qualidade]').hidden = worker || state.offline || !canQuality();
   nav.querySelector('[data-view=despesas]').hidden = worker || state.offline || !canExpenses();
@@ -1579,7 +1594,7 @@ async function boot() {
   // v48: the office opens on its own first tab (Secretariado for HR), not on Picar, which it rarely uses.
   if (!state.booted && state.view === 'picar' && !tabsFor(me.role).includes('picar')) state.view = tabsFor(me.role)[0];
   const visible = (v) => { const b = nav.querySelector(`button[data-view="${v}"]`); return !!b && !b.hidden; };
-  if (!state.booted && nav.querySelector(`button[data-view="${state.view}"]`) && !visible(state.view)) state.view = tabsFor(me.role).find(visible) || MENU_GROUPS.flatMap((g) => g[1]).find(visible) || state.view;
+  if (!state.booted && nav.querySelector(`button[data-view="${state.view}"]`) && !visible(state.view)) state.view = tabsFor(me.role).find(visible) || menuBase().flatMap((g) => g[1]).find(visible) || state.view;
   state.booted = true;
   if (state.view === 'minhas' && !me.collaborator_id) state.view = tabsFor(me.role)[0];
   layoutNav(me.role);
@@ -2044,7 +2059,7 @@ function go(view) {
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
      ficha: viewWorker, obras: viewSites, area: viewArea, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients, cliente: viewClient, precos: viewPrices, empresa: viewCompanyRules, inicio: viewHome, departamento: viewDept,
      processo: viewProcess, orcamentos: viewEstimates, comercial: viewSales, premios: viewAwards, custos: viewCosts, diarias: viewPerDiemOffice, faltas: viewOfficeAbsences, mesresumo: viewOfficeSummary, reclamacoes: viewOfficeRequests, salarios: viewOfficePayroll, lmra: viewLmra, reunioes: viewMeetings, relatos: viewHazards, material: viewSiteMaterial, emergencia: viewEmergency,
-     armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, producao: viewProd, progresso: viewProgress, frentes: viewFronts, rotinas: viewRoutines, contactos: viewContacts, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
+     armazem: viewWarehouse, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, docscliente: viewClientDocs, producao: viewProd, progresso: viewProgress, frentes: viewFronts, rotinas: viewRoutines, contactos: viewContacts, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
   checkEmergencyBar(); encBadges();
 }
 
@@ -6442,7 +6457,9 @@ function viewCompanyRules() {
     <p class="small muted">Toca numa pessoa para escolher os departamentos dela. Cada pessoa só vê as áreas dos seus departamentos.</p>
     <div id="logins">${skel(2)}</div>
     <div class="sec-h"><h2 class="eyebrow">Departamentos</h2></div>
-    <div id="depts">${skel(2)}</div>` : ''}
+    <div id="depts">${skel(2)}</div>
+    <div class="sec-h"><h2 class="eyebrow">Onde aparece cada ecrã</h2></div>
+    <div class="card" id="menuplace"></div>` : ''}
     ${can('salarios.configurar') || can('diarias.configurar') ? `<div class="sec-h"><h2 class="eyebrow">Regras da empresa</h2></div>
     <div class="card">
       ${can('salarios.configurar') ? `<details class="fold" id="roundcfg"><summary><span>Tolerância nas picagens<span class="sub">Minutos perdoados à entrada e à saída</span></span></summary><div id="roundform">${skel(1)}</div></details>` : ''}
@@ -6461,7 +6478,25 @@ function viewCompanyRules() {
       if (e) { x.checked = !x.checked; return toast(friendly(e)); }
       toast(x.checked ? 'Os colaboradores passam a ver a estimativa do que vão ganhar.' : 'A estimativa deixou de aparecer aos colaboradores.'); };
   });
-  if (can('contas.gerir')) { loadTimeMode(); loadCompanyFronts(); loadCompanyGps(); loadLogins(); loadDepartments(); }
+  if (can('contas.gerir')) { loadTimeMode(); loadCompanyFronts(); loadCompanyGps(); loadLogins(); loadDepartments(); menuPlaceCard(); }
+}
+// v116: which department heading a movable screen sits under, for the whole company. The permission still decides who
+// sees it: to give the screen to the Secretariado people, give their department «docs_cliente.gerir» too (Departamentos above).
+function menuPlaceCard() {
+  const box = $('#menuplace'); if (!box) return;
+  const mp = state.menuPlace || {};
+  const label = { docscliente: 'Documentação do cliente' };
+  box.innerHTML = Object.entries(MOVABLE).map(([v, groups]) => {
+    const cur = mp[v] || MENU_GROUPS.find(([, vs]) => vs.includes(v))[0];
+    return `<label for="mp-${v}">${esc(label[v] || v)}</label><select id="mp-${v}" data-mp="${v}">${groups.map((g) => `<option value="${esc(g)}" ${g === cur ? 'selected' : ''}>${esc(g.split(' · ')[0])}</option>`).join('')}</select>`;
+  }).join('') + '<p class="small muted">Muda o sítio do ecrã no menu, para toda a empresa. Quem o vê continua a ser decidido pelas permissões dos departamentos.</p>';
+  box.querySelectorAll('[data-mp]').forEach((x) => x.onchange = async () => {
+    const v = x.dataset.mp; const std = MENU_GROUPS.find(([, vs]) => vs.includes(v))[0];
+    const { data, error } = await sb.rpc('mini_menu_place_set', { p_view: v, p_group: x.value === std ? null : x.value });
+    if (error) { toast(friendly(error)); return menuPlaceCard(); }
+    state.menuPlace = data || {}; layoutNav(state.me.role);
+    toast(`«${label[v] || v}» passa a aparecer em ${x.value.split(' · ')[0]}.`);
+  });
 }
 // The company's GPS rule (sql/105): every site follows it unless the site has its own rule (Obras › Área da fábrica).
 // Turning it off is allowed (a test, a client that does not want it) but asked twice and kept in the history.
@@ -14153,6 +14188,509 @@ async function loadMyTravels() {
   box.querySelectorAll('[data-file]').forEach((b) => b.onclick = () => openDocFile(b.dataset.file, 'viagens'));
 }
 
+// ------------------------------------------------------------------ Documentação do cliente (v116, sql/131)
+// Diogo 2026-10-29: «são eles [RH] que tratam de toda a papelada para as pessoas poderem entrar nas fábricas». Per client
+// (the refinery, the plant) and per year: what the client asks (formações, CV, aptidão, certificados), who goes, and per
+// person and paper: pendente → tratado → enviado ao cliente → aceite (or recusado, with why). A list is copied to the next
+// year or site in one tap, so next year starts from what the client asked this year. «Enviar ao cliente» records the pack
+// and builds it on the phone: the Excel matrix plus every proof, in one .zip. The morning job rings the RH when a paper is
+// late, due within 7 days, refused or expires before the end of the works. Entry block: a paper tied to a document type can
+// be «sem isto não entra» (the site's tap check refuses entry without it).
+const canClientDocs = () => mod('compliance') && ['docs_cliente.ver', 'docs_cliente.gerir'].some(can);
+const CD_KIND = { training: ['Formação', 'medal'], document: ['Documento', 'doc'], cv: ['Currículo (CV)', 'user'], medical: ['Aptidão médica', 'shield'],
+  certificate: ['Certificado', 'key'], other: ['Outro', 'more'] };
+const CD_ST = { pending: ['bad', 'Pendente'], lapsed: ['bad', 'Caducou'], ready: ['info', 'Tratado'], sent: ['warn', 'Enviado ao cliente'],
+  accepted: ['ok', 'Aceite pelo cliente'], refused: ['bad', 'Recusado'] };
+const CD_SHORT = { pending: 'Pendente', lapsed: 'Caducou', ready: 'Tratado', sent: 'Enviado', accepted: 'Aceite', refused: 'Recusado' };
+const CD_CHANNEL = { email: 'E-mail', portal: 'Portal do cliente', hand: 'Em mão', other: 'Outro' };
+const CD_LOG = { list_created: 'Lista criada', list_changed: 'Lista alterada', list_copied: 'Copiada de outra lista', list_closed: 'Lista fechada', list_reopened: 'Lista reaberta',
+  item_added: 'Pedido acrescentado', item_changed: 'Pedido alterado', item_removed: 'Pedido retirado', person_added: 'Pessoa juntada', person_removed: 'Pessoa retirada',
+  person_changed: 'Pessoa alterada', state_ready: 'Marcado tratado', state_sent: 'Enviado ao cliente', state_accepted: 'Aceite pelo cliente', state_refused: 'Recusado pelo cliente',
+  state_pending: 'Voltou a pendente', pack_sent: 'Pacote enviado' };
+const cdDay = (d) => (d ? new Date(d + 'T12:00:00').toLocaleDateString(LOC, { day: '2-digit', month: '2-digit' }) : '');
+const cdIn = (d) => { if (!d) return ''; const n = Math.round((new Date(d + 'T12:00:00') - new Date(isoDay(new Date()) + 'T12:00:00')) / 864e5);
+  return n === 0 ? 'hoje' : n === 1 ? 'amanhã' : n > 0 ? `daqui a ${n} dias` : n === -1 ? 'ontem' : `há ${-n} dias`; };
+function viewClientDocs() {
+  if (!state.ready) return boot();   // never a screen before login
+  if (!canClientDocs()) return viewClock();   // code guard as well as the database's
+  if (!state.cdocs) state.cdocs = { tab: 'curso', ltab: 'pessoas', sel: new Set() };
+  if (state.cdocs.list) return cdList(state.cdocs.list);
+  const dept = (menuBase().find(([, vs]) => vs.includes('docscliente')) || ['Recursos Humanos'])[0].split(' · ')[0];
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">${esc(dept)}</p><h1>Documentação do cliente</h1></div></div>
+    <p class="small muted cd-lead">O que cada cliente pede para a equipa entrar na fábrica: formações, CV, aptidão médica e certificados. Por pessoa, o que está pendente, tratado, enviado e aceite.</p>
+    <div id="cdtop">${skel(2)}</div><div id="cdbody"></div>`;
+  cdHome();
+}
+async function cdHome() {
+  const top = $('#cdtop'); if (!top) return;
+  const { data: h, error } = await sb.rpc('mini_cdocs_home');
+  if (!top.isConnected) return;
+  if (error) { top.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  const S = state.cdocs; S.home = h;
+  const act = h.lists.filter((l) => l.status === 'active');
+  const sum = (k) => act.reduce((a, l) => a + ((l.counts || {})[k] || 0), 0);
+  top.innerHTML = `<div class="fl-sum">
+      <div class="fl-n ${sum('late') ? 'bad' : ''}"><b>${sum('late')}</b><span>papéis atrasados</span></div>
+      <div class="fl-n ${sum('soon') ? 'warn' : ''}"><b>${sum('soon')}</b><span>a vencer em 7 dias</span></div>
+      <div class="fl-n ${sum('refused') ? 'bad' : 'ok'}"><b>${sum('refused')}</b><span>recusados pelo cliente</span></div></div>
+    ${h.can_manage ? '<button class="btn big wide" id="cdnew">+ Nova lista de um cliente</button>' : ''}
+    <div class="seg" role="tablist">${[['curso', 'Em curso'], ['historico', 'Histórico por cliente']].map(([k, l]) =>
+      `<button role="tab" data-cdtab="${k}" aria-selected="${S.tab === k}">${esc(l)}</button>`).join('')}</div>`;
+  top.querySelectorAll('[data-cdtab]').forEach((b) => b.onclick = () => { S.tab = b.dataset.cdtab; cdHome(); });
+  if ($('#cdnew')) $('#cdnew').onclick = () => cdNewList();
+  const body = $('#cdbody');
+  if (S.tab === 'historico') return cdClients(body, h);
+  body.innerHTML = act.length ? `<div class="list">${act.map(cdCard).join('')}</div>`
+    : `<div class="card">${empty('box', 'Ainda sem listas em curso', h.can_manage ? 'Carrega em «+ Nova lista de um cliente»: escreves o que o cliente pede e juntas a equipa. No ano seguinte começas a partir desta lista.' : 'Quando o RH preparar a documentação de um cliente para a tua obra, aparece aqui.')}</div>`;
+  body.querySelectorAll('[data-cdl]').forEach((b) => b.onclick = () => { S.list = b.dataset.cdl; S.ltab = 'pessoas'; S.sel = new Set(); cdList(S.list); });
+}
+function cdCard(l) {
+  const k = l.counts || {}; const pct = k.cells ? Math.round((k.done / k.cells) * 100) : 0;
+  const warn = [k.late ? chip('bad', `${k.late} atrasado(s)`) : '', k.refused ? chip('bad', `${k.refused} recusado(s)`) : '', k.soon ? chip('warn', `${k.soon} a vencer`) : '',
+    k.expiring ? chip('warn', `${k.expiring} caduca(m) durante a obra`) : ''].join('');
+  return `<button type="button" class="card link cd-card" data-cdl="${esc(l.id)}">
+    <div class="wk"><span class="ho-ic">${ic('clientdocs')}</span><div class="grow"><div class="nm" data-nt>${esc(l.client)} <small class="muted">· ${esc(l.year)}</small></div>
+      <div class="sub">${nt(l.title)} · ${l.site ? '<span>Obra ' + esc(l.site) + '</span>' : '<span>todas as obras</span>'}</div></div>${l.status === 'closed' ? chip('reg', 'Fechada') : pct === 100 && k.cells ? chip('ok', 'Pronta') : ''}</div>
+    ${l.mobilize_on ? `<p class="small cd-when">${ic('calendar')}Entra a ${esc(cdDay(l.mobilize_on))} (${esc(cdIn(l.mobilize_on))})${l.ends_on ? ' · até ' + esc(cdDay(l.ends_on)) : ''}</p>` : ''}
+    <div class="prog" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><i style="width:${pct}%"></i></div>
+    <p class="small muted">${k.cells ? `${k.done} de ${k.cells} papéis prontos · ${k.people_ready || 0} de ${l.people} pessoa(s) prontas` : `${l.items} pedido(s) · ${l.people} pessoa(s)`}</p>
+    ${warn ? `<div class="cd-warn">${warn}</div>` : ''}</button>`;
+}
+// The history per client: every year, what was asked, how it ended. «Começar {ano} a partir desta» copies the list.
+async function cdClients(body, h) {
+  const S = state.cdocs;
+  const byClient = {};
+  for (const l of h.lists) (byClient[l.client_id] = byClient[l.client_id] || { id: l.client_id, name: l.client, lists: [] }).lists.push(l);
+  const list = Object.values(byClient).sort((a, b) => a.name.localeCompare(b.name));
+  if (!list.length) { body.innerHTML = `<div class="card">${empty('box', 'Ainda sem histórico', 'Cada lista fica guardada por cliente e por ano. No ano seguinte vês aqui o que o cliente pediu e começas a partir daí.')}</div>`; return; }
+  // first time: the client with the longest history (the one whose past years matter most)
+  if (!S.client || !byClient[S.client]) S.client = list.slice().sort((a, b) => b.lists.length - a.lists.length)[0].id;
+  body.innerHTML = `<label for="cdcl">Cliente</label><select id="cdcl" data-nt>${list.map((c) => `<option value="${esc(c.id)}" ${c.id === S.client ? 'selected' : ''}>${esc(c.name)} (${c.lists.length})</option>`).join('')}</select>
+    <div id="cdhist">${skel(2)}</div>`;
+  $('#cdcl').onchange = (e) => { S.client = e.target.value; cdClients(body, h); };
+  const { data, error } = await sb.rpc('mini_cdocs_history', { p_client: S.client });
+  const box = $('#cdhist'); if (!box) return;
+  if (error) { box.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  const year = h.year;
+  box.innerHTML = `<ol class="cd-years">${data.lists.map((l) => { const k = l.counts || {};
+    return `<li class="card cd-year"><div class="wk"><b class="cd-y tnum">${esc(l.year)}</b><div class="grow"><div class="nm" data-nt>${esc(l.title)}</div>
+      <div class="sub">${[l.site ? 'Obra ' + esc(l.site) : 'Todas as obras', l.mobilize_on ? (l.mobilize_on > isoDay(new Date()) ? 'entra a ' : 'entrou a ') + esc(fmtDate(l.mobilize_on)) : '', l.copied_from_year ? 'partiu de ' + esc(l.copied_from_year) : ''].filter(Boolean).map((x) => `<span>${x}</span>`).join(' · ')}</div></div>
+      ${l.status === 'closed' ? chip('reg', 'Fechada') : chip('info', 'Em curso')}</div>
+      <p class="small muted">O cliente pediu ${pl(l.asked.filter((x) => !x.removed).length, 'papel', 'papéis')}${k.cells ? ` · ${k.accepted} aceite(s), ${k.refused} recusado(s), ${l.people} pessoa(s)` : ''}:</p>
+      <ul class="cd-asked">${l.asked.map((x) => `<li class="${x.removed ? 'gone' : ''}">${ic((CD_KIND[x.kind] || CD_KIND.other)[1])}<span>${nt(x.name)}${x.applies_to ? ` <small class="muted">· só ${nt(x.applies_to)}</small>` : ''}${x.removed ? ' <small class="muted">· retirado</small>' : ''}</span></li>`).join('')}</ul>
+      <div class="acts"><button class="btn ghost small" data-cdopen="${esc(l.id)}">Abrir</button>
+        ${h.can_manage ? `<button class="btn small" data-cdcopy="${esc(l.id)}">Começar ${Math.max(year, l.year + 1)} a partir desta</button>` : ''}</div></li>`; }).join('')}</ol>`;
+  box.querySelectorAll('[data-cdopen]').forEach((b) => b.onclick = () => { S.list = b.dataset.cdopen; S.ltab = 'pessoas'; S.sel = new Set(); cdList(S.list); });
+  box.querySelectorAll('[data-cdcopy]').forEach((b) => b.onclick = () => cdCopy(data.lists.find((x) => x.id === b.dataset.cdcopy)));
+}
+async function cdNewList() {
+  const h = state.cdocs.home; const cl = h.clients || [];
+  if (!cl.length) return toast('Primeiro cria o cliente em Administração › Clientes.');
+  const fd = await askSheet('Nova lista de um cliente', `
+    <label for="cdc">Cliente *</label><select id="cdc" name="client_id" required data-nt><option value="">—</option>${cl.map((c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select>
+    <p class="small cd-prev" id="cdprev" hidden></p>
+    <label for="cds">Obra</label><select id="cds" name="site_id"><option value="">Todas as obras deste cliente</option></select>
+    <div class="row"><div><label for="cdy">Ano *</label><input id="cdy" name="year" type="number" required min="2020" max="2100" value="${esc(h.year)}"></div>
+      <div><label for="cdt">Nome da lista *</label><input id="cdt" name="title" required minlength="2" maxlength="120" placeholder="ex.: Paragem de primavera"></div></div>
+    <div class="row"><div><label for="cdm">Entrada da equipa</label><input id="cdm" name="mobilize_on" type="date"></div>
+      <div><label for="cde">Fim dos trabalhos</label><input id="cde" name="ends_on" type="date"></div></div>
+    <label for="cdk">Quem recebe os papéis no cliente</label><input id="cdk" name="contact" maxlength="300" placeholder="ex.: acreditações, e-mail ou portal">
+    <p class="small muted">A data de entrada dá os prazos: cada papel tem «quantos dias antes» o cliente o quer.</p>`, 'Criar lista', (d) => {
+    const cs = d.querySelector('#cdc'); const ss = d.querySelector('#cds'); const prev = d.querySelector('#cdprev');
+    cs.onchange = () => {
+      const c = cl.find((x) => x.id === cs.value);
+      ss.innerHTML = `<option value="">Todas as obras deste cliente</option>${(c ? c.sites : []).map((s) => `<option value="${esc(s.id)}">Obra ${esc(s.code)} · ${esc(s.title)}</option>`).join('')}`;
+      const last = h.lists.filter((l) => l.client_id === cs.value).sort((a, b) => b.year - a.year)[0];
+      prev.hidden = !last;
+      if (last) prev.innerHTML = `<label class="chk"><input type="checkbox" name="from" value="${esc(last.id)}" checked> Começar a partir de ${esc(last.year)}: «${esc(last.title)}» (${pl(last.items, 'papel', 'papéis')})</label>`;
+    };
+    ss.onchange = () => { const c = cl.find((x) => x.id === cs.value); const s = c && c.sites.find((x) => x.id === ss.value);
+      if (s) { if (s.start && !d.querySelector('#cdm').value) d.querySelector('#cdm').value = s.start; if (s.end && !d.querySelector('#cde').value) d.querySelector('#cde').value = s.end; } };
+  });
+  if (!fd) return;
+  const p = {}; for (const [k, v] of fd.entries()) if (!['_v', 'from'].includes(k)) p[k] = String(v).trim();
+  const from = fd.get('from');
+  const { data, error } = from ? await sb.rpc('mini_cdocs_copy', { p_list: from, p }) : await sb.rpc('mini_cdocs_list_save', { p });
+  if (error) return toast(friendly(error));
+  toast(from ? 'Lista criada com o que o cliente pediu da última vez. Revê e junta a equipa.' : 'Lista criada. Agora escreve o que o cliente pede.');
+  state.cdocs.list = data; state.cdocs.ltab = from ? 'pessoas' : 'pede'; state.cdocs.sel = new Set(); cdList(data);
+}
+async function cdCopy(l) {
+  if (!l) return;
+  const h = state.cdocs.home; const c = (h.clients || []).find((x) => x.id === l.client_id) || { sites: [] };
+  const y = Math.max(h.year, l.year + 1);
+  const fd = await askSheet(`Começar ${y} a partir de ${l.year}`, `<p><b>${nt(l.client)}</b> · ${nt(l.title)}</p>
+    <p class="small muted">Copia o que o cliente pediu (${pl(l.items, 'papel', 'papéis')}). Os estados não passam: em cada ano o cliente aceita outra vez.</p>
+    <div class="row"><div><label for="cpy">Ano *</label><input id="cpy" name="year" type="number" required min="2020" max="2100" value="${y}"></div>
+      <div><label for="cpt">Nome *</label><input id="cpt" name="title" required minlength="2" maxlength="120" value="${esc(l.title.replace(String(l.year), String(y)))}"></div></div>
+    <label for="cps">Obra</label><select id="cps" name="site_id"><option value="">Todas as obras deste cliente</option>${c.sites.map((s) => `<option value="${esc(s.id)}" ${s.id === l.site_id ? 'selected' : ''}>Obra ${esc(s.code)} · ${esc(s.title)}</option>`).join('')}</select>
+    <div class="row"><div><label for="cpm">Entrada da equipa</label><input id="cpm" name="mobilize_on" type="date"></div>
+      <div><label for="cpe">Fim dos trabalhos</label><input id="cpe" name="ends_on" type="date"></div></div>
+    <label class="chk"><input type="checkbox" name="people" value="true"> Levar também as mesmas pessoas</label>`, 'Criar');
+  if (!fd) return;
+  const p = {}; for (const [k, v] of fd.entries()) if (k !== '_v') p[k] = String(v).trim();
+  p.people = fd.get('people') === 'true';
+  const { data, error } = await sb.rpc('mini_cdocs_copy', { p_list: l.id, p });
+  if (error) return toast(friendly(error));
+  toast(`Lista de ${p.year} criada a partir de ${l.year}. Confirma se o cliente mudou alguma coisa.`);
+  state.cdocs.list = data; state.cdocs.ltab = 'pede'; state.cdocs.sel = new Set(); cdList(data);
+}
+
+// ---- one list: the matrix
+async function cdList(id) {
+  const S = state.cdocs;
+  if (!$('#cdl')) {
+    app.innerHTML = `<div id="backbar"><button type="button" class="btn ghost small home-back" id="cdback">‹ <span>Documentação do cliente</span></button></div><div id="cdl">${skel(3)}</div>`;
+    $('#cdback').onclick = () => { S.list = null; S.sel = new Set(); viewClientDocs(); };
+  }
+  const { data: L, error } = await sb.rpc('mini_cdocs_list', { p_list: id });
+  const box = $('#cdl'); if (!box || !box.isConnected || S.list !== id) return;
+  if (error) { box.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  S.L = L;
+  const k = L.counts || {}; const pct = k.cells ? Math.round((k.done / k.cells) * 100) : 0;
+  const tabs = [['pessoas', 'Por pessoa'], ['papeis', 'Por papel'], ['pede', `O cliente pede (${L.items.length})`], ['envios', 'Envios e histórico']];
+  box.innerHTML = `<div class="ph"><div><p class="ph-k">${nt(L.client)} · ${esc(L.year)}</p><h1>${nt(L.title)}</h1></div></div>
+    <div class="card cd-head">
+      <ul class="cd-facts">
+        <li>${ic('crane')}<span>${L.site ? 'Obra ' + esc(L.site) + ' · ' + nt(L.site_title) : 'Todas as obras do cliente'}</span></li>
+        <li class="${L.mobilize_on ? '' : 'warn'}">${ic('calendar')}<span>${L.mobilize_on ? `<b>Entra a ${esc(fmtDate(L.mobilize_on))}</b> (${esc(cdIn(L.mobilize_on))})${L.ends_on ? ' · até ' + esc(fmtDate(L.ends_on)) : ''}` : 'Sem data de entrada: sem prazos'}</span></li>
+        ${L.contact ? `<li>${ic('user')}<span>${nt(L.contact)}</span></li>` : ''}
+        ${L.copied_from_year ? `<li>${ic('clock')}<span>Partiu do que o cliente pediu em ${esc(L.copied_from_year)}</span></li>` : ''}
+      </ul>
+      <div class="prog" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><i style="width:${pct}%"></i></div>
+      <div class="cd-counts">${['pending', 'ready', 'sent', 'accepted', 'refused'].map((s) => `<span class="cd-c ${CD_ST[s][0]}"><b class="tnum">${k[s] || 0}</b>${esc(CD_ST[s][1])}</span>`).join('')}</div>
+      ${k.late ? `<p class="cd-al bad">${ic('warn')}<span><b>${k.late} documento(s) atrasado(s):</b> o prazo do cliente já passou.</span></p>` : ''}
+      ${k.soon ? `<p class="cd-al warn">${ic('clock')}<span><b>${k.soon} documento(s) com prazo nos próximos 7 dias.</b></span></p>` : ''}
+      ${k.expiring ? `<p class="cd-al warn">${ic('calendar')}<span><b>${k.expiring} documento(s) caduca(m) antes do fim dos trabalhos.</b></span></p>` : ''}
+      ${L.status === 'closed' ? `<p class="cd-al">${ic('lock')}<span><b>Lista fechada.</b> Fica no histórico do cliente.</span></p>` : ''}
+      ${L.can_manage || L.can_reopen ? `<div class="acts">${L.can_manage ? '<button class="btn small" id="cdsend">Enviar ao cliente</button><button class="btn ghost small" id="cdedit">Datas e contacto</button>' : ''}
+        <button class="btn ghost small" id="cdcopy">Copiar para outro ano</button>
+        ${L.can_manage ? '<button class="btn ghost small" id="cdclose">Fechar lista</button>' : '<button class="btn ghost small" id="cdreopen">Reabrir</button>'}</div>` : ''}
+    </div>
+    <div class="seg cd-seg" role="tablist">${tabs.map(([t, l]) => `<button role="tab" data-lt="${t}" aria-selected="${S.ltab === t}">${esc(l)}</button>`).join('')}</div>
+    <div id="cdtab"></div><div id="cdbar" class="cd-bar" hidden></div>`;
+  box.querySelectorAll('[data-lt]').forEach((b) => b.onclick = () => { S.ltab = b.dataset.lt; S.sel = new Set(); cdList(id); });
+  const on = (sel, fn) => { const b = box.querySelector(sel); if (b) b.onclick = fn; };
+  on('#cdsend', () => cdSend(L)); on('#cdedit', () => cdEdit(L));
+  on('#cdcopy', () => cdCopy(L));
+  on('#cdclose', async () => { if (!confirm('Fechar esta lista? Fica no histórico do cliente e deixa de dar avisos e bloqueios.')) return; const { error: e } = await sb.rpc('mini_cdocs_close', { p_list: L.id, p_close: true }); if (e) return toast(friendly(e)); toast('Lista fechada.'); cdList(id); });
+  on('#cdreopen', async () => { const { error: e } = await sb.rpc('mini_cdocs_close', { p_list: L.id, p_close: false }); if (e) return toast(friendly(e)); toast('Lista reaberta.'); cdList(id); });
+  const tab = $('#cdtab');
+  if (S.ltab === 'pede') return cdAsked(tab, L);
+  if (S.ltab === 'envios') return cdSends(tab, L);
+  if (S.ltab === 'papeis') return cdByItem(tab, L);
+  cdByPerson(tab, L);
+}
+const cdKey = (c) => c.p + '|' + c.i;
+function cdRow(c, label, sub, L) {
+  const kind = (CD_ST[c.st] || [''])[0]; const text = CD_SHORT[c.st] || c.st;
+  const bits = [];
+  const sp = (x) => `<span>${x}</span>`;
+  if (c.doc && c.doc.n) bits.push(sp('n.º ') + nt(c.doc.n));
+  if (c.doc) bits.push(sp(c.doc.exp ? (c.doc.ok ? 'válido até ' : 'caducou a ') + esc(fmtDate(c.doc.exp)) : c.doc.ok ? 'sem validade' : 'não serve na data'));
+  if (c.st === 'accepted') bits.push(sp('aceite' + (c.acc_at ? ' a ' + esc(cdDay(c.acc_at)) : '')) + (c.acc_by ? ' ' + sp('por') + ' ' + nt(c.acc_by) : ''));
+  if (c.acc_ref) bits.push(nt(c.acc_ref));
+  if (c.until) bits.push(sp('no cliente até ' + esc(fmtDate(c.until))));
+  if (c.st === 'sent' && c.sent_at) bits.push(sp('enviado a ' + esc(cdDay(c.sent_at.slice(0, 10)))));
+  if (c.why) bits.push('«' + nt(c.why) + '»');
+  const flag = c.late ? `<span class="cd-flag bad">${ic('warn')}prazo ${esc(cdDay(c.due))} passou</span>` : c.soon ? `<span class="cd-flag warn">${ic('clock')}até ${esc(cdDay(c.due))}</span>` : '';
+  const exp = c.flag === 'expires' ? `<span class="cd-flag warn">${ic('calendar')}caduca durante a obra</span>` : c.flag === 'acc_expires' ? `<span class="cd-flag warn">${ic('calendar')}aceitação acaba antes do fim</span>` : '';
+  const sel = state.cdocs.sel.has(cdKey(c));
+  return `<li class="cd-row ${c.done ? 'done' : ''} ${sel ? 'sel' : ''}">
+    ${L.can_manage ? `<label class="cd-ck"><input type="checkbox" data-ck="${esc(cdKey(c))}" ${sel ? 'checked' : ''} aria-label="Escolher ${esc(label)}"></label>` : ''}
+    <button type="button" class="cd-cell" data-cell="${esc(cdKey(c))}"><span class="grow"><b>${nt(label)}</b>${sub ? `<small class="muted"> · ${esc(sub)}</small>` : ''}
+      ${bits.length ? `<small class="cd-bits">${bits.join(' · ')}</small>` : ''}${flag || exp ? `<span class="cd-flags">${flag}${exp}</span>` : ''}</span>${chip(kind, text)}</button></li>`;
+}
+function cdBind(tab, L) {
+  const S = state.cdocs;
+  tab.querySelectorAll('[data-ck]').forEach((x) => x.onchange = () => { if (x.checked) S.sel.add(x.dataset.ck); else S.sel.delete(x.dataset.ck); x.closest('.cd-row').classList.toggle('sel', x.checked); cdBar(L); });
+  tab.querySelectorAll('[data-cell]').forEach((b) => b.onclick = () => cdCellSheet(L, L.cells.find((c) => cdKey(c) === b.dataset.cell)));
+  tab.querySelectorAll('[data-all]').forEach((b) => b.onclick = () => {
+    const keys = b.dataset.all.split(',').filter(Boolean); const all = keys.every((x) => S.sel.has(x));
+    keys.forEach((x) => (all ? S.sel.delete(x) : S.sel.add(x))); cdList(L.id);
+  });
+  cdBar(L);
+}
+function cdByPerson(tab, L) {
+  if (!L.people.length) {
+    tab.innerHTML = `<div class="card">${empty('box', 'Ainda sem pessoas', L.can_manage ? 'Junta quem vai a este cliente: a equipa da obra num toque, ou pessoa a pessoa.' : 'O RH ainda não juntou a equipa.')}</div>${cdPeopleBtns(L)}`;
+    cdPeopleBind(tab, L); return;
+  }
+  const items = Object.fromEntries(L.items.map((i) => [i.id, i]));
+  tab.innerHTML = `${cdPeopleBtns(L)}<div class="list">${L.people.map((p) => {
+    const cells = L.cells.filter((c) => c.p === p.id); const done = cells.filter((c) => c.done).length;
+    return `<article class="card cd-person"><div class="wk"><span class="av">${esc((p.name || '?').split(' ').map((x) => x[0]).slice(0, 2).join(''))}</span>
+      <div class="grow"><div class="nm" data-nt>${esc(p.name)}</div><div class="sub">${[p.role || p.job ? nt(p.role || p.job) : '', p.number ? nt(p.number) : '', p.own_start && p.start ? `<span>entra a ${esc(cdDay(p.start))}</span>` : ''].filter(Boolean).join(' · ')}</div></div>
+      ${chip(done === cells.length && cells.length ? 'ok' : 'reg', `${done}/${cells.length}`)}</div>
+      ${L.can_manage ? `<div class="acts cd-pacts"><button class="btn ghost small" data-all="${esc(cells.map(cdKey).join(','))}">Escolher tudo</button><button class="btn ghost small" data-pset="${esc(p.id)}">Função e data</button></div>` : ''}
+      <ul class="cd-rows">${cells.map((c) => cdRow(c, (items[c.i] || {}).name || '', null, L)).join('')}</ul></article>`; }).join('')}</div>`;
+  tab.querySelectorAll('[data-pset]').forEach((b) => b.onclick = () => cdPerson(L, L.people.find((p) => p.id === b.dataset.pset)));
+  cdPeopleBind(tab, L); cdBind(tab, L);
+}
+function cdByItem(tab, L) {
+  if (!L.items.length) { tab.innerHTML = `<div class="card">${empty('box', 'O cliente ainda não pede nada aqui', 'Abre «O cliente pede» e escreve os papéis.')}</div>`; return; }
+  const people = Object.fromEntries(L.people.map((p) => [p.id, p]));
+  tab.innerHTML = `<div class="list">${L.items.map((i) => {
+    const cells = L.cells.filter((c) => c.i === i.id); const done = cells.filter((c) => c.done).length;
+    return `<article class="card cd-item"><div class="wk"><span class="ho-ic">${ic((CD_KIND[i.kind] || CD_KIND.other)[1])}</span>
+      <div class="grow"><div class="nm" data-nt>${esc(i.name)}</div><div class="sub">${esc((CD_KIND[i.kind] || CD_KIND.other)[0])} · ${i.lead_days} dias antes${i.applies_to ? ' · só ' + nt(i.applies_to) : ''}${i.blocks_entry ? ' · sem isto não entra' : ''}</div></div>
+      ${chip(done === cells.length && cells.length ? 'ok' : 'reg', `${done}/${cells.length}`)}</div>
+      ${L.can_manage && cells.length ? `<div class="acts cd-pacts"><button class="btn ghost small" data-all="${esc(cells.map(cdKey).join(','))}">Escolher todos</button></div>` : ''}
+      <ul class="cd-rows">${cells.map((c) => { const p = people[c.p] || {}; return cdRow(c, p.name || '', p.role || p.job, L); }).join('')}</ul></article>`; }).join('')}</div>`;
+  cdBind(tab, L);
+}
+function cdPeopleBtns(L) {
+  return L.can_manage ? `<div class="acts cd-padd"><button class="btn small" id="cdcrew">${ic('team')}Juntar a equipa da obra</button><button class="btn ghost small" id="cdpick">+ Pessoa</button></div>` : '';
+}
+function cdPeopleBind(tab, L) {
+  const crew = tab.querySelector('#cdcrew'); const pick = tab.querySelector('#cdpick');
+  if (crew) crew.onclick = async () => {
+    const { data, error } = await sb.rpc('mini_cdocs_people_add', { p_list: L.id, p_people: null, p_role: null });
+    if (error) return toast(friendly(error));
+    toast(data ? `${pl(data, 'pessoa juntada', 'pessoas juntadas')} da equipa da obra.` : 'Ninguém novo: a equipa da obra já está toda na lista (ou ainda não tem pessoas atribuídas).');
+    cdList(L.id);
+  };
+  if (pick) pick.onclick = () => cdPick(L);
+}
+async function cdPick(L) {
+  const c = (L.candidates || []).slice().sort((a, b) => (b.crew - a.crew) || a.name.localeCompare(b.name));
+  if (!c.length) return toast('Já estão todos na lista.');
+  const fd = await askSheet('Juntar pessoas', `<input type="search" id="cdq" placeholder="Procurar por nome ou número" aria-label="Procurar">
+    <div class="cd-pick" id="cdpl">${c.map((p) => `<label class="chk" data-n="${esc((p.name + ' ' + (p.number || '')).toLowerCase())}"><input type="checkbox" name="p" value="${esc(p.id)}"> ${nt(p.name)}<small class="muted">${p.number ? ' · ' + nt(p.number) : ''}${p.job ? ' · ' + nt(p.job) : ''}${p.crew ? ' · da obra' : ''}</small></label>`).join('')}</div>
+    <label for="cdr">Função nesta lista (opcional)</label><input id="cdr" name="role" maxlength="60" placeholder="ex.: Soldador">
+    <p class="small muted">A função serve para os papéis que o cliente só pede a algumas funções.</p>`, 'Juntar', (d) => {
+    d.querySelector('#cdq').oninput = (e) => { const q = e.target.value.trim().toLowerCase(); d.querySelectorAll('#cdpl [data-n]').forEach((x) => { x.hidden = q && !x.dataset.n.includes(q); }); };
+  });
+  if (!fd) return;
+  const ids = fd.getAll('p'); if (!ids.length) return toast('Escolhe pelo menos uma pessoa.');
+  const { error } = await sb.rpc('mini_cdocs_people_add', { p_list: L.id, p_people: ids, p_role: String(fd.get('role') || '').trim() || null });
+  if (error) return toast(friendly(error));
+  toast(`${pl(ids.length, 'pessoa juntada', 'pessoas juntadas')}.`); cdList(L.id);
+}
+async function cdPerson(L, p) {
+  if (!p) return;
+  const fd = await askSheet(p.name, `<label for="cpr">Função nesta lista</label><input id="cpr" name="role" maxlength="60" value="${esc(p.role || '')}" placeholder="${esc(p.job || 'ex.: Soldador')}">
+    <label for="cpd">Entra a (se for diferente da equipa)</label><input id="cpd" name="start" type="date" value="${p.own_start ? esc(p.start) : ''}">
+    <p class="small muted">Retirar da lista não apaga nada: fica no histórico.</p>`, 'Guardar', (d) => {
+    const f = d.querySelector('form'); const rm = Object.assign(document.createElement('button'), { className: 'btn ghost wide', value: 'rm', textContent: 'Retirar da lista' });
+    rm.setAttribute('formnovalidate', ''); f.querySelector('.acts').appendChild(rm);
+  });
+  if (!fd) return;
+  const rm = fd.get('_v') === 'rm';
+  const { error } = await sb.rpc('mini_cdocs_person_set', { p_list: L.id, p_collab: p.id, p: rm ? { remove: true } : { role: String(fd.get('role') || '').trim(), start: fd.get('start') || '' } });
+  if (error) return toast(friendly(error));
+  toast(rm ? 'Retirada da lista.' : 'Guardado.'); cdList(L.id);
+}
+// The bar at the bottom when lines are chosen: one tap for many people (the client accepts the whole crew at once).
+function cdBar(L) {
+  const bar = $('#cdbar'); if (!bar) return;
+  const n = state.cdocs.sel.size; bar.hidden = !n || !L.can_manage;
+  if (bar.hidden) return;
+  bar.innerHTML = `<b>${pl(n, 'escolhido', 'escolhidos')}</b><div class="cd-bar-acts">
+    <button class="btn small" data-mk="sent">Enviado</button><button class="btn small" data-mk="accepted">Aceite</button>
+    <button class="btn ghost small" data-mk="more">Mais…</button><button class="btn ghost small" data-mk="none" aria-label="Limpar a escolha">${ic('x')}</button></div>`;
+  bar.querySelectorAll('[data-mk]').forEach((b) => b.onclick = () => {
+    const k = b.dataset.mk;
+    if (k === 'none') { state.cdocs.sel = new Set(); return cdList(L.id); }
+    const cells = [...state.cdocs.sel].map((x) => { const [p, i] = x.split('|'); return { p, i }; });
+    if (k === 'more') return cdMarkSheet(L, cells, null);
+    cdMarkSheet(L, cells, k);
+  });
+}
+function cdCellSheet(L, c) {
+  if (!c) return;
+  const p = L.people.find((x) => x.id === c.p) || {}; const i = L.items.find((x) => x.id === c.i) || {};
+  if (!L.can_manage) {
+    const d = document.createElement('dialog'); d.className = 'dlg';
+    d.innerHTML = `<form method="dialog"><h2>${nt(i.name)}</h2><p><b>${nt(p.name)}</b> · ${chip(...(CD_ST[c.st] || ['', c.st]))}</p>
+      ${c.due ? `<p class="small muted">Prazo do cliente: ${esc(fmtDate(c.due))}</p>` : ''}<div class="acts"><button class="btn ghost wide" value="x">Fechar</button></div></form>`;
+    d.addEventListener('close', () => d.remove()); document.body.appendChild(d); d.showModal(); return;
+  }
+  cdMarkSheet(L, [{ p: c.p, i: c.i }], null, c, p, i);
+}
+// Change the state of one or many lines. With one line it also shows the proof (opens the file) and the last change.
+async function cdMarkSheet(L, cells, preset, c, p, i) {
+  const one = cells.length === 1 && c;
+  const opts = [['ready', 'Tratado (temos o papel)'], ['sent', 'Enviado ao cliente'], ['accepted', 'Aceite pelo cliente'], ['refused', 'Recusado pelo cliente'], ['pending', 'Voltar a pendente']];
+  const today = isoDay(new Date());
+  const fd = await askSheet(one ? i.name : `Mudar ${pl(cells.length, 'linha', 'linhas')}`, `
+    ${one ? `<p><b>${nt(p.name)}</b> · ${chip(...(CD_ST[c.st] || ['', c.st]))}</p>
+      ${i.type ? `<p class="small muted">${c.doc ? `${nt(i.type)}${c.doc.n ? ' · <span>n.º</span> ' + nt(c.doc.n) : ''}${c.doc.exp ? ' · <span>válido até</span> ' + esc(fmtDate(c.doc.exp)) : ''}` : `Sem «${nt(i.type)}» na ficha da pessoa: junta-o em Pessoas › ficha › Documentos e fica «tratado» sozinho.`}</p>` : ''}
+      ${c.doc && c.doc.file ? `<button type="button" class="btn ghost small" id="cdfile">${ic('doc')}Abrir o comprovativo</button>` : ''}
+      ${c.at ? `<p class="small muted"><span>Última mudança</span>: ${nt(c.by || '')}, ${esc(fmtDate(c.at.slice(0, 10)))}${c.note ? ' · «' + nt(c.note) + '»' : ''}</p>` : ''}` : ''}
+    <label>Passa a *</label><div class="chips reasons" role="radiogroup">${opts.map(([k, l]) => `<label class="chip"><input type="radio" name="st" value="${k}" required ${preset === k ? 'checked' : ''}>${esc(l)}</label>`).join('')}</div>
+    <div id="cdacc" hidden><div class="row"><div><label for="cda">Aceite a</label><input id="cda" name="accepted_at" type="date" max="${today}" value="${today}"></div>
+      <div><label for="cdu">Válido no cliente até</label><input id="cdu" name="valid_until" type="date"></div></div>
+      <div class="row"><div><label for="cdb">Quem aceitou no cliente</label><input id="cdb" name="by" maxlength="120"></div>
+      <div><label for="cdf">N.º do cartão ou acreditação</label><input id="cdf" name="ref" maxlength="64"></div></div></div>
+    <div id="cdref" hidden><label for="cdw">Porque recusou *</label><input id="cdw" name="reason" maxlength="300" placeholder="ex.: CV sem as últimas paragens"></div>
+    <label for="cdn">Nota</label><input id="cdn" name="note" maxlength="300">
+    <p class="small muted">Fica no histórico com o teu nome e a hora. Não se apaga.</p>`, 'Guardar', (d) => {
+    const sync = () => { const v = (d.querySelector('input[name=st]:checked') || {}).value;
+      d.querySelector('#cdacc').hidden = v !== 'accepted'; const r = d.querySelector('#cdref'); r.hidden = v !== 'refused'; d.querySelector('#cdw').required = v === 'refused'; };
+    d.querySelectorAll('input[name=st]').forEach((x) => x.onchange = sync); sync();
+    const f = d.querySelector('#cdfile'); if (f) f.onclick = () => openDocFile(c.doc.file, 'documentos', { title: `${i.name} · ${p.name}` });
+  });
+  if (!fd) return;
+  const st = fd.get('st'); const o = {}; for (const [k, v] of fd.entries()) if (!['_v', 'st'].includes(k) && String(v).trim()) o[k] = String(v).trim();
+  const { data, error } = await sb.rpc('mini_cdocs_mark', { p_list: L.id, p_cells: cells, p_state: st, p: o });
+  if (error) return toast(friendly(error));
+  toast(`${pl(data, 'linha mudada', 'linhas mudadas')}: ${(CD_ST[st] || ['', 'Pendente'])[1].toLowerCase()}.`);
+  state.cdocs.sel = new Set(); cdList(L.id);
+}
+function cdAsked(tab, L) {
+  tab.innerHTML = `${L.can_manage ? '<button class="btn wide" id="cdadd">+ Acrescentar o que o cliente pede</button>' : ''}
+    ${L.items.length ? `<div class="list">${L.items.map((i) => `<article class="card cd-ask"><div class="wk"><span class="ho-ic">${ic((CD_KIND[i.kind] || CD_KIND.other)[1])}</span>
+      <div class="grow"><div class="nm" data-nt>${esc(i.name)}</div><div class="sub">${esc((CD_KIND[i.kind] || CD_KIND.other)[0])} · ${i.lead_days} dias antes da entrada${i.applies_to ? ' · só ' + nt(i.applies_to) : ' · todos'}</div></div>
+      ${L.can_manage ? `<button class="btn ghost small" data-ied="${esc(i.id)}">Mudar</button>` : ''}</div>
+      <div class="chips cd-tags">${i.type ? chip('info', 'Da ficha: ' + i.type, 'doc') : chip('reg', 'Marcado à mão')}${i.needs_acceptance ? chip('reg', 'O cliente aceita') : ''}${i.blocks_entry ? chip('bad', 'Sem isto não entra', 'lock') : ''}</div>
+      ${i.note ? `<p class="small muted">${nt(i.note)}</p>` : ''}</article>`).join('')}</div>`
+    : `<div class="card">${empty('box', 'Ainda sem pedidos', 'Escreve cada papel que o cliente pede: formações, CV, aptidão médica, certificados. Liga-o a um tipo de documento e o estado sai sozinho da ficha de cada pessoa.')}</div>`}
+    ${L.items.some((i) => i.blocks_entry) && !L.gate ? `<p class="cd-al warn">${ic('warn')}<b>O bloqueio na entrada precisa do módulo Portaria ligado.</b> Pede-o em Administração.</p>` : ''}`;
+  const add = $('#cdadd'); if (add) add.onclick = () => cdItem(L, null);
+  tab.querySelectorAll('[data-ied]').forEach((b) => b.onclick = () => cdItem(L, L.items.find((x) => x.id === b.dataset.ied)));
+}
+async function cdItem(L, it) {
+  const types = L.doc_types || [];
+  const fd = await askSheet(it ? 'Mudar o pedido' : 'O cliente pede', `
+    <label>O que é *</label><div class="chips" role="radiogroup">${Object.entries(CD_KIND).map(([k, [l]], n) => `<label class="chip"><input type="radio" name="kind" value="${k}" ${(it ? it.kind === k : !n) ? 'checked' : ''} required>${esc(l)}</label>`).join('')}</div>
+    <label for="cin">Nome *</label><input id="cin" name="name" required minlength="2" maxlength="120" value="${esc(it ? it.name : '')}" placeholder="ex.: Formação de espaços confinados">
+    <label for="cit">Vem da ficha da pessoa?</label><select id="cit" name="type_id"><option value="">Não: marco à mão</option>
+      ${types.map((t) => `<option value="${esc(t.id)}" ${it && it.type_id === t.id ? 'selected' : ''}>${esc(t.name)}${t.valid_months ? ` (${t.valid_months} meses)` : ''}</option>`).join('')}
+      <option value="new">+ Novo tipo de documento com este nome</option></select>
+    <div id="cinew" hidden><label for="cim">Validade (meses)</label><input id="cim" name="valid_months" type="number" min="1" max="120" inputmode="numeric" placeholder="ex.: 12"></div>
+    <div class="row"><div><label for="cil">Dias antes da entrada *</label><input id="cil" name="lead_days" type="number" required min="0" max="120" value="${it ? it.lead_days : 10}" inputmode="numeric"></div>
+      <div><label for="cia">Só para a função</label><input id="cia" name="applies_to" maxlength="60" value="${esc(it ? it.applies_to || '' : '')}" placeholder="todos"></div></div>
+    <label class="chk"><input type="checkbox" name="needs_acceptance" value="true" ${!it || it.needs_acceptance ? 'checked' : ''}> O cliente tem de aceitar (só fica pronto quando aceitar)</label>
+    <label class="chk" id="cibl"><input type="checkbox" name="blocks_entry" value="true" ${it && it.blocks_entry ? 'checked' : ''}> Sem isto não entra: o Picar recusa a entrada na obra sem este documento válido</label>
+    <label for="cino">Nota</label><input id="cino" name="note" maxlength="300" value="${esc(it ? it.note || '' : '')}" placeholder="ex.: o cliente quer o CV no modelo dele">
+    <p class="small muted">Com um tipo de documento, o estado sai da ficha de cada pessoa: válido na entrada = «tratado», com o comprovativo e a validade.</p>`, 'Guardar', (d) => {
+    const f = d.querySelector('form'); const sel = d.querySelector('#cit'); const bl = d.querySelector('#cibl input');
+    const sync = () => { d.querySelector('#cinew').hidden = sel.value !== 'new'; bl.disabled = !sel.value; if (!sel.value) bl.checked = false; d.querySelector('#cibl').classList.toggle('muted', !sel.value); };
+    sel.onchange = sync; sync();
+    if (it) { const rm = Object.assign(document.createElement('button'), { className: 'btn ghost wide', value: 'rm', textContent: 'Retirar este pedido' }); rm.setAttribute('formnovalidate', ''); f.querySelector('.acts').appendChild(rm); }
+  });
+  if (!fd) return;
+  if (fd.get('_v') === 'rm') {
+    const { error } = await sb.rpc('mini_cdocs_item_remove', { p_list: L.id, p_item: it.id });
+    if (error) return toast(friendly(error));
+    toast('Pedido retirado. Fica no histórico.'); return cdList(L.id);
+  }
+  const t = fd.get('type_id');
+  const p = { id: it ? it.id : '', kind: fd.get('kind'), name: String(fd.get('name')).trim(), type_id: t === 'new' ? '' : t, new_type: t === 'new',
+    valid_months: fd.get('valid_months') || '', lead_days: fd.get('lead_days'), applies_to: String(fd.get('applies_to') || '').trim(),
+    needs_acceptance: fd.get('needs_acceptance') === 'true', blocks_entry: fd.get('blocks_entry') === 'true', note: String(fd.get('note') || '').trim() };
+  const { error } = await sb.rpc('mini_cdocs_item_save', { p_list: L.id, p });
+  if (error) return toast(friendly(error));
+  toast(p.blocks_entry ? 'Guardado. A obra só deixa entrar quem tiver este documento válido.' : 'Guardado.'); cdList(L.id);
+}
+function cdSends(tab, L) {
+  tab.innerHTML = `<h2 class="cd-h">Envios ao cliente</h2>
+    ${L.sends.length ? `<ul class="cd-log">${L.sends.map((s) => `<li>${ic('go')}<span><b>${esc(fmtDate(s.at.slice(0, 10)))} · ${nt(s.to)}</b> <small class="muted">${esc(CD_CHANNEL[s.channel] || s.channel)} · ${pl(s.lines, 'papel', 'papéis')} · por ${nt(s.by || '')}${s.note ? ' · «' + nt(s.note) + '»' : ''}</small></span></li>`).join('')}</ul>`
+      : `<p class="small muted">Ainda nada enviado. «Enviar ao cliente» junta os papéis tratados num pacote (Excel + comprovativos) e marca-os como enviados.</p>`}
+    <h2 class="cd-h">Histórico da lista</h2>
+    ${L.log.length ? `<ul class="cd-log">${L.log.map((g) => `<li>${ic('clock')}<span><b>${esc(CD_LOG[g.action] || g.action)}</b>${g.person ? ' · ' + nt(g.person) : ''}${g.item ? ' · ' + nt(g.item) : ''}
+      <small class="muted">${esc(new Date(g.at).toLocaleString(LOC, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }))} · ${nt(g.by || '')}${g.detail && (g.detail.reason || g.detail.ref || g.detail.to || g.detail.from_year) ? ' · ' + nt(g.detail.reason || g.detail.ref || g.detail.to || ('de ' + g.detail.from_year)) : ''}</small></span></li>`).join('')}</ul>` : '<p class="small muted">Sem nada ainda.</p>'}`;
+}
+async function cdEdit(L) {
+  const fd = await askSheet('Datas e contacto', `
+    <div class="row"><div><label for="cey">Ano *</label><input id="cey" name="year" type="number" required min="2020" max="2100" value="${esc(L.year)}"></div>
+      <div><label for="cet">Nome *</label><input id="cet" name="title" required minlength="2" maxlength="120" value="${esc(L.title)}"></div></div>
+    <div class="row"><div><label for="cem">Entrada da equipa</label><input id="cem" name="mobilize_on" type="date" value="${esc(L.mobilize_on || '')}"></div>
+      <div><label for="cee">Fim dos trabalhos</label><input id="cee" name="ends_on" type="date" value="${esc(L.ends_on || '')}"></div></div>
+    <label for="cek">Quem recebe os papéis no cliente</label><input id="cek" name="contact" maxlength="300" value="${esc(L.contact || '')}">
+    <label for="cen">Notas</label><textarea id="cen" name="notes" maxlength="1000" rows="3">${esc(L.notes || '')}</textarea>`, 'Guardar');
+  if (!fd) return;
+  const p = { id: L.id, client_id: L.client_id, site_id: L.site_id || '' }; for (const [k, v] of fd.entries()) if (k !== '_v') p[k] = String(v).trim();
+  const { error } = await sb.rpc('mini_cdocs_list_save', { p });
+  if (error) return toast(friendly(error));
+  toast('Guardado.'); cdList(L.id);
+}
+// «Enviar ao cliente»: which lines (by default every «tratado» not yet sent), to whom, how. Then the pack is built on the
+// phone: the Excel matrix (person × paper, state, number, validity) and every proof the line has, in one .zip.
+async function cdSend(L) {
+  const people = Object.fromEntries(L.people.map((p) => [p.id, p])); const items = Object.fromEntries(L.items.map((i) => [i.id, i]));
+  const ready = L.cells.filter((c) => c.st === 'ready');
+  const chosen = state.cdocs.sel.size ? L.cells.filter((c) => state.cdocs.sel.has(cdKey(c))) : ready;
+  if (!chosen.length) return toast('Nada tratado por enviar. Marca os papéis como tratados (ou escolhe linhas) primeiro.');
+  const files = chosen.filter((c) => c.doc && c.doc.file).length;
+  const fd = await askSheet('Enviar ao cliente', `<p><b>${nt(L.client)}</b> · ${pl(chosen.length, 'papel', 'papéis')} de ${pl(new Set(chosen.map((c) => c.p)).size, 'pessoa', 'pessoas')}${state.cdocs.sel.size ? ' (os escolhidos)' : ' (todos os tratados)'}</p>
+    <ul class="cd-sendl">${chosen.slice(0, 8).map((c) => `<li>${nt((people[c.p] || {}).name || '')} · ${nt((items[c.i] || {}).name || '')}</li>`).join('')}${chosen.length > 8 ? `<li class="muted">e mais ${chosen.length - 8}…</li>` : ''}</ul>
+    <label for="cst">Para quem *</label><input id="cst" name="to" required minlength="2" maxlength="200" value="${esc(L.contact || '')}" placeholder="ex.: acreditações do cliente">
+    <label>Como *</label><div class="chips" role="radiogroup">${Object.entries(CD_CHANNEL).map(([k, l], n) => `<label class="chip"><input type="radio" name="channel" value="${k}" ${n ? '' : 'checked'} required>${esc(l)}</label>`).join('')}</div>
+    <label for="csn">Nota</label><input id="csn" name="note" maxlength="300">
+    <label class="chk"><input type="checkbox" name="pack" value="1" checked> Fazer o pacote agora: Excel + ${pl(files, 'comprovativo', 'comprovativos')} num ficheiro .zip</label>
+    <p class="small muted">As linhas ficam «enviado ao cliente» com a data. Quando o cliente responder, marca «aceite» ou «recusado».</p>`, 'Registar envio');
+  if (!fd) return;
+  const cells = chosen.map((c) => ({ p: c.p, i: c.i }));
+  const { error } = await sb.rpc('mini_cdocs_send', { p_list: L.id, p: { to: String(fd.get('to')).trim(), channel: fd.get('channel'), note: String(fd.get('note') || '').trim(), cells } });
+  if (error) return toast(friendly(error));
+  toast('Envio registado.');
+  if (fd.get('pack')) await cdPack(L, chosen);
+  state.cdocs.sel = new Set(); state.cdocs.ltab = 'envios'; cdList(L.id);
+}
+// file names keep the accents (the .zip says UTF-8); only what Windows refuses goes
+const cdSafe = (s) => String(s || '').replace(/[\\/:*?"<>|\x00-\x1f]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 80);
+async function cdPack(L, cells) {
+  toast('A preparar o pacote…');
+  let X; try { X = await loadExcel(); } catch (_) { return toast('Não consegui preparar o Excel. Verifica a rede e tenta «Enviar ao cliente» outra vez.'); }
+  const people = Object.fromEntries(L.people.map((p) => [p.id, p])); const items = Object.fromEntries(L.items.map((i) => [i.id, i]));
+  const wb = new X.Workbook(); const ws = wb.addWorksheet('Documentação');
+  ws.addRow([`${L.client} · ${L.title} (${L.year})`]); ws.getRow(1).font = { bold: true, size: 14 };
+  ws.addRow([L.site ? `Obra ${L.site} · ${L.site_title}` : 'Todas as obras', L.mobilize_on ? `Entrada: ${fmtDate(L.mobilize_on)}` : '', `Enviado: ${fmtDate(isoDay(new Date()))}`]);
+  ws.addRow([]);
+  const head = ws.addRow(['Nome', 'N.º', 'Função', 'Papel', 'Tipo', 'N.º do documento', 'Válido até', 'Ficheiro no pacote']); head.font = { bold: true };
+  const out = []; const zipFiles = [];
+  for (const c of cells) {
+    const p = people[c.p] || {}; const i = items[c.i] || {};
+    let fname = '';
+    if (c.doc && c.doc.file) {
+      const r = await docBlob(c.doc.file, 'documentos', false);
+      if (!r.error) {
+        const ext = (c.doc.file.split('.').pop() || 'pdf').toLowerCase();
+        fname = `${cdSafe(p.name)}/${cdSafe(i.name)}.${ext}`;
+        zipFiles.push({ name: fname, data: new Uint8Array(await r.blob.arrayBuffer()) });
+      }
+    }
+    out.push([p.name || '', p.number || '', p.role || p.job || '', i.name || '', (CD_KIND[i.kind] || CD_KIND.other)[0], (c.doc && c.doc.n) || '', c.doc && c.doc.exp ? fmtDate(c.doc.exp) : '', fname]);
+  }
+  out.forEach((r) => ws.addRow(r));
+  ws.columns.forEach((col, n) => { col.width = [28, 12, 16, 34, 16, 18, 12, 40][n] || 14; });
+  const xbuf = new Uint8Array(await wb.xlsx.writeBuffer());
+  const base = cdSafe(`${L.client} ${L.year} ${L.title}`);
+  zipFiles.unshift({ name: `${base} - lista.xlsx`, data: xbuf });
+  const blob = zipStore(zipFiles);
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${base} - pacote ${isoDay(new Date())}.zip`;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  if (globalThis.GESTNOW_TEST) globalThis.LAST_ZIP = { name: a.download, files: zipFiles.map((f) => f.name), size: blob.size };
+  toast(`Pacote pronto: ${pl(zipFiles.length - 1, 'comprovativo', 'comprovativos')} e o Excel. Anexa-o no e-mail ou no portal do cliente.`);
+}
+// A plain .zip with the files stored as they are (PDFs and photos are already compressed), so no library is needed.
+const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+const crc32 = (u) => { let c = 0xffffffff; for (let i = 0; i < u.length; i++) c = CRC_T[(c ^ u[i]) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+function zipStore(files) {
+  const enc = new TextEncoder(); const parts = []; const central = []; let off = 0;
+  const d = new Date(); const time = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1); const day = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+  const seen = new Set();
+  for (const f of files) {
+    let name = f.name; let k = 2; while (seen.has(name)) name = f.name.replace(/(\.[^.]+)$/, ` (${k++})$1`); seen.add(name);
+    const nb = enc.encode(name); const crc = crc32(f.data); const sz = f.data.length;
+    const h = new DataView(new ArrayBuffer(30));
+    h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(8, 0, true); h.setUint16(10, time, true); h.setUint16(12, day, true);
+    h.setUint32(14, crc, true); h.setUint32(18, sz, true); h.setUint32(22, sz, true); h.setUint16(26, nb.length, true); h.setUint16(28, 0, true);
+    parts.push(new Uint8Array(h.buffer), nb, f.data);
+    const c = new DataView(new ArrayBuffer(46));
+    c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint16(10, 0, true); c.setUint16(12, time, true); c.setUint16(14, day, true);
+    c.setUint32(16, crc, true); c.setUint32(20, sz, true); c.setUint32(24, sz, true); c.setUint16(28, nb.length, true); c.setUint32(42, off, true);
+    central.push(new Uint8Array(c.buffer), nb);
+    off += 30 + nb.length + sz;
+  }
+  const csz = central.reduce((a, b) => a + b.length, 0);
+  const e = new DataView(new ArrayBuffer(22));
+  e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true); e.setUint32(12, csz, true); e.setUint32(16, off, true);
+  return new Blob([...parts, ...central, new Uint8Array(e.buffer)], { type: 'application/zip' });
+}
+
 // Andaimes (v46): request, build, inspect (green / amber / red), damage reports, "posso subir?", waiting evidence and hire cost.
 // A scaffold whose inspection is overdue turns red by itself. Every move is checked again by the database.
 const canScaffolds = () => mod('scaffolds') && ['andaimes.ver', 'andaimes.gerir', 'andaimes.inspecionar'].some(can);
@@ -14466,6 +15004,7 @@ function noticeRoute(x) {
   if (k === 'hazard_answer') return mine('relatos');
   if (k === 'front_request' || k === 'front_answer') return view('frentes');
   if (k === 'routine_late') return view('rotinas');
+  if (/^client_docs/.test(k)) return () => { if (!viewOpen('docscliente')) return false; state.cdocs = { tab: 'curso', ltab: 'pessoas', sel: new Set(), list: l.list_id || null }; go('docscliente'); return true; };
   return () => false;
 }
 async function showNotices() {

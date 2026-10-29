@@ -2563,3 +2563,75 @@ table.grid.mini td, table.grid.mini th { padding: 8px 10px; }
 #backbar { margin: 0 0 4px; }
 /* v114: Obras: dados e regras, the site being set up */
 .list.sites .card.sel { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft); }
+
+/* ---------------------------------------------------------------- v116 Documentação do cliente */
+.cd-lead { margin: -4px 0 16px; max-width: 62ch; }
+button.cd-card { display: block; width: 100%; text-align: left; font: inherit; color: inherit; }
+.cd-card .prog { margin: 10px 0 4px; }
+.cd-when { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; font-weight: 600; }
+.cd-when .i { width: 16px; height: 16px; color: var(--brand); }
+.cd-warn { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.chk { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; font-weight: 500; line-height: 1.35; cursor: pointer; }
+.chk input { width: 20px; height: 20px; flex: 0 0 auto; margin: 0; accent-color: var(--brand); }
+.chk small { display: inline; }
+.chk.muted { opacity: .55; }
+.cd-prev { margin: 4px 0 0; padding: 4px 12px; background: var(--brand-soft); border-radius: var(--r-md); }
+.cd-head .fl-papers { margin-top: 0; }
+.cd-counts { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 10px 0 4px; }
+.cd-c { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; border-radius: var(--r-md); background: var(--surface-2); font-size: 11px; line-height: 1.2; text-align: center; color: var(--ink-2); }
+.cd-c b { font-size: var(--t-lg); color: var(--ink); }
+.cd-c.bad b { color: var(--bad); } .cd-c.warn b { color: var(--warn); } .cd-c.ok b { color: var(--ok); } .cd-c.info b { color: var(--info); }
+.cd-al { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0 0; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2); font-size: var(--t-sm); }
+.cd-al .i { flex: 0 0 auto; width: 18px; height: 18px; margin-top: 1px; }
+.cd-al.bad { background: var(--bad-bg); color: var(--bad); } .cd-al.warn { background: var(--warn-bg); color: var(--warn); }
+.cd-head .acts { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
+.cd-seg { overflow-x: auto; scrollbar-width: none; margin-top: 16px; }
+.cd-seg::-webkit-scrollbar { display: none; }
+.cd-seg > button { flex: 1 0 auto; padding: 0 14px; white-space: nowrap; font-size: var(--t-sm); }
+.cd-padd, .cd-pacts { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+.cd-pacts { margin: 10px 0 0; }
+.cd-rows { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
+.cd-row { display: flex; align-items: stretch; gap: 0; border-radius: var(--r-md); background: var(--surface-2); overflow: hidden; }
+.cd-row.done { background: color-mix(in srgb, var(--ok-bg) 55%, var(--surface-2)); }
+.cd-row.sel { box-shadow: inset 0 0 0 2px var(--brand); }
+.cd-ck { display: flex; align-items: center; padding: 0 4px 0 12px; cursor: pointer; }
+.cd-ck input { width: 22px; height: 22px; margin: 0; accent-color: var(--brand); }
+.cd-cell { flex: 1 1 auto; display: flex; gap: 8px; align-items: center; min-height: var(--tap); padding: 8px 12px; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.cd-cell .grow { min-width: 0; }
+.cd-cell > .chip { flex: 0 0 auto; }
+.cd-bits { display: block; color: var(--ink-2); font-size: var(--t-xs); margin-top: 2px; overflow-wrap: anywhere; }
+.cd-flags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.cd-flag { display: inline-flex; align-items: center; gap: 4px; font-size: var(--t-xs); font-weight: 650; }
+.cd-flag .i { width: 13px; height: 13px; }
+.cd-flag.bad { color: var(--bad); } .cd-flag.warn { color: var(--warn); }
+.cd-bar { position: fixed; z-index: 30; left: 8px; right: 8px; bottom: calc(var(--tab-h) + env(safe-area-inset-bottom) + 8px); max-width: 640px; margin: 0 auto;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; border-radius: var(--r-lg); background: var(--top-bg); color: var(--top-ink); box-shadow: var(--sh-2); }
+.cd-bar > b { flex: 1 1 auto; }
+.cd-bar-acts { display: flex; gap: 6px; flex-wrap: wrap; }
+.cd-bar .btn.ghost { color: var(--top-ink); box-shadow: inset 0 0 0 1px var(--top-ink-2); background: transparent; }
+.cd-tags { margin: 8px 0 0; }
+.cd-tags .chip { min-height: 0; padding: 2px 8px; font-size: var(--t-xs); box-shadow: none; cursor: default; }
+.cd-tags .chip.info { background: var(--info-bg); } .cd-tags .chip.bad { background: var(--bad-bg); } .cd-tags .chip.reg { background: var(--surface-2); }
+.cd-pick { max-height: 46vh; overflow-y: auto; margin: 8px 0; border-top: var(--bw) solid var(--line); border-bottom: var(--bw) solid var(--line); }
+.cd-pick .chk { padding: 10px 2px; border-bottom: var(--bw) solid var(--line); }
+.cd-pick .chk[hidden] { display: none; }
+.cd-h { font-size: var(--t-md); margin: 20px 0 8px; }
+.cd-log { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.cd-log li { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-bottom: var(--bw) solid var(--line); font-size: var(--t-sm); }
+.cd-log li .i { flex: 0 0 auto; width: 16px; height: 16px; margin-top: 2px; color: var(--ink-2); }
+.cd-log small { display: block; }
+.cd-sendl { margin: 0 0 8px; padding-left: 18px; font-size: var(--t-sm); }
+.cd-years { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 12px; }
+.cd-y { font-size: var(--t-xl); color: var(--brand); min-width: 64px; }
+.cd-asked { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
+.cd-asked li { display: flex; gap: 8px; align-items: center; font-size: var(--t-sm); }
+.cd-asked li .i { width: 16px; height: 16px; color: var(--brand); flex: 0 0 auto; }
+.cd-asked li.gone span { text-decoration: line-through; color: var(--ink-2); }
+.cd-year .acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.cd-person .av { width: 40px; height: 40px; background: var(--brand-soft); color: var(--brand); }
+@media (min-width: 1100px) { .cd-bar { left: calc(var(--side-w) + 16px); bottom: 16px; } }
+.cd-facts { list-style: none; margin: 0 0 4px; padding: 0; display: grid; gap: 6px; font-size: var(--t-sm); }
+.cd-facts li { display: flex; gap: 8px; align-items: flex-start; overflow-wrap: anywhere; }
+.cd-facts li .i { flex: 0 0 auto; width: 16px; height: 16px; margin-top: 2px; color: var(--brand); }
+.cd-facts li.warn { color: var(--warn); }
+.cd-al > span { flex: 1 1 auto; }
