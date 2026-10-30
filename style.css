@@ -2166,7 +2166,7 @@ dialog.docview { box-sizing: border-box; overflow-x: hidden; max-height: 96vh; p
 .sw input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; z-index: 1; }
 .sw i { position: absolute; inset: 0; border-radius: 999px; background: var(--surface-3); transition: background .15s; }
 .sw i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: transform .15s; }
-.sw input:checked + i { background: var(--brand, #4f46e5); } .sw input:checked + i::after { transform: translateX(22px); }
+.sw input:checked + i { background: var(--brand-fill); } .sw input:checked + i::after { transform: translateX(22px); }
 .sw input:focus-visible + i { outline: 3px solid var(--brand, #4f46e5); outline-offset: 2px; }
 .sw input:disabled + i { opacity: .5; }
 ul.plain { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; } ul.plain li { display: flex; gap: 8px; align-items: center; }
@@ -2678,3 +2678,24 @@ button.cd-card { display: block; width: 100%; text-align: left; font: inherit; c
    412 px phone, so the whole page scrolled sideways. The word «GestNow» gives way to the «Sem rede» chip, which can shrink. */
 .net { min-width: 0; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; }
 @media (max-width: 520px) { .top:has(#net:not([hidden])) .brand strong { display: none; } }
+
+/* v120 · Inventário (sql/135) */
+.inv-lead { margin: -4px 0 12px; }
+.inv-h { font-size: 1rem; margin: 18px 0 8px; }
+.inv-new { display: grid; gap: 8px; margin: 0 0 8px; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.inv-card, .inv-zone { display: block; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.inv-card .nm, .inv-zone .nm { overflow-wrap: anywhere; }
+.inv-zone.mine { border-color: var(--brand); }
+.inv-zone.done { opacity: .78; }
+.inv-head h2 { font-size: 1.1rem; overflow-wrap: anywhere; }
+.inv-steps { display: flex; flex-wrap: wrap; gap: 4px 6px; list-style: none; padding: 0; margin: 12px 0 0; font-size: .78rem; }
+.inv-steps li { padding: 3px 8px; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
+.inv-steps li.done { background: var(--ok-fill); color: #fff; }
+.inv-steps li.now { background: var(--brand-fill); color: #fff; font-weight: 600; }
+.inv-scan .wk input { flex: 1 1 auto; min-width: 0; }
+.inv-l .linkish, .linkish { background: none; border: 0; padding: 0; text-align: left; font: inherit; color: inherit; cursor: pointer; min-width: 0; overflow-wrap: anywhere; }
+.inv-l.done { opacity: .8; }
+.inv-var li { align-items: flex-start; }
+.acts-col { display: grid; gap: 8px; margin: 8px 0; }
+@media (max-width: 380px) { .row2 { grid-template-columns: 1fr; } }
