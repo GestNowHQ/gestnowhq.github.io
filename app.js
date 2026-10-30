@@ -54,6 +54,45 @@ const REASON_PREFIX = {
 };
 const ERRORS = [
   // Resíduos (sql/132)
+  // v120 · Inventário (sql/135)
+  [/inventory not found/i, 'Inventário não encontrado.'],
+  [/the annual inventory of this year already exists/i, 'O inventário anual deste ano já existe. Abre esse.'],
+  [/choose what to count/i, 'Escolhe o que contar: o stock, as ferramentas ou os dois.'],
+  [/zones change only before the count ends/i, 'As zonas só mudam até acabar a contagem.'],
+  [/give the zone a name/i, 'Dá um nome à zona (ex.: Prateleira A).'],
+  [/zone not found/i, 'Zona não encontrada.'],
+  [/too many zones/i, 'Zonas a mais (máximo 200).'],
+  [/this inventory has already started/i, 'Este inventário já começou.'],
+  [/add at least one zone/i, 'Junta pelo menos uma zona.'],
+  [/nothing to count in these warehouses/i, 'Não há nada para contar nestes armazéns.'],
+  [/another count is running on the same items: (\S+)/i, 'Já há outra contagem a decorrer com os mesmos artigos: $1.'],
+  [/this item is being counted \(inventory (\S+)\)/i, 'Este artigo está a ser contado (inventário $1). Volta a mexer quando a contagem acabar.'],
+  [/this inventory is not counting/i, 'Este inventário não está em contagem.'],
+  [/this zone is finished for this round/i, 'Esta zona já foi dada como acabada nesta contagem.'],
+  [/line not found/i, 'Linha não encontrada.'],
+  [/this tool is not in this inventory/i, 'Esta ferramenta não está neste inventário.'],
+  [/^code not found|: code not found/i, 'Código não encontrado. Confirma o código do artigo ou da ferramenta.'],
+  [/this item is not in this count/i, 'Este artigo não faz parte desta contagem.'],
+  [/this line is not counted in this round/i, 'Esta linha já está certa: não se conta nesta ronda.'],
+  [/say how many you counted/i, 'Diz quantos contaste (0 se não há nenhum).'],
+  [/the recount is done by another person/i, 'A 2.ª contagem é feita por outra pessoa, não por quem fez a 1.ª.'],
+  [/the 3rd count is done by the person in charge/i, 'A 3.ª contagem é feita pelo responsável do inventário.'],
+  [/say why the round closes with zones not finished/i, 'Diz porque fechas com zonas por acabar.'],
+  [/some zones are not finished/i, 'Há zonas por acabar.'],
+  [/reasons are given in the review/i, 'Os motivos dão-se na revisão.'],
+  [/this line has no difference/i, 'Esta linha não tem diferença.'],
+  [/explain the other reason/i, 'Escreve o que aconteceu (em «Outro»).'],
+  [/this inventory is not in review/i, 'Este inventário não está em revisão.'],
+  [/every difference needs a reason/i, 'Cada diferença precisa de um motivo.'],
+  [/this inventory is not waiting for signatures/i, 'Este inventário não está à espera de assinaturas.'],
+  [/who counted does not sign/i, 'Quem contou não assina: tem de ser alguém de fora da contagem.'],
+  [/say what needs fixing/i, 'Diz o que tem de ser corrigido.'],
+  [/you already signed: the 2nd signature is another person/i, 'Já assinaste. A 2.ª assinatura é de outra pessoa.'],
+  [/this inventory is closed/i, 'Este inventário está fechado.'],
+  [/it is waiting for signatures: ask for it back first/i, 'Está à espera de assinaturas: pede primeiro que o devolvam.'],
+  [/say why it is cancelled/i, 'Diz porque cancelas.'],
+  [/the report is ready when the counting ends/i, 'O relatório fica pronto quando a contagem acabar.'],
+  [/inventory records are never (changed|removed)/i, 'Os registos do inventário nunca se alteram nem se apagam.'],
   [/say how much/i, 'Diz quanto (maior que zero).'],
   [/container not found/i, 'Contentor não encontrado.'],
   [/this container is switched off/i, 'Este contentor está desligado.'],
@@ -1082,7 +1121,7 @@ const RC_PREFIX = 'gn.rc.';
 const OFFLINE_READS = new Set(['mini_my_home', 'mini_my_summary', 'mini_my_papers', 'mini_time_mode', 'mini_my_meetings', 'mini_my_team_messages',
   'mini_my_hazards', 'mini_hazard_sites', 'mini_my_weeks', 'mini_my_day', 'mini_my_day_more', 'mini_my_day_disputes', 'mini_my_documents', 'mini_my_kit',
   'mini_wh_my_tools', 'mini_my_per_diems', 'mini_my_requests', 'mini_my_glances', 'mini_my_stay', 'mini_my_travels', 'mini_my_timesheet', 'mini_progress_my',
-  'mini_meeting_get', 'mini_meetings', 'mini_cases', 'mini_case_get', 'mini_case_scan', 'mini_site_material', 'mini_hazards', 'mini_hazard', 'mini_waste_home']);
+  'mini_meeting_get', 'mini_meetings', 'mini_cases', 'mini_case_get', 'mini_case_scan', 'mini_site_material', 'mini_hazards', 'mini_hazard', 'mini_waste_home', 'mini_inv_home', 'mini_inv_get']);
 const rpcRaw = sb.rpc.bind(sb);
 const rcKey = (fn, args) => `${RC_PREFIX}${(state.me && state.me.user_id) || '-'}.${fn}.${JSON.stringify(args || {})}`;
 function rcTrim() {   // the phone is full: the oldest half goes
@@ -1190,7 +1229,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '119';
+const APP_VERSION = '120';
 // v107 (Diogo 2026-10-26): «Início» = what is urgent + the departments. The bottom bar keeps only Início, the field tools of
 // the encarregado (Equipa, Picar) or of the safety officer (Emergência), Procurar and Eu. Everything else is in its department.
 const TABS = { supervisor: ['inicio', 'equipa', 'picar', 'minhas'], admin: ['inicio', 'minhas'],
@@ -1206,8 +1245,8 @@ function tabsFor(role) {
   if (role === 'admin' && ownerDesk()) return ['clientes'];   // inside a client company, «‹ Os meus clientes» is on Início
   return TABS[role] || TABS.supervisor;
 }
-const OFFLINE_VIEWS = ['picar', 'minhas', 'material', 'reunioes', 'relatos', 'emergencia', 'residuos'];   // v89: they keep a copy
-const MORE_ORDER = ['inicio', 'empresa', 'onbtextos', 'equipa', 'material', 'picar', 'emergencia', 'relatos', 'reunioes', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'faltas', 'mesresumo', 'reclamacoes', 'salarios', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'residuos', 'compras', 'frota', 'alojamento', 'viagens', 'docscliente', 'despesas', 'diarias', 'andaimes', 'processo', 'clientes', 'custos', 'progresso', 'frentes', 'rotinas', 'contactos'];
+const OFFLINE_VIEWS = ['picar', 'minhas', 'material', 'reunioes', 'relatos', 'emergencia', 'residuos', 'inventario'];   // v89: they keep a copy
+const MORE_ORDER = ['inicio', 'empresa', 'onbtextos', 'equipa', 'material', 'picar', 'emergencia', 'relatos', 'reunioes', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'faltas', 'mesresumo', 'reclamacoes', 'salarios', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'inventario', 'residuos', 'compras', 'frota', 'alojamento', 'viagens', 'docscliente', 'despesas', 'diarias', 'andaimes', 'processo', 'clientes', 'custos', 'progresso', 'frentes', 'rotinas', 'contactos'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -1230,7 +1269,7 @@ const MENU_GROUPS = [
   ['Frota', ['frota']],
   ['QSA · Qualidade, Segurança e Ambiente', ['relatos', 'seguranca', 'reunioes', 'lmra', 'emergencia', 'qualidade', 'processo']],
   ['Produção (Obra)', ['painel', 'naobra', 'progresso', 'frentes', 'rotinas', 'material', 'andaimes', 'picar', 'obras', 'equipa', 'producao']],
-  ['Compras e Armazém', ['armazem', 'residuos', 'compras']],
+  ['Compras e Armazém', ['armazem', 'inventario', 'residuos', 'compras']],
   ['Comercial', ['comercial']],
   ['Orçamentação', ['orcamentos']],
   ['Eu', ['minhas', 'contactos']],
@@ -1255,7 +1294,7 @@ const VIEW_NEEDS = {
   emergencia: () => can('seguranca.emergencia'), acolhimento: () => can('acolhimento.gerir'),
   obras: () => can('obras.gerir') || can('obras.ver_detalhes') || can('obras.area'), painel: () => canSiteDetails(), naobra: () => canSiteDetails() || can('ponto.picar'),
   equipa: () => canSiteDetails(), picar: () => can('ponto.picar'), horas: () => can('horas.ver') || can('horas.validar_obra'),
-  andaimes: () => canScaffolds(), producao: () => canProd(), progresso: () => canProgress(), frentes: () => canFronts(), rotinas: () => canRoutines(), contactos: () => true, material: () => canSiteMaterial(), armazem: () => canWh(), residuos: () => canWaste(), compras: () => canBuy(), frota: () => canFleet(),
+  andaimes: () => canScaffolds(), producao: () => canProd(), progresso: () => canProgress(), frentes: () => canFronts(), rotinas: () => canRoutines(), contactos: () => true, material: () => canSiteMaterial(), armazem: () => canWh(), inventario: () => canInv(), residuos: () => canWaste(), compras: () => canBuy(), frota: () => canFleet(),
   orcamentos: () => canEstimates(), qualidade: () => canQuality(), comercial: () => canSales(), premios: () => canAwards(), custos: () => canCosts(), diarias: () => canPerDiems(),
   faltas: () => canApprove(), mesresumo: () => canApprove(), reclamacoes: () => canApprove(), salarios: () => canPayroll(),
 };
@@ -1296,9 +1335,10 @@ const ENC_ICONS = {
   todo: '<path d="M4 6l2 2 3-3M4 13l2 2 3-3M12 7h8M12 14h8M4 19.5h.01M12 19.5h8"/>',
   clientdocs: '<path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5zM8.5 13l2.5 2.5 4.5-4.5"/>',
   recycle: '<path d="M7 19H4.8a1.8 1.8 0 0 1-1.6-.9 1.8 1.8 0 0 1 0-1.8l4-6.8M11 19h8.2a1.8 1.8 0 0 0 1.6-.9 1.8 1.8 0 0 0 0-1.8l-1.2-2.1M14 16l-3 3 3 3M8.3 13.6 7.2 9.5l-4.1 1.1M9.3 5.8l1.1-1.9A1.8 1.8 0 0 1 12 3a1.8 1.8 0 0 1 1.5.9l4 6.8M13.4 9.6l4.1 1.1 1.1-4.1"/>',
+  stocktake: '<path d="M9 3h6v3H9zM9 4.5H6v16.5h12V4.5h-3M8.5 12.5l2 2 4-4M9 18h6"/>',
   medal: '<path d="M12 14a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM9.5 13.3 8 21l4-2 4 2-1.5-7.7M10 9l1.5 1.5L14.5 7.5"/>',
 };
-const MENU_ICON = { painel: 'gauge', producao: 'chart', seguranca: 'hhat', equipa: 'crew', minhas: 'myclock', naobra: 'gate', qualidade: 'medal', clientes: 'firms', comercial: 'target', premios: 'trophy', custos: 'coins', progresso: 'sheet', frentes: 'fronts', rotinas: 'todo', docscliente: 'clientdocs', residuos: 'recycle' };
+const MENU_ICON = { painel: 'gauge', producao: 'chart', seguranca: 'hhat', equipa: 'crew', minhas: 'myclock', naobra: 'gate', qualidade: 'medal', clientes: 'firms', comercial: 'target', premios: 'trophy', custos: 'coins', progresso: 'sheet', frentes: 'fronts', rotinas: 'todo', docscliente: 'clientdocs', residuos: 'recycle', inventario: 'stocktake' };
 (function encIcons() {
   const ns = 'http://www.w3.org/2000/svg'; const sp = document.createElementNS(ns, 'svg');
   sp.setAttribute('width', '0'); sp.setAttribute('height', '0'); sp.setAttribute('aria-hidden', 'true'); sp.style.position = 'absolute';
@@ -1615,6 +1655,7 @@ async function boot() {
   nav.querySelector('[data-view=material]').hidden = worker || !canSiteMaterial();
   nav.querySelector('[data-view=emergencia]').hidden = worker || !canEmergency();
   nav.querySelector('[data-view=armazem]').hidden = worker || state.offline || !canWh();
+  nav.querySelector('[data-view=inventario]').hidden = worker || !canInv();   // v120: counting opens without network (kept copy, entries wait)
   nav.querySelector('[data-view=residuos]').hidden = worker || !canWaste();   // v117: opens without network (kept copy, entradas wait)
   nav.querySelector('[data-view=compras]').hidden = worker || state.offline || !canBuy();
   nav.querySelector('[data-view=frota]').hidden = worker || state.offline || !canFleet();
@@ -2094,7 +2135,7 @@ function go(view) {
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
      ficha: viewWorker, obras: viewSites, area: viewArea, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients, cliente: viewClient, precos: viewPrices, empresa: viewCompanyRules, inicio: viewHome, departamento: viewDept,
      processo: viewProcess, orcamentos: viewEstimates, comercial: viewSales, premios: viewAwards, custos: viewCosts, diarias: viewPerDiemOffice, faltas: viewOfficeAbsences, mesresumo: viewOfficeSummary, reclamacoes: viewOfficeRequests, salarios: viewOfficePayroll, lmra: viewLmra, reunioes: viewMeetings, relatos: viewHazards, material: viewSiteMaterial, emergencia: viewEmergency,
-     armazem: viewWarehouse, residuos: viewWaste, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, docscliente: viewClientDocs, producao: viewProd, progresso: viewProgress, frentes: viewFronts, rotinas: viewRoutines, contactos: viewContacts, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
+     armazem: viewWarehouse, inventario: viewInventory, residuos: viewWaste, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, docscliente: viewClientDocs, producao: viewProd, progresso: viewProgress, frentes: viewFronts, rotinas: viewRoutines, contactos: viewContacts, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
   checkEmergencyBar(); encBadges();
 }
 
@@ -10323,12 +10364,13 @@ async function loadWarehouse() {
       <button class="kpi ${h.inspections_due ? 'warn' : ''}" data-tab="ferramentas"><b>${h.inspections_due}</b><span>inspeções a vencer</span></button>
       <div class="kpi ${h.ppe_due ? 'info' : ''}"><b>${h.ppe_due}</b><span>EPI a trocar em 30 dias</span></div></div>
     <div class="wh-bar">${h.warehouses.length > 1 ? `<select id="whsel" aria-label="Armazém">${h.warehouses.map((w) => `<option value="${esc(w.id)}" ${w.id === W.wid ? 'selected' : ''}>${esc(w.name)}${w.site ? ' (' + esc(w.site) + ')' : ''}</option>`).join('')}</select>` : `<span class="muted small">${esc(h.warehouses[0].name)}</span>`}
-      ${h.can_manage ? '<button class="btn ghost small" id="whadd">+ Armazém</button>' : ''}${canWaste() ? `<button class="btn ghost small" id="whwaste">${ic('recycle')}Resíduos</button>` : ''}</div>
+      ${h.can_manage ? '<button class="btn ghost small" id="whadd">+ Armazém</button>' : ''}${canInv() ? `<button class="btn ghost small" id="whinv">${ic('stocktake')}Inventário</button>` : ''}${canWaste() ? `<button class="btn ghost small" id="whwaste">${ic('recycle')}Resíduos</button>` : ''}</div>
     <div class="seg wh-tabs" role="tablist">${tabs.map(([k, l]) => `<button role="tab" data-whtab="${k}" aria-selected="${W.tab === k}">${l}</button>`).join('')}</div>`;
   top.querySelectorAll('[data-whtab]').forEach((b) => b.onclick = () => { W.tab = b.dataset.whtab; stopNfc(); loadWarehouse(); });
   top.querySelectorAll('button.kpi[data-tab]').forEach((b) => b.onclick = () => { W.tab = b.dataset.tab; stopNfc(); loadWarehouse(); });
   if ($('#whsel')) $('#whsel').onchange = (e) => { W.wid = e.target.value; W.cart = []; loadWarehouse(); };
   if ($('#whadd')) $('#whadd').onclick = addWarehouse;
+  if ($('#whinv')) $('#whinv').onclick = () => go('inventario');
   if ($('#whwaste')) $('#whwaste').onclick = () => go('residuos');
   ({ entregar: whIssue, stock: whStock, ferramentas: whTools, obras: whSiteRequests, maloes: whCases }[W.tab] || whStock)();
 }
@@ -15549,6 +15591,445 @@ async function wsTypeForm(t) {
   toast('Tipo de resíduo guardado.'); wsLoad();
 }
 
+// ------------------------------------------------------------------ Inventário (sql/135): a contagem anual e as rotativas
+// Diogo 2026-10-30: «ao final do ano tem que se fazer sempre um inventário anual de tudo o que existe no armazém».
+// The way the best warehouses do it: zones, a photo of the system at «Começar» (the counted items stop moving), blind
+// counts (nobody sees what the system says), a 2nd count by another person for every difference beyond the tolerance and
+// a 3rd by the person in charge, a reason for each difference, two signatures from people who did not count, then the
+// stock is adjusted. Tools out with people or on sites are counted where they are. Counting works without network: each
+// entry waits on the phone and goes later, kept once. Excel and the AT inventory file at the end. Nothing is ever deleted.
+const canInv = () => mod('warehouse') && ['inventario.contar', 'inventario.gerir', 'inventario.aprovar'].some(can);
+const INV_KIND = { annual: 'Anual', cycle: 'Rotativa', spot: 'Pontual' };
+const INV_ST = { preparing: ['info', 'A preparar'], counting: ['warn', 'A contar'], review: ['warn', 'A rever'], approval: ['warn', 'À espera de assinaturas'],
+  closed: ['ok', 'Fechado'], cancelled: ['reg', 'Cancelado'] };
+const INV_REASON = { tolerancia: 'Dentro da tolerância', saida_sem_registo: 'Saiu sem registo', entrada_sem_registo: 'Entrou sem registo', dano_abate: 'Estragado, foi para o lixo',
+  perda_roubo: 'Perda ou roubo', erro_anterior: 'Erro de uma contagem antiga', unidade_errada: 'Unidade errada (caixa vs unidade)', outro_sitio: 'Estava noutro armazém', outro: 'Outro' };
+const INV_PICK = { abc: 'Os artigos de mais valor (ABC)', stale: 'Os que estão há mais tempo sem contar', random: 'Ao acaso' };
+const INV_AT_CAT = { P: 'P · Matérias-primas, subsidiárias e de consumo', M: 'M · Mercadorias', A: 'A · Produtos acabados e intermédios', S: 'S · Subprodutos, desperdícios e refugos', T: 'T · Produtos e trabalhos em curso' };
+const invNum = (n) => Number(n || 0).toLocaleString(LOC, { maximumFractionDigits: 3 });
+const invEur = (n) => Number(n || 0).toLocaleString(LOC, { style: 'currency', currency: 'EUR' });
+const invRound = (n) => `${n}.ª contagem`;
+function viewInventory() {
+  if (!state.ready) return boot();   // never a screen before login
+  if (!canInv()) return viewClock();   // code guard as well as the database's
+  if (!state.inv) state.inv = { id: null, zone: null };
+  const dept = (menuBase().find(([, vs]) => vs.includes('inventario')) || ['Compras e Armazém'])[0].split(' · ')[0];
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">${esc(dept)}</p><h1>Inventário</h1></div></div>
+    <div id="invbody">${skel(3)}</div>`;
+  invLoad();
+}
+function invLoad() { return state.inv.id ? (state.inv.zone ? invZone() : invDetail()) : invHome(); }
+// ---- Início: what needs you, the year's annual inventory, the list
+async function invHome() {
+  const box = $('#invbody'); if (!box) return;
+  const { data: h, error } = await sb.rpc('mini_inv_home');
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
+  state.inv.home = h;
+  const yr = h.annual && h.annual[String(h.year)];
+  const open = h.counts.filter((c) => !['closed', 'cancelled'].includes(c.status));
+  const done = h.counts.filter((c) => ['closed', 'cancelled'].includes(c.status));
+  const al = h.alerts || [];
+  box.innerHTML = `<p class="small muted inv-lead">Contar tudo o que há nos armazéns: às cegas, por zonas, com 2.ª contagem nas diferenças e duas assinaturas no fim. O stock acerta-se sozinho.</p>
+    ${al.length ? `<section class="card ws-alerts"><h2 style="margin-top:0">O que precisa de ti</h2><ul class="plain">${al.map(invAlertLine).join('')}</ul></section>` : ''}
+    ${h.can_manage ? `<div class="inv-new">
+      ${yr ? '' : `<button class="btn big wide" id="invannual">${ic('box')}Preparar o inventário anual de ${h.year}</button>`}
+      <div class="row2"><button class="btn ghost" id="invcycle">Contagem rotativa</button><button class="btn ghost" id="invspot">Contagem pontual</button></div>
+      <button class="btn ghost small" id="invrules">${ic('key')}Regras (tolerância, ficheiro AT)</button></div>` : ''}
+    <h2 class="inv-h">A decorrer</h2>
+    ${open.length ? open.map(invCard).join('') : `<div class="card"><p class="muted">Nenhum inventário a decorrer.${h.can_manage ? '' : ' Quando o armazém começar um, aparece aqui.'}</p></div>`}
+    ${done.length ? `<h2 class="inv-h">Fechados</h2>${done.map(invCard).join('')}` : ''}
+    <details class="card inv-how"><summary>Como funciona</summary><ol class="small">
+      <li><b>Preparar</b>: o armazém escolhe os armazéns e divide-os em zonas (ex.: Prateleira A, Contentor 2, Carrinha 1). As obras com ferramentas emprestadas também são zonas.</li>
+      <li><b>Começar</b>: a app tira a fotografia do que o sistema diz. Os artigos contados ficam parados até acabar a contagem (não há entregas nem entradas desses artigos).</li>
+      <li><b>Contar às cegas</b>: quem conta não vê quanto devia haver. Lê o código (QR, NFC ou número) e escreve quanto contou. Funciona sem rede.</li>
+      <li><b>2.ª contagem</b>: as diferenças maiores que a tolerância são contadas outra vez por outra pessoa. Se ainda não bater, o responsável faz a 3.ª.</li>
+      <li><b>Rever</b>: cada diferença leva um motivo (perda, saída sem registo, estragado…).</li>
+      <li><b>Assinar</b>: duas pessoas que não contaram assinam. Aí o stock acerta-se e as ferramentas que não apareceram ficam como desaparecidas.</li>
+      <li><b>Excel e ficheiro da AT</b>: para a contabilidade comunicar o inventário até 31 de janeiro (as ferramentas não entram: são ativo, não existências).</li></ol></details>`;
+  box.querySelectorAll('[data-inv]').forEach((b) => b.onclick = () => { state.inv.id = b.dataset.inv; state.inv.zone = null; invLoad(); });
+  box.querySelectorAll('[data-ina]').forEach((b) => b.onclick = () => { state.inv.id = b.dataset.id; state.inv.zone = null; invLoad(); });
+  if ($('#invannual')) $('#invannual').onclick = () => invCreate('annual');
+  if ($('#invcycle')) $('#invcycle').onclick = () => invCreate('cycle');
+  if ($('#invspot')) $('#invspot').onclick = () => invCreate('spot');
+  if ($('#invrules')) $('#invrules').onclick = invRules;
+}
+function invAlertLine(a) {
+  const open = (id, label) => `<button class="btn ghost small" type="button" data-ina="1" data-id="${esc(id)}">${esc(label)}</button>`;
+  const [txt, act] = a.k === 'stalled' ? [`${a.code}: ninguém conta há ${pl(a.days, 'dia', 'dias')}.`, open(a.id, 'Abrir')]
+    : a.k === 'review' ? [`${a.code}: contagem acabada há mais de 7 dias, falta rever as diferenças.`, open(a.id, 'Rever')]
+    : a.k === 'sign' ? [`${a.code}: à espera de assinaturas (${a.signed} de 2).`, open(a.id, 'Abrir')]
+    : a.k === 'plan' ? [`O inventário anual de ${a.year} ainda não está marcado. A contagem é a 31 de dezembro.`, '']
+    : [`O inventário de ${a.year} não está fechado. A comunicação à AT acaba a 31 de janeiro (faltam ${pl(a.days, 'dia', 'dias')}).`, ''];
+  return `<li class="ws-al ${a.sev}"><span class="dot">${ic(a.sev === 'bad' ? 'warn' : 'info')}</span><span class="grow">${esc(txt)}</span>${act}</li>`;
+}
+function invCard(c) {
+  const [k, l] = INV_ST[c.status]; const p = c.progress || {}; const s = c.summary || {};
+  const pct = p.todo ? Math.round(100 * p.done / p.todo) : 0;
+  const line = c.status === 'counting' ? `${invRound(c.phase)}: ${p.done} de ${p.todo} linhas contadas`
+    : c.status === 'preparing' ? `${pl(c.warehouses.length, 'armazém', 'armazéns')}`
+    : c.status === 'cancelled' ? `Cancelado: ${c.cancel_reason || ''}`
+    : `${s.lines || 0} linhas · ${s.variance || 0} com diferença${s.accuracy != null ? ` · exatidão ${String(s.accuracy).replace('.', ',')} %` : ''}`;
+  return `<button type="button" class="card inv-card" data-inv="${esc(c.id)}">
+    <div class="wk"><div class="grow"><div class="nm"><b>${esc(c.code)}</b> · ${esc(c.title)}</div>
+      <div class="small muted">${esc(t_(INV_KIND[c.kind]))} · ${esc(fmtDate(c.count_on))} · ${esc(line)}</div></div>${chip(k, t_(l))}</div>
+    ${c.status === 'counting' ? `<div class="prog" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="Contado"><i style="width:${pct}%"></i></div>` : ''}</button>`;
+}
+async function invCreate(kind) {
+  const h = state.inv.home; const whs = h.warehouses;
+  const isA = kind === 'annual';
+  const fd = await askSheet(isA ? `Inventário anual de ${h.year}` : kind === 'cycle' ? 'Contagem rotativa' : 'Contagem pontual', `
+    ${isA ? `<p class="small muted">Conta tudo: o stock de todos os armazéns e todas as ferramentas, também as que estão com pessoas e nas obras. A data do inventário é 31/12/${h.year}.</p>`
+      : kind === 'cycle' ? '<p class="small muted">Uma amostra pequena, para contar um pouco todas as semanas. Quem faz isto ao longo do ano chega ao fim do ano sem surpresas.</p>'
+      : '<p class="small muted">Contar já um armazém ou parte dele (ex.: depois de um roubo ou de uma mudança).</p>'}
+    <label>Armazéns</label><div class="chips">${whs.map((w) => `<label class="chip"><input type="checkbox" name="w" value="${esc(w.id)}" ${isA || w.central ? 'checked' : ''}>${esc(w.name)}${w.site ? ' (' + esc(w.site) + ')' : ''}</label>`).join('')}</div>
+    ${kind === 'cycle' ? `<label for="ipk">Que artigos</label><select id="ipk" name="pk">${Object.entries(INV_PICK).map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('')}</select>
+      <label for="ipn">Quantos</label><input id="ipn" name="n" type="number" min="1" max="500" value="20" inputmode="numeric">` : ''}
+    ${isA ? '' : `<label class="check"><input type="checkbox" name="st" checked> Contar o stock (EPI, farda, consumíveis, material)</label>
+      <label class="check"><input type="checkbox" name="tl" ${kind === 'spot' ? 'checked' : ''}> Contar as ferramentas</label>`}
+    <label for="izn">Zonas do armazém (uma por linha)</label><textarea id="izn" name="z" rows="4" maxlength="2000" placeholder="Prateleira A&#10;Prateleira B&#10;Contentor 2"></textarea>
+    <p class="small muted">Sem zonas, cada armazém é uma zona. Podes juntar ou mudar zonas antes de começar.</p>
+    ${isA ? `<label class="check"><input type="checkbox" name="ob" checked> Juntar uma zona por cada obra com ferramentas emprestadas</label>` : ''}
+    <label for="inote">Nota</label><input id="inote" name="note" maxlength="500" placeholder="ex.: contagem no sábado 2 de janeiro, armazém fechado">`, 'Criar');
+  if (!fd) return;
+  const ids = fd.getAll('w'); if (!ids.length) return toast('Escolhe pelo menos um armazém.');
+  const names = String(fd.get('z') || '').split('\n').map((s) => s.trim()).filter(Boolean).slice(0, 100);
+  const zones = [];
+  for (const w of ids) for (const n of names) zones.push({ warehouse_id: w, name: ids.length > 1 ? `${n} · ${whs.find((x) => x.id === w).name}`.slice(0, 80) : n.slice(0, 80) });
+  const p = { kind, year: h.year, warehouse_ids: ids, zones, site_zones: isA && fd.get('ob') === 'on', note: String(fd.get('note') || '').trim() || null };
+  if (kind === 'cycle') p.pick = { by: fd.get('pk'), n: Number(fd.get('n')) || 20 };
+  if (!isA) { p.include_stock = fd.get('st') === 'on'; p.include_tools = fd.get('tl') === 'on'; }
+  const { data, error } = await sb.rpc('mini_inv_create', { p });
+  if (error) return toast(friendly(error));
+  toast(`${data.code} criado. Confere as zonas e carrega em «Começar».`);
+  state.inv.id = data.id; state.inv.zone = null; invLoad();
+}
+async function invRules() {
+  const s = state.inv.home.settings;
+  const fd = await askSheet('Regras do inventário', `
+    <p class="small muted">Diferenças pequenas aceitam-se sem 2.ª contagem, mas só se forem pequenas nas duas medidas: em percentagem e em euros.</p>
+    <div class="row"><div><label for="itp">Tolerância (%)</label><input id="itp" name="p" type="number" step="0.5" min="0" max="20" value="${esc(s.tol_pct)}" inputmode="decimal"></div>
+      <div><label for="itv">e no máximo (€)</label><input id="itv" name="v" type="number" step="1" min="0" max="5000" value="${esc(s.tol_value)}" inputmode="decimal"></div></div>
+    <label class="check"><input type="checkbox" name="o" ${s.recount_other ? 'checked' : ''}> A 2.ª contagem é feita por outra pessoa (recomendado)</label>
+    <label for="isd">Avisar quando ninguém conta há (dias)</label><input id="isd" name="d" type="number" min="1" max="30" value="${esc(s.stall_days)}" inputmode="numeric">
+    <label for="iac">Categoria no ficheiro da AT</label><select id="iac" name="c">${Object.entries(INV_AT_CAT).map(([k, l]) => `<option value="${k}" ${k === s.at_category ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>
+    <p class="small muted">EPI, farda e consumíveis da empresa são normalmente «P». Confirma com o contabilista.</p>`, 'Guardar');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_inv_settings_save', { p: { tol_pct: Number(fd.get('p')), tol_value: Number(fd.get('v')), recount_other: fd.get('o') === 'on', stall_days: Number(fd.get('d')), at_category: fd.get('c') } });
+  if (error) return toast(friendly(error));
+  toast('Regras guardadas. Valem para os próximos inventários.'); invHome();
+}
+// ---- One inventory
+async function invDetail() {
+  const box = $('#invbody'); if (!box) return;
+  const S = state.inv;
+  const { data: c, error } = await sb.rpc('mini_inv_get', { p_count: S.id, p_zone: null });
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div><button class="btn ghost" id="invback">‹ Inventário</button>`; $('#invback').onclick = () => { S.id = null; invLoad(); }; return; }
+  S.c = c;
+  const m = can('inventario.gerir'); const [k, l] = INV_ST[c.status];
+  const head = `<button class="btn ghost small" id="invback">‹ Inventário</button>
+    <section class="card inv-head"><div class="wk"><div class="grow"><h2 style="margin:0">${esc(c.code)} · ${esc(c.title)}</h2>
+      <p class="small muted">${esc(t_(INV_KIND[c.kind]))} · data ${esc(fmtDate(c.count_on))} · ${esc(c.warehouses.map((w) => w.name).join(', '))}${c.include_tools ? ' · com ferramentas' : ''}</p></div>${chip(k, t_(l))}</div>
+      <ol class="inv-steps">${['preparing', 'counting', 'review', 'approval', 'closed'].map((st, i, a) => `<li class="${a.indexOf(c.status) > i || c.status === 'closed' ? 'done' : c.status === st ? 'now' : ''}">${esc(t_(INV_ST[st][1]))}</li>`).join('')}</ol>
+      ${c.note ? `<p class="small">${esc(c.note)}</p>` : ''}</section>`;
+  let body = '';
+  if (c.status === 'preparing') body = invPrep(c, m);
+  else if (c.status === 'counting') body = invCounting(c, m);
+  else if (c.status === 'cancelled') body = `<div class="card"><p>Cancelado a ${esc(fmtTime(c.cancelled_at))}: ${esc(c.cancel_reason || '')}</p></div>`;
+  else body = invResult(c, m);
+  box.innerHTML = head + body;
+  $('#invback').onclick = () => { S.id = null; S.zone = null; invLoad(); };
+  box.querySelectorAll('[data-zone]').forEach((b) => b.onclick = () => { S.zone = b.dataset.zone; invLoad(); });
+  box.querySelectorAll('[data-zedit]').forEach((b) => b.onclick = () => invZoneForm(c.zones.find((z) => z.id === b.dataset.zedit)));
+  box.querySelectorAll('[data-reason]').forEach((b) => b.onclick = () => invReasonForm(c.lines.find((x) => x.id === b.dataset.reason)));
+  const on = (id, f) => { const e = $(id); if (e) e.onclick = f; };
+  on('#invzadd', () => invZoneForm(null));
+  on('#invstart', invStart);
+  on('#invround', invRoundClose);
+  on('#invcancel', invCancel);
+  on('#invsubmit', async () => { const { error: e } = await sb.rpc('mini_inv_submit', { p_count: c.id }); if (e) return toast(friendly(e)); toast('Enviado. Duas pessoas que não contaram têm de assinar.'); invDetail(); });
+  on('#invsign', () => invSign(false));
+  on('#invsendback', () => invSign(true));
+  on('#invxl', () => invExcel(c.id));
+  on('#invat', () => invAtFile(c.id));
+}
+function invPrep(c, m) {
+  return `<section class="card"><h2 style="margin-top:0">Zonas</h2>
+      <p class="small muted">Cada zona é um sítio por onde alguém passa a contar. Podes dar cada zona a uma pessoa.</p>
+      <ul class="q-list">${c.zones.map((z) => `<li class="wk"><span class="grow"><b>${esc(z.name)}</b><br><span class="small muted">${esc(z.place || '')}${z.counter ? ' · conta: ' + esc(z.counter) : ''}</span></span>
+        ${m ? `<button class="btn ghost small" type="button" data-zedit="${esc(z.id)}">Mudar</button>` : ''}</li>`).join('')}</ul>
+      ${m ? '<button class="btn ghost" id="invzadd">+ Zona</button>' : ''}</section>
+    ${m ? `<section class="card inv-warn"><h2 style="margin-top:0">Antes de começar</h2><ul class="small">
+        <li>A app tira a fotografia do stock neste momento.</li>
+        <li>Os artigos contados ficam <b>parados</b> até fechar a contagem: entregas e entradas desses artigos ficam à espera. Avisa as obras.</li>
+        <li>Arruma antes: material recebido arrumado, devoluções metidas, artigos estragados à parte.</li></ul>
+      <button class="btn big wide" id="invstart">Começar a contagem</button>
+      <button class="btn ghost wide" id="invcancel">Cancelar este inventário</button></section>` : ''}`;
+}
+function invCounting(c, m) {
+  const p = c.progress || {}; const pct = p.todo ? Math.round(100 * p.done / p.todo) : 0;
+  const allDone = c.zones.every((z) => z.done);
+  return `<section class="card"><h2 style="margin-top:0">${esc(invRound(c.phase))}</h2>
+      <p class="small muted">${c.phase === 1 ? 'Conta tudo o que encontrares em cada zona. Não vês quanto devia haver: é de propósito.'
+        : c.phase === 2 ? 'Só as linhas que não bateram. Conta outra pessoa, sem ver a 1.ª contagem.' : 'Última contagem, feita pelo responsável. Esta decide.'}</p>
+      <div class="prog" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="Contado"><i style="width:${pct}%"></i></div>
+      <p class="small">${p.done} de ${p.todo} linhas contadas · ${c.entries} leituras</p></section>
+    <h2 class="inv-h">Escolhe a tua zona</h2>
+    ${c.zones.map((z) => `<button type="button" class="card inv-zone ${z.done ? 'done' : ''} ${z.mine ? 'mine' : ''}" data-zone="${esc(z.id)}">
+      <div class="wk"><div class="grow"><div class="nm"><b>${esc(z.name)}</b>${z.mine ? ' · a tua' : ''}</div><div class="small muted">${esc(z.place || '')}${z.counter ? ' · ' + esc(z.counter) : ''} · ${pl(z.entries, 'leitura', 'leituras')}</div></div>
+      ${z.done ? chip('ok', t_('Acabada'), 'ok') : chip('warn', t_('Por contar'))}</div></button>`).join('')}
+    ${m ? `<section class="card"><button class="btn ${allDone ? 'big' : 'ghost'} wide" id="invround">Fechar a ${esc(invRound(c.phase))}</button>
+      ${allDone ? '' : '<p class="small muted">Ainda há zonas por acabar. Podes fechar na mesma, mas tens de dizer porquê.</p>'}
+      <button class="btn ghost small" id="invzadd">+ Zona</button> <button class="btn ghost small" id="invcancel">Cancelar inventário</button></section>` : ''}`;
+}
+function invResult(c, m) {
+  const s = c.summary || {};
+  const varLines = c.lines.filter((x) => x.state === 'variance');
+  const toSign = c.status === 'approval';
+  const myTurn = toSign && can('inventario.aprovar') && !c.i_counted;
+  const kpi = (cls, n, txt) => `<div class="kpi ${cls}"><b>${n}</b><span>${esc(t_(txt))}</span></div>`;
+  return `<div class="kpis k4">${kpi('ok', s.ok || 0, 'certas')}${kpi(s.variance ? 'warn' : '', s.variance || 0, 'com diferença')}
+      ${kpi(s.value_minus > 0 ? 'bad' : '', invEur(-(s.value_minus || 0)), 'a menos')}${kpi('', s.accuracy != null ? String(s.accuracy).replace('.', ',') + ' %' : '–', 'exatidão')}</div>
+    ${s.tools_missing || s.tools_record_only ? `<p class="small">${s.tools_missing ? esc(pl(s.tools_missing, 'ferramenta não apareceu', 'ferramentas não apareceram')) + '. ' : ''}${s.tools_record_only ? esc(pl(s.tools_record_only, 'ferramenta só confirmada com quem a tem', 'ferramentas só confirmadas com quem as tem')) + ' (não vistas).' : ''}</p>` : ''}
+    <section class="card"><h2 style="margin-top:0">Diferenças (${varLines.length})</h2>
+      ${varLines.length ? `<ul class="q-list inv-var">${varLines.map((x) => invVarLine(x, m && c.status === 'review')).join('')}</ul>` : '<p class="muted">Tudo certo. Nenhuma diferença.</p>'}
+      ${c.status === 'review' && m ? `<button class="btn big wide" id="invsubmit" ${s.no_reason ? 'disabled' : ''}>Enviar para assinar</button>${s.no_reason ? `<p class="small muted">${esc(pl(s.no_reason, 'diferença sem motivo', 'diferenças sem motivo'))}.</p>` : ''}` : ''}</section>
+    ${['approval', 'closed'].includes(c.status) ? `<section class="card"><h2 style="margin-top:0">Assinaturas</h2>
+      <ul class="q-list">${[1, 2].map((n) => { const x = c.signoffs.find((y) => y.step === n);
+        return `<li>${x ? chip('ok', `${n}.ª`, 'ok') : chip('reg', `${n}.ª`)} ${x ? `<b>${esc(x.by)}</b> · ${esc(fmtTime(x.at))}${x.note ? ' · ' + esc(x.note) : ''}` : esc(t_('por assinar'))}</li>`; }).join('')}</ul>
+      ${toSign ? `<p class="small muted">Assinam duas pessoas diferentes que não contaram neste inventário. Na 2.ª assinatura o stock acerta-se.</p>
+        ${myTurn ? '<button class="btn big wide" id="invsign">Assinar</button><button class="btn ghost wide" id="invsendback">Devolver para rever</button>'
+          : can('inventario.aprovar') && c.i_counted ? '<p class="small">Contaste neste inventário: não podes assinar.</p>' : ''}` : ''}</section>` : ''}
+    ${c.full ? `<section class="card"><h2 style="margin-top:0">Exportar</h2><div class="row2"><button class="btn ghost" id="invxl">${ic('doc')}Excel completo</button>
+      ${c.status === 'closed' && c.include_stock ? `<button class="btn ghost" id="invat">${ic('doc')}Ficheiro da AT</button>` : ''}</div>
+      ${c.status === 'closed' ? '<p class="small muted">O ficheiro da AT é para o contabilista: normalmente quem comunica é o programa de contabilidade (Primavera ou outro). Serve para conferir ou para ele importar.</p>' : ''}</section>` : ''}
+    ${c.status === 'review' && m ? '<button class="btn ghost small" id="invcancel">Cancelar inventário</button>' : ''}`;
+}
+function invVarLine(x, edit) {
+  const d = Number(x.diff || 0);
+  const what = x.kind === 'tool' ? (x.final > 0 ? 'Encontrada (estava dada como desaparecida)' : `Não apareceu · devia estar: ${x.where || '-'}`)
+    : `Sistema ${invNum(x.expected)} · contado ${x.counts.map(invNum).join(' → ')} ${x.unit || ''} · ${d > 0 ? '+' : ''}${invNum(d)} (${invEur(x.value)})`;
+  return `<li class="wk"><span class="grow"><b>${esc(x.tag ? x.tag + ' · ' : '')}${esc(x.name)}</b>${x.sku && !x.tag ? ` <span class="small muted">${esc(x.sku)}</span>` : ''}
+      <br><span class="small">${esc(what)}</span>
+      <br><span class="small ${x.reason ? '' : 'bad-t'}">${x.reason ? esc(t_(INV_REASON[x.reason])) + (x.reason_note ? ': ' + esc(x.reason_note) : '') : esc(t_('Falta o motivo'))}</span>
+      ${x.post_note ? `<br><span class="small muted">${esc(x.post_note)}</span>` : ''}</span>
+    ${edit ? `<button class="btn ghost small" type="button" data-reason="${esc(x.id)}">${x.reason ? 'Mudar' : 'Motivo'}</button>` : ''}</li>`;
+}
+async function invZoneForm(z) {
+  const c = state.inv.c; const h = state.inv.home || {}; const whs = c.warehouses;
+  const counters = c.counters || [];
+  const fd = await askSheet(z ? `Zona ${z.name}` : 'Nova zona', `
+    <label for="izn1">Nome *</label><input id="izn1" name="n" required maxlength="80" value="${esc(z ? z.name : '')}" placeholder="ex.: Prateleira C, Contentor 2">
+    ${z ? '' : `<label for="izw">Onde</label><select id="izw" name="w">${whs.map((w) => `<option value="w:${esc(w.id)}">${esc(w.name)}</option>`).join('')}
+      ${c.include_tools ? activeSites().map((s) => `<option value="s:${esc(s.id)}">Obra ${esc(s.cost_center_code)} · ${esc(s.title)} (ferramentas emprestadas)</option>`).join('') : ''}</select>`}
+    <label for="izc">Quem conta</label><select id="izc" name="c"><option value="">Qualquer pessoa do inventário</option>${counters.map((u) => `<option value="${esc(u.id)}" ${z && z.counter_id === u.id ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}</select>
+    ${z ? '<label class="check"><input type="checkbox" name="off"> Tirar esta zona</label>' : ''}`, 'Guardar');
+  if (!fd) return;
+  const w = String(fd.get('w') || '');
+  const p = { count_id: c.id, name: String(fd.get('n')).trim(), counter_id: fd.get('c') || null };
+  if (z) { p.id = z.id; if (fd.get('off') === 'on') p.active = false; } else if (w.startsWith('w:')) p.warehouse_id = w.slice(2); else p.site_id = w.slice(2);
+  const { error } = await sb.rpc('mini_inv_zone_save', { p });
+  if (error) return toast(friendly(error));
+  void h; toast('Zona guardada.'); invDetail();
+}
+async function invStart() {
+  const c = state.inv.c;
+  const fd = await askSheet('Começar a contagem?', `<p>A partir de agora os artigos de ${esc(c.warehouses.map((w) => w.name).join(', '))} ficam parados até fechares a contagem.</p>
+    <p class="small muted">Entregas e entradas desses artigos ficam à espera. As ferramentas continuam a sair e a entrar.</p>`, 'Começar');
+  if (!fd) return;
+  const { data, error } = await sb.rpc('mini_inv_start', { p_count: c.id });
+  if (error) return toast(friendly(error));
+  toast(`Começou. ${data.progress.todo} linhas para contar. Quem conta já recebeu o aviso.`); invDetail();
+}
+async function invRoundClose() {
+  const c = state.inv.c; const open = c.zones.filter((z) => !z.done);
+  const fd = await askSheet(`Fechar a ${invRound(c.phase)}?`, `<p class="small">A app compara com a fotografia. O que bater fica certo; as diferenças pequenas (até ${String(c.tol_pct).replace('.', ',')} % e ${invEur(c.tol_value)}) aceitam-se; o resto vai para a ${invRound(c.phase + 1 > 3 ? 3 : c.phase + 1)}${c.phase === 3 ? ' (esta é a última: o que contaste fica)' : ''}.</p>
+    ${open.length ? `<p class="small bad-t">Zonas por acabar: ${esc(open.map((z) => z.name).join(', '))}. O que lá não foi contado conta como zero.</p>
+      <label for="irn">Porque fechas assim? *</label><input id="irn" name="n" required minlength="3" maxlength="300">` : ''}`, 'Fechar');
+  if (!fd) return;
+  const { data, error } = await sb.rpc('mini_inv_round_close', { p_count: c.id, p_force: open.length > 0, p_note: fd.get('n') || null });
+  if (error) return toast(friendly(error));
+  toast(data.status === 'counting' ? `Há linhas para a ${invRound(data.phase)}. Quem conta já recebeu o aviso.` : 'Contagem acabada. Agora dá o motivo de cada diferença.');
+  invDetail();
+}
+async function invReasonForm(x) {
+  const fd = await askSheet(`Porquê a diferença? ${x.tag || x.name}`, `
+    <div class="chips reasons" role="radiogroup">${Object.entries(INV_REASON).filter(([k]) => k !== 'tolerancia' || x.reason === 'tolerancia').map(([k, l], i) =>
+      `<label class="chip"><input type="radio" name="r" value="${k}" ${x.reason === k ? 'checked' : ''} ${i ? '' : 'required'}>${esc(l)}</label>`).join('')}</div>
+    <label for="irx">Nota</label><input id="irx" name="x" maxlength="300" value="${esc(x.reason_note || '')}" placeholder="O que aconteceu (obrigatório em «Outro»)">`, 'Guardar');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_inv_reason', { p_line: x.id, p_reason: fd.get('r'), p_note: String(fd.get('x') || '').trim() || null });
+  if (error) return toast(friendly(error));
+  invDetail();
+}
+async function invSign(back) {
+  const c = state.inv.c;
+  const fd = await askSheet(back ? 'Devolver para rever' : `Assinar ${c.code}`, back
+    ? '<label for="isn">O que tem de ser corrigido? *</label><input id="isn" name="n" required minlength="3" maxlength="300">'
+    : `<p class="small">Confirmas que viste as diferenças e os motivos. ${c.signoffs.length ? 'Esta é a 2.ª assinatura: o stock acerta-se agora.' : 'Falta depois a 2.ª assinatura, de outra pessoa.'}</p>
+      <label for="isn">Nota</label><input id="isn" name="n" maxlength="300">`, back ? 'Devolver' : 'Assinar');
+  if (!fd) return;
+  const { data, error } = await sb.rpc('mini_inv_sign', { p_count: c.id, p_note: String(fd.get('n') || '').trim() || null, p_back: back });
+  if (error) return toast(friendly(error));
+  toast(back ? 'Devolvido ao armazém.' : data.status === 'closed' ? 'Inventário fechado. O stock está acertado.' : 'Assinado. Falta a 2.ª assinatura.');
+  invDetail();
+}
+async function invCancel() {
+  const c = state.inv.c;
+  const fd = await askSheet(`Cancelar ${c.code}?`, `<p class="small">Fica guardado como cancelado (nunca se apaga). ${c.status === 'counting' ? 'Os artigos voltam a mexer.' : ''}</p>
+    <label for="icr">Porquê? *</label><input id="icr" name="r" required minlength="3" maxlength="300">`, 'Cancelar inventário');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_inv_cancel', { p_count: c.id, p_reason: String(fd.get('r')).trim() });
+  if (error) return toast(friendly(error));
+  toast('Cancelado.'); invDetail();
+}
+// ---- Counting in a zone: scan or tap, blind. Each entry has its own id: without network it waits and goes later.
+async function invZone() {
+  const box = $('#invbody'); if (!box) return;
+  const S = state.inv;
+  const { data: c, error } = await sb.rpc('mini_inv_get', { p_count: S.id, p_zone: S.zone });
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div><button class="btn ghost" id="invback">‹ Zonas</button>`; $('#invback').onclick = () => { S.zone = null; invLoad(); }; return; }
+  S.c = c; const z = c.zones.find((x) => x.id === S.zone) || {};
+  if (c.status !== 'counting') { S.zone = null; return invDetail(); }
+  const waiting = outboxMine().filter((x) => x.fn === 'mini_inv_count' && x.args.p.zone_id === z.id);
+  const nfcOk = 'NDEFReader' in window; const m = can('inventario.gerir');
+  const todo = c.lines.filter((x) => !x.counted_now); const doneL = c.lines.filter((x) => x.counted_now);
+  const row = (x) => `<li class="wk inv-l ${x.counted_now ? 'done' : ''}"><button type="button" class="grow linkish" data-line="${esc(x.id)}">
+      <b>${esc(x.tag ? x.tag + ' · ' : '')}${esc(x.name)}</b>${x.size ? ' ' + esc(x.size) : ''}<br><span class="small muted">${esc(x.sku || '')}${x.kind === 'tool' && x.out ? ' · ' + esc(x.where || '') : ''}</span></button>
+      ${x.mine != null ? `<span class="chip ok">${x.kind === 'tool' ? (Number(x.mine) > 0 ? esc(t_('cá está')) : esc(t_('não está'))) : esc(invNum(x.mine)) + ' ' + esc(x.unit || '')}</span>` : x.counted_now ? chip('reg', t_('contado')) : ''}</li>`;
+  box.innerHTML = `<button class="btn ghost small" id="invback">‹ ${esc(c.code)} · zonas</button>
+    <section class="card inv-scan"><h2 style="margin-top:0">${esc(z.name || '')} <span class="small muted">· ${esc(invRound(c.phase))}</span></h2>
+      <p class="small muted">${esc(z.place || '')}. Lê o código de cada coisa e escreve quanto contaste. Contas outra vez a mesma coisa nesta zona? A última leitura é a que vale.</p>
+      <form id="invscan" class="wk"><input id="invcode" name="r" maxlength="80" placeholder="Código, QR ou número da ferramenta" autocomplete="off" enterkeyhint="go"><button class="btn">Contar</button></form>
+      ${nfcOk ? `<button type="button" class="btn ghost small" id="invnfc">${ic('tap')}Ler etiqueta NFC</button>` : ''}
+      ${waiting.length ? `<p class="small ws-wait">${ic('cloud')} ${esc(pl(waiting.length, 'contagem guardada', 'contagens guardadas'))} no telemóvel: vão quando houver rede.</p>` : ''}</section>
+    <section class="card"><h2 style="margin-top:0">Por contar (${todo.length})</h2>
+      ${todo.length ? `<ul class="q-list">${todo.map(row).join('')}</ul>` : '<p class="muted">Nada por contar nesta zona.</p>'}
+      ${doneL.length ? `<details><summary>Já contadas (${doneL.length})</summary><ul class="q-list">${doneL.map(row).join('')}</ul></details>` : ''}</section>
+    ${z.done ? `<p class="small">Zona dada como acabada por ${esc(z.done_by || '')}.</p>` : `<button class="btn big wide" id="invzdone">${ic('ok')}Acabei esta zona</button>`}`;
+  $('#invback').onclick = () => { stopNfc(); S.zone = null; invLoad(); };
+  const send = async (p, label) => {
+    const r = await callOrQueue('mini_inv_count', { p: { ref: uuid(), count_id: c.id, zone_id: z.id, ...p } }, label);
+    if (r.error) { beep(false); toast(friendly(r.error)); return null; }
+    if (r.queued) { beep('neutral'); toast('Sem rede: a contagem ficou guardada no telemóvel e vai quando houver rede.'); return null; }
+    beep(true); return r.data;
+  };
+  const askQty = async (name, unit) => {
+    const fd = await askSheet(name, `<label for="iq">Quantos contaste aqui? (${esc(unit || 'un')})</label>
+      <input id="iq" name="q" type="number" min="0" max="1000000" step="any" required inputmode="decimal" autofocus>
+      <p class="small muted">Se não há nenhum, escreve 0.</p>`, 'Guardar', (d) => setTimeout(() => d.querySelector('#iq').focus(), 50));
+    return fd ? Number(String(fd.get('q')).replace(',', '.')) : null;
+  };
+  const byCode = async (code, via) => {
+    code = String(code || '').trim(); if (!code) return;
+    const U = code.toUpperCase();
+    const x = c.lines.find((l) => l.kind === 'stock' && l.sku && l.sku.toUpperCase() === U);
+    if (x) {   // an item of this zone: how many?
+      const q = await askQty(x.name + (x.size ? ' ' + x.size : ''), x.unit); if (q == null) return;
+      if (await send({ line_id: x.id, qty: q, via }, x.name)) { toast(`${x.name}: ${invNum(q)}`); invZone(); }
+      return;
+    }
+    const tl = c.lines.find((l) => l.kind === 'tool' && l.tag && l.tag.toUpperCase() === U);
+    let r = await callOrQueue('mini_inv_count', { p: { ref: uuid(), count_id: c.id, zone_id: z.id, ...(tl ? { line_id: tl.id } : { code }), via } }, code);
+    if (r.error && /say how many you counted/i.test(r.error.message || '')) {   // an item found here that is not on this zone's list
+      const q = await askQty(code, ''); if (q == null) return;
+      r = await callOrQueue('mini_inv_count', { p: { ref: uuid(), count_id: c.id, zone_id: z.id, code, qty: q, via } }, code);
+    }
+    if (r.error) { beep(false); return toast(friendly(r.error)); }
+    if (r.queued) { beep('neutral'); return toast('Sem rede: a contagem ficou guardada no telemóvel e vai quando houver rede.'); }
+    beep(true); const d = r.data;
+    toast(d.tag ? `${d.tag}${d.elsewhere ? ' · devia estar: ' + d.elsewhere : ''}` : `${d.name}: ${invNum(d.qty)}${d.new_line ? ' · não estava na lista, foi junto' : ''}`);
+    invZone();
+  };
+  $('#invscan').onsubmit = (e) => { e.preventDefault(); const v = $('#invcode').value; $('#invcode').value = ''; byCode(v, 'scan'); };
+  if (!window.matchMedia || !matchMedia('(pointer: coarse)').matches) $('#invcode').focus();
+  if ($('#invnfc')) $('#invnfc').onclick = () => wtReadTag((uid) => byCode(uid, 'nfc'));
+  box.querySelectorAll('[data-line]').forEach((b) => b.onclick = async () => {
+    const x = c.lines.find((l) => l.id === b.dataset.line);
+    if (x.kind === 'stock') {
+      const q = await askQty(x.name + (x.size ? ' ' + x.size : ''), x.unit); if (q == null) return;
+      if (await send({ line_id: x.id, qty: q, via: 'typed' }, x.name)) invZone();
+      return;
+    }
+    const fd = await askSheet(`${x.tag} · ${x.name}`, `${x.out ? `<p class="small">Devia estar: <b>${esc(x.where || '')}</b></p>` : ''}
+      <div class="acts-col"><button class="btn big" value="found">Está aqui (vi-a)</button>
+      ${m && x.out ? '<button class="btn ghost" value="holder">Confirmei com quem a tem (não a vi)</button>' : ''}
+      <button class="btn ghost" value="notfound">Não está aqui</button></div>`, 'Fechar');
+    const v = fd && fd.get('_v'); if (!v || v === 'ok') return;
+    if (await send({ line_id: x.id, via: v === 'found' ? 'typed' : v }, x.tag)) invZone();
+  });
+  if ($('#invzdone')) $('#invzdone').onclick = async () => {
+    if (waiting.length) return toast('Ainda há contagens guardadas no telemóvel. Espera pela rede antes de acabar a zona.');
+    if (todo.length && !(await askSheet('Acabar com coisas por contar?', `<p class="small">${esc(pl(todo.length, 'linha ficou', 'linhas ficaram'))} por contar nesta zona. Se não estão aqui, está certo: noutra zona podem aparecer.</p>`, 'Acabar'))) return;
+    const { data, error: e } = await sb.rpc('mini_inv_zone_done', { p_zone: z.id, p_done: true });
+    if (e) return toast(friendly(e));
+    toast(data.all_done ? 'Zona acabada. Todas as zonas estão acabadas: o responsável já pode fechar a contagem.' : 'Zona acabada. Obrigado.');
+    stopNfc(); S.zone = null; invLoad();
+  };
+}
+// ---- Excel: everything; and the AT layout
+function invExcel(id) {
+  excelExport(async () => { const r = await sb.rpc('mini_inv_report', { p_count: id }); if (r.error) { toast(friendly(r.error)); return null; } return r.data; }, (X, d) => {
+    const doc = xlDoc([d.company], `${d.title} (${d.code})`, `Data do inventário ${fmtDate(d.count_on)} · ${d.warehouses.map((w) => w.name).join(', ')} · ${t_(INV_ST[d.status][1])}`, d.status !== 'closed');
+    const wb = xlBook(X, doc); const s = d.summary || {};
+    const a = xlSheet(wb, 'Resumo', doc, [{ h: 'O quê', t: 'text', w: 34 }, { h: 'Valor', t: 'text', w: 30, max: 60 }]);
+    let r = a.head + 1;
+    const sig = (d.signoffs || []).map((x) => `${x.step}.ª ${x.by} (${fmtTime(x.at)})`).join(' · ');
+    for (const [k, v] of [['Inventário', `${d.code} · ${d.title}`], ['Tipo', INV_KIND[d.kind]], ['Estado', INV_ST[d.status][1]], ['Data do inventário', fmtDate(d.count_on)],
+      ['Começou', d.started_at ? `${fmtTime(d.started_at)} por ${d.started_by}` : ''], ['Linhas contadas', String(s.lines || 0)], ['Certas', String(s.ok || 0)],
+      ['Com diferença', String(s.variance || 0)], ['Exatidão', s.accuracy != null ? `${String(s.accuracy).replace('.', ',')} %` : ''], ['Valor do stock (sistema)', invEur(s.value_expected)],
+      ['Valor a mais', invEur(s.value_plus)], ['Valor a menos', invEur(s.value_minus)], ['Ferramentas que não apareceram', String(s.tools_missing || 0)],
+      ['Ferramentas só confirmadas com quem as tem', String(s.tools_record_only || 0)], ['Tolerância', `${String(d.tol_pct).replace('.', ',')} % e ${invEur(d.tol_value)}`], ['Assinaturas', sig || 'por assinar']]) xlRow(a, r++, [k, v]);
+    const L = xlSheet(wb, 'Linhas', doc, [{ h: 'Tipo', t: 'text', w: 10 }, { h: 'Armazém', t: 'text', w: 16, max: 30 }, { h: 'Código', t: 'text', w: 12 }, { h: 'Ferramenta', t: 'text', w: 11 },
+      { h: 'Artigo', t: 'text', w: 28, max: 50 }, { h: 'Unidade', t: 'text', w: 8 }, { h: 'Sistema', t: 'h', w: 10 }, { h: '1.ª', t: 'h', w: 9 }, { h: '2.ª', t: 'h', w: 9 }, { h: '3.ª', t: 'h', w: 9 },
+      { h: 'Final', t: 'h', w: 10 }, { h: 'Diferença', t: 'h', w: 10 }, { h: 'Custo unit.', t: 'eur', w: 10 }, { h: 'Valor dif.', t: 'eur', w: 11 }, { h: 'Estado', t: 'text', w: 11 },
+      { h: 'Motivo', t: 'text', w: 22, max: 40 }, { h: 'Onde devia estar', t: 'text', w: 22, max: 40 }, { h: 'Zonas', t: 'text', w: 16, max: 30 }, { h: 'Quem contou', t: 'text', w: 18, max: 40 }, { h: 'Acerto', t: 'text', w: 20, max: 40 }]);
+    r = L.head + 1;
+    const ST = { ok: 'certa', variance: 'diferença', recount: 'por recontar', pending: 'por contar' };
+    for (const x of d.lines) xlRow(L, r++, [x.kind === 'tool' ? 'Ferramenta' : 'Stock', x.warehouse || '', x.sku || '', x.tag || '', x.name, x.unit || '', Number(x.expected),
+      x.counts[0] ?? '', x.counts[1] ?? '', x.counts[2] ?? '', x.final == null ? '' : Number(x.final), Number(x.diff || 0), Number(x.unit_cost || 0), Number(x.value || 0), ST[x.state] || x.state,
+      x.reason ? INV_REASON[x.reason] + (x.reason_note ? ': ' + x.reason_note : '') : '', x.where || '', x.zones || '', (x.who || '') + (x.record_only ? ' (confirmada com quem a tem)' : ''), x.post_note || '']);
+    xlFit(L, L.head + 1, r - 1);
+    const H = xlSheet(wb, 'Leituras', doc, [{ h: 'Quando', t: 'text', w: 16 }, { h: 'Contagem', t: 'n', w: 9 }, { h: 'Zona', t: 'text', w: 16, max: 30 }, { h: 'Código', t: 'text', w: 12 },
+      { h: 'Artigo', t: 'text', w: 26, max: 50 }, { h: 'Quantidade', t: 'h', w: 10 }, { h: 'Como', t: 'text', w: 10 }, { h: 'Quem', t: 'text', w: 18, max: 40 }]);
+    r = H.head + 1;
+    const VIA = { scan: 'leitura', nfc: 'NFC', typed: 'à mão', holder: 'com quem a tem', notfound: 'não está' };
+    for (const e of d.entries) xlRow(H, r++, [fmtTime(e.at), e.round, e.zone || '', e.tag || e.sku || '', e.name, Number(e.qty), VIA[e.via] || e.via, e.by || '']);
+    xlFit(H, H.head + 1, r - 1);
+    const G = xlSheet(wb, 'Histórico', doc, [{ h: 'Quando', t: 'text', w: 16 }, { h: 'O quê', t: 'text', w: 16 }, { h: 'Quem', t: 'text', w: 18, max: 40 }, { h: 'Detalhe', t: 'text', w: 40, max: 80 }]);
+    r = G.head + 1;
+    for (const g of d.history) xlRow(G, r++, [fmtTime(g.at), g.kind, g.by || '', g.detail && (g.detail.note || g.detail.reason || g.detail.name || '') || '']);
+    xlFit(G, G.head + 1, r - 1);
+    if (d.include_stock) {
+      const T = xlSheet(wb, 'Inventário AT', doc, [{ h: 'ProductCategory', t: 'text', w: 15 }, { h: 'ProductCode', t: 'text', w: 14 }, { h: 'ProductDescription', t: 'text', w: 30, max: 60 },
+        { h: 'ProductNumberCode', t: 'text', w: 16 }, { h: 'ClosingStockQuantity', t: 'h', w: 16 }, { h: 'UnitOfMeasure', t: 'text', w: 12 }, { h: 'Valor (informativo)', t: 'eur', w: 14 }]);
+      r = T.head + 1;
+      for (const x of d.at) xlRow(T, r++, [d.at_category, x.code, x.desc, x.number, Number(x.qty), x.unit, Number(x.value)]);
+      xlFit(T, T.head + 1, r - 1);
+    }
+    return { wb, name: `gestnow-${d.code.toLowerCase()}.xlsx`, msg: d.status === 'closed' ? 'Excel descarregado.' : 'Excel descarregado (provisório: ainda não está assinado).' };
+  });
+}
+// The AT inventory file (CSV with «;», header line, existências only). The accountant checks it and submits it, or imports
+// it in the accounting software (which usually submits it itself).
+async function invAtFile(id) {
+  const { data: d, error } = await sb.rpc('mini_inv_report', { p_count: id });
+  if (error) return toast(friendly(error));
+  const cell = (v) => String(v ?? '').replace(/[;\r\n]+/g, ' ').trim();
+  const qty = (n) => Number(n).toFixed(2);
+  const lines = ['ProductCategory;ProductCode;ProductDescription;ProductNumberCode;ClosingStockQuantity;UnitOfMeasure']
+    .concat(d.at.filter((x) => Number(x.qty) > 0).map((x) => [d.at_category, cell(x.code), cell(x.desc).slice(0, 200), cell(x.number), qty(x.qty), cell(x.unit)].join(';')));
+  const text = lines.join('\r\n') + '\r\n';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + text], { type: 'text/csv;charset=utf-8' }));
+  a.download = `inventario-AT-${d.year}-${d.code.toLowerCase()}.csv`;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  if (globalThis.GESTNOW_TEST) globalThis.LAST_CSV = { name: a.download, text };
+  toast(`Ficheiro da AT: ${pl(lines.length - 1, 'artigo', 'artigos')}. Entrega ao contabilista.`);
+}
+
 // ------------------------------------------------------------------ Avisos (sql/83): the bell, and the screens that change by themselves
 // The database writes a notice for a role or a person (documents to expire, a week to confirm, a contract unsigned,
 // a tool overdue…). The bell shows the ones for this login; each one is read per person, and a tap opens where it
@@ -15589,6 +16070,7 @@ function noticeRoute(x) {
   if (k === 'front_request' || k === 'front_answer') return view('frentes');
   if (k === 'routine_late') return view('rotinas');
   if (/^waste/.test(k)) return view('residuos');
+  if (/^inv_/.test(k)) return () => { if (!viewOpen('inventario')) return false; state.inv = { id: l.count_id || null, zone: null }; go('inventario'); return true; };
   if (/^client_docs/.test(k)) return () => { if (!viewOpen('docscliente')) return false; state.cdocs = { tab: 'curso', ltab: 'pessoas', sel: new Set(), list: l.list_id || null }; go('docscliente'); return true; };
   return () => false;
 }
