@@ -1245,7 +1245,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '124';
+const APP_VERSION = '125';
 // v107 (Diogo 2026-10-26): «Início» = what is urgent + the departments. The bottom bar keeps only Início, the field tools of
 // the encarregado (Equipa, Picar) or of the safety officer (Emergência), Procurar and Eu. Everything else is in its department.
 const TABS = { supervisor: ['inicio', 'equipa', 'picar', 'minhas'], admin: ['inicio', 'minhas'],
@@ -1262,7 +1262,7 @@ function tabsFor(role) {
   return TABS[role] || TABS.supervisor;
 }
 const OFFLINE_VIEWS = ['picar', 'minhas', 'material', 'reunioes', 'relatos', 'emergencia', 'residuos', 'inventario'];   // v89: they keep a copy
-const MORE_ORDER = ['inicio', 'saude', 'empresa', 'onbtextos', 'equipa', 'material', 'picar', 'emergencia', 'relatos', 'reunioes', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'faltas', 'mesresumo', 'reclamacoes', 'salarios', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'envios', 'inventario', 'residuos', 'compras', 'frota', 'alojamento', 'viagens', 'docscliente', 'despesas', 'diarias', 'andaimes', 'processo', 'clientes', 'custos', 'progresso', 'frentes', 'rotinas', 'contactos'];
+const MORE_ORDER = ['inicio', 'saude', 'empresa', 'onbtextos', 'equipa', 'material', 'picar', 'emergencia', 'relatos', 'reunioes', 'lmra', 'painelqsa', 'painelcom', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'faltas', 'mesresumo', 'reclamacoes', 'salarios', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'envios', 'inventario', 'residuos', 'compras', 'frota', 'alojamento', 'viagens', 'docscliente', 'despesas', 'diarias', 'andaimes', 'processo', 'clientes', 'custos', 'progresso', 'frentes', 'rotinas', 'contactos'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -1283,10 +1283,10 @@ const MENU_GROUPS = [
   ['Secretariado', ['secretariado', 'faltas', 'mesresumo', 'reclamacoes', 'horas', 'diarias', 'salarios', 'despesas', 'custos']],
   ['Recursos Humanos', ['trabalhadores', 'onbtextos', 'acolhimento', 'docscliente', 'viagens', 'alojamento']],
   ['Frota', ['frota']],
-  ['QSA · Qualidade, Segurança e Ambiente', ['relatos', 'seguranca', 'reunioes', 'lmra', 'emergencia', 'qualidade', 'processo']],
+  ['QSA · Qualidade, Segurança e Ambiente', ['painelqsa', 'relatos', 'seguranca', 'reunioes', 'lmra', 'emergencia', 'qualidade', 'processo']],
   ['Produção (Obra)', ['painel', 'naobra', 'progresso', 'frentes', 'rotinas', 'material', 'andaimes', 'picar', 'obras', 'equipa', 'producao']],
   ['Compras e Armazém', ['armazem', 'envios', 'inventario', 'residuos', 'compras']],
-  ['Comercial', ['comercial']],
+  ['Comercial', ['painelcom', 'comercial']],
   ['Orçamentação', ['orcamentos']],
   ['Eu', ['minhas', 'contactos']],
 ];
@@ -1303,7 +1303,7 @@ function menuBase() {
 }
 // What each screen needs, to place it under the department that gives it (the visibility itself is set in boot).
 const VIEW_NEEDS = {
-  inicio: () => canHome(), saude: () => canHealth(), empresa: () => canCompanyRules(), processo: () => canProcess(),
+  inicio: () => canHome(), saude: () => canHealth(), painelqsa: () => canQsaPanel(), painelcom: () => canSalesPanel(), empresa: () => canCompanyRules(), processo: () => canProcess(),
   secretariado: () => canApprove(), despesas: () => canExpenses(), viagens: () => canTravel(), alojamento: () => canHousing(), docscliente: () => canClientDocs(),
   trabalhadores: () => can('pessoas.ver') || can('pessoas.gerir'), onbtextos: () => canPeople(),
   seguranca: () => ['seguranca.lmra', 'seguranca.parar_obra', 'seguranca.emergencia'].some(can), lmra: () => canLmra(), reunioes: () => canMeet(), relatos: () => canHazards(),
@@ -1352,10 +1352,12 @@ const ENC_ICONS = {
   clientdocs: '<path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5zM8.5 13l2.5 2.5 4.5-4.5"/>',
   recycle: '<path d="M7 19H4.8a1.8 1.8 0 0 1-1.6-.9 1.8 1.8 0 0 1 0-1.8l4-6.8M11 19h8.2a1.8 1.8 0 0 0 1.6-.9 1.8 1.8 0 0 0 0-1.8l-1.2-2.1M14 16l-3 3 3 3M8.3 13.6 7.2 9.5l-4.1 1.1M9.3 5.8l1.1-1.9A1.8 1.8 0 0 1 12 3a1.8 1.8 0 0 1 1.5.9l4 6.8M13.4 9.6l4.1 1.1 1.1-4.1"/>',
   stocktake: '<path d="M9 3h6v3H9zM9 4.5H6v16.5h12V4.5h-3M8.5 12.5l2 2 4-4M9 18h6"/>',
+  pyramid: '<path d="M12 3 2.5 20h19zM6.4 13h11.2M9.2 8h5.6"/>',
+  funnel: '<path d="M3 4h18l-7 8v6l-4 2v-8z"/>',
   pulse: '<path d="M3 12h4l2.5-6 4 12 2.5-6H21"/>',
   medal: '<path d="M12 14a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM9.5 13.3 8 21l4-2 4 2-1.5-7.7M10 9l1.5 1.5L14.5 7.5"/>',
 };
-const MENU_ICON = { painel: 'gauge', producao: 'chart', seguranca: 'hhat', equipa: 'crew', minhas: 'myclock', naobra: 'gate', qualidade: 'medal', clientes: 'firms', comercial: 'target', premios: 'trophy', custos: 'coins', progresso: 'sheet', frentes: 'fronts', rotinas: 'todo', docscliente: 'clientdocs', residuos: 'recycle', inventario: 'stocktake', envios: 'car', saude: 'pulse' };
+const MENU_ICON = { painel: 'gauge', producao: 'chart', seguranca: 'hhat', equipa: 'crew', minhas: 'myclock', naobra: 'gate', qualidade: 'medal', clientes: 'firms', comercial: 'target', premios: 'trophy', custos: 'coins', progresso: 'sheet', frentes: 'fronts', rotinas: 'todo', docscliente: 'clientdocs', residuos: 'recycle', inventario: 'stocktake', envios: 'car', saude: 'pulse', painelqsa: 'pyramid', painelcom: 'funnel' };
 (function encIcons() {
   const ns = 'http://www.w3.org/2000/svg'; const sp = document.createElementNS(ns, 'svg');
   sp.setAttribute('width', '0'); sp.setAttribute('height', '0'); sp.setAttribute('aria-hidden', 'true'); sp.style.position = 'absolute';
@@ -1659,6 +1661,8 @@ async function boot() {
   nav.querySelector('[data-view=comercial]').hidden = worker || state.offline || !canSales();
   nav.querySelector('[data-view=premios]').hidden = worker || state.offline || !canAwards();
   nav.querySelector('[data-view=saude]').hidden = worker || state.offline || !canHealth();
+  nav.querySelector('[data-view=painelqsa]').hidden = worker || state.offline || !canQsaPanel();
+  nav.querySelector('[data-view=painelcom]').hidden = worker || state.offline || !canSalesPanel();
   nav.querySelector('[data-view=custos]').hidden = worker || state.offline || !canCosts();
   nav.querySelector('[data-view=diarias]').hidden = worker || state.offline || !canPerDiems();
   for (const v of ['faltas', 'mesresumo', 'reclamacoes', 'salarios']) nav.querySelector(`[data-view=${v}]`).hidden = worker || state.offline || !VIEW_NEEDS[v]();
@@ -2152,7 +2156,7 @@ function go(view) {
   nav.querySelector('button[data-more]').classList.toggle('on', !!cur && cur.parentElement.id === 'more');
   window.scrollTo(0, 0);
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
-     ficha: viewWorker, obras: viewSites, area: viewArea, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients, cliente: viewClient, precos: viewPrices, empresa: viewCompanyRules, inicio: viewHome, departamento: viewDept, saude: viewHealth,
+     ficha: viewWorker, obras: viewSites, area: viewArea, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients, cliente: viewClient, precos: viewPrices, empresa: viewCompanyRules, inicio: viewHome, departamento: viewDept, saude: viewHealth, painelqsa: viewQsaPanel, painelcom: viewSalesPanel,
      processo: viewProcess, orcamentos: viewEstimates, comercial: viewSales, premios: viewAwards, custos: viewCosts, diarias: viewPerDiemOffice, faltas: viewOfficeAbsences, mesresumo: viewOfficeSummary, reclamacoes: viewOfficeRequests, salarios: viewOfficePayroll, lmra: viewLmra, reunioes: viewMeetings, relatos: viewHazards, material: viewSiteMaterial, emergencia: viewEmergency,
      armazem: viewWarehouse, envios: viewShipments, inventario: viewInventory, residuos: viewWaste, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, docscliente: viewClientDocs, producao: viewProd, progresso: viewProgress, frentes: viewFronts, rotinas: viewRoutines, contactos: viewContacts, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
   checkEmergencyBar(); encBadges();
@@ -2476,6 +2480,96 @@ async function editTargets() {
   const res = await Promise.all(jobs); const bad = res.find((r) => r.error);
   toast(bad ? friendly(bad.error) : 'Metas guardadas.');
   viewHealth();
+}
+// ------------------------------------------------------------------ v125 · the two full panels (sql/139): QSA and Comercial
+// Only these two departments are run by trends; the others work from a queue and keep the strip on their page. Each panel is
+// its own tile in its department. Bars are drawn with plain HTML so they read the same in light and dark and on the phone.
+const canQsaPanel = () => ['seguranca.relatos', 'seguranca.parar_obra', 'qualidade.gerir'].some(can);
+const canSalesPanel = () => canSales();
+const MONTHS_PT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const monthLbl = (ym) => MONTHS_PT[Number(String(ym).slice(5, 7)) - 1] || ym;
+const nfmt = (v) => Number(v || 0).toLocaleString(LOC);
+// a column chart: one or two series per month, the tallest month fills the box
+function monthBars(rows, series) {
+  const max = Math.max(1, ...rows.map((r) => series.reduce((a, [k]) => a + (r[k] || 0), 0)));
+  return `<div class="pn-cols">${rows.map((r) => `<div class="pn-col"><div class="pn-stack">${series.map(([k, , cls]) => (r[k] ? `<i class="${cls}" style="height:${(100 * r[k] / max).toFixed(1)}%" title="${esc(String(r[k]))}"></i>` : '')).join('')}</div>
+    <b class="tnum">${nfmt(series.reduce((a, [k]) => a + (r[k] || 0), 0))}</b><small>${esc(monthLbl(r.month))}</small></div>`).join('')}</div>
+    <div class="pn-legend">${series.map(([, label, cls]) => `<span><i class="${cls}"></i>${esc(label)}</span>`).join('')}</div>`;
+}
+// «‹ <department>» comes from the bar every screen opened from a department page has (v110)
+const panelHead = (dept, title) => `<div class="ph"><div><p class="ph-k">${esc(dept.split(' · ')[0])}</p><h1>${esc(title)}</h1></div></div>`;
+
+async function viewQsaPanel() {
+  if (!state.ready) return boot();
+  if (!canQsaPanel()) return go('inicio');
+  const dept = navDeps().find((d) => d.views.includes('painelqsa')); const title = dept ? dept.title : 'QSA · Qualidade, Segurança e Ambiente';
+  app.innerHTML = `${panelHead(title, 'Painel QSA')}<div id="pnbody">${skel(4)}</div>`;
+  const { data: d, error } = await sb.rpc('mini_qsa_panel');
+  const box = $('#pnbody'); if (!box || !box.isConnected || state.view !== 'painelqsa') return;
+  if (error) { box.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
+  const P = d.pyramid || {}; const total = (P.near_miss || 0) + (P.first_aid || 0) + (P.damage || 0) + (P.lti || 0);
+  const lm = d.lmra || []; const lmMax = Math.max(1, ...lm.map((x) => x.n)); const lmToday = (lm[lm.length - 1] || {}).n || 0;
+  const lmDays = lm.filter((x) => x.n > 0).length;
+  // the base of the pyramid should be wide: many near misses reported for each injury is a healthy reporting culture
+  const ratio = P.lti ? Math.round((P.near_miss || 0) / P.lti) : null;
+  box.innerHTML = `
+    <div class="kpis k4">
+      <div class="kpi ${d.days_no_lti == null ? 'ok' : d.days_no_lti < 30 ? 'bad' : ''}"><b class="tnum">${d.days_no_lti == null ? '—' : nfmt(d.days_no_lti)}</b><span>${d.days_no_lti == null ? 'Sem acidentes com baixa registados' : 'Dias sem acidente com baixa'}</span></div>
+      <div class="kpi ${d.stops ? 'bad' : 'zero'}"><b class="tnum">${nfmt(d.stops)}</b><span>Paragens de trabalho em vigor</span></div>
+      <div class="kpi ${d.sif_open ? 'bad' : 'zero'}"><b class="tnum">${nfmt(d.sif_open)}</b><span>Relatos graves por fechar</span></div>
+      <div class="kpi ${(d.nc || {}).late ? 'warn' : 'zero'}"><b class="tnum">${nfmt((d.nc || {}).late)}</b><span>Não-conformidades atrasadas</span></div>
+    </div>
+    <div class="sec-h"><h2 class="eyebrow">Pirâmide de segurança · 12 meses</h2></div>
+    <div class="card pn-pyr">
+      ${[['lti', 'Acidentes com baixa', 'bad'], ['damage', 'Danos e ambiente', 'warn'], ['first_aid', 'Primeiros socorros', 'warn'], ['near_miss', 'Quase-acidentes e condições inseguras', 'ok']]
+        .map(([k, label, cls], i) => `<div class="pn-lvl ${cls}" style="--w:${40 + i * 20}%"><b class="tnum">${nfmt(P[k])}</b><span>${esc(label)}</span></div>`).join('')}
+      <p class="small muted">${total ? (ratio != null ? esc(`${ratio} relatos de quase-acidente por cada acidente com baixa. Quanto mais larga a base, melhor: as pessoas avisam antes de alguém se magoar.`) : 'Nenhum acidente com baixa em 12 meses. Continua a pedir relatos: a base larga é o que evita o topo.') : 'Ainda não há relatos nestes 12 meses. Uma obra sem relatos não é uma obra segura: é uma obra que não avisa.'}</p>
+    </div>
+    <div class="sec-h"><h2 class="eyebrow">Relatos por mês</h2></div>
+    <div class="card">${monthBars(d.months || [], [['near_miss', 'Quase-acidentes', 'ok'], ['other', 'Outros', 'warn']])}</div>
+    <div class="sec-h"><h2 class="eyebrow">LMRA · últimos 30 dias</h2></div>
+    <div class="card"><div class="pn-spark">${lm.map((x) => `<i style="height:${(100 * x.n / lmMax).toFixed(1)}%" class="${x.n ? '' : 'zero'}" title="${esc(x.day)}: ${x.n}"></i>`).join('')}</div>
+      <p class="small muted">${esc(`Hoje: ${lmToday} · ${lmDays} de 30 dias com LMRA · ${d.placed} pessoas colocadas nas obras`)}</p></div>
+    <div class="sec-h"><h2 class="eyebrow">Reuniões de segurança · 30 dias</h2></div>
+    <div class="kpis"><div class="kpi"><b class="tnum">${nfmt(d.meetings_30)}</b><span>Reuniões feitas</span></div>
+      <div class="kpi"><b class="tnum">${nfmt(d.signed_30)}</b><span>Presenças assinadas</span></div>
+      <div class="kpi ${d.missed_30 ? 'warn' : 'zero'}"><b class="tnum">${nfmt(d.missed_30)}</b><span>Faltas</span></div></div>
+    <div class="sec-h"><h2 class="eyebrow">Não-conformidades</h2></div>
+    <div class="kpis"><div class="kpi ${(d.nc || {}).open ? 'warn' : 'zero'}"><b class="tnum">${nfmt((d.nc || {}).open)}</b><span>Abertas</span></div>
+      <div class="kpi ${(d.nc || {}).decided ? '' : 'zero'}"><b class="tnum">${nfmt((d.nc || {}).decided)}</b><span>Com decisão, por fechar</span></div>
+      <div class="kpi ${(d.nc || {}).closed_90 ? 'ok' : 'zero'}"><b class="tnum">${nfmt((d.nc || {}).closed_90)}</b><span>Fechadas em 90 dias</span></div></div>
+    <p class="small muted pn-foot">Só contagens das obras que podes ver. Toca em Relatos de perigo ou Qualidade para ver cada caso.</p>`;
+}
+
+async function viewSalesPanel() {
+  if (!state.ready) return boot();
+  if (!canSalesPanel()) return go('inicio');
+  const dept = navDeps().find((d) => d.views.includes('painelcom')); const title = dept ? dept.title : 'Comercial';
+  app.innerHTML = `${panelHead(title, 'Painel comercial')}<div id="pnbody">${skel(4)}</div>`;
+  const { data: d, error } = await sb.rpc('mini_sales_panel', { p_year: null });
+  const box = $('#pnbody'); if (!box || !box.isConnected || state.view !== 'painelcom') return;
+  if (error) { box.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
+  const F = d.funnel || {}; const stages = [['prospect', 'Prospeção'], ['contacto', 'Em contacto'], ['proposta', 'Com proposta'], ['cliente', 'Clientes']];
+  const fMax = Math.max(1, ...stages.map(([k]) => F[k] || 0));
+  const decided = (d.won_n || 0) + (d.lost_n || 0); const conv = decided ? Math.round(100 * d.won_n / decided) : null;
+  const eur = (v) => Number(v || 0).toLocaleString(LOC, { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+  const WHY = { preco: 'Preço', prazo: 'Prazo', tecnica: 'Técnica', concorrente: 'Concorrente', cancelado: 'Cancelado pelo cliente', sem_resposta: 'Sem resposta', outro: 'Outro' };
+  const why = Object.entries(d.lost_why || {}).sort((a, b) => b[1] - a[1]); const whyMax = Math.max(1, ...why.map((x) => x[1]));
+  box.innerHTML = `
+    ${d.all ? '' : '<p class="small muted">Só os clientes que tu angariaste.</p>'}
+    <div class="kpis k4">
+      <div class="kpi"><b class="tnum">${eur(d.open_value)}</b><span>${esc(`Em proposta (${d.open_n || 0})`)}</span></div>
+      <div class="kpi ok"><b class="tnum">${eur(d.won_value)}</b><span>${esc(`Ganho em ${d.year}`)}</span></div>
+      <div class="kpi ${conv == null ? 'zero' : conv < 25 ? 'warn' : ''}"><b class="tnum">${conv == null ? '—' : conv + '%'}</b><span>${esc(`Taxa de ganho (${d.won_n || 0} de ${decided})`)}</span></div>
+      <div class="kpi ${F.perdido ? '' : 'zero'}"><b class="tnum">${nfmt(F.perdido)}</b><span>Clientes perdidos</span></div>
+    </div>
+    <div class="sec-h"><h2 class="eyebrow">Funil</h2></div>
+    <div class="card pn-funnel">${stages.map(([k, label]) => `<div class="pn-frow"><span>${esc(label)}</span><div class="pn-fbar"><i style="width:${Math.max(2, 100 * (F[k] || 0) / fMax).toFixed(1)}%"></i></div><b class="tnum">${nfmt(F[k])}</b></div>`).join('')}</div>
+    <div class="sec-h"><h2 class="eyebrow">Por mês</h2></div>
+    <div class="card">${monthBars(d.months || [], [['new', 'Clientes novos', 'info'], ['won', 'Propostas ganhas', 'ok']])}</div>
+    <div class="sec-h"><h2 class="eyebrow">${esc(`Porque perdemos · ${d.year}`)}</h2></div>
+    <div class="card pn-funnel">${why.length ? why.map(([k, n]) => `<div class="pn-frow"><span>${esc(WHY[k] || k)}</span><div class="pn-fbar warn"><i style="width:${(100 * n / whyMax).toFixed(1)}%"></i></div><b class="tnum">${nfmt(n)}</b></div>`).join('')
+      : '<p class="small muted">Nenhuma proposta perdida este ano. Quando houver, regista o motivo: é daqui que se aprende a ganhar a próxima.</p>'}</div>`;
 }
 // ------------------------------------------------------------------ Clientes (the GestNow owner's console, sql/59)
 // The client companies, with numbers only. «Entrar» moves this login into one (and back): what it had in each company
@@ -5368,6 +5462,8 @@ const TOUR_TEXT = {
   progresso: 'Folha de produção: cada colaborador envia o que fez no dia, o encarregado corrige, junta tudo e envia ao gestor de obra com o Excel.',
   custos: 'Custos das obras: o que cada obra gastou no mês, por tipo de custo, contra o orçamento. No fim do mês preparas daqui o pacote para o Primavera.',
   saude: 'Saúde dos departamentos: todos os departamentos num ecrã, com uma luz cada. Vermelho é segurança ou coisa grave parada; âmbar é trabalho à espera. Tocas e abres o departamento.',
+  painelqsa: 'Painel QSA: a pirâmide de segurança de 12 meses, os relatos por mês, as LMRA dos últimos 30 dias, as reuniões e as não-conformidades. Só contagens.',
+  painelcom: 'Painel comercial: o funil de clientes, o valor em proposta e ganho, a taxa de ganho e porque perdemos. O angariador vê só os seus.',
   premios: 'Prémios e objetivos: os prémios do ano com as regras escritas em janeiro. Qualquer chefe propõe quem merece; a Administração decide.',
   comercial: 'Angariação de clientes: abres o cliente com os dados todos e registas cada contacto. A direção comercial vê a prospeção de toda a gente.',
   orcamentos: 'Orçamentos: um só cálculo de custo e cinco formas de dar o preço ao cliente, de homem-hora a chave na mão. Quem assina segue as regras da tua empresa.',
