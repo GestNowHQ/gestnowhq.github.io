@@ -1245,7 +1245,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '122';
+const APP_VERSION = '123';
 // v107 (Diogo 2026-10-26): «Início» = what is urgent + the departments. The bottom bar keeps only Início, the field tools of
 // the encarregado (Equipa, Picar) or of the safety officer (Emergência), Procurar and Eu. Everything else is in its department.
 const TABS = { supervisor: ['inicio', 'equipa', 'picar', 'minhas'], admin: ['inicio', 'minhas'],
@@ -1262,7 +1262,7 @@ function tabsFor(role) {
   return TABS[role] || TABS.supervisor;
 }
 const OFFLINE_VIEWS = ['picar', 'minhas', 'material', 'reunioes', 'relatos', 'emergencia', 'residuos', 'inventario'];   // v89: they keep a copy
-const MORE_ORDER = ['inicio', 'empresa', 'onbtextos', 'equipa', 'material', 'picar', 'emergencia', 'relatos', 'reunioes', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'faltas', 'mesresumo', 'reclamacoes', 'salarios', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'envios', 'inventario', 'residuos', 'compras', 'frota', 'alojamento', 'viagens', 'docscliente', 'despesas', 'diarias', 'andaimes', 'processo', 'clientes', 'custos', 'progresso', 'frentes', 'rotinas', 'contactos'];
+const MORE_ORDER = ['inicio', 'saude', 'empresa', 'onbtextos', 'equipa', 'material', 'picar', 'emergencia', 'relatos', 'reunioes', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'faltas', 'mesresumo', 'reclamacoes', 'salarios', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'envios', 'inventario', 'residuos', 'compras', 'frota', 'alojamento', 'viagens', 'docscliente', 'despesas', 'diarias', 'andaimes', 'processo', 'clientes', 'custos', 'progresso', 'frentes', 'rotinas', 'contactos'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -1279,7 +1279,7 @@ WIDE.addEventListener('change', () => {
 // v77 (Diogo 2026-10-21): Viagens and Alojamento are run by RH (their costs go to each site); Segurança and Qualidade are
 // one department, QSA (sql/99); «controlo da app para garantir a ISO 9001» = Processo.
 const MENU_GROUPS = [
-  ['Administração', ['inicio', 'empresa', 'premios', 'clientes']],
+  ['Administração', ['inicio', 'saude', 'empresa', 'premios', 'clientes']],
   ['Secretariado', ['secretariado', 'faltas', 'mesresumo', 'reclamacoes', 'horas', 'diarias', 'salarios', 'despesas', 'custos']],
   ['Recursos Humanos', ['trabalhadores', 'onbtextos', 'acolhimento', 'docscliente', 'viagens', 'alojamento']],
   ['Frota', ['frota']],
@@ -1303,7 +1303,7 @@ function menuBase() {
 }
 // What each screen needs, to place it under the department that gives it (the visibility itself is set in boot).
 const VIEW_NEEDS = {
-  inicio: () => canHome(), empresa: () => canCompanyRules(), processo: () => canProcess(),
+  inicio: () => canHome(), saude: () => canHealth(), empresa: () => canCompanyRules(), processo: () => canProcess(),
   secretariado: () => canApprove(), despesas: () => canExpenses(), viagens: () => canTravel(), alojamento: () => canHousing(), docscliente: () => canClientDocs(),
   trabalhadores: () => can('pessoas.ver') || can('pessoas.gerir'), onbtextos: () => canPeople(),
   seguranca: () => ['seguranca.lmra', 'seguranca.parar_obra', 'seguranca.emergencia'].some(can), lmra: () => canLmra(), reunioes: () => canMeet(), relatos: () => canHazards(),
@@ -1352,9 +1352,10 @@ const ENC_ICONS = {
   clientdocs: '<path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5zM8.5 13l2.5 2.5 4.5-4.5"/>',
   recycle: '<path d="M7 19H4.8a1.8 1.8 0 0 1-1.6-.9 1.8 1.8 0 0 1 0-1.8l4-6.8M11 19h8.2a1.8 1.8 0 0 0 1.6-.9 1.8 1.8 0 0 0 0-1.8l-1.2-2.1M14 16l-3 3 3 3M8.3 13.6 7.2 9.5l-4.1 1.1M9.3 5.8l1.1-1.9A1.8 1.8 0 0 1 12 3a1.8 1.8 0 0 1 1.5.9l4 6.8M13.4 9.6l4.1 1.1 1.1-4.1"/>',
   stocktake: '<path d="M9 3h6v3H9zM9 4.5H6v16.5h12V4.5h-3M8.5 12.5l2 2 4-4M9 18h6"/>',
+  pulse: '<path d="M3 12h4l2.5-6 4 12 2.5-6H21"/>',
   medal: '<path d="M12 14a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM9.5 13.3 8 21l4-2 4 2-1.5-7.7M10 9l1.5 1.5L14.5 7.5"/>',
 };
-const MENU_ICON = { painel: 'gauge', producao: 'chart', seguranca: 'hhat', equipa: 'crew', minhas: 'myclock', naobra: 'gate', qualidade: 'medal', clientes: 'firms', comercial: 'target', premios: 'trophy', custos: 'coins', progresso: 'sheet', frentes: 'fronts', rotinas: 'todo', docscliente: 'clientdocs', residuos: 'recycle', inventario: 'stocktake', envios: 'car' };
+const MENU_ICON = { painel: 'gauge', producao: 'chart', seguranca: 'hhat', equipa: 'crew', minhas: 'myclock', naobra: 'gate', qualidade: 'medal', clientes: 'firms', comercial: 'target', premios: 'trophy', custos: 'coins', progresso: 'sheet', frentes: 'fronts', rotinas: 'todo', docscliente: 'clientdocs', residuos: 'recycle', inventario: 'stocktake', envios: 'car', saude: 'pulse' };
 (function encIcons() {
   const ns = 'http://www.w3.org/2000/svg'; const sp = document.createElementNS(ns, 'svg');
   sp.setAttribute('width', '0'); sp.setAttribute('height', '0'); sp.setAttribute('aria-hidden', 'true'); sp.style.position = 'absolute';
@@ -1657,6 +1658,7 @@ async function boot() {
   nav.querySelector('[data-view=orcamentos]').hidden = worker || state.offline || !canEstimates();
   nav.querySelector('[data-view=comercial]').hidden = worker || state.offline || !canSales();
   nav.querySelector('[data-view=premios]').hidden = worker || state.offline || !canAwards();
+  nav.querySelector('[data-view=saude]').hidden = worker || state.offline || !canHealth();
   nav.querySelector('[data-view=custos]').hidden = worker || state.offline || !canCosts();
   nav.querySelector('[data-view=diarias]').hidden = worker || state.offline || !canPerDiems();
   for (const v of ['faltas', 'mesresumo', 'reclamacoes', 'salarios']) nav.querySelector(`[data-view=${v}]`).hidden = worker || state.offline || !VIEW_NEEDS[v]();
@@ -2150,7 +2152,7 @@ function go(view) {
   nav.querySelector('button[data-more]').classList.toggle('on', !!cur && cur.parentElement.id === 'more');
   window.scrollTo(0, 0);
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
-     ficha: viewWorker, obras: viewSites, area: viewArea, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients, cliente: viewClient, precos: viewPrices, empresa: viewCompanyRules, inicio: viewHome, departamento: viewDept,
+     ficha: viewWorker, obras: viewSites, area: viewArea, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients, cliente: viewClient, precos: viewPrices, empresa: viewCompanyRules, inicio: viewHome, departamento: viewDept, saude: viewHealth,
      processo: viewProcess, orcamentos: viewEstimates, comercial: viewSales, premios: viewAwards, custos: viewCosts, diarias: viewPerDiemOffice, faltas: viewOfficeAbsences, mesresumo: viewOfficeSummary, reclamacoes: viewOfficeRequests, salarios: viewOfficePayroll, lmra: viewLmra, reunioes: viewMeetings, relatos: viewHazards, material: viewSiteMaterial, emergencia: viewEmergency,
      armazem: viewWarehouse, envios: viewShipments, inventario: viewInventory, residuos: viewWaste, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, docscliente: viewClientDocs, producao: viewProd, progresso: viewProgress, frentes: viewFronts, rotinas: viewRoutines, contactos: viewContacts, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
   checkEmergencyBar(); encBadges();
@@ -2192,7 +2194,7 @@ function toolTiles(views) {
     return `<button type="button" data-open="${esc(v)}"${w ? ` data-badge="${w > 99 ? '99+' : w}"` : ''}><svg class="i" aria-hidden="true"><use href="#i-${esc(navIcon(v))}"/></svg><span>${esc(navLabel(v))}</span></button>`; }).join('')}</div>`;
 }
 function bindTiles(box) {
-  box.querySelectorAll('[data-dept]').forEach((b) => b.onclick = () => { state.dept = b.dataset.dept; try { history.pushState({ gnDept: 1 }, ''); } catch (_) {} go('departamento'); });
+  box.querySelectorAll('[data-dept]').forEach((b) => b.onclick = () => { state.dept = b.dataset.dept; state.deptFrom = null; try { history.pushState({ gnDept: 1 }, ''); } catch (_) {} go('departamento'); });
   box.querySelectorAll('[data-open]').forEach((b) => b.onclick = () => openFromMenu(b.dataset.open));
 }
 // v110 (Diogo 2026-10-27): a screen opened from a department page (or from Início) has «‹ <that page>» on top, and the
@@ -2246,6 +2248,7 @@ async function viewHome() {
     ${isOwner() ? `<button class="btn ghost small home-back" id="hback">‹ Os meus clientes</button>` : ''}
     <div class="ph"><div><p class="ph-k">Início</p><h1 id="hco">${esc((state.platform && state.platform.tenant) || '')}</h1></div></div>
     <div class="sec-h"><h2 class="eyebrow">Precisa de ti hoje</h2></div>
+    ${canHealth() ? '<div id="hhealth" class="home-health"></div>' : ''}
     <div id="hwait">${skel(1)}</div>
     ${recent.length ? `<div class="sec-h"><h2 class="eyebrow">Usados há pouco</h2></div>${toolTiles(recent)}` : ''}
     <div class="sec-h"><h2 class="eyebrow">Departamentos</h2></div>
@@ -2254,6 +2257,7 @@ async function viewHome() {
   if ($('#hback')) $('#hback').onclick = () => go('clientes');
   bindTiles(app);
   homeWaiting();
+  if (canHealth()) homeHealth();
 }
 // «Precisa de ti hoje»: what the company waits on (sql/90, for whoever sees the sites), else what this login's own screens count
 async function homeWaiting() {
@@ -2293,12 +2297,128 @@ function viewDept() {
   const d = navDeps().find((x) => x.title === state.dept);
   if (!d) return go('inicio');
   const [name, sub] = d.title.split(' · ');
-  app.innerHTML = `<button class="btn ghost small home-back" id="dback">‹ Início</button>
+  const from = state.deptFrom === 'saude' && canHealth() ? 'saude' : null;   // v123: opened from «Saúde dos departamentos»
+  app.innerHTML = `<button class="btn ghost small home-back" id="dback">‹ ${from ? 'Saúde dos departamentos' : 'Início'}</button>
     <div class="ph"><div><p class="ph-k">${sub ? esc(sub) : 'Departamento'}</p><h1>${esc(name)}</h1></div></div>
+    <div id="dpulse"></div>
     ${toolTiles(d.views)}${d.title === 'Eu' ? `<button class="btn ghost" id="dtour">${ic('bot')}Visita guiada</button>` : ''}`;
-  $('#dback').onclick = () => { if (history.state && history.state.gnDept) history.back(); else go('inicio'); };
+  $('#dback').onclick = () => { if (from) { state.deptFrom = null; go(from); } else if (history.state && history.state.gnDept) history.back(); else go('inicio'); };
   if ($('#dtour')) $('#dtour').onclick = () => startTour();
   bindTiles(app);
+  deptPulse(d);
+}
+// ------------------------------------------------------------------ v123 · Department pulse and «Saúde dos departamentos» (sql/137)
+// Diogo 2026-10-30: «o administrador não vai querer ligar todos os dias a cada gestor de departamento». Not one dashboard per
+// department: each department page gets a strip on top (4 numbers + what is stuck, the oldest first), and the Administração
+// gets one screen with every department and a light. The server counts (mini_dept_pulse, mini_dept_health); the words are here.
+const canHealth = () => can('gestao.saude');
+// [number key, label, screen it opens] and {wait key: [label, screen]}. A number or a line opens the screen where it is solved.
+const PULSE = {
+  producao: { title: 'Produção (Obra)', nums: [['sites', 'Obras ativas', 'painel'], ['inside_now', 'Na obra agora', 'naobra'], ['to_validate', 'Dias por validar', 'horas'], ['missing_out', 'Saídas por picar (7 dias)', 'horas']],
+    waits: { to_validate: ['dia(s) por validar na obra', 'horas'], missing_out: ['saída(s) por picar nos últimos 7 dias', 'horas'], sheets_missing: ['obra(s) sem folha de produção de ontem', 'progresso'] } },
+  qsa: { title: 'QSA · Qualidade, Segurança e Ambiente', nums: [['reports_open', 'Relatos abertos', 'relatos'], ['nc_open', 'Não-conformidades abertas', 'qualidade'], ['lmra_today', 'LMRA hoje', 'lmra'], ['days_no_lti', 'Dias sem acidente com baixa', 'relatos']],
+    waits: { stops: ['paragem(ns) de trabalho em vigor', 'qualidade'], sif_open: ['relato(s) grave(s) por fechar', 'relatos'], reports_waiting: ['relato(s) à espera de responsável', 'relatos'], nc_late: ['não-conformidade(s) com a ação atrasada', 'qualidade'] } },
+  secretariado: { title: 'Secretariado', nums: [['to_approve', 'Dias por aprovar', 'secretariado'], ['to_validate', 'Ainda por validar na obra', 'horas'], ['disputes', 'Reclamações abertas', 'reclamacoes'], ['expenses', 'Despesas por aprovar', 'despesas']],
+    waits: { to_approve: ['dia(s) à espera de aprovação', 'secretariado'], disputes: ['reclamação(ões) de horas por responder', 'reclamacoes'], absences: ['pedido(s) de ausência por decidir', 'reclamacoes'], expenses: ['despesa(s) por aprovar', 'despesas'] } },
+  rh: { title: 'Recursos Humanos', nums: [['active', 'Pessoas ativas', 'trabalhadores'], ['joining', 'A fazer a entrada', 'trabalhadores'], ['docs_expired', 'Com documento caducado', 'trabalhadores'], ['docs_expiring', 'Documento a caducar (30 dias)', 'trabalhadores']],
+    waits: { docs_expired: ['pessoa(s) com documento caducado', 'trabalhadores'], joining: ['pessoa(s) com a entrada por acabar', 'trabalhadores'], travel_requested: ['viagem(ns) pedida(s) por decidir', 'viagens'], docs_expiring: ['pessoa(s) com documento a caducar', 'trabalhadores'] } },
+  armazem: { title: 'Compras e Armazém', nums: [['tools_out', 'Ferramentas fora', 'armazem'], ['tools_late', 'Fora do prazo', 'armazem'], ['low_stock', 'Abaixo do mínimo', 'armazem'], ['requests_open', 'Pedidos das obras', 'armazem']],
+    waits: { calibration_expired: ['ferramenta(s) com calibração caducada', 'armazem'], tools_late: ['ferramenta(s) por devolver fora do prazo', 'armazem'], requests_open: ['pedido(s) de material das obras por tratar', 'armazem'], writeoffs: ['abate(s) à espera da segunda assinatura', 'armazem'], low_stock: ['artigo(s) abaixo do mínimo', 'armazem'] } },
+  frota: { title: 'Frota', nums: [['vehicles', 'Viaturas', 'frota'], ['in_use', 'Em uso', 'frota'], ['vehicles_red', 'Paradas (vermelho)', 'frota'], ['licences_expiring', 'Cartas a caducar (30 dias)', 'frota']],
+    waits: { vehicles_red: ['viatura(s) a vermelho: papéis ou revisão', 'frota'], licences_expired: ['carta(s) de condução caducada(s)', 'frota'], vehicles_amber: ['viatura(s) a amarelo', 'frota'] } },
+  comercial: { title: 'Comercial', nums: [['prospects', 'Em prospeção', 'comercial'], ['proposals', 'Com proposta', 'comercial'], ['won', 'Clientes ganhos', 'comercial'], ['late_contact', 'Contacto atrasado', 'comercial']],
+    waits: { late_contact: ['cliente(s) com o contacto atrasado', 'comercial'] } },
+  orcamentacao: { title: 'Orçamentação', nums: [['requests_open', 'Pedidos por orçamentar', 'orcamentos'], ['in_review', 'À espera de assinatura', 'orcamentos'], ['no_answer', 'Enviados sem resposta', 'orcamentos'], ['won_year', 'Ganhos este ano', 'orcamentos']],
+    waits: { requests_late: ['pedido(s) de orçamento fora do prazo', 'orcamentos'], in_review: ['orçamento(s) à espera de assinatura', 'orcamentos'], no_answer: ['orçamento(s) enviado(s) sem resposta do cliente', 'orcamentos'] } },
+};
+// which pulses a department page shows: by the screens it holds (a company may join Secretariado and RH into «Escritório»)
+const PULSE_BY_VIEW = [['painel', 'producao'], ['relatos', 'qsa'], ['seguranca', 'qsa'], ['qualidade', 'qsa'], ['secretariado', 'secretariado'], ['trabalhadores', 'rh'],
+  ['armazem', 'armazem'], ['frota', 'frota'], ['comercial', 'comercial'], ['orcamentos', 'orcamentacao']];
+const pulseKeys = (views) => [...new Set(PULSE_BY_VIEW.filter(([v]) => views.includes(v)).map(([, k]) => k))];
+const LIGHT = { red: ['bad', 'Vermelho'], amber: ['warn', 'Âmbar'], green: ['ok', 'Em dia'] };
+const ageTxt = (d) => (d == null ? '' : d <= 0 ? 'desde hoje' : d === 1 ? 'o mais antigo há 1 dia' : `o mais antigo há ${d} dias`);
+// the stuck lines of one pulse, the worst first (bad, then warn, then info; older first)
+function pulseWaits(p) {
+  const cat = (PULSE[p.key] || {}).waits || {}; const rank = { bad: 0, warn: 1, info: 2 };
+  return Object.entries(p.waits || {}).filter(([k, w]) => cat[k] && w.n > 0)
+    .map(([k, w]) => ({ k, n: w.n, days: w.days, sev: w.sev, label: cat[k][0], view: cat[k][1] }))
+    .sort((a, b) => rank[a.sev] - rank[b.sev] || (b.days || 0) - (a.days || 0));
+}
+function pulseRow(w) {
+  const go = viewOpen(w.view);
+  return `<${go ? `button type="button" data-go="${esc(w.view)}"` : 'div'} class="home-w ${w.sev === 'bad' ? 'bad' : w.sev === 'warn' ? 'warn' : 'info'}">`
+    + `<span class="home-wi">${ic(w.sev === 'bad' ? 'warn' : 'clock')}</span><span class="grow"><b>${esc(String(w.n))} ${esc(w.label)}</b>${w.days != null ? `<small>${esc(ageTxt(w.days))}</small>` : ''}</span>${go ? ic('go') : ''}</${go ? 'button' : 'div'}>`;
+}
+function pulseNums(p) {
+  const nums = (PULSE[p.key] || {}).nums || [];
+  return `<div class="kpis k4 dp-nums">${nums.map(([k, label, v]) => {
+    const n = (p.nums || {})[k]; const go = viewOpen(v);
+    const tone = n == null ? 'zero' : (p.waits && p.waits[k] && p.waits[k].n > 0) ? (p.waits[k].sev === 'bad' ? 'bad' : p.waits[k].sev === 'warn' ? 'warn' : '') : Number(n) === 0 ? 'zero' : '';
+    return `<${go ? `button type="button" data-go="${esc(v)}"` : 'div'} class="kpi ${tone}"><b class="tnum">${n == null ? '—' : Number(n).toLocaleString(LOC)}</b><span>${esc(label)}</span></${go ? 'button' : 'div'}>`;
+  }).join('')}</div>`;
+}
+function bindGo(box) {
+  box.querySelectorAll('[data-go]').forEach((b) => b.onclick = () => { state.backNext = backFrom(); openFromMenu(b.dataset.go); });
+}
+// the strip on a department page: one per pulse its screens give (usually one); a department with none shows nothing
+async function deptPulse(d) {
+  const box = $('#dpulse'); if (!box || state.offline) return;
+  const keys = pulseKeys(d.views); if (!keys.length) return;
+  box.innerHTML = skel(1);
+  const res = await Promise.all(keys.map((k) => sb.rpc('mini_dept_pulse', { p_key: k }).then(({ data, error }) => (error ? null : data)).catch(() => null)));
+  if (!box.isConnected || state.view !== 'departamento') return;
+  const ok = res.filter(Boolean);
+  box.innerHTML = ok.map((p) => {
+    const ws = pulseWaits(p); const L = LIGHT[p.light] || LIGHT.green;
+    return `<section class="dp" data-key="${esc(p.key)}">
+      ${ok.length > 1 ? `<div class="sec-h"><h2 class="eyebrow">${esc(PULSE[p.key].title.split(' · ')[0])}</h2></div>` : ''}
+      ${pulseNums(p)}
+      ${ws.length ? `<div class="home-wait">${ws.slice(0, 3).map(pulseRow).join('')}</div>${ws.length > 3 ? `<details class="fold home-more"><summary><span>Mais ${ws.length - 3} assunto(s)</span></summary><div class="home-wait">${ws.slice(3).map(pulseRow).join('')}</div></details>` : ''}`
+        : `<div class="card home-ok">${ic('ok')}<div><b>${esc(L[1])}</b><small>Nada parado neste departamento.</small></div></div>`}
+    </section>`;
+  }).join('') + (ok.length ? `<div class="sec-h"><h2 class="eyebrow">Ecrãs</h2></div>` : '');
+  bindGo(box);
+}
+// Início: one line for whoever sees the health screen («2 a vermelho, 1 a âmbar»), so the admin knows before opening it
+async function homeHealth() {
+  const box = $('#hhealth'); if (!box) return;
+  const { data, error } = await sb.rpc('mini_dept_health');
+  if (!box.isConnected || state.view !== 'inicio' || error || !data) return;
+  const n = (l) => (data.depts || []).filter((x) => x.light === l).length;
+  const red = n('red'); const amber = n('amber');
+  const kind = red ? 'bad' : amber ? 'warn' : 'info';
+  const line = red || amber ? [red ? `${red} a vermelho` : '', amber ? `${amber} a âmbar` : ''].filter(Boolean).join(', ') : 'Todos em dia';
+  box.innerHTML = `<button type="button" class="home-w ${kind}" data-go="saude"><span class="home-wi">${ic('pulse')}</span><span class="grow"><b>Saúde dos departamentos: ${esc(line)}</b><small>Toca para ver cada departamento.</small></span>${ic('go')}</button>`;
+  box.querySelector('[data-go]').onclick = () => { state.backNext = backFrom(); openFromMenu('saude'); };
+}
+async function viewHealth() {
+  if (!state.ready) return boot();   // never a screen before login
+  if (!canHealth()) return go('inicio');   // code guard as well as the database's
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Administração</p><h1>Saúde dos departamentos</h1></div></div>
+    <p class="muted small dh-help">Uma luz por departamento. <b>Vermelho</b>: segurança ou coisa grave parada. <b>Âmbar</b>: trabalho à espera. Toca num departamento para o abrir.</p>
+    <div id="dhsum"></div><div id="dhlist">${skel(4)}</div>`;
+  const { data, error } = await sb.rpc('mini_dept_health');
+  const box = $('#dhlist'); if (!box || !box.isConnected || state.view !== 'saude') return;
+  if (error) { box.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
+  const order = { red: 0, amber: 1, green: 2 };
+  const list = (data.depts || []).slice().sort((a, b) => order[a.light] - order[b.light] || (b.oldest || 0) - (a.oldest || 0));
+  const cnt = (l) => list.filter((x) => x.light === l).length;
+  $('#dhsum').innerHTML = `<div class="dh-sum">${['red', 'amber', 'green'].map((l) => `<span class="dh-chip ${LIGHT[l][0]}"><i class="dh-dot"></i><b class="tnum">${cnt(l)}</b> ${esc(LIGHT[l][1])}</span>`).join('')}
+    <small class="muted">Atualizado às ${esc(new Date(data.at || Date.now()).toLocaleTimeString(LOC, { hour: '2-digit', minute: '2-digit' }))}</small></div>`;
+  const mine = new Set(navDeps().map((x) => x.title));
+  box.innerHTML = `<div class="dh-list">${list.map((p) => {
+    const P = PULSE[p.key]; const L = LIGHT[p.light] || LIGHT.green; const ws = pulseWaits(p).filter((w) => w.sev !== 'info');
+    const [name] = P.title.split(' · '); const open = mine.has(P.title);
+    const nums = P.nums.slice(0, 3).map(([k, label]) => `<span><b class="tnum">${(p.nums || {})[k] == null ? '—' : Number(p.nums[k]).toLocaleString(LOC)}</b> ${esc(label)}</span>`).join('');
+    return `<${open ? `button type="button" data-dept="${esc(P.title)}"` : 'div'} class="dh ${L[0]}">
+      <div class="dh-top"><i class="dh-dot" aria-hidden="true"></i><b class="grow">${esc(name)}</b><span class="dh-st">${esc(L[1])}</span>${open ? ic('go') : ''}</div>
+      <div class="dh-nums">${nums}</div>
+      ${ws.length ? `<ul class="dh-w">${ws.slice(0, 2).map((w) => `<li class="${w.sev}"><b class="tnum">${w.n}</b> ${esc(w.label)}${w.days ? ` <small>· ${esc(ageTxt(w.days))}</small>` : ''}</li>`).join('')}${ws.length > 2 ? `<li class="more">+ ${ws.length - 2} assunto(s)</li>` : ''}</ul>` : ''}
+    </${open ? 'button' : 'div'}>`;
+  }).join('')}</div>`;
+  box.querySelectorAll('[data-dept]').forEach((b) => b.onclick = () => {
+    state.dept = b.dataset.dept; state.deptFrom = 'saude'; go('departamento');
+  });
 }
 
 // ------------------------------------------------------------------ Clientes (the GestNow owner's console, sql/59)
@@ -5191,6 +5311,7 @@ const TOUR_TEXT = {
   clientes: 'Clientes: as empresas que usam a GestNow. Crias, entras numa e voltas.',
   progresso: 'Folha de produção: cada colaborador envia o que fez no dia, o encarregado corrige, junta tudo e envia ao gestor de obra com o Excel.',
   custos: 'Custos das obras: o que cada obra gastou no mês, por tipo de custo, contra o orçamento. No fim do mês preparas daqui o pacote para o Primavera.',
+  saude: 'Saúde dos departamentos: todos os departamentos num ecrã, com uma luz cada. Vermelho é segurança ou coisa grave parada; âmbar é trabalho à espera. Tocas e abres o departamento.',
   premios: 'Prémios e objetivos: os prémios do ano com as regras escritas em janeiro. Qualquer chefe propõe quem merece; a Administração decide.',
   comercial: 'Angariação de clientes: abres o cliente com os dados todos e registas cada contacto. A direção comercial vê a prospeção de toda a gente.',
   orcamentos: 'Orçamentos: um só cálculo de custo e cinco formas de dar o preço ao cliente, de homem-hora a chave na mão. Quem assina segue as regras da tua empresa.',
