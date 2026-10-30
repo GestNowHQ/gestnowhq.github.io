@@ -1245,7 +1245,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '121';
+const APP_VERSION = '122';
 // v107 (Diogo 2026-10-26): «Início» = what is urgent + the departments. The bottom bar keeps only Início, the field tools of
 // the encarregado (Equipa, Picar) or of the safety officer (Emergência), Procurar and Eu. Everything else is in its department.
 const TABS = { supervisor: ['inicio', 'equipa', 'picar', 'minhas'], admin: ['inicio', 'minhas'],
@@ -1262,7 +1262,7 @@ function tabsFor(role) {
   return TABS[role] || TABS.supervisor;
 }
 const OFFLINE_VIEWS = ['picar', 'minhas', 'material', 'reunioes', 'relatos', 'emergencia', 'residuos', 'inventario'];   // v89: they keep a copy
-const MORE_ORDER = ['inicio', 'empresa', 'onbtextos', 'equipa', 'material', 'picar', 'emergencia', 'relatos', 'reunioes', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'faltas', 'mesresumo', 'reclamacoes', 'salarios', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'inventario', 'residuos', 'compras', 'frota', 'alojamento', 'viagens', 'docscliente', 'despesas', 'diarias', 'andaimes', 'processo', 'clientes', 'custos', 'progresso', 'frentes', 'rotinas', 'contactos'];
+const MORE_ORDER = ['inicio', 'empresa', 'onbtextos', 'equipa', 'material', 'picar', 'emergencia', 'relatos', 'reunioes', 'lmra', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'faltas', 'mesresumo', 'reclamacoes', 'salarios', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'envios', 'inventario', 'residuos', 'compras', 'frota', 'alojamento', 'viagens', 'docscliente', 'despesas', 'diarias', 'andaimes', 'processo', 'clientes', 'custos', 'progresso', 'frentes', 'rotinas', 'contactos'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -1285,7 +1285,7 @@ const MENU_GROUPS = [
   ['Frota', ['frota']],
   ['QSA · Qualidade, Segurança e Ambiente', ['relatos', 'seguranca', 'reunioes', 'lmra', 'emergencia', 'qualidade', 'processo']],
   ['Produção (Obra)', ['painel', 'naobra', 'progresso', 'frentes', 'rotinas', 'material', 'andaimes', 'picar', 'obras', 'equipa', 'producao']],
-  ['Compras e Armazém', ['armazem', 'inventario', 'residuos', 'compras']],
+  ['Compras e Armazém', ['armazem', 'envios', 'inventario', 'residuos', 'compras']],
   ['Comercial', ['comercial']],
   ['Orçamentação', ['orcamentos']],
   ['Eu', ['minhas', 'contactos']],
@@ -1310,7 +1310,7 @@ const VIEW_NEEDS = {
   emergencia: () => can('seguranca.emergencia'), acolhimento: () => can('acolhimento.gerir'),
   obras: () => can('obras.gerir') || can('obras.ver_detalhes') || can('obras.area'), painel: () => canSiteDetails(), naobra: () => canSiteDetails() || can('ponto.picar'),
   equipa: () => canSiteDetails(), picar: () => can('ponto.picar'), horas: () => can('horas.ver') || can('horas.validar_obra'),
-  andaimes: () => canScaffolds(), producao: () => canProd(), progresso: () => canProgress(), frentes: () => canFronts(), rotinas: () => canRoutines(), contactos: () => true, material: () => canSiteMaterial(), armazem: () => canWh(), inventario: () => canInv(), residuos: () => canWaste(), compras: () => canBuy(), frota: () => canFleet(),
+  andaimes: () => canScaffolds(), producao: () => canProd(), progresso: () => canProgress(), frentes: () => canFronts(), rotinas: () => canRoutines(), contactos: () => true, material: () => canSiteMaterial(), armazem: () => canWh(), envios: () => canShip(), inventario: () => canInv(), residuos: () => canWaste(), compras: () => canBuy(), frota: () => canFleet(),
   orcamentos: () => canEstimates(), qualidade: () => canQuality(), comercial: () => canSales(), premios: () => canAwards(), custos: () => canCosts(), diarias: () => canPerDiems(),
   faltas: () => canApprove(), mesresumo: () => canApprove(), reclamacoes: () => canApprove(), salarios: () => canPayroll(),
 };
@@ -1354,7 +1354,7 @@ const ENC_ICONS = {
   stocktake: '<path d="M9 3h6v3H9zM9 4.5H6v16.5h12V4.5h-3M8.5 12.5l2 2 4-4M9 18h6"/>',
   medal: '<path d="M12 14a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM9.5 13.3 8 21l4-2 4 2-1.5-7.7M10 9l1.5 1.5L14.5 7.5"/>',
 };
-const MENU_ICON = { painel: 'gauge', producao: 'chart', seguranca: 'hhat', equipa: 'crew', minhas: 'myclock', naobra: 'gate', qualidade: 'medal', clientes: 'firms', comercial: 'target', premios: 'trophy', custos: 'coins', progresso: 'sheet', frentes: 'fronts', rotinas: 'todo', docscliente: 'clientdocs', residuos: 'recycle', inventario: 'stocktake' };
+const MENU_ICON = { painel: 'gauge', producao: 'chart', seguranca: 'hhat', equipa: 'crew', minhas: 'myclock', naobra: 'gate', qualidade: 'medal', clientes: 'firms', comercial: 'target', premios: 'trophy', custos: 'coins', progresso: 'sheet', frentes: 'fronts', rotinas: 'todo', docscliente: 'clientdocs', residuos: 'recycle', inventario: 'stocktake', envios: 'car' };
 (function encIcons() {
   const ns = 'http://www.w3.org/2000/svg'; const sp = document.createElementNS(ns, 'svg');
   sp.setAttribute('width', '0'); sp.setAttribute('height', '0'); sp.setAttribute('aria-hidden', 'true'); sp.style.position = 'absolute';
@@ -1671,6 +1671,7 @@ async function boot() {
   nav.querySelector('[data-view=material]').hidden = worker || !canSiteMaterial();
   nav.querySelector('[data-view=emergencia]').hidden = worker || !canEmergency();
   nav.querySelector('[data-view=armazem]').hidden = worker || state.offline || !canWh();
+  nav.querySelector('[data-view=envios]').hidden = worker || state.offline || !canShip();
   nav.querySelector('[data-view=inventario]').hidden = worker || !canInv();   // v120: counting opens without network (kept copy, entries wait)
   nav.querySelector('[data-view=residuos]').hidden = worker || !canWaste();   // v117: opens without network (kept copy, entradas wait)
   nav.querySelector('[data-view=compras]').hidden = worker || state.offline || !canBuy();
@@ -2151,7 +2152,7 @@ function go(view) {
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
      ficha: viewWorker, obras: viewSites, area: viewArea, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients, cliente: viewClient, precos: viewPrices, empresa: viewCompanyRules, inicio: viewHome, departamento: viewDept,
      processo: viewProcess, orcamentos: viewEstimates, comercial: viewSales, premios: viewAwards, custos: viewCosts, diarias: viewPerDiemOffice, faltas: viewOfficeAbsences, mesresumo: viewOfficeSummary, reclamacoes: viewOfficeRequests, salarios: viewOfficePayroll, lmra: viewLmra, reunioes: viewMeetings, relatos: viewHazards, material: viewSiteMaterial, emergencia: viewEmergency,
-     armazem: viewWarehouse, inventario: viewInventory, residuos: viewWaste, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, docscliente: viewClientDocs, producao: viewProd, progresso: viewProgress, frentes: viewFronts, rotinas: viewRoutines, contactos: viewContacts, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
+     armazem: viewWarehouse, envios: viewShipments, inventario: viewInventory, residuos: viewWaste, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, docscliente: viewClientDocs, producao: viewProd, progresso: viewProgress, frentes: viewFronts, rotinas: viewRoutines, contactos: viewContacts, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
   checkEmergencyBar(); encBadges();
 }
 
@@ -5173,6 +5174,7 @@ const TOUR_TEXT = {
   frota: 'Frota: cada viatura com semáforo: seguro, inspeção, IUC, revisão e contrato de aluguer. Entregas e devoluções com km.',
   compras: 'Compras: pedes o que falta; acima do limite o Secretariado aprova; depois encomenda-se e regista-se o que chega.',
   armazem: 'Armazém: EPIs, farda e ferramentas. Quem recebe assina com o cartão; os tamanhos vêm da ficha.',
+  envios: 'Envios para a obra: escolhes a obra e vês a morada, quem recebe, os tamanhos de cada pessoa e o EPI que lhe falta. Na obra, cada um assina o seu saco com o cartão.',
   residuos: 'Resíduos: o lixo da oficina e do escritório, os EPI gastos e as pilhas. Cada contentor com o seu código LER, cada recolha com a empresa licenciada e a e-GAR.',
   horas: 'Horas: as horas da equipa, dia a dia, para corrigir e validar.',
   minhas: 'Eu: o teu dia, a tua semana, as tuas horas, pedidos, diárias, documentos, EPI e onde dormes. Se um dia estiver mal, dizes aqui.',
@@ -10367,6 +10369,14 @@ function shipWhere(s, card = true) {
       <dt>EPI fornecido por</dt><dd>${s.ppe_by ? esc(PPE_BY[s.ppe_by] || s.ppe_by) : '<span class="muted">não definido</span>'}</dd>
       ${s.logistics ? `<dt>Logística</dt><dd>${esc(s.logistics)}</dd>` : ''}</dl>
     ${s.ppe_by === 'client' ? `<p class="small sh-warn">${ic('warn')}<span>Nesta obra o EPI é do cliente: envia só o que a empresa dá (farda, por exemplo).</span></p>` : ''}</section>`;
+}
+// v122: «Envios para a obra» has its own tile; it opens the warehouse on the Envios tab.
+const canShip = () => canWh() && ['armazem.gerir', 'armazem.entregar'].some(can);
+function viewShipments() {
+  if (!state.ready) return boot();
+  if (!canShip()) return viewClock();
+  state.wh = { ...(state.wh || { cart: [], tools: [], person: null, wid: null }), tab: 'envios', shipId: null, shipSite: null, shipEdit: null };
+  viewWarehouse();
 }
 async function whShip() {
   const W = state.wh; const body = $('#whbody'); if (!body) return;
