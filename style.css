@@ -2813,3 +2813,10 @@ button.dh { cursor: pointer; } button.dh:hover { border-color: var(--brand); }
 .dup-list li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line, rgba(0,0,0,.08)); }
 .dup-list li:first-child { border-top: 0; }
 .dup-list .grow { flex: 1; min-width: 0; }
+/* v128 · Informática (sql/142) */
+.ws-al.ok .dot { background: var(--ok-bg); color: var(--ok); }
+.it-li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: var(--bw) solid var(--line); }
+.it-li:first-child { border-top: 0; }
+.it-li .grow { min-width: 0; overflow-wrap: anywhere; }
+.it-li .btn { flex: 0 0 auto; }
+.card.it-exit { border-color: var(--bad); }
