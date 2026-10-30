@@ -1308,7 +1308,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '130';
+const APP_VERSION = '131';
 // v107 (Diogo 2026-10-26): «Início» = what is urgent + the departments. The bottom bar keeps only Início, the field tools of
 // the encarregado (Equipa, Picar) or of the safety officer (Emergência), Procurar and Eu. Everything else is in its department.
 const TABS = { supervisor: ['inicio', 'equipa', 'picar', 'minhas'], admin: ['inicio', 'minhas'],
@@ -2224,7 +2224,7 @@ function go(view) {
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
      ficha: viewWorker, obras: viewSites, area: viewArea, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients, cliente: viewClient, precos: viewPrices, empresa: viewCompanyRules, inicio: viewHome, departamento: viewDept, saude: viewHealth, painelqsa: viewQsaPanel, painelcom: viewSalesPanel,
      processo: viewProcess, orcamentos: viewEstimates, comercial: viewSales, premios: viewAwards, custos: viewCosts, diarias: viewPerDiemOffice, faltas: viewOfficeAbsences, mesresumo: viewOfficeSummary, reclamacoes: viewOfficeRequests, salarios: viewOfficePayroll, lmra: viewLmra, reunioes: viewMeetings, relatos: viewHazards, material: viewSiteMaterial, emergencia: viewEmergency,
-     armazem: viewWarehouse, envios: viewShipments, inventario: viewInventory, residuos: viewWaste, informatica: viewIT, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, docscliente: viewClientDocs, producao: viewProd, progresso: viewProgress, frentes: viewFronts, rotinas: viewRoutines, contactos: viewContacts, qualidade: viewQuality, despesas: viewExpenses, cartoes: viewCards, andaimes: viewScaffolds }[view] || viewClock)();
+     armazem: viewWarehouseHome, envios: viewShipments, inventario: viewInventory, residuos: viewWaste, informatica: viewIT, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, docscliente: viewClientDocs, producao: viewProd, progresso: viewProgress, frentes: viewFronts, rotinas: viewRoutines, contactos: viewContacts, qualidade: viewQuality, despesas: viewExpenses, cartoes: viewCards, andaimes: viewScaffolds }[view] || viewClock)();
   checkEmergencyBar(); encBadges();
 }
 
@@ -10725,6 +10725,11 @@ function shipWhere(s, card = true) {
 }
 // v122: «Envios para a obra» has its own tile; it opens the warehouse on the Envios tab.
 const canShip = () => canWh() && ['armazem.gerir', 'armazem.entregar'].some(can);
+// v131: the Armazém tile opens the Armazém, not the Envios tab left open by the «Envios para a obra» tile
+function viewWarehouseHome() {
+  if (state.wh && state.wh.tab === 'envios') state.wh = { ...state.wh, tab: null, shipId: null, shipSite: null, shipEdit: null };
+  viewWarehouse();
+}
 function viewShipments() {
   if (!state.ready) return boot();
   if (!canShip()) return viewClock();
@@ -11031,7 +11036,7 @@ function viewWarehouse() {
   if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canWh()) return viewClock();   // code guard as well as the database's
   if (!state.wh) state.wh = { tab: null, cart: [], tools: [], person: null, wid: null };
-  app.innerHTML = `<div class="ph"><div><p class="ph-k">EPI, farda e ferramentas</p><h1>Armazém</h1></div></div>
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">EPI, farda e ferramentas</p><h1>${state.wh.tab === 'envios' ? 'Envios para a obra' : 'Armazém'}</h1></div></div>
     <div id="whtop">${skel(1)}</div><div id="whbody"></div>`;
   loadWarehouse();
 }
