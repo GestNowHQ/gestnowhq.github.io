@@ -1,4 +1,7 @@
-{". Também liguei: {x} (é preciso)":". J'ai aussi activé : {x} (nécessaire)",
+{"Cliente da lista.":"Client de la liste.",
+"É o cliente «{x}»: fica nesse.":"C’est le client «{x}» : il reste sur celui-ci.",
+"Cliente novo: é aberto ao guardar.":"Nouveau client : ouvert à l’enregistrement.",
+". Também liguei: {x} (é preciso)":". J'ai aussi activé : {x} (nécessaire)",
 ". Vai assim para o contrato.":". Il va ainsi dans le contrat.",
 "‹ Andaimes":"‹ Échafaudages",
 "‹ Os meus clientes":"‹ Mes clients",
