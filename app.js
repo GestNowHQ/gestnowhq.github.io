@@ -1245,7 +1245,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '123';
+const APP_VERSION = '124';
 // v107 (Diogo 2026-10-26): «Início» = what is urgent + the departments. The bottom bar keeps only Início, the field tools of
 // the encarregado (Equipa, Picar) or of the safety officer (Emergência), Procurar and Eu. Everything else is in its department.
 const TABS = { supervisor: ['inicio', 'equipa', 'picar', 'minhas'], admin: ['inicio', 'minhas'],
@@ -2373,6 +2373,7 @@ async function deptPulse(d) {
     return `<section class="dp" data-key="${esc(p.key)}">
       ${ok.length > 1 ? `<div class="sec-h"><h2 class="eyebrow">${esc(PULSE[p.key].title.split(' · ')[0])}</h2></div>` : ''}
       ${pulseNums(p)}
+      ${(p.targets || []).length ? `<div class="sec-h"><h2 class="eyebrow">Metas</h2><span class="small ${p.targets_met < p.targets_total ? 'bad-t' : 'muted'}">${p.targets_met}/${p.targets_total}</span></div>${targetList(p)}` : ''}
       ${ws.length ? `<div class="home-wait">${ws.slice(0, 3).map(pulseRow).join('')}</div>${ws.length > 3 ? `<details class="fold home-more"><summary><span>Mais ${ws.length - 3} assunto(s)</span></summary><div class="home-wait">${ws.slice(3).map(pulseRow).join('')}</div></details>` : ''}`
         : `<div class="card home-ok">${ic('ok')}<div><b>${esc(L[1])}</b><small>Nada parado neste departamento.</small></div></div>`}
     </section>`;
@@ -2391,36 +2392,91 @@ async function homeHealth() {
   box.innerHTML = `<button type="button" class="home-w ${kind}" data-go="saude"><span class="home-wi">${ic('pulse')}</span><span class="grow"><b>Saúde dos departamentos: ${esc(line)}</b><small>Toca para ver cada departamento.</small></span>${ic('go')}</button>`;
   box.querySelector('[data-go]').onclick = () => { state.backNext = backFrom(); openFromMenu('saude'); };
 }
+// v124 (sql/138): each department's targets («metas»), measured by the app, never typed. {x} = the limit the company set.
+const TARGET = {
+  'to_validate.days': 'Validar os dias da obra em {x} dias no máximo', 'missing_out.n': 'Saídas por picar: no máximo {x}',
+  'sheets_missing.n': 'Obras sem a folha de produção de ontem: no máximo {x}', 'reports_waiting.days': 'Dar responsável a um relato em {x} dias no máximo',
+  'nc_late.n': 'Não-conformidades com a ação atrasada: no máximo {x}', 'to_approve.days': 'Aprovar os dias em {x} dias no máximo',
+  'disputes.days': 'Responder às reclamações em {x} dias no máximo', 'expenses.days': 'Aprovar as despesas em {x} dias no máximo',
+  'docs_expired.n': 'Pessoas com documento caducado: no máximo {x}', 'joining.days': 'Acabar a entrada de uma pessoa em {x} dias no máximo',
+  'calibration_expired.n': 'Ferramentas com calibração caducada: no máximo {x}', 'tools_late.n': 'Ferramentas fora do prazo: no máximo {x}',
+  'requests_open.days': 'Tratar os pedidos das obras em {x} dias no máximo', 'vehicles_red.n': 'Viaturas a vermelho: no máximo {x}',
+  'licences_expired.n': 'Cartas de condução caducadas: no máximo {x}', 'late_contact.n': 'Clientes com o contacto atrasado: no máximo {x}',
+  'requests_late.n': 'Pedidos de orçamento fora do prazo: no máximo {x}', 'in_review.days': 'Assinar os orçamentos em {x} dias no máximo',
+};
+const targetLabel = (m) => t_(TARGET[m.metric] || m.metric, m.max);
+const targetNow = (m) => (/\.days$/.test(m.metric) ? (m.value === 1 ? 'agora: 1 dia' : `agora: ${m.value} dias`) : `agora: ${m.value}`);
+function targetList(p, cls) {
+  const ts = p.targets || []; if (!ts.length) return '';
+  return `<ul class="tg ${cls || ''}">${ts.map((m) => `<li class="${m.ok ? 'ok' : 'bad'}">${ic(m.ok ? 'ok' : 'warn')}<span class="grow">${esc(targetLabel(m))}</span><small class="tnum">${esc(targetNow(m))}</small></li>`).join('')}</ul>`;
+}
+// the last 28 days, one square per day (the worst light of that day); days before the first photograph stay empty
+function historyStrip(h) {
+  const days = (h && h.days) || []; if (!days.length) return '';
+  const by = Object.fromEntries(days.map((d) => [d.day, d.light]));
+  const out = []; const now = new Date();
+  for (let i = 27; i >= 0; i--) { const d = isoDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - i, 12)); out.push(`<i class="${by[d] ? LIGHT[by[d]][0] : 'none'}" title="${esc(d)}"></i>`); }
+  return `<div class="dh-hist" aria-label="Últimos 28 dias">${out.join('')}</div>`;
+}
 async function viewHealth() {
   if (!state.ready) return boot();   // never a screen before login
   if (!canHealth()) return go('inicio');   // code guard as well as the database's
-  app.innerHTML = `<div class="ph"><div><p class="ph-k">Administração</p><h1>Saúde dos departamentos</h1></div></div>
-    <p class="muted small dh-help">Uma luz por departamento. <b>Vermelho</b>: segurança ou coisa grave parada. <b>Âmbar</b>: trabalho à espera. Toca num departamento para o abrir.</p>
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Administração</p><h1>Saúde dos departamentos</h1></div><button class="btn ghost small" id="dhedit" hidden>${ic('target')}Mudar as metas</button></div>
+    <p class="muted small dh-help">Uma luz por departamento. <b>Vermelho</b>: segurança, coisa grave parada ou meta falhada. <b>Âmbar</b>: trabalho à espera, metas cumpridas. Toca num departamento para o abrir.</p>
     <div id="dhsum"></div><div id="dhlist">${skel(4)}</div>`;
   const { data, error } = await sb.rpc('mini_dept_health');
   const box = $('#dhlist'); if (!box || !box.isConnected || state.view !== 'saude') return;
   if (error) { box.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
+  state.health = data;
   const order = { red: 0, amber: 1, green: 2 };
   const list = (data.depts || []).slice().sort((a, b) => order[a.light] - order[b.light] || (b.oldest || 0) - (a.oldest || 0));
   const cnt = (l) => list.filter((x) => x.light === l).length;
+  const met = list.reduce((a, p) => a + (p.targets_met || 0), 0); const tot = list.reduce((a, p) => a + (p.targets_total || 0), 0);
   $('#dhsum').innerHTML = `<div class="dh-sum">${['red', 'amber', 'green'].map((l) => `<span class="dh-chip ${LIGHT[l][0]}"><i class="dh-dot"></i><b class="tnum">${cnt(l)}</b> ${esc(LIGHT[l][1])}</span>`).join('')}
+    ${tot ? `<span class="dh-chip"><b class="tnum">${met}/${tot}</b> metas cumpridas</span>` : ''}
     <small class="muted">Atualizado às ${esc(new Date(data.at || Date.now()).toLocaleTimeString(LOC, { hour: '2-digit', minute: '2-digit' }))}</small></div>`;
   const mine = new Set(navDeps().map((x) => x.title));
   box.innerHTML = `<div class="dh-list">${list.map((p) => {
     const P = PULSE[p.key]; const L = LIGHT[p.light] || LIGHT.green; const ws = pulseWaits(p).filter((w) => w.sev !== 'info');
-    const [name] = P.title.split(' · '); const open = mine.has(P.title);
+    const missed = (p.targets || []).filter((m) => !m.ok);
+    const [name] = P.title.split(' · '); const open = mine.has(P.title); const h = p.history || {};
     const nums = P.nums.slice(0, 3).map(([k, label]) => `<span><b class="tnum">${(p.nums || {})[k] == null ? '—' : Number(p.nums[k]).toLocaleString(LOC)}</b> ${esc(label)}</span>`).join('');
+    const lines = [...missed.map((m) => `<li class="bad">${ic('warn')} ${esc(targetLabel(m))} <small>· ${esc(targetNow(m))}</small></li>`),
+      ...ws.map((w) => `<li class="${w.sev}"><b class="tnum">${w.n}</b> ${esc(w.label)}${w.days ? ` <small>· ${esc(ageTxt(w.days))}</small>` : ''}</li>`)];
     return `<${open ? `button type="button" data-dept="${esc(P.title)}"` : 'div'} class="dh ${L[0]}">
       <div class="dh-top"><i class="dh-dot" aria-hidden="true"></i><b class="grow">${esc(name)}</b><span class="dh-st">${esc(L[1])}</span>${open ? ic('go') : ''}</div>
       <div class="dh-nums">${nums}</div>
-      ${ws.length ? `<ul class="dh-w">${ws.slice(0, 2).map((w) => `<li class="${w.sev}"><b class="tnum">${w.n}</b> ${esc(w.label)}${w.days ? ` <small>· ${esc(ageTxt(w.days))}</small>` : ''}</li>`).join('')}${ws.length > 2 ? `<li class="more">+ ${ws.length - 2} assunto(s)</li>` : ''}</ul>` : ''}
+      ${p.targets_total ? `<div class="dh-meta"><span class="${missed.length ? 'bad' : 'ok'}">Metas <b class="tnum">${p.targets_met}/${p.targets_total}</b></span>${p.light !== 'green' && h.streak > 1 ? `<span>${esc(p.light === 'red' ? `há ${h.streak} dias a vermelho` : `há ${h.streak} dias a âmbar`)}</span>` : ''}${h.met_pct != null && (h.days || []).length > 1 ? `<span>${esc(`${h.met_pct}% das metas em 28 dias`)}</span>` : ''}</div>` : ''}
+      ${lines.length ? `<ul class="dh-w">${lines.slice(0, 3).join('')}${lines.length > 3 ? `<li class="more">+ ${lines.length - 3} assunto(s)</li>` : ''}</ul>` : ''}
+      ${historyStrip(h)}
     </${open ? 'button' : 'div'}>`;
   }).join('')}</div>`;
   box.querySelectorAll('[data-dept]').forEach((b) => b.onclick = () => {
     state.dept = b.dataset.dept; state.deptFrom = 'saude'; go('departamento');
   });
+  const ed = $('#dhedit'); if (ed && data.can_edit) { ed.hidden = false; ed.onclick = editTargets; }
 }
-
+// «Mudar as metas»: every department's targets on one sheet; a limit or on/off per line. Only what changed is saved.
+async function editTargets() {
+  const H = state.health; if (!H) return;
+  const body = `<p class="small muted">Cada meta é medida pela app. Escreve o limite; desliga a que não serve a esta empresa.</p>
+    ${H.depts.map((p) => `<fieldset class="tg-ed"><legend>${esc(PULSE[p.key].title.split(' · ')[0])}</legend>
+      ${(p.all_targets || p.targets || []).map((m) => `<label class="tg-row"><input type="checkbox" name="on:${esc(p.key)}:${esc(m.metric)}" ${m.active !== false ? 'checked' : ''}>
+        <span class="grow">${esc(t_((TARGET[m.metric] || m.metric), '…'))}</span>
+        <input type="number" inputmode="numeric" min="0" max="365" name="max:${esc(p.key)}:${esc(m.metric)}" value="${esc(String(m.max))}" aria-label="Limite"></label>`).join('')}</fieldset>`).join('')}`;
+  const fd = await askSheet('Metas dos departamentos', body, 'Guardar');
+  if (!fd) return;
+  const jobs = [];
+  for (const p of H.depts) for (const m of (p.all_targets || p.targets || [])) {
+    const on = fd.get(`on:${p.key}:${m.metric}`) === 'on'; const max = parseInt(fd.get(`max:${p.key}:${m.metric}`), 10);
+    if (Number.isNaN(max) || max < 0 || max > 365) return toast('Cada limite tem de ser um número de 0 a 365.');
+    if (on !== (m.active !== false) || max !== m.max) jobs.push(sb.rpc('mini_dept_target_save', { p_key: p.key, p_metric: m.metric, p_max: max, p_active: on }));
+  }
+  if (!jobs.length) return toast('Nada mudou.');
+  const res = await Promise.all(jobs); const bad = res.find((r) => r.error);
+  toast(bad ? friendly(bad.error) : 'Metas guardadas.');
+  viewHealth();
+}
 // ------------------------------------------------------------------ Clientes (the GestNow owner's console, sql/59)
 // The client companies, with numbers only. «Entrar» moves this login into one (and back): what it had in each company
 // is kept. Only the platform owner, with the phone code, sees this screen; the database checks the same.
@@ -16504,6 +16560,7 @@ function noticeRoute(x) {
   const k = x.kind || ''; const l = x.link || {};
   const mine = (tab) => () => { if (!state.me.collaborator_id) return false; state.mineTab = 'home'; go('minhas'); if (tab) meOpen(tab); return true; };
   const view = (v) => () => (viewOpen(v) ? (go(v), true) : false);
+  if (k === 'dept_red' || k === 'dept_week') return view('saude');   // v124
   if (k === 'job_failed') return () => (can('contas.gerir') ? (showJobs(), true) : false);
   if (k === 'week_to_confirm') return mine('horas');
   if (k === 'contract_unsigned') return mine('contrato');
