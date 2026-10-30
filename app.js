@@ -474,6 +474,29 @@ const ERRORS = [
   [/receipt date out of range/i, 'A data do talão tem de ser dos últimos 6 meses, e não do futuro.'],
   [/supplier tax number is not valid/i, 'O NIF do fornecedor não é válido.'],
   [/file not allowed for this expense/i, 'Este ficheiro não pode ir para esta despesa.'],
+  [/write only the last 4 digits/i, 'Escreve só os 4 últimos dígitos do cartão. Nunca o número completo.'],
+  [/this card is already registered/i, 'Este cartão já está registado.'],
+  [/this card is with someone/i, 'Este cartão está com alguém: recebe-o primeiro.'],
+  [/this card is already in the office/i, 'Este cartão já está no escritório.'],
+  [/this card is cancelled/i, 'Este cartão está cancelado.'],
+  [/this card has expired/i, 'Este cartão já caducou.'],
+  [/say how the card came back/i, 'Diz como veio o cartão.'],
+  [/card not found/i, 'Cartão não encontrado.'],
+  [/say why you used another card/i, 'Diz porque usaste outro cartão (5 letras ou mais).'],
+  [/say how it was paid back/i, 'Diz como foi devolvido: transferência ou com o salário.'],
+  [/vehicle not found/i, 'Viatura não encontrada.'],
+  [/choose the company card/i, 'Escolhe o cartão da empresa com que pagaste.'],
+  [/this card was not with this person on that day/i, 'Este cartão não estava com esta pessoa no dia do talão.'],
+  [/the monthly limit is not valid/i, 'O limite por mês não é válido.'],
+  [/the file has no lines/i, 'O ficheiro não tem movimentos.'],
+  [/too many lines in one file/i, 'Demasiados movimentos num só ficheiro (máximo 2000).'],
+  [/a line has no valid date or amount/i, 'Há um movimento sem data ou valor válidos.'],
+  [/this month is closed/i, 'Este mês já está fechado e não muda.'],
+  [/load the bank statement of this month first/i, 'Carrega primeiro o extrato do banco deste mês.'],
+  [/line\(s\) still without receipt/i, 'Ainda há movimentos sem talão nem explicação.'],
+  [/this line already has its receipt/i, 'Este movimento já tem talão.'],
+  [/line not found/i, 'Movimento não encontrado.'],
+  [/card records are never removed|a handover never changes|a closed handover never changes|a bank line never changes/i, 'Os registos dos cartões nunca se apagam nem se alteram.'],
   [/this receipt was already handed in/i, 'Este talão já foi entregue. O mesmo talão não se pede duas vezes.'],
   [/expense not found/i, 'Despesa não encontrada.'],
   [/this expense was already decided/i, 'Esta despesa já foi decidida.'],
@@ -1279,7 +1302,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '128';
+const APP_VERSION = '129';
 // v107 (Diogo 2026-10-26): «Início» = what is urgent + the departments. The bottom bar keeps only Início, the field tools of
 // the encarregado (Equipa, Picar) or of the safety officer (Emergência), Procurar and Eu. Everything else is in its department.
 const TABS = { supervisor: ['inicio', 'equipa', 'picar', 'minhas'], admin: ['inicio', 'minhas'],
@@ -1296,7 +1319,7 @@ function tabsFor(role) {
   return TABS[role] || TABS.supervisor;
 }
 const OFFLINE_VIEWS = ['picar', 'minhas', 'material', 'reunioes', 'relatos', 'emergencia', 'residuos', 'inventario'];   // v89: they keep a copy
-const MORE_ORDER = ['inicio', 'saude', 'empresa', 'onbtextos', 'equipa', 'material', 'picar', 'emergencia', 'relatos', 'reunioes', 'lmra', 'painelqsa', 'painelcom', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'faltas', 'mesresumo', 'reclamacoes', 'salarios', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'envios', 'inventario', 'residuos', 'informatica', 'compras', 'frota', 'alojamento', 'viagens', 'docscliente', 'despesas', 'diarias', 'andaimes', 'processo', 'clientes', 'custos', 'progresso', 'frentes', 'rotinas', 'contactos'];
+const MORE_ORDER = ['inicio', 'saude', 'empresa', 'onbtextos', 'equipa', 'material', 'picar', 'emergencia', 'relatos', 'reunioes', 'lmra', 'painelqsa', 'painelcom', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'faltas', 'mesresumo', 'reclamacoes', 'salarios', 'cartoes', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'envios', 'inventario', 'residuos', 'informatica', 'compras', 'frota', 'alojamento', 'viagens', 'docscliente', 'despesas', 'diarias', 'andaimes', 'processo', 'clientes', 'custos', 'progresso', 'frentes', 'rotinas', 'contactos'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -1314,7 +1337,7 @@ WIDE.addEventListener('change', () => {
 // one department, QSA (sql/99); «controlo da app para garantir a ISO 9001» = Processo.
 const MENU_GROUPS = [
   ['Administração', ['inicio', 'saude', 'empresa', 'premios', 'clientes']],
-  ['Secretariado', ['secretariado', 'faltas', 'mesresumo', 'reclamacoes', 'horas', 'diarias', 'salarios', 'despesas', 'custos']],
+  ['Secretariado', ['secretariado', 'faltas', 'mesresumo', 'reclamacoes', 'horas', 'diarias', 'salarios', 'despesas', 'cartoes', 'custos']],
   ['Recursos Humanos', ['trabalhadores', 'onbtextos', 'acolhimento', 'docscliente', 'viagens', 'alojamento']],
   ['Frota', ['frota']],
   ['QSA · Qualidade, Segurança e Ambiente', ['painelqsa', 'relatos', 'seguranca', 'reunioes', 'lmra', 'emergencia', 'qualidade', 'processo']],
@@ -1338,7 +1361,7 @@ function menuBase() {
 // What each screen needs, to place it under the department that gives it (the visibility itself is set in boot).
 const VIEW_NEEDS = {
   inicio: () => canHome(), saude: () => canHealth(), painelqsa: () => canQsaPanel(), painelcom: () => canSalesPanel(), empresa: () => canCompanyRules(), processo: () => canProcess(),
-  secretariado: () => canApprove(), despesas: () => canExpenses(), viagens: () => canTravel(), alojamento: () => canHousing(), docscliente: () => canClientDocs(),
+  secretariado: () => canApprove(), despesas: () => canExpenses(), cartoes: () => canCards(), viagens: () => canTravel(), alojamento: () => canHousing(), docscliente: () => canClientDocs(),
   trabalhadores: () => can('pessoas.ver') || can('pessoas.gerir'), onbtextos: () => canPeople(),
   seguranca: () => ['seguranca.lmra', 'seguranca.parar_obra', 'seguranca.emergencia'].some(can), lmra: () => canLmra(), reunioes: () => canMeet(), relatos: () => canHazards(),
   emergencia: () => can('seguranca.emergencia'), acolhimento: () => can('acolhimento.gerir'),
@@ -1724,6 +1747,7 @@ async function boot() {
   nav.querySelector('[data-view=producao]').hidden = worker || state.offline || !canProd();
   nav.querySelector('[data-view=qualidade]').hidden = worker || state.offline || !canQuality();
   nav.querySelector('[data-view=despesas]').hidden = worker || state.offline || !canExpenses();
+  nav.querySelector('[data-view=cartoes]').hidden = worker || state.offline || !canCards();
   nav.querySelector('[data-view=andaimes]').hidden = worker || state.offline || !canScaffolds();
   if (me.role === 'supervisor' && !state.booted && state.view === 'picar' && canSiteDetails()) state.view = 'equipa';
   // v48: the office opens on its own first tab (Secretariado for HR), not on Picar, which it rarely uses.
@@ -2194,7 +2218,7 @@ function go(view) {
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
      ficha: viewWorker, obras: viewSites, area: viewArea, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients, cliente: viewClient, precos: viewPrices, empresa: viewCompanyRules, inicio: viewHome, departamento: viewDept, saude: viewHealth, painelqsa: viewQsaPanel, painelcom: viewSalesPanel,
      processo: viewProcess, orcamentos: viewEstimates, comercial: viewSales, premios: viewAwards, custos: viewCosts, diarias: viewPerDiemOffice, faltas: viewOfficeAbsences, mesresumo: viewOfficeSummary, reclamacoes: viewOfficeRequests, salarios: viewOfficePayroll, lmra: viewLmra, reunioes: viewMeetings, relatos: viewHazards, material: viewSiteMaterial, emergencia: viewEmergency,
-     armazem: viewWarehouse, envios: viewShipments, inventario: viewInventory, residuos: viewWaste, informatica: viewIT, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, docscliente: viewClientDocs, producao: viewProd, progresso: viewProgress, frentes: viewFronts, rotinas: viewRoutines, contactos: viewContacts, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
+     armazem: viewWarehouse, envios: viewShipments, inventario: viewInventory, residuos: viewWaste, informatica: viewIT, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, docscliente: viewClientDocs, producao: viewProd, progresso: viewProgress, frentes: viewFronts, rotinas: viewRoutines, contactos: viewContacts, qualidade: viewQuality, despesas: viewExpenses, cartoes: viewCards, andaimes: viewScaffolds }[view] || viewClock)();
   checkEmergencyBar(); encBadges();
 }
 
@@ -5484,6 +5508,7 @@ const TOUR_TEXT = {
   frota: 'Frota: cada viatura com semáforo: seguro, inspeção, IUC, revisão e contrato de aluguer. Entregas e devoluções com km.',
   compras: 'Compras: pedes o que falta; acima do limite o Secretariado aprova; depois encomenda-se e regista-se o que chega.',
   armazem: 'Armazém: EPIs, farda e ferramentas. Quem recebe assina com o cartão; os tamanhos vêm da ficha.',
+  cartoes: 'Cartões da empresa: cada cartão pelos 4 últimos dígitos, quem o tem, quanto se gastou no mês e o extrato do banco cruzado com os talões.',
   envios: 'Envios para a obra: escolhes a obra e vês a morada, quem recebe, os tamanhos de cada pessoa e o EPI que lhe falta. Na obra, cada um assina o seu saco com o cartão.',
   informatica: 'Informática: os portáteis, telemóveis, impressoras e ratos de cada pessoa, no escritório ou na obra, e as contas de email. Quando alguém sai, diz o que falta devolver e fechar.',
   residuos: 'Resíduos: o lixo da oficina e do escritório, os EPI gastos e as pilhas. Cada contentor com o seu código LER, cada recolha com a empresa licenciada e a e-GAR.',
@@ -13450,6 +13475,8 @@ async function hoInspection(id) {
 const canExpenses = () => mod('housing') && ['despesas.registar', 'despesas.aprovar', 'despesas.pagar'].some(can);
 const EX_CAT = { fuel: 'Combustível', meal: 'Refeição', lodging: 'Alojamento', toll: 'Portagem', parking: 'Estacionamento',
   transport: 'Transporte', material: 'Material', other: 'Outro' };
+const EX_PAID = { assigned_card: 'Cartão da empresa atribuído', other_card: 'Outro cartão da empresa', cash: 'Dinheiro da pessoa (a reembolsar)',
+  own_card: 'Cartão pessoal (a reembolsar)', company: 'Pago pela empresa' };
 const EX_STATE = { submitted: ['warn', 'Por aprovar'], approved: ['info', 'Aprovada'], rejected: ['bad', 'Recusada'], reimbursed: ['ok', 'Reembolsada'] };
 function viewExpenses() {
   if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
@@ -13488,7 +13515,7 @@ function exCard(x) {
   return `<article class="card ex-card ${esc(x.status)}"><div class="wk"><span class="ho-ic">${ic('card')}</span><div class="grow">
       <div class="nm">${esc(eur2(x.amount))} · ${esc(EX_CAT[x.category] || x.category)} <small class="muted">· ${esc(x.person)}</small></div>
       <div class="sub">${esc(x.site)} · talão de ${esc(fmtDate(x.day))}${x.vat != null ? ' · IVA ' + esc(eur2(x.vat)) : ''}${x.nif ? ' · NIF ' + esc(x.nif) : ''}${x.receipt_no ? ' · nº ' + esc(x.receipt_no) : ''}</div></div>${chip(k, l)}</div>
-    <p class="small muted">${x.payment === 'out_of_pocket' ? 'Pago pela pessoa (a reembolsar)' : 'Pago pela empresa'} · entregue por ${esc(x.by || '—')} · ${esc(fmtTime(x.at))}${x.decided_by ? ` · ${x.status === 'rejected' ? 'recusada' : 'aprovada'} por ${esc(x.decided_by)}` : ''}${x.reason ? ': «' + esc(x.reason) + '»' : ''}${x.paid_by ? ' · reembolsada por ' + esc(x.paid_by) : ''}</p>
+    <p class="small muted">${cdJoin([esc(EX_PAID[x.paid_with] || 'Pago pela empresa'), x.card && '•••• ' + esc(x.card), x.other_reason && '«' + esc(x.other_reason) + '»', x.plate && esc(x.plate), x.auto && 'aprovada automaticamente (abaixo do limite)', x.paid_how && (x.paid_how === 'payroll' ? 'devolvida com o salário' : 'devolvida por transferência')])} · entregue por ${esc(x.by || '—')} · ${esc(fmtTime(x.at))}${x.decided_by && !x.auto ? ` · ${x.status === 'rejected' ? 'recusada' : 'aprovada'} por ${esc(x.decided_by)}` : ''}${x.reason ? ': «' + esc(x.reason) + '»' : ''}${x.paid_by ? ' · reembolsada por ' + esc(x.paid_by) : ''}</p>
     ${x.note ? `<p class="small">${esc(x.note)}</p>` : ''}
     <div class="acts"><button class="btn ghost small" data-exfile="${esc(x.file)}">${ic('doc')}Ver talão</button>
       ${x.can_decide ? `<button class="btn small" data-exok="${esc(x.id)}">Aprovar</button><button class="btn ghost small" data-exno="${esc(x.id)}">Recusar</button>` : ''}
@@ -13504,6 +13531,13 @@ async function exSubmit(h, reload) {
   if (!h.sites.length) return toast('Não estás em nenhuma obra aberta. Cada despesa vai para uma obra.');
   const today = isoDay(new Date());
   const people = h.can_register ? state.people.filter((p) => p.is_active !== false) : [];
+  // v129: the company card this person has now comes chosen; with despesas.registar, the cards of the team too
+  const cards = h.cards || [];
+  const myCard = cards.find((k) => k.holder_id === h.me && k.now) || null;
+  const allCards = h.all_cards || [];
+  const teamCards = cards.filter((k) => k.now && k.holder_id !== h.me);   // handing a receipt in for the person who holds it
+  const vehicles = h.vehicles || [];
+  const nameOf = (id) => ((state.people || []).find((p) => p.id === id) || {}).full_name || '';
   const fd = await askSheet('Entregar despesa', `
     <label for="exf">Fotografia do talão *</label><input id="exf" name="f" type="file" required accept="image/*,application/pdf" capture="environment">
     ${people.length ? `<label for="exp">De quem é a despesa *</label><select id="exp" name="p" required>${people.map((p) => `<option value="${esc(p.id)}" ${p.id === h.me ? 'selected' : ''}>${esc(p.full_name)}${p.employee_number ? ' · ' + esc(p.employee_number) : ''}</option>`).join('')}</select>` : ''}
@@ -13514,25 +13548,59 @@ async function exSubmit(h, reload) {
     <div class="row"><div><label for="exd">Data do talão *</label><input id="exd" name="d" type="date" required value="${today}" max="${today}"></div>
       <div><label for="exn">Nº do talão</label><input id="exn" name="n" maxlength="64" placeholder="ex.: FS 1/123"></div></div>
     <label for="exi">NIF do fornecedor</label><input id="exi" name="i" maxlength="16" inputmode="numeric" placeholder="ex.: 500000000">
-    <label>Quem pagou *</label><div class="chips"><label class="chip"><input type="radio" name="w" value="out_of_pocket" required checked>Paguei eu (reembolso)</label>
-      <label class="chip"><input type="radio" name="w" value="direct_billing">A empresa pagou</label></div>
+    <label>Como pagaste? *</label><div class="chips reasons" role="radiogroup">
+      ${myCard || teamCards.length ? `<label class="chip"><input type="radio" name="w" value="assigned_card" required ${myCard ? 'checked' : ''}>O cartão que me foi atribuído${myCard ? ' (•••• ' + esc(myCard.last4) + ')' : ''}</label>` : ''}
+      ${allCards.length || cards.length ? `<label class="chip"><input type="radio" name="w" value="other_card" required>Outro cartão da empresa</label>` : ''}
+      <label class="chip"><input type="radio" name="w" value="cash" required ${myCard ? '' : 'checked'}>Dinheiro meu</label>
+      <label class="chip"><input type="radio" name="w" value="own_card" required>Cartão pessoal</label>
+      <label class="chip"><input type="radio" name="w" value="company" required>A empresa pagou (fatura à empresa)</label></div>
+    <div id="exotherw" hidden><label for="exoc">Que cartão *</label><select id="exoc" name="k"><option value="">Escolhe</option>${allCards.filter((k) => !myCard || k.id !== myCard.id).map((k) => `<option value="${esc(k.id)}">•••• ${esc(k.last4)}${k.bank ? ' · ' + esc(k.bank) : ''}</option>`).join('')}<option value="new">Não está na lista (cartão novo)</option></select>
+      <div id="exo4w" hidden><label for="exo4">4 últimos dígitos *</label><input id="exo4" name="l4" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off"></div>
+      <label for="exow">Porquê outro cartão? *</label><input id="exow" name="ow" maxlength="250" minlength="5" placeholder="ex.: o meu ficou na carrinha; o banco mandou um novo">
+      <p class="small muted">O Secretariado é avisado.</p></div>
+    <p class="small muted" id="exrefund" ${myCard ? 'hidden' : ''}>Pagaste do teu bolso: o Secretariado é avisado logo para te devolver o dinheiro, por transferência ou com o salário.</p>
+    ${vehicles.length ? `<div id="exvw" hidden><label for="exveh">Viatura</label><select id="exveh" name="veh"><option value="">Sem viatura / outra</option>${vehicles.map((v) => `<option value="${esc(v.id)}">${esc(v.plate)}${v.model ? ' · ' + esc(v.model) : ''}</option>`).join('')}</select></div>` : ''}
+    ${h.company_nif ? `<p class="small sh-mob">${ic('doc')}<span>Pede sempre fatura com o NIF da empresa: <b>${esc(h.company_nif)}</b>. Sem ele o IVA perde-se.</span></p>` : ''}
     <label for="exo">Nota</label><input id="exo" name="o" maxlength="300" placeholder="ex.: gasóleo da carrinha 12-AB-34">
-    <p class="small muted">A Produção aprova e o custo vai para a obra. O mesmo talão não se pode entregar duas vezes. O talão fica guardado e não se apaga.</p>`, 'Entregar');
+    <p class="small muted">${h.auto_limit != null ? `Até ${esc(eur2(h.auto_limit))} fica aprovada logo e o custo vai para a obra; acima disso a Produção aprova.` : 'A Produção aprova e o custo vai para a obra.'} O mesmo talão não se pode entregar duas vezes. O talão fica guardado e não se apaga.</p>`, 'Entregar', (d) => {
+    const show = () => {
+      const w = (d.querySelector('input[name=w]:checked') || {}).value;
+      const oc = d.querySelector('#exoc');
+      d.querySelector('#exotherw').hidden = w !== 'other_card';
+      d.querySelector('#exo4w').hidden = !(w === 'other_card' && oc.value === 'new');
+      oc.required = w === 'other_card'; d.querySelector('#exow').required = w === 'other_card';
+      d.querySelector('#exo4').required = w === 'other_card' && oc.value === 'new';
+      d.querySelector('#exrefund').hidden = !(w === 'cash' || w === 'own_card');
+      const vw = d.querySelector('#exvw'); if (vw) vw.hidden = (d.querySelector('input[name=c]:checked') || {}).value !== 'fuel';
+    };
+    d.querySelectorAll('input[name=w], input[name=c]').forEach((r) => r.addEventListener('change', show));
+    d.querySelector('#exoc').addEventListener('change', show);
+    show();
+  });
   if (!fd) return;
   let f = fd.get('f'); if (!f || !f.size) return;
   if (f.type.startsWith('image/')) f = await shrinkPhoto(f);
   const bad = fileProblem(f); if (bad) return toast(bad);
   const person = fd.get('p') || h.me;
+  // «the card given to me» = the card the person on the receipt holds (the encarregado may hand one in for the team)
+  const cardFor = (id) => cards.find((k) => k.holder_id === id && k.now);
+  if (fd.get('w') === 'assigned_card' && !cardFor(person)) return toast('Esta pessoa não tem nenhum cartão da empresa atribuído. Escolhe «Outro cartão da empresa».');
   const path = `${state.me.tenant_id}/${person}/${uuid()}.${FILE_TYPES[f.type]}`;
   const sha = await sha256Hex(f);
   const up = await sb.storage.from('despesas').upload(path, f, { contentType: f.type, upsert: false });
   if (up.error) return toast(friendly(up.error));
   const nif = String(fd.get('i') || '').replace(/\s/g, '').toUpperCase();
-  const { error } = await sb.rpc('mini_expense_submit', { p: { person_id: person, site_id: fd.get('s'), category: fd.get('c'), payment: fd.get('w'),
+  const { error } = await sb.rpc('mini_expense_submit', { p: { person_id: person, site_id: fd.get('s'), category: fd.get('c'), paid_with: fd.get('w'),
+    card_id: fd.get('w') === 'assigned_card' ? (cardFor(person) || {}).id || null : fd.get('w') === 'other_card' && fd.get('k') !== 'new' ? fd.get('k') : null,
+    other_last4: fd.get('w') === 'other_card' && fd.get('k') === 'new' ? String(fd.get('l4') || '').trim() : null,
+    other_reason: fd.get('w') === 'other_card' ? String(fd.get('ow') || '').trim() : null,
+    vehicle_id: fd.get('c') === 'fuel' ? fd.get('veh') || null : null,
     day: fd.get('d'), amount: fd.get('a'), vat: fd.get('v') || null, nif, receipt_no: String(fd.get('n') || '').trim(), note: String(fd.get('o') || '').trim(),
     file: path, sha256: sha } });
   if (error) return toast(friendly(error));
-  toast('Despesa entregue. A Produção foi avisada.'); reload();
+  const own = ['cash', 'own_card'].includes(fd.get('w'));
+  const auto = h.auto_limit != null && Number(fd.get('a')) <= Number(h.auto_limit);
+  toast(`Despesa entregue. ${auto ? 'Aprovada, o custo já está na obra.' : 'A Produção foi avisada.'}${own ? ' O Secretariado vai devolver-te o dinheiro.' : ''}`); reload();
 }
 async function exDecide(x, yes, reload) {
   if (!x) return;
@@ -13548,9 +13616,12 @@ async function exDecide(x, yes, reload) {
 }
 async function exPaid(x, reload) {
   if (!x) return;
-  const fd = await askSheet('Marcar reembolsada', `<p>Confirmas que <b>${esc(x.person)}</b> já recebeu <b>${esc(eur2(x.amount))}</b>?</p>`, 'Sim, está pago');
+  const fd = await askSheet('Marcar reembolsada', `<p>Confirmas que <b>${esc(x.person)}</b> já recebeu <b>${esc(eur2(x.amount))}</b>?</p>
+    <label>Como foi devolvido? *</label><div class="chips reasons" role="radiogroup"><label class="chip"><input type="radio" name="h" value="transfer" required checked>Transferência</label>
+      <label class="chip"><input type="radio" name="h" value="payroll">Com o salário</label></div>
+    <p class="small muted">Com o salário: numa linha à parte do recibo («reembolso de despesas»), nunca somado ao vencimento.</p>`, 'Sim, está pago');
   if (!fd) return;
-  const { error } = await sb.rpc('mini_expense_paid', { p_id: x.id });
+  const { error } = await sb.rpc('mini_expense_refund', { p_id: x.id, p_how: fd.get('h') });
   if (error) return toast(friendly(error));
   toast('Marcada como reembolsada. A pessoa foi avisada.'); reload();
 }
@@ -13563,9 +13634,319 @@ async function loadMyExpenses() {
   const mine = h.expenses.filter((x) => x.person_id === h.me).slice(0, 8);
   box.innerHTML = `<div class="card ex-mine"><div class="wk"><h2 class="grow" style="margin:0">${ic('card')} As minhas despesas</h2>
       ${h.sites.length ? '<button class="btn small" id="myexnew">+ Entregar talão</button>' : ''}</div>
+    ${(h.cards || []).filter((k) => k.holder_id === h.me && k.now).map((k) => `<p class="small sh-mob">${ic('card')}<span><span>O cartão da empresa</span> <b>•••• ${esc(k.last4)}</b> <span>está contigo. Cada pagamento: foto do talão aqui, com fatura em nome da empresa.</span></span></p>`).join('')}
     ${mine.length ? `<ul class="q-list">${mine.map((x) => `<li><b>${esc(eur2(x.amount))}</b> ${esc(EX_CAT[x.category])} · ${esc(fmtDate(x.day))} · ${esc(EX_STATE[x.status][1])}${x.reason ? ': «' + esc(x.reason) + '»' : ''}</li>`).join('')}</ul>`
       : '<p class="small muted">Pagaste algo para a obra? Tira uma foto ao talão e entrega aqui.</p>'}</div>`;
   if ($('#myexnew')) $('#myexnew').onclick = () => exSubmit(h, loadMyExpenses);
+}
+// v129 Cartões da empresa (Secretariado, sql/143): each card by its last 4 digits only, who has it (hand over with the
+// person's own clock-in card, take back), what was spent this month against the limit, and the month close: load the
+// bank statement, every line finds its receipt by itself, the ones without are asked to the holder or explained.
+const canCards = () => can('cartoes.gerir');
+const CARD_KIND = { credit: 'Crédito', debit: 'Débito', prepaid: 'Pré-pago', fuel: 'Combustível' };
+const CARD_BACK = { ok: 'Em bom estado', damaged: 'Danificado', lost: 'Perdido ou roubado', cancelled: 'Cancelado' };
+// pieces of one line, each its own text (so each one is translated on its own)
+const cdJoin = (arr) => arr.filter(Boolean).map((x) => `<span>${x}</span>`).join(' · ');
+const cardName = (c) => `•••• ${c.last4}${c.bank ? ' · ' + c.bank : ''}`;
+const monthKey = (d) => String(d || isoDay(new Date())).slice(0, 7) + '-01';
+function viewCards() {
+  if (!state.ready) return boot();
+  if (!canCards()) return viewClock();   // code guard as well as the database's
+  if (!state.cards) state.cards = { month: monthKey(), id: null };
+  if (state.cards.id) return viewCard();
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">Quem tem cada cartão, gastos e extrato do mês</p><h1>Cartões da empresa</h1></div></div>
+    <div id="cdtop">${skel(1)}</div><div id="cdbody"></div>`;
+  loadCards();
+}
+function cardMonthPick(K) {
+  return `<label class="cd-month">Mês <input type="month" id="cdm" value="${esc(K.month.slice(0, 7))}" max="${esc(isoDay(new Date()).slice(0, 7))}"></label>`;
+}
+function wireCardMonth(K, reload) {
+  const m = $('#cdm'); if (m) m.onchange = () => { if (m.value) { K.month = m.value + '-01'; reload(); } };
+}
+async function loadCards() {
+  const top = $('#cdtop'); if (!top) return;
+  const K = state.cards;
+  const { data: h, error } = await sb.rpc('mini_cards_home', { p_month: K.month });
+  if (!top.isConnected) return;
+  if (error) { top.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  K.home = h;
+  const live = h.cards.filter((c) => c.active);
+  const out = live.filter((c) => c.holder);
+  const gone = out.filter((c) => !c.holder.active);
+  const missing = live.reduce((a, c) => a + Number((c.statement && c.statement.missing) || 0), 0);
+  const spent = live.reduce((a, c) => a + Number(c.spent || 0), 0);
+  top.innerHTML = `<div class="fl-sum">
+      <div class="fl-n"><b>${live.length}</b><span>cartões ativos</span></div>
+      <div class="fl-n"><b>${out.length}</b><span>com alguém</span></div>
+      <div class="fl-n"><b>${esc(eur2(spent))}</b><span>em talões este mês</span></div>
+      <div class="fl-n ${missing ? 'warn' : ''}"><b>${missing}</b><span>movimentos sem talão</span></div></div>
+    ${gone.length ? `<p class="small sh-warn">${ic('warn')}<span>${gone.map((c) => `<b>${esc(c.holder.name)}</b> <span>saiu da empresa com o cartão</span> <b>${esc(cardName(c))}</b>`).join('; ')}. Recolhe e regista a devolução.</span></p>` : ''}
+    <div class="wk">${cardMonthPick(K)}<span class="grow"></span><button class="btn" id="cdnew">+ Novo cartão</button></div>
+    <p class="small muted">Só os 4 últimos dígitos. Nunca escrevas aqui o número completo, o PIN nem o código de segurança. Faturas em nome da empresa: NIF ${esc(h.company_nif || '—')}.</p>`;
+  wireCardMonth(K, loadCards);
+  $('#cdnew').onclick = () => cardEdit(null, loadCards);
+  const body = $('#cdbody');
+  body.innerHTML = h.cards.length ? `<div class="list">${h.cards.map(cardCard).join('')}</div>`
+    : `<div class="card">${empty('card', 'Ainda sem cartões', 'Regista cada cartão da empresa (só os 4 últimos dígitos) e entrega-o ao encarregado. Os talões passam a vir pela app, com foto, em vez do Excel por email.')}</div>`;
+  body.querySelectorAll('[data-cd]').forEach((b) => b.onclick = () => { K.id = b.dataset.cd; viewCard(); });
+}
+function cardSpent(c) {
+  const s = c.statement;
+  return cdJoin([`${pl(Number(c.receipts), 'talão', 'talões')}: ${esc(eur2(c.spent))}`, c.limit && `limite ${esc(eur2(c.limit))} por mês`,
+    s ? `extrato: ${esc(eur2(s.total))}` : 'extrato do mês por carregar', s && pl(Number(s.lines), 'movimento', 'movimentos')]);
+}
+function cardBar(c) {
+  if (!c.limit) return '';
+  const pct = Math.min(100, Math.round(Number(c.spent) / Number(c.limit) * 100));
+  return `<div class="cd-bar ${pct >= 100 ? 'bad' : pct >= 80 ? 'warn' : ''}" title="${pct}%"><i style="width:${pct}%"></i></div>`;
+}
+function cardState(c) {
+  if (!c.active) return chip('', 'Cancelado');
+  if (c.expired) return chip('bad', 'Caducado');
+  if (c.holder && !c.holder.active) return chip('bad', 'Saiu da empresa');
+  if (!c.holder) return chip('info', 'No escritório');
+  const s = c.statement;
+  if (s && s.closed_at) return chip('ok', 'Mês fechado');
+  if (s && Number(s.missing)) return chip('warn', pl(Number(s.missing), 'sem talão', 'sem talão'));
+  return chip('ok', 'Em uso');
+}
+function cardCard(c) {
+  const s = c.statement;
+  return `<button class="card ex-card cd-card ${c.active ? '' : 'off'}" data-cd="${esc(c.id)}"><div class="wk"><span class="ho-ic">${ic('card')}</span><div class="grow">
+      <div class="nm">${esc(cardName(c))}${c.label ? ` <small class="muted">· ${esc(c.label)}</small>` : ''}</div>
+      <div class="sub">${c.holder ? `<b>${esc(c.holder.name)}</b> <span>desde ${esc(fmtDate(String(c.holder.since).slice(0, 10)))}</span>` : c.active ? 'No escritório' : cdJoin(['Cancelado', esc(c.cancel_reason || '')])}</div></div>${cardState(c)}</div>
+    <p class="small muted">${cardSpent(c)}</p>
+    ${cardBar(c)}</button>`;
+}
+async function cardEdit(c, reload) {
+  const fd = await askSheet(c ? cardName(c) : 'Novo cartão da empresa', `
+    <div class="row"><div><label for="cl4">4 últimos dígitos *</label><input id="cl4" name="l" required inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" value="${esc(c ? c.last4 : '')}" ${c ? 'readonly' : ''}></div>
+      <div><label for="cbk">Banco</label><input id="cbk" name="b" maxlength="64" value="${esc(c && c.bank || '')}" placeholder="ex.: Banco X"></div></div>
+    <label>Tipo</label><div class="chips">${Object.entries(CARD_KIND).map(([k, l]) => `<label class="chip"><input type="radio" name="k" value="${k}" ${(c ? c.kind : 'credit') === k ? 'checked' : ''}>${esc(l)}</label>`).join('')}</div>
+    <label for="cnm">Nome para o reconhecer</label><input id="cnm" name="n" maxlength="64" value="${esc(c && c.label || '')}" placeholder="ex.: Encarregado Sines">
+    <div class="row"><div><label for="clm">Limite por mês (€)</label><input id="clm" name="m" type="number" inputmode="decimal" step="0.01" min="1" value="${esc(c && c.limit || '')}"></div>
+      <div><label for="cvu">Válido até</label><input id="cvu" name="v" type="month" value="${esc(c && c.valid_until ? String(c.valid_until).slice(0, 7) : '')}"></div></div>
+    <label for="cno">Nota</label><input id="cno" name="o" maxlength="300" value="${esc(c && c.note || '')}">
+    <p class="small muted">Nunca o número completo, o PIN nem o código de segurança: a app não os guarda.</p>`, 'Guardar');
+  if (!fd) return;
+  const v = String(fd.get('v') || '');
+  const until = v ? isoDay(new Date(Number(v.slice(0, 4)), Number(v.slice(5, 7)), 0)) : null;   // last day of that month
+  const { error } = await sb.rpc('mini_card_save', { p: { id: c ? c.id : null, last4: String(fd.get('l') || '').trim(), bank: fd.get('b'),
+    kind: fd.get('k') || 'credit', label: fd.get('n'), limit: fd.get('m') || null, valid_until: until, note: fd.get('o') } });
+  if (error) return toast(friendly(error));
+  toast(c ? 'Cartão atualizado.' : 'Cartão registado. Agora entrega-o a quem o vai usar.'); reload();
+}
+async function viewCard() {
+  const K = state.cards;
+  app.innerHTML = `<button class="btn ghost small home-back" id="cdback">‹ Cartões da empresa</button>
+    <div class="ph"><div><p class="ph-k">Cartão da empresa</p><h1 id="cdh">Cartão</h1></div></div>
+    <div id="cdone">${skel(2)}</div>`;
+  $('#cdback').onclick = () => { K.id = null; viewCards(); };
+  loadCard();
+}
+async function loadCard() {
+  const box = $('#cdone'); if (!box) return;
+  const K = state.cards;
+  const { data: c, error } = await sb.rpc('mini_card', { p_card: K.id, p_month: K.month });
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
+  $('#cdh').textContent = cardName(c);
+  const s = c.statement; const closed = !!(s && s.closed_at);
+  const people = (K.home && K.home.people) || [];
+  box.innerHTML = `<section class="card"><div class="wk"><div class="grow"><b>${esc(c.label || CARD_KIND[c.kind] || '')}</b>
+        <div class="sub">${cdJoin([esc(CARD_KIND[c.kind] || ''), c.valid_until && `válido até ${esc(String(c.valid_until).slice(5, 7) + '/' + String(c.valid_until).slice(0, 4))}`])}</div></div>${cardState(c)}</div>
+      ${c.holder ? `<p><span>Está com</span> <b>${esc(c.holder.name)}</b> · ${cdJoin([`desde ${esc(fmtTime(c.holder.since))}`, c.holder.signed ? 'assinou com o cartão de ponto' : 'sem cartão de ponto', !c.holder.signed && '«' + esc(c.holder.no_card || '') + '»'])}</p>` : c.active ? '<p>Está no escritório.</p>' : `<p>${cdJoin(['Cancelado', esc(c.cancel_reason || '')])}</p>`}
+      ${c.note ? `<p class="small">${esc(c.note)}</p>` : ''}
+      ${c.active ? `<div class="acts">${c.holder ? '<button class="btn" id="cdrecv">Receber o cartão</button>' : '<button class="btn" id="cdgive">Entregar a alguém</button>'}
+        <button class="btn ghost small" id="cdedit">Editar</button>${c.holder ? '' : '<button class="btn ghost small" id="cdcancel">Cancelar o cartão</button>'}</div>` : ''}</section>
+    <section class="card"><div class="wk"><h2 class="grow" style="margin:0">Extrato do mês</h2>${cardMonthPick(K)}</div>
+      <p class="small muted">${cardSpent(c)}</p>${cardBar(c)}
+      ${closed ? `<p class="small">${chip('ok', 'Mês fechado')} ${cdJoin([esc(s.closed_by || '—'), esc(fmtTime(s.closed_at))])}</p>`
+        : `<div class="acts"><button class="btn" id="cdload">${s ? 'Carregar outra vez o extrato' : 'Carregar o extrato do banco'}</button>
+          ${s && Number(s.missing) ? '<button class="btn ghost" id="cdchase">Pedir os talões em falta</button>' : ''}
+          ${s && !Number(s.missing) ? '<button class="btn" id="cdclose">Fechar o mês</button>' : ''}</div>
+          <p class="small muted">O ficheiro do banco (CSV ou Excel) é lido aqui: só a data, o valor e a descrição de cada movimento vão para a GestNow. Cada movimento encontra o seu talão (mesmo valor, até 3 dias de diferença).</p>`}
+      ${c.lines.length ? `<ul class="cd-lines">${c.lines.map((l) => cardLine(l, closed)).join('')}</ul>` : ''}
+      ${c.loose.length ? `<h3>Talões sem movimento no extrato</h3><p class="small muted">Podem vir no extrato do mês seguinte, ou foram entregues com o cartão errado.</p>
+        <ul class="q-list">${c.loose.map((x) => `<li><b>${esc(eur2(x.amount))}</b> · ${cdJoin([esc(EX_CAT[x.category] || x.category), esc(x.person), esc(x.site), esc(fmtDate(x.day))])} <button class="chip" data-exfile="${esc(x.file)}">${ic('doc')}Talão</button></li>`).join('')}</ul>` : ''}</section>
+    ${c.history.length ? `<section class="card"><h2>Quem teve o cartão</h2><ul class="q-list">${c.history.map((x) => `<li><b>${esc(x.name)}</b> · <span>${esc(fmtTime(x.given_at))} → ${x.returned_at ? esc(fmtTime(x.returned_at)) : ''}</span>${x.returned_at ? '' : '<b>agora</b>'} · ${cdJoin([x.returned_at && esc(CARD_BACK[x.state] || x.state), x.signed ? 'assinou com o cartão de ponto' : 'sem cartão de ponto', x.no_card && '«' + esc(x.no_card) + '»', x.return_note && '«' + esc(x.return_note) + '»'])}</li>`).join('')}</ul></section>` : ''}`;
+  wireCardMonth(K, loadCard);
+  const on = (id, f) => { const b = $(id); if (b) b.onclick = f; };
+  on('#cdgive', () => cardGive(c, people));
+  on('#cdrecv', () => cardReceive(c));
+  on('#cdedit', () => cardEdit(c, loadCard));
+  on('#cdcancel', () => cardCancel(c));
+  on('#cdload', () => cardLoadStatement(c));
+  on('#cdchase', async () => {
+    const { data, error: e } = await sb.rpc('mini_card_chase', { p_card: c.id, p_month: K.month });
+    if (e) return toast(friendly(e));
+    toast(data ? `${pl(data, 'pedido enviado', 'pedidos enviados')} a quem tinha o cartão.` : 'Ninguém para avisar: o cartão não estava com ninguém nesses dias. Explica os movimentos.');
+    loadCard();
+  });
+  on('#cdclose', async () => {
+    const fd = await askSheet('Fechar o mês', `<p>Todos os movimentos de <b>${esc(cardName(c))}</b> têm talão ou explicação. Depois de fechar, este mês não muda.</p>`, 'Fechar o mês');
+    if (!fd) return;
+    const { error: e } = await sb.rpc('mini_card_close_month', { p_card: c.id, p_month: K.month });
+    if (e) return toast(friendly(e));
+    toast('Mês fechado. Os talões já estão no pacote do Primavera.'); loadCard();
+  });
+  box.querySelectorAll('[data-exfile]').forEach((b) => b.onclick = () => openDocFile(b.dataset.exfile, 'despesas'));
+  box.querySelectorAll('[data-cdx]').forEach((b) => b.onclick = () => cardExplain(c.lines.find((l) => l.id === b.dataset.cdx)));
+  box.querySelectorAll('[data-cdask]').forEach((b) => b.onclick = async () => {
+    const { data, error: e } = await sb.rpc('mini_card_chase', { p_card: c.id, p_month: K.month, p_line: b.dataset.cdask });
+    if (e) return toast(friendly(e));
+    toast(data ? 'Pedido enviado.' : 'O cartão não estava com ninguém nesse dia. Explica o movimento.'); loadCard();
+  });
+}
+function cardLine(l, closed) {
+  const e = l.expense;
+  const st = e ? chip('ok', 'com talão') : l.explained ? chip('info', 'explicado') : chip('warn', 'sem talão');
+  return `<li class="cd-line ${e || l.explained ? '' : 'miss'}"><div class="wk"><div class="grow"><b>${esc(eur2(l.amount))}</b> · <span>${esc(l.merchant || 'sem descrição')}</span>
+      <div class="sub">${cdJoin([esc(fmtDate(l.day)), l.holder && esc(l.holder), e && esc(EX_CAT[e.category] || e.category), e && esc(e.site), e && esc(e.person), l.explained && '«' + esc(l.explained) + '»', !e && !l.explained && l.chased_at && 'pedido a ' + esc(fmtTime(l.chased_at))])}</div></div>${st}</div>
+    ${e ? `<div class="acts"><button class="btn ghost small" data-exfile="${esc(e.file)}">${ic('doc')}Ver talão</button></div>`
+      : !l.explained && !closed ? `<div class="acts">${Number(l.amount) > 0 && l.holder ? `<button class="btn ghost small" data-cdask="${esc(l.id)}">Pedir talão</button>` : ''}<button class="btn ghost small" data-cdx="${esc(l.id)}">Explicar</button></div>` : ''}</li>`;
+}
+async function cardExplain(l) {
+  if (!l) return;
+  const fd = await askSheet('Explicar o movimento', `<p><b>${esc(eur2(l.amount))}</b> · ${esc(l.merchant || '')} · ${esc(fmtDate(l.day))}</p>
+    <label>Porquê não há talão? *</label><div class="chips reasons">${['Comissão do banco', 'Anuidade do cartão', 'Devolução / estorno', 'Despesa pessoal, descontada ao trabalhador'].map((r, i) => `<label class="chip"><input type="radio" name="r" value="${esc(r)}" ${i ? '' : 'required checked'}>${esc(r)}</label>`).join('')}
+      <label class="chip"><input type="radio" name="r" value="">Outro</label></div>
+    <label for="cdxo">Outro motivo</label><input id="cdxo" name="o" maxlength="300">`, 'Guardar');
+  if (!fd) return;
+  const why = String(fd.get('r') || '').trim() || String(fd.get('o') || '').trim();
+  const { error } = await sb.rpc('mini_card_line_explain', { p_line: l.id, p_text: why });
+  if (error) return toast(friendly(error));
+  toast('Movimento explicado.'); loadCard();
+}
+async function cardGive(c, people) {
+  const fd = await askSheet(cardName(c), `
+    <label for="cgp">A quem *</label><select id="cgp" name="p" required><option value="">Escolhe</option>${people.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}${p.number ? ' · ' + esc(p.number) : ''}${p.cards ? ' · já tem ' + pl(p.cards, 'cartão', 'cartões') : ''}</option>`).join('')}</select>
+    <label for="cgu">Cartão de ponto de quem recebe</label><div class="wk"><input id="cgu" name="u" maxlength="40" placeholder="Encosta o cartão ou escreve o número" autocomplete="off">${'NDEFReader' in window ? '<button type="button" class="btn ghost small" id="cgnfc">Ler</button>' : ''}</div>
+    <label for="cgr">Sem cartão de ponto? Porquê</label><input id="cgr" name="r" maxlength="200" placeholder="ex.: entregue em mão no escritório, confirmado por mim">
+    <label for="cgn">Nota</label><input id="cgn" name="n" maxlength="300">
+    <p class="small muted">Quem recebe é avisado na app: cada talão pago com o cartão entra pela foto em «Entregar talão», com fatura em nome da empresa.</p>`, 'Entregar', (d) => {
+    if (d.querySelector('#cgnfc')) d.querySelector('#cgnfc').onclick = () => wtReadTag((uid) => { d.querySelector('#cgu').value = uid; });
+  });
+  if (!fd) return;
+  const uid = String(fd.get('u') || '').trim(); const why = String(fd.get('r') || '').trim();
+  if (!uid && !why) return toast('Encosta o cartão de ponto de quem recebe, ou diz porque não há cartão.');
+  const p = { card_id: c.id, collaborator_id: fd.get('p'), note: fd.get('n') };
+  if (uid) p.uid = uid; else p.no_card_reason = why;
+  const { data, error } = await sb.rpc('mini_card_give', { p });
+  if (error) return toast(friendly(error));
+  toast(`Cartão ${data.card} entregue a ${data.name}.`); loadCard();
+}
+async function cardReceive(c) {
+  const fd = await askSheet(cardName(c), `<p class="small"><span>Está com</span> <b>${esc(c.holder ? c.holder.name : '')}</b></p>
+    <label>Como veio? *</label><div class="chips reasons" role="radiogroup">${[['ok', 'Em bom estado'], ['damaged', 'Danificado'], ['lost', 'Perdido ou roubado']]
+      .map(([v, lb], i) => `<label class="chip"><input type="radio" name="s" value="${v}" ${i ? '' : 'checked'} required>${lb}</label>`).join('')}</div>
+    <label for="crn">O que aconteceu</label><input id="crn" name="n" maxlength="300" placeholder="Obrigatório se não veio bem">
+    <p class="small muted">Perdido ou roubado: o cartão fica cancelado aqui. Liga já ao banco para o bloquear.</p>`, 'Registar');
+  if (!fd) return;
+  const st = fd.get('s');
+  const { error } = await sb.rpc('mini_card_receive', { p: { card_id: c.id, state: st, note: fd.get('n') } });
+  if (error) return toast(friendly(error));
+  toast(st === 'lost' ? 'Registado e cancelado. Liga já ao banco para bloquear o cartão.' : 'Cartão recebido. Está no escritório.'); loadCard();
+}
+async function cardCancel(c) {
+  const fd = await askSheet(cardName(c), `<label for="ccr">Porquê *</label><input id="ccr" name="r" required minlength="3" maxlength="300" placeholder="ex.: o banco enviou um novo, caducou">
+    <p class="small muted">Fica no histórico; não se pode voltar a entregar.</p>`, 'Cancelar o cartão');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_card_cancel', { p_card: c.id, p_reason: String(fd.get('r')).trim() });
+  if (error) return toast(friendly(error));
+  toast('Cartão cancelado.'); loadCard();
+}
+// The bank file is read on this device: only date, amount and description of each line go to the database.
+// CSV (; or , separated) or Excel. Columns are found by their names (Data, Descrição, Montante / Débito / Crédito…).
+function cardNum(v) {
+  if (typeof v === 'number') return v;
+  let s = String(v == null ? '' : v).replace(/[€\s]/g, '').replace(/ /g, '');
+  if (!s) return NaN;
+  if (/,\d{1,2}$/.test(s)) s = s.replace(/\./g, '').replace(',', '.'); else s = s.replace(/,/g, '');
+  return Number(s);
+}
+function cardDay(v) {
+  if (v instanceof Date && !isNaN(v)) return isoDay(new Date(v.getTime() + v.getTimezoneOffset() * 60000));
+  const s = String(v == null ? '' : v).trim();
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})/);
+  if (m) return `${m[3].length === 2 ? '20' + m[3] : m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  return null;
+}
+function cardCsv(text) {
+  const first = text.split(/\r?\n/).find((l) => l.trim()) || '';
+  const sep = (first.match(/;/g) || []).length >= (first.match(/,/g) || []).length ? ';' : (first.includes('\t') ? '\t' : ',');
+  const rows = []; let row = []; let cell = ''; let q = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) { if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += ch; continue; }
+    if (ch === '"') q = true;
+    else if (ch === sep) { row.push(cell); cell = ''; }
+    else if (ch === '\n' || ch === '\r') { if (ch === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+    else cell += ch;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows.filter((r) => r.some((c) => String(c).trim()));
+}
+function cardRows(rows) {
+  const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+  const hi = rows.findIndex((r) => r.some((c) => /^data/.test(norm(c)) || norm(c) === 'date'));
+  if (hi < 0) return { error: 'Não encontrei a linha dos títulos (Data, Descrição, Montante). Exporta o extrato do banco em CSV ou Excel.' };
+  const H = rows[hi].map(norm);
+  const col = (re) => H.findIndex((h) => re.test(h));
+  const cDay = col(/^data( (do )?mov| valor| operacao| transac)?|^date/);
+  const cDesc = col(/descri|comerciante|estabelecimento|movimento|merchant|description|detalhe/);
+  const cDeb = col(/^debito|^debit/); const cCred = col(/^credito|^credit/);
+  const cAmt = col(/montante|valor|importancia|amount|quantia/);
+  if (cDay < 0 || (cAmt < 0 && cDeb < 0)) return { error: 'O ficheiro não tem as colunas de data e de valor.' };
+  const out = [];
+  for (const r of rows.slice(hi + 1)) {
+    const day = cardDay(r[cDay]); if (!day) continue;
+    let amount;
+    if (cDeb >= 0) { const d = cardNum(r[cDeb]); const c = cCred >= 0 ? cardNum(r[cCred]) : NaN; amount = !isNaN(d) && d ? Math.abs(d) : !isNaN(c) && c ? -Math.abs(c) : NaN; }
+    else amount = cardNum(r[cAmt]);
+    if (isNaN(amount) || !amount) continue;
+    out.push({ day, amount, merchant: cDesc >= 0 ? String(r[cDesc] || '').trim().slice(0, 255) : '' });
+  }
+  // one signed column: banks show what was spent as negative. Flip so that spent = positive.
+  if (cDeb < 0 && out.length && out.filter((x) => x.amount < 0).length > out.length / 2) out.forEach((x) => { x.amount = -x.amount; });
+  return { lines: out };
+}
+async function cardLoadStatement(c) {
+  const K = state.cards;
+  const fd = await askSheet(cardName(c), `<p class="small"><span>Mês</span>: <b>${esc(K.month.slice(5, 7) + '/' + K.month.slice(0, 4))}</b></p>
+    <label for="cdf">Ficheiro do banco (CSV ou Excel) *</label><input id="cdf" name="f" type="file" required accept=".csv,.txt,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+    <p class="small muted">Movimentos de outros meses são ignorados. Carregar o mesmo ficheiro duas vezes não repete nada.</p>`, 'Ler o extrato');
+  if (!fd) return;
+  const f = fd.get('f'); if (!f || !f.size) return;
+  if (f.size > 5 * 1024 * 1024) return toast('O ficheiro é grande demais (máximo 5 MB).');
+  let rows;
+  try {
+    if (/\.xlsx$/i.test(f.name)) {
+      const X = await loadExcel(); const wb = new X.Workbook(); await wb.xlsx.load(await f.arrayBuffer());
+      rows = []; wb.worksheets[0].eachRow({ includeEmpty: false }, (r) => {
+        rows.push(r.values.slice(1).map((v) => (v && typeof v === 'object' && !(v instanceof Date)) ? (v.result != null ? v.result : v.text || '') : v));
+      });
+    } else {
+      const buf = await f.arrayBuffer(); let text = new TextDecoder('utf-8').decode(buf);
+      if (text.includes('�')) text = new TextDecoder('windows-1252').decode(buf);   // many PT banks still export in Latin-1
+      rows = cardCsv(text.replace(/^﻿/, ''));
+    }
+  } catch (e) { return toast('Não consegui ler o ficheiro. Exporta o extrato em CSV ou Excel (.xlsx).'); }
+  const r = cardRows(rows);
+  if (r.error) return toast(r.error);
+  const inMonth = r.lines.filter((x) => x.day.slice(0, 7) === K.month.slice(0, 7));
+  if (!inMonth.length) return toast(`Nenhum movimento de ${K.month.slice(5, 7)}/${K.month.slice(0, 4)} no ficheiro (${pl(r.lines.length, 'movimento', 'movimentos')} de outros meses).`);
+  const total = inMonth.reduce((a, x) => a + x.amount, 0);
+  const ok = await askSheet('Confirmar o extrato', `<p><span>${pl(inMonth.length, 'movimento', 'movimentos')}</span> · <span>Total</span>: <b>${esc(eur2(total))}</b></p>
+    <ul class="q-list">${inMonth.slice(0, 6).map((x) => `<li>${esc(fmtDate(x.day))} · <b>${esc(eur2(x.amount))}</b> · <span>${esc(x.merchant)}</span></li>`).join('')}${inMonth.length > 6 ? `<li>… e mais ${inMonth.length - 6}</li>` : ''}</ul>
+    <p class="small muted">Confere com o total do extrato do banco antes de guardar.</p>`, 'Guardar');
+  if (!ok) return;
+  const { data, error } = await sb.rpc('mini_card_statement_load', { p: { card_id: c.id, month: K.month, file: f.name, lines: inMonth } });
+  if (error) return toast(friendly(error));
+  toast(`${pl(data.new, 'movimento novo', 'movimentos novos')}. ${data.missing ? pl(data.missing, 'ainda sem talão', 'ainda sem talão') + '.' : 'Todos têm talão.'}`);
+  loadCard();
 }
 // Qualidade: non-conformities, the inspection and test plan with its hold points, stopping work, the instruments
 // to re-check and the Data Book. Each action shows only with its permission; the database checks the same.
@@ -14916,7 +15297,7 @@ function tvCard(x) {
       ${x.cost != null ? `<li class="fl-p ok"><span>Custo</span><b>${esc(eur2(x.cost))}</b></li>` : ''}
     </ul>
     ${x.purpose ? `<p class="small">${esc(x.purpose)}</p>` : ''}
-    <p class="small muted">Pedido por ${esc(x.by || '—')}${x.decided_by ? ` · ${x.status === 'rejected' ? 'recusado' : 'aprovado'} por ${esc(x.decided_by)}` : ''}${x.note ? ': «' + esc(x.note) + '»' : ''}${x.cancel_reason ? ' · cancelada: «' + esc(x.cancel_reason) + '»' : ''}</p>
+    <p class="small muted">Pedido por ${esc(x.by || '—')}${x.decided_by && !x.auto ? ` · ${x.status === 'rejected' ? 'recusado' : 'aprovado'} por ${esc(x.decided_by)}` : ''}${x.note ? ': «' + esc(x.note) + '»' : ''}${x.cancel_reason ? ' · cancelada: «' + esc(x.cancel_reason) + '»' : ''}</p>
     ${tickets.length ? `<div class="chips">${tickets.map((t) => `<button class="chip" data-file="${esc(t.path)}">${ic('doc')}${esc(t.label)}</button>`).join('')}</div>` : ''}
     <div class="acts">
       ${x.can_decide ? `<button class="btn small" data-ok="${esc(x.id)}">Aprovar</button><button class="btn ghost small" data-no="${esc(x.id)}">Recusar</button>` : ''}
