@@ -2820,3 +2820,16 @@ button.dh { cursor: pointer; } button.dh:hover { border-color: var(--brand); }
 .it-li .grow { min-width: 0; overflow-wrap: anywhere; }
 .it-li .btn { flex: 0 0 auto; }
 .card.it-exit { border-color: var(--bad); }
+/* v129 Cartões da empresa */
+button.cd-card { display: block; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.cd-card.off { opacity: .6; }
+.cd-month { display: inline-flex; align-items: center; gap: 6px; font-size: .9rem; color: var(--muted); }
+.cd-month input { width: auto; margin: 0; }
+.cd-bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin-top: 6px; }
+.cd-bar i { display: block; height: 100%; background: var(--brand); }
+.cd-bar.warn i { background: var(--warn); }
+.cd-bar.bad i { background: var(--bad); }
+.cd-lines { list-style: none; padding: 0; margin: 10px 0 0; }
+.cd-line { padding: 10px 0; border-top: 1px solid var(--line); }
+.cd-line.miss { border-left: 3px solid var(--warn); padding-left: 8px; }
+.cd-line .acts { margin-top: 6px; }
