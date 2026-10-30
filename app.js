@@ -124,6 +124,9 @@ const ERRORS = [
   // Orçamento feito noutra plataforma (sql/111)
   [/say how the client asked/i, 'Diz como o cliente pediu (email, telefone...).'],
   [/say what the client asked for/i, 'Escreve o que o cliente pede.'],
+  // v119 (sql/134): the client's name is the one Comercial wrote
+  [/write the client name as Comercial has it: (.+)$/i, 'O Comercial registou este cliente como «$1». Escreve o nome assim (toca em «Usar»).'],
+  [/only Comercial opens clients: (.+)$/i, 'Este cliente ainda não existe. Só o Comercial abre clientes: pede a $1 para o abrir.'],
   [/choose the client/i, 'Escolhe o cliente.'],
   [/request not found/i, 'Pedido não encontrado.'],
   [/this request is closed/i, 'Este pedido já está fechado.'],
@@ -1187,7 +1190,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '118';
+const APP_VERSION = '119';
 // v107 (Diogo 2026-10-26): «Início» = what is urgent + the departments. The bottom bar keeps only Início, the field tools of
 // the encarregado (Equipa, Picar) or of the safety officer (Emergência), Procurar and Eu. Everything else is in its department.
 const TABS = { supervisor: ['inicio', 'equipa', 'picar', 'minhas'], admin: ['inicio', 'minhas'],
@@ -8393,18 +8396,38 @@ const clientMatch = (names, typed) => {
   const v = String(typed || '').trim().toLowerCase(); if (!v) return null;
   return names.find((c) => c.name.trim().toLowerCase() === v) || names.find((c) => c.key && c.key === clientKey(typed)) || null;
 };
-// what is sent: the name as the company already has it
-const clientSend = (names, typed) => { const m = clientMatch(names, typed); return m ? m.name : String(typed || '').trim(); };
+// v119 (sql/134): the client's true name is the one Comercial wrote (Diogo 2026-10-30: «o comercial nunca se vai enganar,
+// é ele que abre o cliente»). Anyone else who writes it differently is told «O Comercial registou X. Tu escreveste Y.
+// Tens a certeza?» and has to save with Comercial's name; a client that does not exist is opened by Comercial only.
+// No back-and-forth with Comercial: it only enters the data. Typing slips are caught too (3-letter pieces in common).
+const canOpenClient = () => can('comercial.gerir') || can('comercial.angariar');
+const clientTri = (k) => { const x = `  ${k} `; const set = new Set(); for (let i = 0; i < x.length - 2; i++) set.add(x.slice(i, i + 3)); return set; };
+const clientSim = (a, b) => { const A = clientTri(a); const B = clientTri(b); let n = 0; A.forEach((x) => { if (B.has(x)) n++; }); return n / (A.size + B.size - n); };
+// the client Comercial registered that this name most likely means (same key, or a near spelling), unless it is exact
+const clientLike = (names, typed) => {
+  const v = String(typed || '').trim(); if (!v) return null;
+  const m = clientMatch(names, v); if (m) return m.name.trim().toLowerCase() === v.toLowerCase() ? null : m;
+  const k = clientKey(v); if (!k) return null;
+  let best = null; let bs = 0.45;
+  for (const c of names) { if (c.lost || !c.key) continue; const sc = clientSim(k, c.key); if (sc > bs) { bs = sc; best = c; } }
+  return best;
+};
+// what is sent: Comercial's own users land on the client already there; anyone else sends what they wrote (the database
+// refuses another spelling with Comercial's name, so an old phone cannot slip one in either)
+const clientSend = (names, typed) => { const m = canOpenClient() && clientMatch(names, typed); return m ? m.name : String(typed || '').trim(); };
 const clientField = (id, names, value, attrs = '') => `<input id="${id}" name="client" required maxlength="120" list="${id}l" autocomplete="off" value="${esc(value || '')}" placeholder="escolhe ou escreve o nome" ${attrs}>
   <datalist id="${id}l">${names.filter((c) => !c.lost).map((c) => `<option value="${esc(c.name)}">`).join('')}</datalist>
-  <p class="small muted" id="${id}h" aria-live="polite"></p>`;
+  <div class="small muted cl-hint" id="${id}h" aria-live="polite"></div>`;
 function clientHint(root, id, names) {
   const inp = root.querySelector('#' + id); const out = root.querySelector('#' + id + 'h'); if (!inp || !out) return;
   const sync = () => {
-    const v = inp.value.trim(); const m = clientMatch(names, v);
-    out.textContent = !v ? '' : m ? (m.name.trim().toLowerCase() === v.toLowerCase() ? t_('Cliente da lista.') : t_('É o cliente «{x}»: fica nesse.', m.name))
-      : t_('Cliente novo: é aberto ao guardar.');
-    out.classList.toggle('warn-t', !!v && !m);
+    const v = inp.value.trim(); const exact = v && names.find((c) => c.name.trim().toLowerCase() === v.toLowerCase()); const like = !exact && clientLike(names, v);
+    out.innerHTML = !v ? '' : exact ? esc(t_('Cliente da lista.'))
+      : like ? `<span>${esc(t_('O Comercial registou «{x}».', like.name))} ${esc(t_('Tu escreveste «{x}».', v))} <b>${esc(t_('Tens a certeza?'))}</b></span>
+        <button type="button" class="btn ghost small cl-use">${esc(t_('Usar «{x}»', like.name))}</button>`
+      : esc(canOpenClient() ? t_('Cliente novo: é aberto ao guardar.') : t_('Este cliente não existe. Só o Comercial abre clientes: pede-lhe para o abrir.'));
+    out.classList.toggle('warn-t', !!v && !exact);
+    const use = out.querySelector('.cl-use'); if (use) use.onclick = () => { inp.value = like.name; sync(); };
   };
   inp.addEventListener('input', sync); sync();
 }

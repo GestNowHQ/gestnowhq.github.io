@@ -989,6 +989,9 @@ ol.taps li { display: flex; gap: 12px; padding: 8px 0; border-top: var(--bw) sol
 ol.taps .t { font-weight: 750; font-variant-numeric: tabular-nums; min-width: 48px; }
 ol.taps small, ol.steps small { display: block; font-size: var(--t-xs); color: var(--ink-2); margin-top: 2px; }
 .warn-t { color: var(--warn) !important; display: flex !important; gap: 4px; align-items: center; } .warn-t .i { width: 14px; height: 14px; }
+/* v119: the client field says what Comercial registered; «Usar» goes under the sentence, full width */
+.cl-hint, .cl-hint.warn-t { display: block !important; margin-top: 6px; }
+.cl-hint .cl-use { display: flex; width: 100%; margin-top: 8px; white-space: normal; }
 ol.steps li { position: relative; padding: 0 0 12px 24px; }
 ol.steps li::before { content: ""; position: absolute; left: 4px; top: 5px; width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
 ol.steps li.on::before { background: var(--ok-fill); } ol.steps li.back::before { background: var(--warn-fill); }
