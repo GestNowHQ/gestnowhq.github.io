@@ -7375,4 +7375,16 @@
 "jan":"ian",
 "fev":"feb",
 "mar":"mar",
-"abr":"apr"}
+"abr":"apr",
+"Há 2 clientes que parecem o mesmo":"2 clienți par să fie același",
+"{x} pares de clientes parecem repetidos":"{x} perechi de clienți par duplicate",
+"Mesmo nome ou mesmo NIF. Junta-os para o histórico, os orçamentos e as comissões ficarem num só cliente.":"Același nume sau același cod fiscal. Unește-i ca istoricul, ofertele și comisioanele să rămână la un singur client.",
+"e":"și",
+"Juntar clientes":"Unește clienții",
+"Este cliente é o mesmo que outro já registado? Escolhe o certo.":"Acest client este același cu unul deja înregistrat? Alege-l pe cel corect.",
+"passa a fazer parte dele.":"devine parte din el.",
+"O cliente certo":"Clientul corect",
+"Qual é o nome certo? O outro passa a fazer parte dele.":"Care este numele corect? Celălalt devine parte din el.",
+"Tudo passa para o cliente certo: obras, orçamentos, pedidos, contactos, registo de prospeção e prémios. Os dados que lhe faltem (NIF, cidade, morada) vêm do outro. Não se desfaz.":"Totul trece la clientul corect: șantiere, oferte, cereri, contacte, jurnal de prospectare și premii. Datele care îi lipsesc (cod fiscal, oraș, adresă) vin de la celălalt. Nu se poate anula.",
+"Juntado. Tudo passou para {x}.":"Unit. Totul a trecut la {x}.",
+"Juntar a outro cliente":"Unește cu alt client"}

@@ -1245,7 +1245,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '125';
+const APP_VERSION = '126';
 // v107 (Diogo 2026-10-26): «Início» = what is urgent + the departments. The bottom bar keeps only Início, the field tools of
 // the encarregado (Equipa, Picar) or of the safety officer (Emergência), Procurar and Eu. Everything else is in its department.
 const TABS = { supervisor: ['inicio', 'equipa', 'picar', 'minhas'], admin: ['inicio', 'minhas'],
@@ -12383,7 +12383,7 @@ async function slHome() {
   const { data: h, error } = await sb.rpc('mini_sales_clients');
   if (!el.isConnected) return;
   if (error) { el.innerHTML = `<p>${esc(friendly(error))}</p>`; return; }
-  S.home = h;
+  S.home = h; S.dupes = null;
   const tabs = h.all ? [['clientes', 'Clientes'], ['prospecao', 'Prospeção']] : [];
   if (!h.all) S.tab = 'clientes';
   el.innerHTML = `${h.can_create ? `<button class="btn big wide" id="slnew">${ic('in')} Abrir cliente novo</button>` : ''}
@@ -12406,6 +12406,7 @@ function slList() {
     <input id="slq" type="search" placeholder="Procurar cliente, cidade, NIF…" value="${esc(S.q)}" aria-label="Procurar cliente">
     <div class="chips" role="radiogroup">${[['todas', 'Todos'], ...Object.entries(SL_STAGE).map(([k, v]) => [k, v[1]])].map(([k, l]) =>
       `<button class="chip ${S.stage === k ? 'on' : ''}" data-slst="${k}" aria-pressed="${S.stage === k}">${esc(l)}${k !== 'todas' ? ` (${counts[k]})` : ''}</button>`).join('')}</div>
+    <div id="sldupes"></div>
     <div class="stack" id="sllist">${list.length ? list.map((c) => {
       const late = c.next_on && c.next_on < today && ['prospect', 'contacto'].includes(c.stage);
       return `<article class="card ov-card" data-open="${esc(c.id)}" tabindex="0" role="button" aria-label="Abrir ${esc(c.name)}">
@@ -12418,6 +12419,43 @@ function slList() {
   const qi = el.querySelector('#slq'); qi.oninput = () => { S.q = qi.value; const pos = qi.selectionStart; slList(); const n = $('#slq'); n.focus(); n.setSelectionRange(pos, pos); };
   el.querySelectorAll('[data-slst]').forEach((b) => b.onclick = () => { S.stage = b.dataset.slst; slList(); });
   el.querySelectorAll('[data-open]').forEach((c) => { const o = () => { S.sel = c.dataset.open; viewSales(); }; c.onclick = o; c.onkeydown = (e) => { if (e.key === 'Enter') o(); }; });
+  if (h.can_edit_all) slDupes();
+}
+// v126 (sql/140): clients that look like the same company (same name without accents, case and S.A./Lda, or the same NIF).
+// Only the commercial direction sees them and joins them; nothing is deleted, the duplicate points to the one that stays.
+async function slDupes() {
+  const box = $('#sldupes'); if (!box) return;
+  const S = state.sales;
+  if (!S.dupes) { const { data, error } = await sb.rpc('mini_client_dupes'); S.dupes = error ? [] : data || []; }
+  const data = S.dupes;
+  if (!box.isConnected || !data.length) return;
+  const by = Object.fromEntries(state.sales.home.clients.map((c) => [c.id, c]));
+  const pairs = data.filter((p) => by[p.a] && by[p.b]); if (!pairs.length) return;
+  box.innerHTML = `<div class="card dup-card"><div class="row-b"><b>${ic('warn')} ${esc(pairs.length === 1 ? t('Há 2 clientes que parecem o mesmo') : t('{x} pares de clientes parecem repetidos', pairs.length))}</b></div>
+    <p class="small muted">Mesmo nome ou mesmo NIF. Junta-os para o histórico, os orçamentos e as comissões ficarem num só cliente.</p>
+    <ul class="plain dup-list">${pairs.map((p) => `<li><span class="grow"><b data-nt>${esc(by[p.a].name)}</b> <small class="muted">e</small> <b data-nt>${esc(by[p.b].name)}</b></span>
+      <button class="btn ghost small" data-dup="${esc(p.a)}|${esc(p.b)}">Juntar</button></li>`).join('')}</ul></div>`;
+  box.querySelectorAll('[data-dup]').forEach((b) => b.onclick = () => { const [a, c] = b.dataset.dup.split('|'); slMerge([by[a], by[c]]); });
+}
+// one sheet for both ways in: from a suggested pair (choose which stays) or from a client (choose the right one)
+async function slMerge(cands, from) {
+  const all = state.sales.home ? state.sales.home.clients : [];
+  const label = (c) => `${c.name}${c.city ? ' · ' + c.city : ''}${c.tax_id ? ' · NIF ' + c.tax_id : ''} (${t((SL_STAGE[c.stage] || [, c.stage])[1])})`;
+  const body = from
+    ? `<p>Este cliente é o mesmo que outro já registado? Escolhe o certo. <b data-nt>${esc(from.name)}</b> passa a fazer parte dele.</p>
+       <label for="mk">O cliente certo</label><select id="mk" name="keep" required><option value="">—</option>${all.filter((c) => c.id !== from.id)
+         .sort((a, b) => a.name.localeCompare(b.name, LOC)).map((c) => `<option value="${esc(c.id)}">${esc(label(c))}</option>`).join('')}</select>`
+    : `<p>Qual é o nome certo? O outro passa a fazer parte dele.</p>
+       ${cands.map((c, i) => `<label class="check"><input type="radio" name="keep" value="${esc(c.id)}" ${i === 0 ? 'checked' : ''} required> <span data-nt>${esc(label(c))}</span></label>`).join('')}`;
+  const fd = await askSheet(t('Juntar clientes'), `${body}
+    <p class="small muted">Tudo passa para o cliente certo: obras, orçamentos, pedidos, contactos, registo de prospeção e prémios. Os dados que lhe faltem (NIF, cidade, morada) vêm do outro. Não se desfaz.</p>`, 'Juntar');
+  if (!fd) return;
+  const keep = fd.get('keep'); if (!keep) return;
+  const dup = from ? from.id : cands.find((c) => c.id !== keep).id;
+  const { data, error } = await sb.rpc('mini_client_merge', { p_dup: dup, p_keep: keep });
+  if (error) return toast(friendly(error));
+  toast(t('Juntado. Tudo passou para {x}.', data.name));
+  state.sales.sel = keep; viewSales();
 }
 async function slBoard() {
   const S = state.sales; const el = $('#slpane'); if (!el) return;
@@ -12461,7 +12499,8 @@ async function slDetail(id) {
       ${!c.can_edit && c.mine ? `<div class="status-hero info">${ic('lock')}<div><b>Passou para a direção comercial</b><span>Já há proposta. Continua a contar para ti, mas só a direção comercial muda este cliente.</span></div></div>` : ''}
       <div class="acts">${c.can_edit ? '<button class="btn ghost" id="sled">Editar os dados</button>' : ''}
         ${c.can_stage_all || (c.can_edit && ['prospect', 'contacto'].includes(c.stage)) ? '<button class="btn ghost" id="slstage">Mudar a fase</button>' : ''}
-        ${c.can_stage_all && can('orcamentos.gerir') ? '<button class="btn ghost" id="slest">Fazer orçamento</button>' : ''}</div></div>
+        ${c.can_stage_all && can('orcamentos.gerir') ? '<button class="btn ghost" id="slest">Fazer orçamento</button>' : ''}
+        ${can('comercial.gerir') ? '<button class="btn ghost" id="slmerge">Juntar a outro cliente</button>' : ''}</div></div>
     <h2>Contactos no cliente</h2>
     <div class="card"><ul class="plain sl-ct">${c.contacts.map((k) => `<li data-nt><b>${esc(k.name)}</b>${k.role ? ` · ${esc(k.role)}` : ''}<br><span class="small">${[k.phone, k.email].filter(Boolean).map(esc).join(' · ')}</span></li>`).join('') || '<li class="muted">Nenhum contacto.</li>'}</ul>
       ${c.can_edit ? '<button class="btn ghost wide" id="slct">+ Pessoa de contacto</button>' : ''}</div>
@@ -12483,6 +12522,10 @@ async function slDetail(id) {
   if ($('#slstage')) $('#slstage').onclick = () => slStage(c);
   if ($('#slest')) $('#slest').onclick = () => { const st = orcState(); st.tab = 'orc'; openEstimates(); newEstimate(c.name); };
   if ($('#slreq')) $('#slreq').onclick = () => requestEdit(null, c.name);
+  if ($('#slmerge')) $('#slmerge').onclick = async () => {
+    if (!state.sales.home) { const { data } = await sb.rpc('mini_sales_clients'); state.sales.home = data; }
+    slMerge(null, { ...c, id });
+  };
 }
 async function slEdit(c) {
   const v = c || { country: 'PT' };

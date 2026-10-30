@@ -7375,4 +7375,16 @@
 "jan":"janv",
 "fev":"févr",
 "mar":"mars",
-"abr":"avr"}
+"abr":"avr",
+"Há 2 clientes que parecem o mesmo":"2 clients semblent être le même",
+"{x} pares de clientes parecem repetidos":"{x} paires de clients semblent en double",
+"Mesmo nome ou mesmo NIF. Junta-os para o histórico, os orçamentos e as comissões ficarem num só cliente.":"Même nom ou même numéro fiscal. Fusionnez-les pour que l'historique, les devis et les commissions restent sur un seul client.",
+"e":"et",
+"Juntar clientes":"Fusionner des clients",
+"Este cliente é o mesmo que outro já registado? Escolhe o certo.":"Ce client est-il le même qu'un client déjà enregistré ? Choisissez le bon.",
+"passa a fazer parte dele.":"en fera partie.",
+"O cliente certo":"Le bon client",
+"Qual é o nome certo? O outro passa a fazer parte dele.":"Quel est le bon nom ? L'autre en fera partie.",
+"Tudo passa para o cliente certo: obras, orçamentos, pedidos, contactos, registo de prospeção e prémios. Os dados que lhe faltem (NIF, cidade, morada) vêm do outro. Não se desfaz.":"Tout passe au bon client : chantiers, devis, demandes, contacts, journal de prospection et primes. Les données qui lui manquent (numéro fiscal, ville, adresse) viennent de l'autre. Irréversible.",
+"Juntado. Tudo passou para {x}.":"Fusionné. Tout est passé à {x}.",
+"Juntar a outro cliente":"Fusionner avec un autre client"}
