@@ -2635,3 +2635,43 @@ button.cd-card { display: block; width: 100%; text-align: left; font: inherit; c
 .cd-facts li .i { flex: 0 0 auto; width: 16px; height: 16px; margin-top: 2px; color: var(--brand); }
 .cd-facts li.warn { color: var(--warn); }
 .cd-al > span { flex: 1 1 auto; }
+
+/* v117 · Resíduos (sql/132) */
+.ws-lead { margin: -4px 0 12px; }
+.fl-sum button.fl-n { text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.ws-wait { display: flex; align-items: center; gap: 6px; color: var(--warn); margin: 0 0 12px; }
+.ws-alerts ul { margin: 0; }
+.ws-al { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: var(--bw) solid var(--line); }
+.ws-al:first-child { border-top: 0; }
+.ws-al .dot { flex: 0 0 auto; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--warn-bg); color: var(--warn); }
+.ws-al.bad .dot { background: var(--bad-bg); color: var(--bad); }
+.ws-al .btn { flex: 0 0 auto; }
+#wsput { margin: 0 0 12px; }
+.ws-tabs { margin: 0 0 12px; overflow-x: auto; }
+.ws-tabs button { white-space: nowrap; flex: 0 0 auto; }
+.ws-h { margin: 16px 0 8px; font-size: var(--t-sm); color: var(--ink-2); text-transform: uppercase; letter-spacing: .04em; }
+.ws-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0 0; }
+.ws-chips .small { display: inline-flex; align-items: center; gap: 4px; }
+.ho-ic.ws-haz { background: var(--bad-bg); color: var(--bad); }
+.ws-prog.warn > i { background: var(--warn); }
+.ws-prog.bad > i { background: var(--bad); }
+.ws-old { color: var(--warn); font-weight: 600; }
+.ws-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.ws-pt.off, .ws-ship.off, .ws-car li.off, .ws-types li.off { opacity: .6; }
+.ws-off { margin: 16px 0; }
+.ws-off summary { cursor: pointer; color: var(--ink-2); padding: 8px 0; }
+.ws-unit { font-weight: 600; color: var(--ink-2); margin-left: 4px; }
+.ws-dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 12px 0; font-size: var(--t-sm); }
+.ws-dl dt { color: var(--ink-2); }
+.ws-dl dd { margin: 0; }
+.ws-file { display: inline-flex; margin: 8px 0; cursor: pointer; }
+.ws-log { margin: 12px 0; }
+.ws-log summary { cursor: pointer; color: var(--ink-2); }
+.ws-cancel { color: var(--bad); margin-top: 8px; }
+.ws-car li, .ws-types li, .ws-hist li { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: var(--bw) solid var(--line); }
+.ws-car li:first-child, .ws-types li:first-child, .ws-hist li:first-child { border-top: 0; }
+.ws-types .chip { margin-right: 4px; }
+/* v117: without network an office login's top bar (Procurar, ?, sino, língua, sol, nome + «Sem rede») was wider than a
+   412 px phone, so the whole page scrolled sideways. The word «GestNow» gives way to the «Sem rede» chip, which can shrink. */
+.net { min-width: 0; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; }
+@media (max-width: 520px) { .top:has(#net:not([hidden])) .brand strong { display: none; } }
