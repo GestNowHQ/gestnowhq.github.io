@@ -93,6 +93,22 @@ const ERRORS = [
   [/say why it is cancelled/i, 'Diz porque cancelas.'],
   [/the report is ready when the counting ends/i, 'O relatório fica pronto quando a contagem acabar.'],
   [/inventory records are never (changed|removed)/i, 'Os registos do inventário nunca se alteram nem se apagam.'],
+  [/not enough stock for the shipment: (.+)$/i, 'Não há stock para o envio: $1. Tira essas linhas ou pede em Compras.'],
+  [/choose what goes in the shipment/i, 'Escolhe pelo menos uma linha para o envio.'],
+  [/shipment not found/i, 'Envio não encontrado.'],
+  [/this shipment has already left/i, 'Este envio já saiu do armazém.'],
+  [/it has already left: what comes back returns line by line/i, 'Já saiu: o que voltar entra linha a linha em «Voltou ao armazém».'],
+  [/this shipment has not left/i, 'Este envio ainda não saiu do armazém.'],
+  [/this shipment is not on its way/i, 'Este envio não está a caminho.'],
+  [/this site is closed/i, 'Esta obra está fechada.'],
+  [/say what goes in the line/i, 'Diz o que vai na linha (3 letras ou mais).'],
+  [/say how it goes/i, 'Diz como vai (carrinha, transportadora, uma pessoa).'],
+  [/say why it came back/i, 'Diz porque voltou.'],
+  [/choose what was received/i, 'Escolhe o que foi recebido.'],
+  [/without the card, say why/i, 'Sem cartão, escreve porquê (5 letras ou mais).'],
+  [/say what happened/i, 'Diz o que aconteceu.'],
+  [/this line is already closed/i, 'Esta linha já está fechada.'],
+  [/shipment (records are never removed|history is never changed)/i, 'Os registos dos envios nunca se apagam nem se alteram.'],
   [/say how much/i, 'Diz quanto (maior que zero).'],
   [/container not found/i, 'Contentor não encontrado.'],
   [/this container is switched off/i, 'Este contentor está desligado.'],
@@ -1229,7 +1245,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '120';
+const APP_VERSION = '121';
 // v107 (Diogo 2026-10-26): «Início» = what is urgent + the departments. The bottom bar keeps only Início, the field tools of
 // the encarregado (Equipa, Picar) or of the safety officer (Emergência), Procurar and Eu. Everything else is in its department.
 const TABS = { supervisor: ['inicio', 'equipa', 'picar', 'minhas'], admin: ['inicio', 'minhas'],
@@ -9858,7 +9874,7 @@ function viewSiteMaterial() {
   const M = state.mat || (state.mat = { tab: 'ferramentas' });
   app.innerHTML = `<div class="ph"><div><p class="ph-k">Ferramentas, EPI e material desta obra</p><h1>Material da obra</h1></div></div>
     <div class="team-site">${siteSelect('mts')}</div>
-    <div id="mtkpis">${skel(1)}</div>
+    <div id="mtkpis">${skel(1)}</div><div id="mtship"></div>
     <div class="seg mt-tabs" role="tablist" id="mttabs">${MAT_TABS.map(([k, l]) => `<button role="tab" data-mt="${k}" aria-selected="${M.tab === k}">${esc(l)}</button>`).join('')}</div>
     <div id="mtbody">${skel(3)}</div>`;
   bindSiteSelect('mts', loadSiteMaterial);
@@ -9898,7 +9914,7 @@ async function loadSiteMaterial() {
     ${d.can_ask ? `<button class="btn big wide" id="mtask">${ic('box')}Pedir ao armazém</button>` : ''}`;
   $('#mtkpis').querySelectorAll('[data-go]').forEach((b) => b.onclick = () => { M.tab = b.dataset.go; matTabs(); matBody(); });
   if ($('#mtask')) $('#mtask').onclick = () => matRequest({});
-  matTabs(); matBody();
+  matTabs(); matBody(); matShipments(site);
 }
 function matBody() {
   const M = state.mat; const d = M.data; const box = $('#mtbody'); if (!box || !d) return;
@@ -10332,6 +10348,313 @@ async function whSiteRequests() {
   });
 }
 
+// ---- Armazém › Envios para obras (sql/136): for whom, where, sizes and what is missing; a list to pick; «Enviado»;
+// at the site each person signs what is theirs with their own card (only then the PPE is theirs).
+const SHIP_ST = { preparing: ['warn', 'a preparar'], sent: ['info', 'a caminho'], arrived: ['info', 'chegou'], done: ['ok', 'recebido'], cancelled: ['', 'cancelado'] };
+const SHIP_TR = { own: 'Carrinha da empresa', carrier: 'Transportadora', person: 'Leva uma pessoa', other: 'Outro' };
+const SHIP_LN = { pending: ['', 'por receber'], received: ['ok', 'recebido'], missing: ['bad', 'não veio'], returned: ['', 'voltou ao armazém'] };
+const PPE_BY = { company: 'a empresa', client: 'o cliente', other: 'outro', none: 'ninguém' };
+const shipMap = (s) => s.lat && s.lng ? `https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lng}`
+  : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([s.address, s.municipality].filter(Boolean).join(', '))}`;
+function shipWhere(s, card = true) {
+  const addr = [s.address, s.municipality].filter(Boolean).join(', ');
+  return `<section class="${card ? 'card ' : ''}sh-where"><h2 style="margin-top:0">Para onde</h2>
+    <p class="sh-addr">${ic('pin')}<span>${addr ? esc(addr) : '<span class="t-bad">A obra não tem morada.</span> Quem gere as obras põe a morada em Obras.'}</span></p>
+    ${addr || (s.lat && s.lng) ? `<a class="btn ghost small" href="${esc(shipMap(s))}" target="_blank" rel="noopener">Abrir no mapa</a>` : ''}
+    <dl class="sh-dl"><dt>Quem recebe</dt><dd>${s.supervisor ? `${esc(s.supervisor)}${s.supervisor_phone ? ` · <a href="tel:${esc(String(s.supervisor_phone).replace(/\s/g, ''))}">${esc(s.supervisor_phone)}</a>` : ''}` : '<span class="muted">Sem encarregado definido na obra</span>'}</dd>
+      ${s.client_contact ? `<dt>Cliente</dt><dd>${esc([s.client, s.client_contact].filter(Boolean).join(' · '))}</dd>` : s.client ? `<dt>Cliente</dt><dd>${esc(s.client)}</dd>` : ''}
+      ${s.planned_start ? `<dt>Início da obra</dt><dd>${esc(fmtDate(s.planned_start))}${s.planned_finish ? ` · fim ${esc(fmtDate(s.planned_finish))}` : ''}</dd>` : ''}
+      <dt>EPI fornecido por</dt><dd>${s.ppe_by ? esc(PPE_BY[s.ppe_by] || s.ppe_by) : '<span class="muted">não definido</span>'}</dd>
+      ${s.logistics ? `<dt>Logística</dt><dd>${esc(s.logistics)}</dd>` : ''}</dl>
+    ${s.ppe_by === 'client' ? `<p class="small sh-warn">${ic('warn')}<span>Nesta obra o EPI é do cliente: envia só o que a empresa dá (farda, por exemplo).</span></p>` : ''}</section>`;
+}
+async function whShip() {
+  const W = state.wh; const body = $('#whbody'); if (!body) return;
+  if (W.shipId) return shipDetail(W.shipId);
+  if (W.shipSite) return shipSite(W.shipSite);
+  const { data: d, error } = await sb.rpc('mini_ship_home');
+  if (!body.isConnected) return;
+  if (error) { body.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
+  const open = d.shipments.filter((s) => ['preparing', 'sent', 'arrived'].includes(s.status));
+  const done = d.shipments.filter((s) => !['preparing', 'sent', 'arrived'].includes(s.status));
+  body.innerHTML = `<section class="card"><h2 style="margin-top:0">Preparar envio para uma obra</h2>
+      <p class="small muted">Escolhe a obra: vês a morada, quem recebe, os tamanhos de cada pessoa e o EPI que lhe falta. A app faz a lista.</p>
+      ${d.sites.length ? `<div class="list sh-sites">${d.sites.map((s) => `<button class="sh-site" data-site="${esc(s.id)}">
+        <div class="grow"><div class="nm">${esc(s.code)} · ${esc(s.title)}</div>
+          <div class="sub">${esc(s.municipality || '')}${s.municipality ? ' · ' : ''}${pl(s.team, 'pessoa', 'pessoas')}${s.coming ? ` · <b>${s.coming} começa${s.coming === 1 ? '' : 'm'} em breve</b>` : ''}</div></div>
+        <div class="mt-chips">${s.starting && s.planned_start ? chip('info', 'início a ' + fmtDate(s.planned_start)) : ''}${s.requests ? chip('warn', pl(s.requests, 'pedido', 'pedidos')) : ''}${s.open ? chip('', pl(s.open, 'envio', 'envios')) : ''}</div></button>`).join('')}</div>`
+        : empty('box', 'Sem obras abertas', 'Quando houver obras, aparecem aqui.')}</section>
+    ${open.length ? `<h3>Em curso</h3><div class="list">${open.map(shipCard).join('')}</div>` : ''}
+    ${done.length ? `<h3>Últimos 30 dias</h3><div class="list">${done.map(shipCard).join('')}</div>` : ''}`;
+  body.querySelectorAll('[data-site]').forEach((b) => b.onclick = () => { W.shipSite = b.dataset.site; W.shipEdit = null; shipSite(W.shipSite); });
+  body.querySelectorAll('[data-ship]').forEach((b) => b.onclick = () => { W.shipId = b.dataset.ship; shipDetail(W.shipId); });
+}
+function shipCard(s) {
+  const [k, l] = SHIP_ST[s.status] || ['', s.status]; const c = s.counts || {};
+  return `<button class="card sh-card ${s.late ? 'bad' : ''}" data-ship="${esc(s.id)}"><div class="wk"><div class="grow">
+      <div class="nm">${esc(s.code)} · Obra ${esc(s.site)}</div>
+      <div class="sub">${pl(Number(c.lines || 0), 'linha', 'linhas')}${c.people ? ' · ' + pl(Number(c.people), 'pessoa', 'pessoas') : ''}${s.sent_at ? ` · saiu ${esc(fmtTime(s.sent_at))}` : ` · ${esc(fmtTime(s.created_at))}`}${s.expected_on && s.status === 'sent' ? ` · chega ${esc(fmtDate(s.expected_on))}` : ''}</div>
+      ${['sent', 'arrived'].includes(s.status) && Number(c.received) ? `<div class="sub">${Number(c.received)} de ${Number(c.lines)} recebidas${Number(c.missing) ? ` · <b class="t-bad">${Number(c.missing)} não veio</b>` : ''}</div>` : ''}</div>
+      <div class="mt-chips">${s.late ? chip('bad', 'atrasado') : ''}${chip(k, l)}</div></div></button>`;
+}
+// One site: where, who, sizes, what is missing; tick what goes; save the shipment.
+async function shipSite(siteId) {
+  const W = state.wh; const body = $('#whbody'); if (!body) return;
+  body.innerHTML = skel(3);
+  const { data: d, error } = await sb.rpc('mini_ship_site', { p_site: siteId, p_days: W.shipDays || 21 });
+  if (!body.isConnected) return;
+  if (error) { body.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
+  W.shipData = d;
+  const ed = W.shipEdit && W.shipEdit.site_id === siteId ? W.shipEdit : null;   // changing a shipment being prepared
+  const lines = [];   // every candidate line: {key, item, desc, qty, for, request_line, on}
+  const has = (it, who) => ed && ed.lines.some((l) => l.item === it && (l.for_id || '') === (who || ''));
+  for (const p of d.team) for (const n of p.needs) {
+    if (!n.item) continue;
+    lines.push({ key: `p:${p.id}:${n.family}`, item: n.item, qty: 1, for: p.id, on: ed ? has(n.item, p.id) : !n.on_way && Number(n.stock) > 0 });
+  }
+  for (const r of d.requests) for (const x of r.lines) {
+    if (x.delivered) continue;
+    lines.push({ key: `r:${x.id}`, item: x.item || '', desc: x.item ? '' : x.desc, qty: Number(x.qty), for: x.for_id || '', request_line: x.id,
+      on: ed ? ed.lines.some((l) => l.from_request && (l.item || '') === (x.item || '') && (l.for_id || '') === (x.for_id || '')) : !x.item || Number(x.stock) >= Number(x.qty) });
+  }
+  const extra = ed ? ed.lines.filter((l) => !l.from_request && !lines.some((c) => c.item && c.item === l.item && (c.for || '') === (l.for_id || '')))
+    .map((l) => ({ item: l.item || '', desc: l.item ? '' : l.desc, qty: Number(l.qty), for: l.for_id || '' })) : [];
+  W.shipLines = lines; W.shipExtra = extra;
+  const s = d.site; const coming = d.team.filter((p) => p.new);
+  const mob = ed ? ed.mobilisation : coming.length > 0 || (s.planned_start && s.planned_start > d.today);
+  const sz = (p) => `<div class="farda f4 sh-sz">${Object.entries(WH_KIND).map(([k, l]) => `<div class="${p.sizes[k] ? '' : 'none'}"><span>${esc(l[0].toUpperCase() + l.slice(1))}</span><b>${p.sizes[k] ? esc(p.sizes[k]) : '?'}</b></div>`).join('')}</div>`;
+  const need = (p, n) => { const c = lines.find((x) => x.key === `p:${p.id}:${n.family}`);
+    if (!n.item) return `<li class="sh-need off">${ic('warn')}<span class="grow">${esc(n.family)}: <b>falta o tamanho de ${esc(WH_KIND[n.kind] || n.kind)}</b> na ficha</span></li>`;
+    if (n.on_way && !ed) return `<li class="sh-need off"><span class="grow">${esc(n.item_name)}</span>${chip('info', 'já vai no ' + n.on_way)}</li>`;
+    return `<li class="sh-need"><label><input type="checkbox" data-ln="${esc(c.key)}" ${c.on ? 'checked' : ''}><span class="grow">${esc(n.item_name)}${n.expiring ? ' <span class="muted small">(troca)</span>' : ''}</span></label>
+      ${Number(n.stock) > 0 ? `<span class="small muted">stock ${Number(n.stock)}</span>` : chip('bad', 'sem stock')}</li>`; };
+  body.innerHTML = `<div class="sh-back"><button class="btn ghost small" id="shback">‹ Obras</button></div>
+    <section class="card sh-head"><p class="ph-k">${ed ? `A mudar ${esc(ed.code)}` : 'Envio para a obra'}</p><h2 style="margin:0">${esc(s.code)} · ${esc(s.title)}</h2>
+      ${mob ? `<p class="small sh-mob">${ic('info')}<span><b>Início de obra.</b> ${coming.length ? `${pl(coming.length, 'pessoa começa', 'pessoas começam')} nos próximos ${d.days} dias: leva o kit completo.` : `A obra começa a ${esc(fmtDate(s.planned_start))}.`}</span></p>` : ''}</section>
+    ${shipWhere(s)}
+    <section class="card"><div class="wk"><div class="grow"><h2 style="margin:0">Equipa (${d.team.length})</h2>
+        <div class="sub">Na obra hoje e quem começa até ${esc(fmtDate(d.until))}. ${d.required_site ? 'EPI obrigatório desta obra.' : 'A obra não tem EPI obrigatório próprio: uso o da empresa.'}</div></div>
+        <select id="shdays" aria-label="Quem começa até"><option value="7" ${d.days === 7 ? 'selected' : ''}>7 dias</option><option value="21" ${d.days === 21 ? 'selected' : ''}>21 dias</option><option value="45" ${d.days === 45 ? 'selected' : ''}>45 dias</option></select></div>
+      ${d.team.length ? `<div class="list sh-team">${d.team.map((p) => `<article class="sh-person ${p.needs.some((n) => !n.item) ? 'warn' : ''}">
+          <div class="wk">${avatar(p.name)}<div class="grow"><div class="nm">${esc(p.name)}</div>
+            <div class="sub">${esc([p.number, p.job].filter(Boolean).join(' · '))}</div></div>${p.new ? chip('info', 'começa a ' + fmtDate(p.starts)) : ''}</div>
+          ${sz(p)}${Object.values(p.sizes).some((x) => !x) ? `<button class="btn ghost small" data-sz="${esc(p.id)}">Preencher tamanhos</button>` : ''}
+          ${p.needs.length ? `<ul class="sh-needs">${p.needs.map((n) => need(p, n)).join('')}</ul>` : `<p class="small muted">${ic('ok')} Tem o EPI da obra em dia.</p>`}
+          ${p.ppe.length ? `<details class="sh-has"><summary class="small">Já tem (${p.ppe.length})</summary><ul class="small">${p.ppe.map((a) => `<li>${esc(a.name)}${a.size ? ' ' + esc(a.size) : ''}${a.replace_after ? ` · até ${esc(fmtDate(a.replace_after))}` : ''}</li>`).join('')}</ul></details>` : ''}
+        </article>`).join('')}</div>` : empty('team', 'Ninguém atribuído a esta obra', 'Quem atribui as pessoas às obras é a Secretaria (Trabalhadores › Obras).')}</section>
+    ${d.requests.length ? `<section class="card"><h2 style="margin-top:0">Pedidos da obra (${d.requests.length})</h2>${d.requests.map((r) => `<div class="sh-req">
+        <div class="sub">${esc(r.by || '')} · ${esc(fmtTime(r.at))}${r.needed_by ? ` · até <b>${esc(fmtDate(r.needed_by))}</b>` : ''}${r.note ? ` · «${esc(r.note)}»` : ''}</div>
+        <ul class="sh-needs">${r.lines.filter((x) => !x.delivered).map((x) => { const c = lines.find((y) => y.key === `r:${x.id}`);
+          return `<li class="sh-need"><label><input type="checkbox" data-ln="${esc(c.key)}" ${c.on ? 'checked' : ''}><span class="grow">${Number(x.qty)} × ${esc(x.desc)}${x.for ? ` <span class="muted">· ${esc(x.for)}</span>` : ''}</span></label>
+            ${x.item ? (Number(x.stock) >= Number(x.qty) ? `<span class="small muted">stock ${Number(x.stock)}</span>` : chip('bad', 'stock ' + Number(x.stock))) : chip('warn', 'fora do catálogo')}</li>`; }).join('')}</ul></div>`).join('')}</section>` : ''}
+    <section class="card"><h2 style="margin-top:0">Mais coisas para a obra</h2><div id="shx"></div>
+      <button class="btn ghost small" id="shaddx" type="button">+ Linha</button></section>
+    <section class="card sh-foot"><div class="row"><div><label for="shneed">Tem de lá estar até</label><input id="shneed" type="date" value="${esc(ed && ed.needed_by || '')}" min="${esc(d.today)}"></div></div>
+      <label class="chk"><input type="checkbox" id="shmob" ${mob ? 'checked' : ''}> Início de obra (kit completo)</label>
+      <label for="shnote">Nota para quem recebe</label><input id="shnote" maxlength="500" value="${esc(ed && ed.note || '')}" placeholder="ex.: 3 caixas; os sacos têm o nome de cada um">
+      <p class="small muted" id="shsum"></p>
+      <button class="btn big wide" id="shsave">${ic('box')}${ed ? 'Guardar alterações' : 'Preparar envio'}</button></section>`;
+  const cat = d.catalogue; const team = d.team;
+  const xrow = (x, i) => `<div class="mt-line" data-x="${i}"><select data-k="item" aria-label="Artigo"><option value="">— Escrevo o que é —</option>${cat.map((c) => `<option value="${esc(c.id)}" ${x.item === c.id ? 'selected' : ''}>${esc(c.name)} (${c.qty > 0 ? 'há ' + Number(c.qty) : 'sem stock'})</option>`).join('')}</select>
+      <input data-k="desc" maxlength="200" placeholder="ex.: fita sinalizadora" value="${esc(x.desc || '')}" ${x.item ? 'hidden' : ''} aria-label="O que é">
+      <div class="mt-line2"><input data-k="qty" type="number" min="0.001" step="any" inputmode="decimal" value="${esc(x.qty)}" aria-label="Quantidade">
+        <select data-k="for" aria-label="Para quem"><option value="">Para a obra</option>${team.map((p) => `<option value="${esc(p.id)}" ${x.for === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
+        <button type="button" class="btn ghost small" data-rmx="${i}" aria-label="Tirar">×</button></div></div>`;
+  const sum = () => { const n = lines.filter((x) => x.on).length + extra.filter((x) => x.item || (x.desc || '').trim().length >= 3).length;
+    const ppl = new Set([...lines.filter((x) => x.on && x.for).map((x) => x.for), ...extra.filter((x) => x.for).map((x) => x.for)]).size;
+    $('#shsum').textContent = n ? `${pl(n, 'linha', 'linhas')}${ppl ? ' · ' + pl(ppl, 'pessoa', 'pessoas') : ''}` : 'Escolhe pelo menos uma linha.'; };
+  const drawX = () => { $('#shx').innerHTML = extra.map(xrow).join('');
+    $('#shx').querySelectorAll('[data-x]').forEach((row) => { const x = extra[Number(row.dataset.x)];
+      row.querySelectorAll('[data-k]').forEach((el) => el.oninput = el.onchange = () => { x[el.dataset.k] = el.value; if (el.dataset.k === 'item') row.querySelector('[data-k=desc]').hidden = !!el.value; sum(); }); });
+    $('#shx').querySelectorAll('[data-rmx]').forEach((b) => b.onclick = () => { extra.splice(Number(b.dataset.rmx), 1); drawX(); sum(); }); };
+  drawX(); sum();
+  body.querySelectorAll('[data-ln]').forEach((cb) => cb.onchange = () => { lines.find((x) => x.key === cb.dataset.ln).on = cb.checked; sum(); });
+  $('#shaddx').onclick = () => { extra.push({ item: '', desc: '', qty: 1, for: '' }); drawX(); sum(); };
+  $('#shback').onclick = () => { W.shipSite = null; W.shipEdit = null; whShip(); };
+  $('#shdays').onchange = (e) => { W.shipDays = Number(e.target.value); shipSite(siteId); };
+  body.querySelectorAll('[data-sz]').forEach((b) => b.onclick = () => shipSizes(team.find((p) => p.id === b.dataset.sz), () => shipSite(siteId)));
+  $('#shsave').onclick = async () => {
+    const pick = [...lines.filter((x) => x.on).map((x) => ({ item: x.item || null, desc: x.desc || null, qty: x.qty, for: x.for || null, request_line: x.request_line || null })),
+      ...extra.filter((x) => x.item || (x.desc || '').trim().length >= 3).map((x) => ({ item: x.item || null, desc: x.item ? null : x.desc.trim(), qty: Number(x.qty), for: x.for || null }))];
+    if (!pick.length) return toast('Escolhe pelo menos uma linha.');
+    const b = $('#shsave'); b.disabled = true;
+    const { data: r, error: e } = await sb.rpc('mini_ship_save', { p: { id: ed ? ed.id : null, site_id: siteId, lines: pick, needed_by: $('#shneed').value || null,
+      note: $('#shnote').value.trim() || null, mobilisation: $('#shmob').checked } });
+    b.disabled = false;
+    if (e) return toast(friendly(e));
+    toast(ed ? 'Envio alterado.' : `Envio ${r.code} preparado. Separa a lista e carrega em «Enviado».`);
+    Object.assign(W, { shipSite: null, shipEdit: null, shipId: r.id }); shipDetail(r.id);
+  };
+}
+// The sizes are asked once and stay in the card (the same form as the window).
+async function shipSizes(p, done) {
+  const lists = { top: SIZES_TOP, bottom: SIZES_BOTTOM, shoes: SIZES_SHOES, gloves: GLOVES };
+  const fd = await askSheet(`Tamanhos de ${p.name}`, `<p class="small muted">Ficam na ficha do trabalhador: não se pergunta outra vez.</p>
+    <div class="row">${Object.entries(WH_KIND).map(([k, l]) => `<div><label for="sz${k}">${esc(l[0].toUpperCase() + l.slice(1))}</label><select id="sz${k}" name="${k}">
+      <option value="">${p.sizes[k] ? '' : '?'}</option>${lists[k].map((x) => `<option ${x === p.sizes[k] ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></div>`).join('')}</div>`, 'Guardar na ficha');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_wh_sizes_save', { p_collab: p.id, p_sizes: Object.fromEntries(Object.keys(WH_KIND).map((k) => [k, fd.get(k) || ''])) });
+  if (error) return toast(friendly(error));
+  toast('Tamanhos guardados na ficha.'); done();
+}
+// One shipment: the picking list, the bags per person, «Enviado», and what happened at the site.
+async function shipDetail(id) {
+  const W = state.wh; const body = $('#whbody'); if (!body) return;
+  body.innerHTML = skel(3);
+  const { data: s, error } = await sb.rpc('mini_ship_get', { p_ship: id });
+  if (!body.isConnected) return;
+  if (error) { body.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
+  const [k, l] = SHIP_ST[s.status] || ['', s.status]; const c = s.counts;
+  const bags = []; for (const x of s.lines) { let b = bags.find((y) => (y.id || '') === (x.for_id || '')); if (!b) bags.push(b = { id: x.for_id, name: x.for, number: x.number, lines: [] }); b.lines.push(x); }
+  const short = s.picking.filter((p) => p.item && Number(p.stock) < Number(p.qty));
+  const prep = s.status === 'preparing'; const out = ['sent', 'arrived', 'done'].includes(s.status);
+  const lineRow = (x) => `<li class="sh-li"><span class="grow">${Number(x.qty)} × ${esc(x.desc)}${x.from_request ? ' <span class="muted small">(pedido)</span>' : ''}</span>
+    ${out ? chip((SHIP_LN[x.state] || [''])[0], (SHIP_LN[x.state] || ['', x.state])[1] + (x.state === 'received' && x.via === 'leader' ? ' (sem cartão)' : '')) : ''}
+    ${out && ['pending', 'missing'].includes(x.state) ? `<button class="btn ghost small" data-back="${esc(x.id)}">Voltou ao armazém</button>` : ''}</li>`;
+  body.innerHTML = `<div class="sh-back"><button class="btn ghost small" id="shback">‹ Envios</button></div>
+    <section class="card sh-head ${s.late ? 'bad' : ''}"><div class="wk"><div class="grow"><p class="ph-k">Envio para a obra</p><h2 style="margin:0">${esc(s.code)} · ${esc(s.site)} ${esc(s.site_title)}</h2>
+      <div class="sub">${pl(Number(c.lines), 'linha', 'linhas')}${c.people ? ' · ' + pl(Number(c.people), 'pessoa', 'pessoas') : ''} · ${esc(eur2(c.value))}${s.mobilisation ? ' · início de obra' : ''}</div></div>${s.late ? chip('bad', 'atrasado') : ''}${chip(k, l)}</div>
+      ${s.needed_by ? `<p class="small">Tem de lá estar até <b>${esc(fmtDate(s.needed_by))}</b></p>` : ''}${s.note ? `<p class="small">«${esc(s.note)}»</p>` : ''}
+      ${s.sent_at ? `<p class="small">Saiu ${esc(fmtTime(s.sent_at))} por ${esc(s.sent_by || '')} · ${esc(SHIP_TR[s.transport] || '')}${s.carrier ? ' ' + esc(s.carrier) : ''}${s.tracking ? ` · guia <b>${esc(s.tracking)}</b>` : ''}${s.expected_on ? ` · chega ${esc(fmtDate(s.expected_on))}` : ''}</p>` : ''}
+      ${s.arrived_at ? `<p class="small">Chegou ${esc(fmtTime(s.arrived_at))}${s.arrived_by ? ' · ' + esc(s.arrived_by) : ''}${s.arrive_note ? ` · «${esc(s.arrive_note)}»` : ''}</p>` : ''}
+      ${s.cancel_reason ? `<p class="small by-no">Cancelado: «${esc(s.cancel_reason)}»</p>` : ''}
+      <div class="acts">${prep ? `<button class="btn" id="shsend">${ic('car')}Enviado</button><button class="btn ghost small" id="shedit">Mudar</button><button class="btn ghost small" id="shcx">Cancelar</button>` : ''}
+        <button class="btn ghost small" id="shxl">${ic('doc')}Excel</button></div></section>
+    ${shipWhere(s.site_card)}
+    ${prep ? `<section class="card"><h2 style="margin-top:0">Lista para separar</h2>
+      ${short.length ? `<p class="small sh-warn">${ic('warn')}<span>Sem stock suficiente: ${short.map((p) => `${esc(p.desc)} (há ${Number(p.stock)})`).join(', ')}. Tira essas linhas em «Mudar» ou pede em Compras.</span></p>` : ''}
+      <table class="sh-pick"><thead><tr><th>Artigo</th><th>Tam.</th><th>Qtd.</th><th>Stock</th></tr></thead><tbody>${s.picking.map((p) => `<tr class="${p.item && Number(p.stock) < Number(p.qty) ? 'bad' : ''}">
+        <td>${esc(p.family)}</td><td>${esc(p.size || '')}</td><td><b>${Number(p.qty)}</b> ${esc(p.unit)}</td><td>${p.item ? Number(p.stock) : '<span class="muted">—</span>'}</td></tr>`).join('')}</tbody></table></section>` : ''}
+    <section class="card"><h2 style="margin-top:0">${prep ? 'Sacos por pessoa' : 'O que vai e quem recebeu'}</h2>
+      ${bags.map((b) => `<div class="sh-bag"><div class="nm">${b.id ? `${esc(b.name)}${b.number ? ` <span class="muted small">${esc(b.number)}</span>` : ''}` : 'Para a obra'}</div>
+        ${b.id && s.sizes && s.sizes[b.id] ? `<div class="sub">${Object.entries(WH_KIND).map(([k2, l2]) => `${esc(l2)} ${esc(s.sizes[b.id][k2] || '?')}`).join(' · ')}</div>` : ''}
+        <ul class="sh-lines">${b.lines.map(lineRow).join('')}</ul></div>`).join('')}</section>
+    ${s.history.length ? `<details class="card"><summary>Histórico</summary><ul class="small">${s.history.map((g) => `<li>${esc(fmtTime(g.at))} · ${esc(SHIP_LOG[g.kind] || g.kind)}${g.by ? ' · ' + esc(g.by) : ''}${g.detail && (g.detail.note || g.detail.reason) ? ` · «${esc(g.detail.note || g.detail.reason)}»` : ''}</li>`).join('')}</ul></details>` : ''}`;
+  $('#shback').onclick = () => { W.shipId = null; whShip(); };
+  $('#shxl').onclick = () => shipExcel(s);
+  if ($('#shsend')) $('#shsend').onclick = () => shipSend(s);
+  if ($('#shedit')) $('#shedit').onclick = () => { Object.assign(W, { shipId: null, shipSite: s.site_id, shipEdit: s }); shipSite(s.site_id); };
+  if ($('#shcx')) $('#shcx').onclick = async () => {
+    const fd = await askSheet('Cancelar o envio', '<label for="shcr">Porquê? *</label><input id="shcr" name="x" required minlength="3" maxlength="300">', 'Cancelar o envio');
+    if (!fd) return; const { error: e } = await sb.rpc('mini_ship_cancel', { p_ship: s.id, p_reason: String(fd.get('x')).trim() });
+    if (e) return toast(friendly(e)); toast('Envio cancelado.'); shipDetail(s.id); };
+  body.querySelectorAll('[data-back]').forEach((b) => b.onclick = async () => {
+    const fd = await askSheet('Voltou ao armazém', '<p class="small muted">Entra outra vez no stock do armazém central e sai do custo da obra.</p><label for="shbk">Porquê? *</label><input id="shbk" name="x" required minlength="3" maxlength="300" placeholder="ex.: tamanho errado; a pessoa não veio">', 'Voltou');
+    if (!fd) return; const { error: e } = await sb.rpc('mini_ship_line_back', { p_line: b.dataset.back, p_note: String(fd.get('x')).trim() });
+    if (e) return toast(friendly(e)); toast('Voltou ao stock.'); shipDetail(s.id); });
+}
+const SHIP_LOG = { created: 'preparado', changed: 'alterado', sent: 'saiu do armazém', arrived: 'chegou à obra', received: 'recebido', missing: 'não veio', returned: 'voltou ao armazém', done: 'tudo recebido', cancelled: 'cancelado' };
+async function shipSend(s) {
+  const fd = await askSheet(`Enviado · ${s.code}`, `<p class="small muted">O stock sai agora do armazém central, com o custo para a obra ${esc(s.site)}. O EPI só fica de cada pessoa quando ela assinar na obra com o cartão.</p>
+    <label for="shtr">Como vai? *</label><select id="shtr" name="transport" required><option value="">—</option>${Object.entries(SHIP_TR).map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('')}</select>
+    <label for="shca">Quem leva (transportadora, carrinha, pessoa)</label><input id="shca" name="carrier" maxlength="120">
+    <div class="row"><div><label for="shtk">Guia / seguimento</label><input id="shtk" name="tracking" maxlength="80"></div>
+      <div><label for="shex">Chega a</label><input id="shex" name="expected_on" type="date" min="${esc(isoDay(new Date()))}"></div></div>`, 'Enviado');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_ship_send', { p_ship: s.id, p: { transport: fd.get('transport'), carrier: String(fd.get('carrier') || '').trim() || null,
+    tracking: String(fd.get('tracking') || '').trim() || null, expected_on: fd.get('expected_on') || null } });
+  if (error) return toast(friendly(error));
+  toast('Enviado. A obra foi avisada.'); shipDetail(s.id);
+}
+function shipExcel(s) {
+  excelExport(async () => s, (X, d) => {
+    const doc = xlDoc([], `Envio ${d.code} · Obra ${d.site}`, [d.site_title, d.site_card.address, d.site_card.municipality].filter(Boolean).join(' · '), d.status === 'preparing');
+    const wb = xlBook(X, doc);
+    const P = xlSheet(wb, 'Separar', doc, [{ h: 'Artigo', t: 'text', w: 28, max: 50 }, { h: 'Tamanho', t: 'text', w: 9 }, { h: 'Quantidade', t: 'h', w: 11 }, { h: 'Unidade', t: 'text', w: 8 },
+      { h: 'Pessoas', t: 'n', w: 9 }, { h: 'Stock', t: 'h', w: 9 }, { h: 'Separado', t: 'text', w: 10 }]);
+    let r = P.head + 1;
+    for (const p of d.picking) xlRow(P, r++, [p.family, p.size || '', Number(p.qty), p.unit, Number(p.people || 0), p.item ? Number(p.stock) : '', '']);
+    xlFit(P, P.head + 1, r - 1);
+    const B = xlSheet(wb, 'Sacos', doc, [{ h: 'Pessoa', t: 'text', w: 24, max: 40 }, { h: 'Nº', t: 'text', w: 11 }, { h: 'Artigo', t: 'text', w: 28, max: 50 }, { h: 'Tamanho', t: 'text', w: 9 },
+      { h: 'Quantidade', t: 'h', w: 11 }, { h: 'Estado', t: 'text', w: 14 }, { h: 'Recebido', t: 'text', w: 16 }]);
+    r = B.head + 1;
+    for (const x of d.lines) xlRow(B, r++, [x.for || 'Para a obra', x.number || '', x.desc, x.size || '', Number(x.qty), (SHIP_LN[x.state] || ['', x.state])[1],
+      x.received_at ? fmtTime(x.received_at) + (x.via === 'leader' ? ' (sem cartão)' : '') : '']);
+    xlFit(B, B.head + 1, r - 1);
+    const sc = d.site_card;
+    const E = xlSheet(wb, 'Morada', doc, [{ h: 'O quê', t: 'text', w: 22 }, { h: 'Valor', t: 'text', w: 50, max: 80 }]);
+    r = E.head + 1;
+    for (const [k, v] of [['Obra', `${sc.code} · ${sc.title}`], ['Morada', [sc.address, sc.municipality].filter(Boolean).join(', ')], ['Quem recebe', [sc.supervisor, sc.supervisor_phone].filter(Boolean).join(' · ')],
+      ['Cliente', [sc.client, sc.client_contact].filter(Boolean).join(' · ')], ['Tem de lá estar até', d.needed_by ? fmtDate(d.needed_by) : ''], ['Transporte', [SHIP_TR[d.transport], d.carrier, d.tracking].filter(Boolean).join(' · ')],
+      ['Nota', d.note || '']]) xlRow(E, r++, [k, v]);
+    return { wb, name: `gestnow-${d.code.toLowerCase()}.xlsx`, msg: 'Excel descarregado.' };
+  });
+}
+
+// ---- Material da obra › «A caminho»: the encarregado says «Chegou», each person signs their own lines with the card.
+async function matShipments(site) {
+  const box = $('#mtship'); if (!box) return;
+  const { data: d, error } = await sb.rpc('mini_site_shipments', { p_site: site.id });
+  if (!box.isConnected || error) { if (box.isConnected) box.innerHTML = ''; return; }
+  state.mat.ships = d.shipments;
+  const open = d.shipments.filter((s) => ['sent', 'arrived'].includes(s.status));
+  box.innerHTML = open.map((s) => `<section class="card sh-way ${s.late ? 'bad' : 'info'}"><div class="wk"><div class="grow">
+      <div class="nm">${ic('car')} ${s.status === 'sent' ? 'A caminho' : 'Chegou'}: envio ${esc(s.code)}</div>
+      <div class="sub">${pl(Number(s.counts.lines), 'linha', 'linhas')}${s.counts.people ? ' · ' + pl(Number(s.counts.people), 'pessoa', 'pessoas') : ''}${s.expected_on && s.status === 'sent' ? ` · chega ${esc(fmtDate(s.expected_on))}` : ''}${s.status === 'arrived' ? ` · ${Number(s.counts.pending)} por receber` : ''}</div></div>
+      ${s.late ? chip('bad', 'atrasado') : ''}</div>
+    <div class="acts"><button class="btn" data-recv="${esc(s.id)}">${ic('card')}Receber</button></div></section>`).join('');
+  box.querySelectorAll('[data-recv]').forEach((b) => b.onclick = () => matReceive(b.dataset.recv));
+}
+async function matReceive(id) {
+  const M = state.mat; const box = $('#mtbody'); if (!box) return;
+  const { data: s, error } = await sb.rpc('mini_ship_get', { p_ship: id });
+  if (error) return toast(friendly(error));
+  const bags = []; for (const x of s.lines) { let b = bags.find((y) => (y.id || '') === (x.for_id || '')); if (!b) bags.push(b = { id: x.for_id, name: x.for, lines: [] }); b.lines.push(x); }
+  box.innerHTML = `<section class="card"><div class="wk"><div class="grow"><p class="ph-k">Receber</p><h2 style="margin:0">Envio ${esc(s.code)}</h2>
+      <div class="sub">Saiu ${esc(fmtTime(s.sent_at))}${s.carrier ? ' · ' + esc(s.carrier) : ''}${s.tracking ? ` · guia ${esc(s.tracking)}` : ''}</div></div>${chip(...(SHIP_ST[s.status] || ['', s.status]))}</div>
+      ${s.note ? `<p class="small">«${esc(s.note)}»</p>` : ''}
+      <p class="small muted">Cada pessoa encosta o seu cartão para assinar o que é dela: só então o EPI fica na ficha dela. O que não veio na caixa, marca «Não veio».</p>
+      <div class="acts">${s.status === 'sent' ? '<button class="btn ghost small" id="rcarr">Chegou à obra</button>' : ''}<button class="btn ghost small" id="rcback">‹ Voltar</button></div></section>
+    ${bags.map((b) => { const pend = b.lines.filter((x) => x.state === 'pending');
+      return `<section class="card sh-bag"><div class="nm">${b.id ? esc(b.name) : 'Para a obra'}</div>
+        <ul class="sh-lines">${b.lines.map((x) => `<li class="sh-li"><span class="grow">${Number(x.qty)} × ${esc(x.desc)}</span>
+          ${x.state !== 'pending' ? chip((SHIP_LN[x.state] || [''])[0], (SHIP_LN[x.state] || ['', x.state])[1]) : `<button class="btn ghost small" data-miss="${esc(x.id)}">Não veio</button>`}</li>`).join('')}</ul>
+        ${pend.length ? `<div class="acts">${b.id ? `<button class="btn" data-sign="${esc(b.id)}">${ic('card')}${esc(String(b.name).split(' ')[0])} assina</button>
+          <button class="btn ghost small" data-nocard="${esc(b.id)}">Sem cartão</button>` : '<button class="btn" data-site="1">Confirmar que chegou</button>'}</div>` : ''}</section>`; }).join('')}`;
+  const pendOf = (who) => s.lines.filter((x) => x.state === 'pending' && (x.for_id || '') === (who || '')).map((x) => x.id);
+  const send = async (who, extra) => {
+    const r = await rpcReceive({ ref: uuid(), shipment_id: s.id, collab: who || null, line_ids: pendOf(who), ...extra });
+    return r;
+  };
+  $('#rcback').onclick = () => loadSiteMaterial();
+  if ($('#rcarr')) $('#rcarr').onclick = async () => { const { error: e } = await sb.rpc('mini_ship_arrived', { p_ship: s.id, p_note: null }); if (e) return toast(friendly(e)); toast('Marcado como chegado.'); matReceive(s.id); };
+  box.querySelectorAll('[data-miss]').forEach((b) => b.onclick = async () => {
+    const fd = await askSheet('Não veio', '<p class="small muted">O armazém é avisado.</p><label for="rcm">O que aconteceu? *</label><input id="rcm" name="x" required minlength="3" maxlength="300" placeholder="ex.: não vinha na caixa">', 'Avisar o armazém');
+    if (!fd) return; const { error: e } = await sb.rpc('mini_ship_line_missing', { p_line: b.dataset.miss, p_note: String(fd.get('x')).trim() });
+    if (e) return toast(friendly(e)); toast('O armazém foi avisado.'); matReceive(s.id); });
+  box.querySelectorAll('[data-site]').forEach((b) => b.onclick = async () => { const { error: e } = await send(null, {}); if (e) return toast(friendly(e)); toast('Confirmado.'); matReceive(s.id); });
+  box.querySelectorAll('[data-nocard]').forEach((b) => b.onclick = async () => {
+    const nm = (bags.find((x) => x.id === b.dataset.nocard) || {}).name || '';
+    const fd = await askSheet(`${nm} sem cartão`, '<p class="small muted">Confirmas tu, à mão. Fica marcado assim na ficha de EPI.</p><label for="rcn">Porquê sem cartão? *</label><input id="rcn" name="x" required minlength="5" maxlength="300" placeholder="ex.: cartão esquecido no alojamento">', 'Confirmar entrega');
+    if (!fd) return; const { error: e } = await send(b.dataset.nocard, { via: 'leader', note: String(fd.get('x')).trim() });
+    if (e) return toast(friendly(e)); toast('Entregue (sem cartão).'); matReceive(s.id); });
+  box.querySelectorAll('[data-sign]').forEach((b) => b.onclick = () => {
+    const who = b.dataset.sign; const nm = (bags.find((x) => x.id === who) || {}).name || ''; const nfcOk = 'NDEFReader' in window;
+    const d = document.createElement('dialog'); d.className = 'dlg';
+    d.innerHTML = `<form method="dialog"><h2>${esc(nm)} assina</h2><p class="small muted">Recebe: ${esc(s.lines.filter((x) => x.state === 'pending' && x.for_id === who).map((x) => `${Number(x.qty)} × ${x.desc}`).join(', '))}.</p>
+      ${nfcOk ? `<button class="tapzone reading" type="button"><span class="ring">${ic('tap')}</span><b>${esc(nm.split(' ')[0])}, encoste o seu cartão</b></button>` : ''}
+      <div class="manual"><input id="rcuid" autocomplete="off" autocapitalize="characters" placeholder="Número do cartão"><button class="btn ghost" type="button" id="rcgo">Assinar</button></div>
+      <div id="rcres" aria-live="polite"></div><div class="acts"><button class="btn ghost wide" value="cancel">Cancelar</button></div></form>`;
+    document.body.appendChild(d); d.showModal();
+    let ctrl = null; let busy = false;
+    const go2 = async (raw, typed) => {
+      const uid = normUid(raw); if (!uid || busy) return; busy = true;
+      const { data, error: e } = await send(who, { uid, via: 'card', typed: !!typed });
+      busy = false;
+      if (e) { beep(false); d.querySelector('#rcres').innerHTML = `<div class="result bad">${ic('x')}<div><b>Não assinou</b>${esc(friendly(e))}</div></div>`; return; }
+      beep(true); d.close(); showFlash('ok', 'RECEBIDO', `${nm} assinou ${pl(Number(data.received || 0), 'linha', 'linhas')}.`); matReceive(s.id);
+    };
+    if (nfcOk) (async () => { try { ctrl = new AbortController(); const r = new NDEFReader(); await r.scan({ signal: ctrl.signal }); r.onreading = (ev) => go2(ev.serialNumber); } catch (_) { /* typed number still works */ } })();
+    const tw = typedWatch(d.querySelector('#rcuid'));
+    d.querySelector('#rcgo').onclick = () => go2(d.querySelector('#rcuid').value, tw());
+    d.querySelector('#rcuid').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); go2(e.target.value, tw()); } };
+    d.addEventListener('close', () => { if (ctrl) ctrl.abort(); d.remove(); });
+  });
+  if (M) M.receiving = id;
+  if (M && M.site) matShipments(M.site);
+}
+const rpcReceive = (p) => sb.rpc('mini_ship_receive', { p });
+
 // ------------------------------------------------------------------ Armazém (sql/65): EPI, farda, consumíveis e ferramentas
 // Entregar: a pessoa encosta o cartão (quem recebe), escolhes o que leva, e ela encosta outra vez para assinar.
 // Stock por armazém e por tamanho, com mínimos. Ferramentas: quem tem o quê; inspeção vencida não deixa sair.
@@ -10357,7 +10680,7 @@ async function loadWarehouse() {
   const W = state.wh; W.home = h;
   if (!W.wid || !h.warehouses.find((w) => w.id === W.wid)) W.wid = h.central;
   if (!W.tab) W.tab = h.can_issue ? 'entregar' : 'stock';
-  const tabs = [h.can_issue && ['entregar', 'Entregar'], ['stock', 'Stock'], ['ferramentas', 'Ferramentas'], (h.can_issue || h.can_manage) && ['obras', 'Das obras'], (h.can_issue || h.can_manage) && ['maloes', 'Malões']].filter(Boolean);
+  const tabs = [h.can_issue && ['entregar', 'Entregar'], ['stock', 'Stock'], ['ferramentas', 'Ferramentas'], (h.can_issue || h.can_manage) && ['obras', 'Das obras'], (h.can_issue || h.can_manage) && ['envios', 'Envios'], (h.can_issue || h.can_manage) && ['maloes', 'Malões']].filter(Boolean);
   top.innerHTML = `<div class="kpis k4 wh-kpis">
       <button class="kpi ${h.low ? 'warn' : ''}" data-tab="stock"><b>${h.low}</b><span>artigos no mínimo</span></button>
       <button class="kpi ${h.tools_late ? 'warn' : ''}" data-tab="ferramentas"><b>${h.tools_out}${h.tools_late ? `<small> · ${h.tools_late} atrasadas</small>` : ''}</b><span>ferramentas fora</span></button>
@@ -10366,13 +10689,13 @@ async function loadWarehouse() {
     <div class="wh-bar">${h.warehouses.length > 1 ? `<select id="whsel" aria-label="Armazém">${h.warehouses.map((w) => `<option value="${esc(w.id)}" ${w.id === W.wid ? 'selected' : ''}>${esc(w.name)}${w.site ? ' (' + esc(w.site) + ')' : ''}</option>`).join('')}</select>` : `<span class="muted small">${esc(h.warehouses[0].name)}</span>`}
       ${h.can_manage ? '<button class="btn ghost small" id="whadd">+ Armazém</button>' : ''}${canInv() ? `<button class="btn ghost small" id="whinv">${ic('stocktake')}Inventário</button>` : ''}${canWaste() ? `<button class="btn ghost small" id="whwaste">${ic('recycle')}Resíduos</button>` : ''}</div>
     <div class="seg wh-tabs" role="tablist">${tabs.map(([k, l]) => `<button role="tab" data-whtab="${k}" aria-selected="${W.tab === k}">${l}</button>`).join('')}</div>`;
-  top.querySelectorAll('[data-whtab]').forEach((b) => b.onclick = () => { W.tab = b.dataset.whtab; stopNfc(); loadWarehouse(); });
+  top.querySelectorAll('[data-whtab]').forEach((b) => b.onclick = () => { W.tab = b.dataset.whtab; W.shipId = null; W.shipSite = null; W.shipEdit = null; stopNfc(); loadWarehouse(); });
   top.querySelectorAll('button.kpi[data-tab]').forEach((b) => b.onclick = () => { W.tab = b.dataset.tab; stopNfc(); loadWarehouse(); });
   if ($('#whsel')) $('#whsel').onchange = (e) => { W.wid = e.target.value; W.cart = []; loadWarehouse(); };
   if ($('#whadd')) $('#whadd').onclick = addWarehouse;
   if ($('#whinv')) $('#whinv').onclick = () => go('inventario');
   if ($('#whwaste')) $('#whwaste').onclick = () => go('residuos');
-  ({ entregar: whIssue, stock: whStock, ferramentas: whTools, obras: whSiteRequests, maloes: whCases }[W.tab] || whStock)();
+  ({ entregar: whIssue, stock: whStock, ferramentas: whTools, obras: whSiteRequests, envios: whShip, maloes: whCases }[W.tab] || whStock)();
 }
 async function addWarehouse() {
   const sites = activeSites();
@@ -16070,6 +16393,9 @@ function noticeRoute(x) {
   if (k === 'front_request' || k === 'front_answer') return view('frentes');
   if (k === 'routine_late') return view('rotinas');
   if (/^waste/.test(k)) return view('residuos');
+  if (/^ship_/.test(k)) return () => {
+    if (k === 'ship_missing' && viewOpen('armazem')) { state.wh = Object.assign(state.wh || { cart: [], tools: [], person: null, wid: null }, { tab: 'envios', shipId: l.shipment_id || null, shipSite: null }); go('armazem'); return true; }
+    if (viewOpen('material')) { go('material'); return true; } return false; };
   if (/^inv_/.test(k)) return () => { if (!viewOpen('inventario')) return false; state.inv = { id: l.count_id || null, zone: null }; go('inventario'); return true; };
   if (/^client_docs/.test(k)) return () => { if (!viewOpen('docscliente')) return false; state.cdocs = { tab: 'curso', ltab: 'pessoas', sel: new Set(), list: l.list_id || null }; go('docscliente'); return true; };
   return () => false;
