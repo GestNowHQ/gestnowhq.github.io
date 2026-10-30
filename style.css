@@ -2741,3 +2741,31 @@ section.card.sh-bag { border-top: 1px solid var(--line, rgba(127,127,127,.25)); 
 .seg.wh-tabs { overflow-x: auto; scrollbar-width: none; }
 .seg.wh-tabs::-webkit-scrollbar { display: none; }
 .seg.wh-tabs > button { flex: 1 0 auto; padding: 0 12px; }
+/* v123 · department pulse (top of a department page) and «Saúde dos departamentos» */
+.dp { margin-bottom: 8px; }
+.dp-nums { margin-bottom: 10px; }
+.dp-nums > button.kpi { text-align: left; cursor: pointer; font: inherit; color: inherit; transition: border-color .15s var(--ease); }
+.dp-nums > button.kpi:hover { border-color: var(--brand); }
+.home-health { margin: 0 0 8px; }
+.dh-help { margin: -4px 0 12px; }
+.dh-sum { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; }
+.dh-sum small { margin-left: auto; }
+.dh-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: var(--surface); border: var(--bw) solid var(--line); font-size: var(--t-sm); font-weight: 600; }
+.dh-dot { display: inline-block; flex: 0 0 auto; width: 10px; height: 10px; border-radius: 50%; background: var(--ok); }
+.bad > .dh-dot, .dh.bad .dh-dot { background: var(--bad); } .warn > .dh-dot, .dh.warn .dh-dot { background: var(--warn-fill); }
+.dh-list { display: grid; gap: 8px; }
+@media (min-width: 1100px) { .dh-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.dh { display: block; width: 100%; text-align: left; font: inherit; color: var(--ink); padding: 14px 16px; border-radius: var(--r-lg);
+  border: var(--bw) solid var(--line); border-left: 4px solid var(--ok); background: var(--surface); box-shadow: var(--sh-1); }
+button.dh { cursor: pointer; } button.dh:hover { border-color: var(--brand); }
+.dh.bad { border-left-color: var(--bad); } .dh.warn { border-left-color: var(--warn-fill); }
+.dh-top { display: flex; align-items: center; gap: 10px; }
+.dh-top b { font-size: var(--t-md); }
+.dh-top .i { width: 20px; height: 20px; color: var(--ink-3); }
+.dh-st { font-size: var(--t-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--ok); }
+.dh.bad .dh-st { color: var(--bad); } .dh.warn .dh-st { color: var(--warn-ink, var(--warn)); }
+.dh-nums { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: var(--t-sm); color: var(--ink-2); }
+.dh-nums b { color: var(--ink); }
+.dh-w { list-style: none; margin: 10px 0 0; padding: 10px 0 0; border-top: var(--bw) solid var(--line); display: grid; gap: 4px; font-size: var(--t-sm); }
+.dh-w li.bad b { color: var(--bad); } .dh-w li.warn b { color: var(--warn-ink, var(--warn)); } .dh-w li.more { color: var(--ink-3); }
+.dh-w small { color: var(--ink-3); }
