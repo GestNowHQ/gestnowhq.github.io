@@ -2807,3 +2807,9 @@ button.dh { cursor: pointer; } button.dh:hover { border-color: var(--brand); }
 .pn-fbar { height: 14px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
 .pn-fbar i { display: block; height: 100%; border-radius: 999px; background: var(--brand); } .pn-fbar.warn i { background: var(--warn-fill); }
 .pn-foot { margin-top: 12px; }
+
+/* v126 · clients that look repeated (Comercial) */
+.dup-card { border-left: 3px solid var(--warn, #d97706); margin-bottom: 12px; }
+.dup-list li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line, rgba(0,0,0,.08)); }
+.dup-list li:first-child { border-top: 0; }
+.dup-list .grow { flex: 1; min-width: 0; }

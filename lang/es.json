@@ -7375,4 +7375,16 @@
 "jan":"ene",
 "fev":"feb",
 "mar":"mar",
-"abr":"abr"}
+"abr":"abr",
+"Há 2 clientes que parecem o mesmo":"Hay 2 clientes que parecen el mismo",
+"{x} pares de clientes parecem repetidos":"{x} pares de clientes parecen repetidos",
+"Mesmo nome ou mesmo NIF. Junta-os para o histórico, os orçamentos e as comissões ficarem num só cliente.":"Mismo nombre o mismo NIF. Júntalos para que el historial, los presupuestos y las comisiones queden en un solo cliente.",
+"e":"y",
+"Juntar clientes":"Juntar clientes",
+"Este cliente é o mesmo que outro já registado? Escolhe o certo.":"¿Este cliente es el mismo que otro ya registrado? Elige el correcto.",
+"passa a fazer parte dele.":"pasa a formar parte de él.",
+"O cliente certo":"El cliente correcto",
+"Qual é o nome certo? O outro passa a fazer parte dele.":"¿Cuál es el nombre correcto? El otro pasa a formar parte de él.",
+"Tudo passa para o cliente certo: obras, orçamentos, pedidos, contactos, registo de prospeção e prémios. Os dados que lhe faltem (NIF, cidade, morada) vêm do outro. Não se desfaz.":"Todo pasa al cliente correcto: obras, presupuestos, pedidos, contactos, registro de prospección y premios. Los datos que le falten (NIF, ciudad, dirección) vienen del otro. No se puede deshacer.",
+"Juntado. Tudo passou para {x}.":"Juntado. Todo pasó a {x}.",
+"Juntar a outro cliente":"Juntar a otro cliente"}

@@ -7375,4 +7375,16 @@
 "jan":"Jan",
 "fev":"Feb",
 "mar":"Mar",
-"abr":"Apr"}
+"abr":"Apr",
+"Há 2 clientes que parecem o mesmo":"2 clients look like the same one",
+"{x} pares de clientes parecem repetidos":"{x} pairs of clients look repeated",
+"Mesmo nome ou mesmo NIF. Junta-os para o histórico, os orçamentos e as comissões ficarem num só cliente.":"Same name or same tax number. Merge them so the history, estimates and commissions stay in one client.",
+"e":"and",
+"Juntar clientes":"Merge clients",
+"Este cliente é o mesmo que outro já registado? Escolhe o certo.":"Is this client the same as one already registered? Choose the right one.",
+"passa a fazer parte dele.":"becomes part of it.",
+"O cliente certo":"The right client",
+"Qual é o nome certo? O outro passa a fazer parte dele.":"Which is the right name? The other becomes part of it.",
+"Tudo passa para o cliente certo: obras, orçamentos, pedidos, contactos, registo de prospeção e prémios. Os dados que lhe faltem (NIF, cidade, morada) vêm do outro. Não se desfaz.":"Everything moves to the right client: sites, estimates, requests, contacts, prospecting log and prizes. Any data it lacks (tax number, city, address) comes from the other. This cannot be undone.",
+"Juntado. Tudo passou para {x}.":"Merged. Everything moved to {x}.",
+"Juntar a outro cliente":"Merge into another client"}
