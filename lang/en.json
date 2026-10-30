@@ -1,4 +1,7 @@
-{". Também liguei: {x} (é preciso)":". Also turned on: {x} (needed)",
+{"Cliente da lista.":"Client from the list.",
+"É o cliente «{x}»: fica nesse.":"This is the client «{x}»: it goes there.",
+"Cliente novo: é aberto ao guardar.":"New client: opened when you save.",
+". Também liguei: {x} (é preciso)":". Also turned on: {x} (needed)",
 ". Vai assim para o contrato.":". It goes into the contract like this.",
 "‹ Andaimes":"‹ Scaffolds",
 "‹ Os meus clientes":"‹ My clients",

@@ -1187,7 +1187,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '117';
+const APP_VERSION = '118';
 // v107 (Diogo 2026-10-26): «Início» = what is urgent + the departments. The bottom bar keeps only Início, the field tools of
 // the encarregado (Equipa, Picar) or of the safety officer (Emergência), Procurar and Eu. Everything else is in its department.
 const TABS = { supervisor: ['inicio', 'equipa', 'picar', 'minhas'], admin: ['inicio', 'minhas'],
@@ -7812,7 +7812,7 @@ function viewSites() {
       ${canArea() ? `<p class="site-go">${canArea() ? `<button class="btn ${noArea(s) ? '' : 'ghost '}small" data-area="${esc(s.id)}">${ic('map')}${noArea(s) ? 'Desenhar a área da fábrica' : 'Área da fábrica'}</button>` : ''}</p>` : ''}</div>`).join('')}</div>`
       : `<div class="card">${empty('helmet', 'Ainda não há obras', 'Abre a primeira obra aqui em baixo.')}</div>`}
     ${can('obras.gerir') ? `<details class="fold" ${state.sites.length ? '' : 'open'}><summary><span>+ Abrir obra<span class="sub">Cliente, código e nome</span></span></summary><div>
-    <form id="f"><div class="row"><div><label>Cliente *</label><input name="client" required placeholder="ex.: Refinaria de Sines"></div>
+    <form id="f"><div class="row"><div><label for="osc">Cliente *</label>${clientField('osc', [], '')}</div>
       <div><label>Código *</label><input name="code" required placeholder="ex.: OB-001"></div></div>
       <label>Nome da obra *</label><input name="title" required placeholder="ex.: Paragem 2026, unidade 3">
       <label>Morada</label><input name="addr">
@@ -7832,10 +7832,14 @@ function viewSites() {
   });
   app.querySelectorAll('[data-area]').forEach((b) => b.onclick = () => { state.areaSite = b.dataset.area; go('area'); });
   if ($('#cfgsite')) { $('#cfgsite').onchange = () => loadSiteDetails($('#cfgsite').value); loadSiteDetails($('#cfgsite').value); }
+  // v118: the client list arrives after the screen; the field works without it (the database matches the same way)
+  let siteClients = [];
+  if ($('#f')) clientNames().then((n) => { const dl = $('#oscl'); if (!dl) return; siteClients = n;
+    dl.innerHTML = n.filter((c) => !c.lost).map((c) => `<option value="${esc(c.name)}">`).join(''); clientHint(app, 'osc', n); });
   if ($('#f')) $('#f').onsubmit = async (e) => {
     e.preventDefault();
     const f = new FormData(e.target);
-    const { data, error } = await sb.rpc('mini_open_site', { p_client: f.get('client'), p_title: f.get('title'),
+    const { data, error } = await sb.rpc('mini_open_site', { p_client: clientSend(siteClients, f.get('client')), p_title: f.get('title'),
       p_code: f.get('code'), p_address: f.get('addr') || null });
     if (error) return toast(friendly(error));
     store(SITE_KEY, data); await loadBasics();
@@ -8372,6 +8376,38 @@ async function viewEstimates() {
     }).join('')}</div>`;
   el.querySelectorAll('[data-id]').forEach((b) => b.onclick = () => { st.id = b.dataset.id; st.face = null; viewEstimates(); });
 }
+// v118 (sql/133): one client, never two. The forms that open a client from a typed name list the company's clients while
+// typing and say what will happen: «Siderurgia do Tejo» finds «Siderurgia do Tejo, S.A.» (the same key as
+// private.client_key: no accents, no punctuation, no company form), anything else opens a new client. The database
+// matches the same way, so an old phone cannot open a duplicate either.
+const CLIENT_FORMS = /(\s(s a|sa|s l|sl|lda|limitada|ltda|sas|sarl|sgps|unipessoal|gmbh|ltd|inc|s p a|spa|bv|nv|plc))+$/;
+const clientKey = (s) => {
+  const k = String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  return k.replace(CLIENT_FORMS, '').trim() || k || null;
+};
+async function clientNames() {
+  try { const { data, error } = await sb.rpc('mini_client_names'); return error ? [] : data || []; } catch (_) { return []; }
+}
+// the company's client for a typed name: the same name first, then the same key (live clients come first in the list)
+const clientMatch = (names, typed) => {
+  const v = String(typed || '').trim().toLowerCase(); if (!v) return null;
+  return names.find((c) => c.name.trim().toLowerCase() === v) || names.find((c) => c.key && c.key === clientKey(typed)) || null;
+};
+// what is sent: the name as the company already has it
+const clientSend = (names, typed) => { const m = clientMatch(names, typed); return m ? m.name : String(typed || '').trim(); };
+const clientField = (id, names, value, attrs = '') => `<input id="${id}" name="client" required maxlength="120" list="${id}l" autocomplete="off" value="${esc(value || '')}" placeholder="escolhe ou escreve o nome" ${attrs}>
+  <datalist id="${id}l">${names.filter((c) => !c.lost).map((c) => `<option value="${esc(c.name)}">`).join('')}</datalist>
+  <p class="small muted" id="${id}h" aria-live="polite"></p>`;
+function clientHint(root, id, names) {
+  const inp = root.querySelector('#' + id); const out = root.querySelector('#' + id + 'h'); if (!inp || !out) return;
+  const sync = () => {
+    const v = inp.value.trim(); const m = clientMatch(names, v);
+    out.textContent = !v ? '' : m ? (m.name.trim().toLowerCase() === v.toLowerCase() ? t_('Cliente da lista.') : t_('É o cliente «{x}»: fica nesse.', m.name))
+      : t_('Cliente novo: é aberto ao guardar.');
+    out.classList.toggle('warn-t', !!v && !m);
+  };
+  inp.addEventListener('input', sync); sync();
+}
 // v87: the estimate can be made here or archived from another tool (the estimators each use their own; Diogo 2026-10-23).
 async function newEstimate(client, request) {
   const how = await askSheet('Novo orçamento', `
@@ -8385,14 +8421,15 @@ async function newEstimate(client, request) {
   const { data: r, error: e1 } = await sb.rpc('mini_estimate_rules');
   if (e1) return toast(friendly(e1));
   const forms = r.forms || Object.keys(EST_FORMS);
+  const names = await clientNames();
   const fd = await askSheet('Novo orçamento', `
-    <label for="oc">Cliente</label><input id="oc" name="client" required maxlength="120" placeholder="ex.: Refinaria do Norte" value="${esc(client || '')}">
+    <label for="oc">Cliente</label>${clientField('oc', names, client)}
     <label for="ot">O que se orçamenta</label><input id="ot" name="title" required maxlength="160" placeholder="ex.: Paragem 2027, instrumentação da unidade 3">
     <label>Forma de preço</label><div class="chips reasons" role="radiogroup">${forms.map((f, i) => `<label class="chip"><input type="radio" name="form" value="${f}" ${f === 'mx' || (i === 0 && !forms.includes('mx')) ? 'checked' : ''} required>${esc(EST_FORMS[f].n)}</label>`).join('')}</div>
     <p class="small muted">Podes mudar a forma depois: o total não muda, só a maneira de o mostrar ao cliente.</p>
-    <label class="check inline"><input type="checkbox" name="ex" checked> Começar com um exemplo de números inventados</label>`, 'Criar');
+    <label class="check inline"><input type="checkbox" name="ex" checked> Começar com um exemplo de números inventados</label>`, 'Criar', (d) => clientHint(d, 'oc', names));
   if (!fd) return;
-  const { data, error } = await sb.rpc('mini_estimate_create', { p_client: String(fd.get('client') || '').trim(), p_title: String(fd.get('title') || '').trim(),
+  const { data, error } = await sb.rpc('mini_estimate_create', { p_client: clientSend(names, fd.get('client')), p_title: String(fd.get('title') || '').trim(),
     p_form: fd.get('form'), p_example: !!fd.get('ex') });
   if (error) return toast(friendly(error));
   if (request) { const { error: e2 } = await sb.rpc('mini_estimate_request', { p_estimate: data, p_request: request }); if (e2) toast(friendly(e2)); }
@@ -8465,13 +8502,10 @@ async function requestOpen(r) {
 }
 // A new request (or correcting one). The client is picked by name: the same client is never opened twice.
 async function requestEdit(r, client) {
-  let names = [];
-  try { const { data } = await sb.rpc('mini_estimates'); names = [...new Set((data || []).map((e) => e.client))]; } catch (_) { /* no list */ }
-  for (const x of ((orcState().req || {}).requests || [])) if (!names.includes(x.client)) names.push(x.client);
+  const names = await clientNames();
   const v = r || {}; const today = new Date().toISOString().slice(0, 10);
   const fd = await askSheet(r ? 'Corrigir o pedido' : 'Pedido do cliente', `
-    <label for="rc">Cliente *</label><input id="rc" name="client" required maxlength="255" list="rcl" value="${esc(v.client || client || '')}" placeholder="escolhe ou escreve o nome" ${client ? 'readonly' : ''}>
-    <datalist id="rcl">${names.map((n) => `<option value="${esc(n)}">`).join('')}</datalist>
+    <label for="rc">Cliente *</label>${clientField('rc', names, v.client || client, client ? 'readonly' : '')}
     <p class="small muted">Se o cliente já existe, escolhe-o: os pedidos do ano ficam todos juntos na ficha dele.</p>
     <label for="rp">Quem pediu</label><input id="rp" name="contact" maxlength="120" value="${esc(v.contact || '')}" placeholder="ex.: Eng.ª Marta, manutenção">
     <label>Como pediu *</label><div class="chips reasons" role="radiogroup">${Object.entries(REQ_CH).map(([k, l], i) => `<label class="chip"><input type="radio" name="ch" value="${k}" ${(v.channel ? v.channel === k : i === 0) ? 'checked' : ''} required>${esc(l)}</label>`).join('')}</div>
@@ -8479,9 +8513,9 @@ async function requestEdit(r, client) {
       <div><label for="rd">Responder até</label><input id="rd" name="due" type="date" value="${esc(v.due_on || '')}"></div></div>
     <label for="rs">O que o cliente pede *</label><textarea id="rs" name="scope" required minlength="3" maxlength="2000" rows="3" placeholder="ex.: paragem da unidade 3, instrumentação, março">${esc(v.scope || '')}</textarea>
     ${r ? '' : `<label for="rf">Email ou ficheiro do pedido</label><input id="rf" name="f" type="file" accept="${esc(EST_FILE_ACCEPT)}">
-    <p class="small muted">Dica: no email, «Imprimir» → «Guardar como PDF», e junta aqui. Fica com a data e a impressão digital.</p>`}`, r ? 'Guardar' : 'Registar pedido');
+    <p class="small muted">Dica: no email, «Imprimir» → «Guardar como PDF», e junta aqui. Fica com a data e a impressão digital.</p>`}`, r ? 'Guardar' : 'Registar pedido', (d) => clientHint(d, 'rc', names));
   if (!fd) return;
-  const name = String(fd.get('client') || '').trim();
+  const name = clientSend(names, fd.get('client'));
   const p = { id: r ? r.id : null, client_name: name, contact: String(fd.get('contact') || '').trim(), channel: fd.get('ch'),
     received_on: fd.get('recv'), due_on: fd.get('due') || null, scope: String(fd.get('scope') || '').trim() };
   if (r && name === r.client) p.client = r.client_id;
@@ -8632,18 +8666,19 @@ async function newEstimateFile(client, request) {
   const { data: r, error: e1 } = await sb.rpc('mini_estimate_rules');
   if (e1) return toast(friendly(e1));
   const forms = r.forms || Object.keys(EST_FORMS);
+  const names = await clientNames();
   const fd = await askSheet('Arquivar orçamento já feito', `
     <label for="xf">Ficheiro do orçamento (PDF, Excel, Word ou foto) *</label><input id="xf" name="f" type="file" required accept="${esc(EST_FILE_ACCEPT)}">
-    <label for="xcl">Cliente *</label><input id="xcl" name="client" required maxlength="120" value="${esc(client || '')}" placeholder="ex.: Refinaria do Norte">
+    <label for="xcl">Cliente *</label>${clientField('xcl', names, client)}
     <label for="xti">O que se orçamenta *</label><input id="xti" name="title" required maxlength="160" placeholder="ex.: Paragem 2027, instrumentação da unidade 3">
     ${estFileFields(null, forms)}
-    <p class="small muted">Fica guardado com a impressão digital e nunca se apaga. Depois envias para assinatura, como um orçamento feito aqui.</p>`, 'Arquivar', estFileSync);
+    <p class="small muted">Fica guardado com a impressão digital e nunca se apaga. Depois envias para assinatura, como um orçamento feito aqui.</p>`, 'Arquivar', (d) => { estFileSync(d); clientHint(d, 'xcl', names); });
   if (!fd) return;
   const p = estFilePayload(fd); if (!p) return;
   const f = fd.get('f');
   if (!f || !f.size || !estFileType(f)) return toast(!f || !f.size ? 'Falta o ficheiro do orçamento.' : 'Só aceito PDF, Excel, Word ou fotografia.');
   if (f.size > EST_FILE_MAX) return toast('O ficheiro é grande demais (máximo 20 MB).');
-  const { data: id, error } = await sb.rpc('mini_estimate_create_file', { p: { ...p, client: String(fd.get('client') || '').trim(), title: String(fd.get('title') || '').trim(), request: request || null } });
+  const { data: id, error } = await sb.rpc('mini_estimate_create_file', { p: { ...p, client: clientSend(names, fd.get('client')), title: String(fd.get('title') || '').trim(), request: request || null } });
   if (error) return toast(friendly(error));
   const ok = await estFileUpload(id, f);
   toast(ok ? 'Arquivado em rascunho. Confere e envia para assinatura.' : 'O orçamento ficou em rascunho, mas o ficheiro não foi. Junta-o outra vez.');
