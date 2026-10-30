@@ -53,6 +53,40 @@ const REASON_PREFIX = {
   'skill_missing:': 'Falta a competência: ',
 };
 const ERRORS = [
+  // v128 · Informática (sql/142)
+  [/equipment not found/i, 'Equipamento não encontrado. Confirma o número (INF-…), o n.º de série ou o IMEI.'],
+  [/equipment (INF-\d+) is not free \((.+)\)/i, 'O equipamento $1 não está livre: $2.'],
+  [/choose the kind of equipment/i, 'Escolhe o que é (portátil, telemóvel…).'],
+  [/write the brand and model/i, 'Escreve a marca e o modelo.'],
+  [/the IMEI has 15 digits/i, 'O IMEI tem 15 algarismos (marca *#06# no telemóvel).'],
+  [/a value is not valid \(date or price\)/i, 'Uma data ou o preço não estão certos.'],
+  [/the price is not valid/i, 'O preço não está certo.'],
+  [/the purchase date is in the future/i, 'A data de compra não pode ser depois de hoje.'],
+  [/the warranty ends before the purchase/i, 'A garantia não pode acabar antes da compra.'],
+  [/this serial number or IMEI is already registered/i, 'Este n.º de série ou IMEI já está registado noutro equipamento.'],
+  [/this sticker is already on another piece of equipment/i, 'Este autocolante já está noutro equipamento.'],
+  [/this person has left the company/i, 'Esta pessoa já saiu da empresa.'],
+  [/tap the card of the person who receives, or say why there is no card/i, 'A pessoa que recebe encosta o cartão dela, ou escreve porque não tem cartão.'],
+  [/this equipment is not with anyone/i, 'Este equipamento não está com ninguém.'],
+  [/say how it came back/i, 'Diz como veio.'],
+  [/write what happened \(at least 5 characters\)/i, 'Escreve o que aconteceu (5 letras ou mais).'],
+  [/this equipment is with someone: receive it first/i, 'Este equipamento está com alguém: recebe-o primeiro.'],
+  [/choose what happened/i, 'Escolhe o que aconteceu.'],
+  [/this equipment was retired/i, 'Este equipamento foi abatido.'],
+  [/nothing to change/i, 'Já está nesse estado.'],
+  [/write why \(at least 5 characters\)/i, 'Escreve porquê (5 letras ou mais).'],
+  [/choose the kind of account/i, 'Escolhe que conta é.'],
+  [/write the account name or address/i, 'Escreve o endereço ou o nome da conta.'],
+  [/the email address is not valid/i, 'O endereço de email não está certo.'],
+  [/never write passwords here/i, 'Nunca escrevas palavras-passe aqui: só o nome da conta.'],
+  [/this account is already registered/i, 'Esta conta já está registada.'],
+  [/account not found/i, 'Conta não encontrada.'],
+  [/this account is already closed/i, 'Esta conta já está fechada.'],
+  [/say how the account was closed/i, 'Diz como ficou a conta (fechada, reencaminhada, resposta automática).'],
+  [/write to whom the email goes now/i, 'Escreve para quem vai o email agora.'],
+  [/IT records are never (changed|removed)/i, 'Os registos da informática nunca se alteram nem se apagam.'],
+  [/a delivery or return already signed cannot be changed/i, 'Uma entrega ou devolução já assinada não muda.'],
+  [/a closed account stays as it was closed/i, 'Uma conta fechada fica como foi fechada.'],
   // Resíduos (sql/132)
   // v120 · Inventário (sql/135)
   [/inventory not found/i, 'Inventário não encontrado.'],
@@ -1245,7 +1279,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '126';
+const APP_VERSION = '128';
 // v107 (Diogo 2026-10-26): «Início» = what is urgent + the departments. The bottom bar keeps only Início, the field tools of
 // the encarregado (Equipa, Picar) or of the safety officer (Emergência), Procurar and Eu. Everything else is in its department.
 const TABS = { supervisor: ['inicio', 'equipa', 'picar', 'minhas'], admin: ['inicio', 'minhas'],
@@ -1262,7 +1296,7 @@ function tabsFor(role) {
   return TABS[role] || TABS.supervisor;
 }
 const OFFLINE_VIEWS = ['picar', 'minhas', 'material', 'reunioes', 'relatos', 'emergencia', 'residuos', 'inventario'];   // v89: they keep a copy
-const MORE_ORDER = ['inicio', 'saude', 'empresa', 'onbtextos', 'equipa', 'material', 'picar', 'emergencia', 'relatos', 'reunioes', 'lmra', 'painelqsa', 'painelcom', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'faltas', 'mesresumo', 'reclamacoes', 'salarios', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'envios', 'inventario', 'residuos', 'compras', 'frota', 'alojamento', 'viagens', 'docscliente', 'despesas', 'diarias', 'andaimes', 'processo', 'clientes', 'custos', 'progresso', 'frentes', 'rotinas', 'contactos'];
+const MORE_ORDER = ['inicio', 'saude', 'empresa', 'onbtextos', 'equipa', 'material', 'picar', 'emergencia', 'relatos', 'reunioes', 'lmra', 'painelqsa', 'painelcom', 'painel', 'naobra', 'horas', 'minhas', 'secretariado', 'faltas', 'mesresumo', 'reclamacoes', 'salarios', 'seguranca', 'trabalhadores', 'acolhimento', 'producao', 'qualidade', 'obras', 'comercial', 'premios', 'orcamentos', 'armazem', 'envios', 'inventario', 'residuos', 'informatica', 'compras', 'frota', 'alojamento', 'viagens', 'docscliente', 'despesas', 'diarias', 'andaimes', 'processo', 'clientes', 'custos', 'progresso', 'frentes', 'rotinas', 'contactos'];
 // Computer mode: on a wide screen (the office PC) the menu is a column on the left with every screen in it, and the
 // Secretariado shows tables. The phone keeps the bottom bar. Same code, same rules: only the layout changes.
 const WIDE = window.matchMedia('(min-width: 1100px)');
@@ -1285,7 +1319,7 @@ const MENU_GROUPS = [
   ['Frota', ['frota']],
   ['QSA · Qualidade, Segurança e Ambiente', ['painelqsa', 'relatos', 'seguranca', 'reunioes', 'lmra', 'emergencia', 'qualidade', 'processo']],
   ['Produção (Obra)', ['painel', 'naobra', 'progresso', 'frentes', 'rotinas', 'material', 'andaimes', 'picar', 'obras', 'equipa', 'producao']],
-  ['Compras e Armazém', ['armazem', 'envios', 'inventario', 'residuos', 'compras']],
+  ['Compras e Armazém', ['armazem', 'envios', 'inventario', 'residuos', 'informatica', 'compras']],
   ['Comercial', ['painelcom', 'comercial']],
   ['Orçamentação', ['orcamentos']],
   ['Eu', ['minhas', 'contactos']],
@@ -1310,7 +1344,7 @@ const VIEW_NEEDS = {
   emergencia: () => can('seguranca.emergencia'), acolhimento: () => can('acolhimento.gerir'),
   obras: () => can('obras.gerir') || can('obras.ver_detalhes') || can('obras.area'), painel: () => canSiteDetails(), naobra: () => canSiteDetails() || can('ponto.picar'),
   equipa: () => canSiteDetails(), picar: () => can('ponto.picar'), horas: () => can('horas.ver') || can('horas.validar_obra'),
-  andaimes: () => canScaffolds(), producao: () => canProd(), progresso: () => canProgress(), frentes: () => canFronts(), rotinas: () => canRoutines(), contactos: () => true, material: () => canSiteMaterial(), armazem: () => canWh(), envios: () => canShip(), inventario: () => canInv(), residuos: () => canWaste(), compras: () => canBuy(), frota: () => canFleet(),
+  andaimes: () => canScaffolds(), producao: () => canProd(), progresso: () => canProgress(), frentes: () => canFronts(), rotinas: () => canRoutines(), contactos: () => true, material: () => canSiteMaterial(), armazem: () => canWh(), envios: () => canShip(), inventario: () => canInv(), residuos: () => canWaste(), informatica: () => canIT(), compras: () => canBuy(), frota: () => canFleet(),
   orcamentos: () => canEstimates(), qualidade: () => canQuality(), comercial: () => canSales(), premios: () => canAwards(), custos: () => canCosts(), diarias: () => canPerDiems(),
   faltas: () => canApprove(), mesresumo: () => canApprove(), reclamacoes: () => canApprove(), salarios: () => canPayroll(),
 };
@@ -1355,9 +1389,10 @@ const ENC_ICONS = {
   pyramid: '<path d="M12 3 2.5 20h19zM6.4 13h11.2M9.2 8h5.6"/>',
   funnel: '<path d="M3 4h18l-7 8v6l-4 2v-8z"/>',
   pulse: '<path d="M3 12h4l2.5-6 4 12 2.5-6H21"/>',
+  laptop: '<path d="M5 6h14v9H5zM3 18h18M10 18l.5-1.5h3L14 18"/>',
   medal: '<path d="M12 14a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM9.5 13.3 8 21l4-2 4 2-1.5-7.7M10 9l1.5 1.5L14.5 7.5"/>',
 };
-const MENU_ICON = { painel: 'gauge', producao: 'chart', seguranca: 'hhat', equipa: 'crew', minhas: 'myclock', naobra: 'gate', qualidade: 'medal', clientes: 'firms', comercial: 'target', premios: 'trophy', custos: 'coins', progresso: 'sheet', frentes: 'fronts', rotinas: 'todo', docscliente: 'clientdocs', residuos: 'recycle', inventario: 'stocktake', envios: 'car', saude: 'pulse', painelqsa: 'pyramid', painelcom: 'funnel' };
+const MENU_ICON = { painel: 'gauge', producao: 'chart', seguranca: 'hhat', equipa: 'crew', minhas: 'myclock', naobra: 'gate', qualidade: 'medal', clientes: 'firms', comercial: 'target', premios: 'trophy', custos: 'coins', progresso: 'sheet', frentes: 'fronts', rotinas: 'todo', docscliente: 'clientdocs', residuos: 'recycle', inventario: 'stocktake', envios: 'car', informatica: 'laptop', saude: 'pulse', painelqsa: 'pyramid', painelcom: 'funnel' };
 (function encIcons() {
   const ns = 'http://www.w3.org/2000/svg'; const sp = document.createElementNS(ns, 'svg');
   sp.setAttribute('width', '0'); sp.setAttribute('height', '0'); sp.setAttribute('aria-hidden', 'true'); sp.style.position = 'absolute';
@@ -1678,6 +1713,7 @@ async function boot() {
   nav.querySelector('[data-view=emergencia]').hidden = worker || !canEmergency();
   nav.querySelector('[data-view=armazem]').hidden = worker || state.offline || !canWh();
   nav.querySelector('[data-view=envios]').hidden = worker || state.offline || !canShip();
+  nav.querySelector('[data-view=informatica]').hidden = worker || state.offline || !canIT();
   nav.querySelector('[data-view=inventario]').hidden = worker || !canInv();   // v120: counting opens without network (kept copy, entries wait)
   nav.querySelector('[data-view=residuos]').hidden = worker || !canWaste();   // v117: opens without network (kept copy, entradas wait)
   nav.querySelector('[data-view=compras]').hidden = worker || state.offline || !canBuy();
@@ -2158,7 +2194,7 @@ function go(view) {
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
      ficha: viewWorker, obras: viewSites, area: viewArea, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients, cliente: viewClient, precos: viewPrices, empresa: viewCompanyRules, inicio: viewHome, departamento: viewDept, saude: viewHealth, painelqsa: viewQsaPanel, painelcom: viewSalesPanel,
      processo: viewProcess, orcamentos: viewEstimates, comercial: viewSales, premios: viewAwards, custos: viewCosts, diarias: viewPerDiemOffice, faltas: viewOfficeAbsences, mesresumo: viewOfficeSummary, reclamacoes: viewOfficeRequests, salarios: viewOfficePayroll, lmra: viewLmra, reunioes: viewMeetings, relatos: viewHazards, material: viewSiteMaterial, emergencia: viewEmergency,
-     armazem: viewWarehouse, envios: viewShipments, inventario: viewInventory, residuos: viewWaste, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, docscliente: viewClientDocs, producao: viewProd, progresso: viewProgress, frentes: viewFronts, rotinas: viewRoutines, contactos: viewContacts, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
+     armazem: viewWarehouse, envios: viewShipments, inventario: viewInventory, residuos: viewWaste, informatica: viewIT, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, docscliente: viewClientDocs, producao: viewProd, progresso: viewProgress, frentes: viewFronts, rotinas: viewRoutines, contactos: viewContacts, qualidade: viewQuality, despesas: viewExpenses, andaimes: viewScaffolds }[view] || viewClock)();
   checkEmergencyBar(); encBadges();
 }
 
@@ -3828,7 +3864,7 @@ async function viewWorker() {
         ${w.card_uid ? chip('', 'cartão ' + maskUid(w.card_uid), 'card') : chip('warn', 'sem cartão', 'card')}</div>
       ${need.length ? `<div class="ready ${pct === 100 ? 'ok' : 'bad'}"><div class="ready-t"><span>Pronto para entrar na obra</span><b>${fine} de ${need.length} documentos</b></div>
         <div class="prog"><i style="width:${pct}%"></i></div></div>` : ''}</div></div>
-    <div id="wonb"></div>
+    <div id="wonb"></div><div id="wit"></div>
     <div class="card" id="ficha">${skel(2)}</div>
     <div class="card"><h2 style="margin-top:0">Documentos e formação</h2>
       <table class="rt"><tr><th>Documento</th><th>Validade</th><th>Estado</th></tr>${ds.data.map((d) => `<tr>
@@ -3945,12 +3981,16 @@ async function viewWorker() {
   };
   if ($('#act')) $('#act').onsubmit = async (e) => {
     e.preventDefault(); const f = new FormData(e.target);
-    if (w.is_active && !confirm(`Desativar ${w.full_name}? Deixa de poder entrar em qualquer obra.`)) return;
+    // v128: before an exit, say what the person still has (equipment, tools, accounts): it stays listed until closed
+    let open = '';
+    if (w.is_active) { const r = await sb.rpc('mini_it_person', { p_collab: id }); if (r.data) open = itOpenText(r.data.open); if (open.startsWith('Nada')) open = ''; }
+    if (w.is_active && !confirm(`Desativar ${w.full_name}? Deixa de poder entrar em qualquer obra.${open ? '\n\n' + t_(open) + '\n' + t_('Fica na ficha e na Informática até estar tudo fechado.') : ''}`)) return;
     const { error } = await sb.rpc('mini_set_worker_active', { p_collab: id, p_active: !w.is_active, p_reason: f.get('why') });
     if (error) return toast(friendly(error));
     toast(w.is_active ? 'Desativado.' : 'Reativado. Dá-lhe um cartão.'); await loadBasics(); viewWorker();
   };
   loadWorkerProfile(id); loadOnbCard(id);
+  if (canIT() || canPeople()) loadItCard(id);   // v128: equipment and accounts; after an exit, what is still open
 }
 
 // ------------------------------------------------------------------ Ficha do colaborador (a ficha de papel da empresa)
@@ -5445,6 +5485,7 @@ const TOUR_TEXT = {
   compras: 'Compras: pedes o que falta; acima do limite o Secretariado aprova; depois encomenda-se e regista-se o que chega.',
   armazem: 'Armazém: EPIs, farda e ferramentas. Quem recebe assina com o cartão; os tamanhos vêm da ficha.',
   envios: 'Envios para a obra: escolhes a obra e vês a morada, quem recebe, os tamanhos de cada pessoa e o EPI que lhe falta. Na obra, cada um assina o seu saco com o cartão.',
+  informatica: 'Informática: os portáteis, telemóveis, impressoras e ratos de cada pessoa, no escritório ou na obra, e as contas de email. Quando alguém sai, diz o que falta devolver e fechar.',
   residuos: 'Resíduos: o lixo da oficina e do escritório, os EPI gastos e as pilhas. Cada contentor com o seu código LER, cada recolha com a empresa licenciada e a e-GAR.',
   horas: 'Horas: as horas da equipa, dia a dia, para corrigir e validar.',
   minhas: 'Eu: o teu dia, a tua semana, as tuas horas, pedidos, diárias, documentos, EPI e onde dormes. Se um dia estiver mal, dizes aqui.',
@@ -16679,6 +16720,292 @@ async function invAtFile(id) {
   toast(`Ficheiro da AT: ${pl(lines.length - 1, 'artigo', 'artigos')}. Entrega ao contabilista.`);
 }
 
+// ------------------------------------------------------------------ v128 · Informática (sql/142)
+// Diogo 2026-10-30: «os PCs, teclados… que pertencem ao João, ao Pedro». Primavera keeps the value of the equipment
+// (Imobilizado); here is WHO has it. Each piece is INF-0001…, with the asset number in Primavera to link both. The person
+// signs with their own card; PCs, phones and tablets come back «por apagar» and only return to stock once wiped. Email
+// and other accounts: only the name, never a password. When someone leaves, the list of what is still open.
+const canIT = () => mod('warehouse') && ['informatica.ver', 'informatica.gerir'].some(can);
+const IT_KIND = { portatil: 'Portátil', computador: 'Computador', telemovel: 'Telemóvel', tablet: 'Tablet', monitor: 'Monitor', impressora: 'Impressora',
+  teclado: 'Teclado', rato: 'Rato', auscultador: 'Auscultadores', router: 'Router ou hotspot', disco: 'Disco ou pen', outro: 'Outro' };
+const IT_ST = { stock: ['ok', 'No armazém'], assigned: ['info', 'Com uma pessoa'], to_wipe: ['warn', 'Por apagar os dados'], repair: ['warn', 'Em reparação'],
+  lost: ['bad', 'Perdido'], retired: ['reg', 'Abatido'] };
+const IT_ACC = { email: 'Email', microsoft365: 'Microsoft 365', google: 'Google', vpn: 'VPN', erp: 'Primavera ou outro ERP', telefone: 'Linha de telemóvel', outro: 'Outra conta' };
+const IT_HOW = { fechada: 'Fechada', reencaminha: 'Reencaminhada', resposta: 'Resposta automática' };
+const IT_FILTERS = [['all', 'Todos'], ['assigned', 'Com pessoas'], ['stock', 'No armazém'], ['to_wipe', 'Por apagar'], ['repair', 'Em reparação'], ['lost', 'Perdidos'], ['retired', 'Abatidos']];
+function viewIT() {
+  if (!state.ready) return boot();   // never a screen before login
+  if (!canIT()) return viewClock();   // code guard as well as the database's
+  state.it = { q: '', f: 'all', ...(state.it || {}) };
+  const dept = (menuBase().find(([, vs]) => vs.includes('informatica')) || ['Compras e Armazém'])[0].split(' · ')[0];
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">${esc(dept)}</p><h1>Informática</h1></div></div><div id="itbody">${skel(3)}</div>`;
+  if (state.it.person) { const id = state.it.person; state.it.person = null; return itPersonPage(id); }
+  itHome();
+}
+async function itHome() {
+  const box = $('#itbody'); if (!box) return;
+  const { data: h, error } = await sb.rpc('mini_it_home');
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = `<div class="card"><p>${esc(friendly(error))}</p></div>`; return; }
+  state.it.home = h; state.it.page = null; const c = h.counts || {};
+  const exits = h.exits || [];
+  box.innerHTML = `<p class="small muted inv-lead">Quem tem cada portátil, telemóvel, impressora ou rato, no escritório ou na obra. O valor fica no Primavera; aqui fica com quem está.</p>
+    ${exits.length ? `<section class="card ws-alerts"><h2 style="margin-top:0">Saídas por fechar</h2><ul class="plain">${exits.map((e) => `<li class="ws-al bad">
+      <span class="dot">${ic('warn')}</span><span class="grow"><b>${esc(e.name)}</b>${e.left_on ? ` · saiu a ${esc(fmtDate(e.left_on))}` : ''}<br><span class="small">${esc(itOpenText(e.open))}</span></span>
+      <button class="btn ghost small" type="button" data-itp="${esc(e.id)}">Abrir</button></li>`).join('')}</ul></section>` : ''}
+    <div class="ov-tiles"><div><b>${c.assigned || 0}</b><span>com pessoas</span></div><div><b>${c.stock || 0}</b><span>no armazém</span></div>
+      <div><b>${c.to_wipe || 0}</b><span>por apagar</span></div><div><b>${(c.repair || 0) + (c.lost || 0)}</b><span>em reparação ou perdidos</span></div></div>
+    ${c.warranty_soon ? `<p class="small">${ic('info')} ${esc(pl(c.warranty_soon, 'equipamento acaba', 'equipamentos acabam'))} a garantia nos próximos 60 dias.</p>` : ''}
+    ${c.no_erp ? `<p class="small">${ic('warn')} ${esc(pl(c.no_erp, 'equipamento de 1000 € ou mais não tem', 'equipamentos de 1000 € ou mais não têm'))} o n.º do bem no Primavera.</p>` : ''}
+    ${h.can_manage ? `<div class="row2"><button class="btn" id="itgive">${ic('in')}Entregar a uma pessoa</button><button class="btn ghost" id="itback">${ic('out')}Receber de volta</button></div>
+      <p><button class="btn ghost wide" id="itnew">+ Equipamento novo</button></p>` : ''}
+    <p><button class="btn ghost wide" id="itwho">${ic('user')}Ver uma pessoa: equipamento e contas</button></p>
+    <input id="itq" type="search" aria-label="Procurar equipamento" placeholder="Procurar: INF-0001, pessoa, marca, n.º de série" value="${esc(state.it.q)}">
+    <div class="chips reasons" id="itf" role="radiogroup">${IT_FILTERS.map(([k, l]) => `<label class="chip"><input type="radio" name="itf" value="${k}" ${state.it.f === k ? 'checked' : ''}>${esc(l)}</label>`).join('')}</div>
+    <div id="itlist"></div>
+    <details class="card inv-how"><summary>Como funciona</summary><ol class="small">
+      <li><b>Registar</b>: cada equipamento recebe um número (INF-0001). Escreve o n.º de série, o IMEI no telemóvel e o n.º do bem no Primavera, para os dois ficarem ligados. Um autocolante NFC ou QR deixa encontrá-lo só de o ler.</li>
+      <li><b>Entregar</b>: a pessoa encosta o cartão dela. No escritório ou numa obra. Fica para sempre quem recebeu e quando.</li>
+      <li><b>Receber</b>: dizes como veio. Portáteis, telemóveis e tablets ficam «por apagar» e só voltam a ser entregues depois de apagados (a próxima pessoa não pode ver os dados da anterior).</li>
+      <li><b>Contas</b>: o email e as outras contas de cada pessoa ficam na ficha dela, só com o nome da conta. Nunca escrevas palavras-passe aqui.</li>
+      <li><b>Saída</b>: quando alguém é desativado, a Informática recebe um aviso com o que falta devolver e fechar. O acesso à app e o cartão de picar desligam-se sozinhos.</li></ol></details>`;
+  box.querySelectorAll('[data-itp]').forEach((b) => b.onclick = () => itPersonPage(b.dataset.itp));
+  if ($('#itnew')) $('#itnew').onclick = () => itForm(null);
+  $('#itwho').onclick = async () => {
+    const people = (state.people || []).filter((p) => p.is_active);
+    const fd = await askSheet('Ver uma pessoa', `<label for="itwp">Quem? *</label><select id="itwp" name="c" required><option value="">Escolhe…</option>${people.map((p) => `<option value="${esc(p.id)}">${esc(p.full_name)}${p.employee_number ? ' · ' + esc(p.employee_number) : ''}</option>`).join('')}</select>`, 'Abrir');
+    if (fd && fd.get('c')) itPersonPage(fd.get('c'));
+  };
+  if ($('#itgive')) $('#itgive').onclick = () => itAskRef('Entregar a uma pessoa', (a) => itGive(a));
+  if ($('#itback')) $('#itback').onclick = () => itAskRef('Receber de volta', (a) => itReceive(a));
+  $('#itq').oninput = (e) => { state.it.q = e.target.value; itDrawList(); };
+  box.querySelectorAll('input[name=itf]').forEach((r) => r.onchange = () => { state.it.f = r.value; itDrawList(); });
+  itDrawList();
+}
+function itOpenText(o) {
+  const parts = [];
+  if (o.it.length) parts.push(pl(o.it.length, 'equipamento', 'equipamentos'));
+  if (o.tools.length + o.cases.length) parts.push(pl(o.tools.length + o.cases.length, 'ferramenta', 'ferramentas'));
+  if (o.accounts.length) parts.push(pl(o.accounts.length, 'conta', 'contas'));
+  return parts.length ? `Falta devolver ou fechar: ${parts.join(' · ')}` : 'Nada por devolver.';   // « · » so each piece translates
+}
+function itDrawList() {
+  const box = $('#itlist'); const h = state.it.home; if (!box || !h) return;
+  const q = state.it.q.trim().toLowerCase();
+  const list = h.assets.filter((a) => (state.it.f === 'all' ? a.status !== 'retired' : a.status === state.it.f)
+    && (!q || [a.code, a.label, a.serial, a.imei, a.phone_number, a.erp_ref, a.holder && a.holder.name, IT_KIND[a.kind]].some((x) => x && String(x).toLowerCase().includes(q))));
+  box.innerHTML = list.length ? list.map(itCard).join('')
+    : `<div class="card"><p class="muted">${h.assets.length ? 'Nada com este filtro.' : 'Ainda não há equipamento registado.'}${h.assets.length || !h.can_manage ? '' : ' Começa em «+ Equipamento novo».'}</p></div>`;
+  box.querySelectorAll('[data-ita]').forEach((b) => b.onclick = () => itAsset(b.dataset.ita));
+}
+function itCard(a) {
+  const [k, l] = IT_ST[a.status]; const hd = a.holder;
+  return `<button type="button" class="card inv-card" data-ita="${esc(a.id)}"><div class="wk"><div class="grow">
+    <div class="nm"><b>${esc(a.code)}</b> · ${esc(t_(IT_KIND[a.kind]))} ${esc(a.label)}</div>
+    <div class="small muted">${hd ? `${esc(hd.name)}${hd.active ? '' : ' (saiu)'} · ${hd.site ? esc(hd.site) : 'escritório'} · desde ${esc(fmtDate(hd.since.slice(0, 10)))}` : a.serial ? 'N.º de série ' + esc(a.serial) : ''}${a.erp_ref ? ' · Primavera ' + esc(a.erp_ref) : ''}</div></div>
+    ${chip(hd && !hd.active ? 'bad' : k, hd && !hd.active ? t_('Por devolver') : t_(l))}</div></button>`;
+}
+// Which equipment: read the sticker, type the number, serial or IMEI.
+async function itAskRef(title, then) {
+  const nfcOk = 'NDEFReader' in window; let ctrl = null;
+  const fd = await askSheet(title, `${nfcOk ? `<p class="small muted">Encosta o telemóvel ao autocolante do equipamento, ou escreve.</p>` : ''}
+    <label for="itref">INF-…, n.º de série ou IMEI *</label><input id="itref" name="r" required autocomplete="off" autocapitalize="characters">`, 'Continuar', (d) => {
+    if (!nfcOk) return;
+    (async () => { try { ctrl = new AbortController(); const r = new NDEFReader(); await r.scan({ signal: ctrl.signal });
+      r.onreading = (ev) => { d.querySelector('#itref').value = normUid(ev.serialNumber); beep(true); }; } catch (_) { /* typing still works */ } })();
+    d.addEventListener('close', () => { if (ctrl) ctrl.abort(); });
+  });
+  if (!fd) return;
+  const { data, error } = await sb.rpc('mini_it_asset', { p_ref: String(fd.get('r')).trim() });
+  if (error) return toast(friendly(error));
+  then(data);
+}
+async function itForm(a) {
+  const v = a || {};
+  const fd = await askSheet(a ? `Corrigir ${a.code}` : 'Equipamento novo', `
+    <label for="itk">O que é? *</label><select id="itk" name="kind" required><option value="">Escolhe…</option>${Object.entries(IT_KIND).map(([k, l]) => `<option value="${k}" ${v.kind === k ? 'selected' : ''}>${esc(t_(l))}</option>`).join('')}</select>
+    <label for="itl">Marca e modelo *</label><input id="itl" name="label" required maxlength="120" value="${esc(v.label || '')}" placeholder="ex.: Lenovo ThinkPad E14">
+    <div class="row"><div><label for="its">N.º de série</label><input id="its" name="serial" maxlength="80" autocapitalize="characters" value="${esc(v.serial || '')}"></div>
+      <div><label for="itr">N.º do bem no Primavera</label><input id="itr" name="erp_ref" maxlength="40" value="${esc(v.erp_ref || '')}" placeholder="Imobilizado"></div></div>
+    <div class="row it-phone"><div><label for="iti">IMEI</label><input id="iti" name="imei" inputmode="numeric" maxlength="20" value="${esc(v.imei || '')}" placeholder="*#06# no telemóvel"></div>
+      <div><label for="itn">N.º de telefone</label><input id="itn" name="phone_number" type="tel" maxlength="20" value="${esc(v.phone_number || '')}"></div></div>
+    <div class="row"><div><label for="itb">Comprado a</label><input id="itb" name="bought_on" type="date" value="${esc(v.bought_on || '')}"></div>
+      <div><label for="itc">Preço (€)</label><input id="itc" name="cost" inputmode="decimal" value="${v.cost != null ? esc(String(v.cost).replace('.', ',')) : ''}"></div></div>
+    <label for="itw">Garantia até</label><input id="itw" name="warranty_until" type="date" value="${esc(v.warranty_until || '')}">
+    <label for="itt">Autocolante NFC ou QR</label><div class="manual"><input id="itt" name="tag_code" maxlength="80" autocapitalize="characters" value="${esc(v.tag_code || '')}">${'NDEFReader' in window ? '<button class="btn ghost" type="button" id="ittr">Ler</button>' : ''}</div>
+    <label for="itx">Nota</label><input id="itx" name="note" maxlength="300" value="${esc(v.note || '')}">`, a ? 'Guardar' : 'Registar', (d) => {
+    const ph = d.querySelector('.it-phone'); const k = d.querySelector('#itk');
+    const sync = () => { ph.hidden = !['telemovel', 'tablet', 'router'].includes(k.value); }; k.onchange = sync; sync();
+    const rb = d.querySelector('#ittr');
+    if (rb) rb.onclick = async () => { try { const ctrl = new AbortController(); const r = new NDEFReader(); await r.scan({ signal: ctrl.signal }); toast('Encosta o autocolante.');
+      r.onreading = (ev) => { d.querySelector('#itt').value = normUid(ev.serialNumber); beep(true); ctrl.abort(); }; setTimeout(() => ctrl.abort(), 20000); } catch (err) { toast('O NFC não arrancou: ' + err.message); } };
+  });
+  if (!fd) return;
+  const p = Object.fromEntries([...fd.entries()].filter(([k]) => k !== '_v'));
+  if (a) p.id = a.id;
+  const { data, error } = await sb.rpc('mini_it_asset_save', { p });
+  if (error) return toast(friendly(error));
+  toast(a ? 'Guardado.' : `Registado: ${data.code}. Escreve este número no equipamento ou cola o autocolante.`, 'ok');
+  if ($('#itbody')) itHome();
+}
+// One piece: its card, who had it, and what can be done now.
+async function itAsset(ref) {
+  const { data: a, error } = await sb.rpc('mini_it_asset', { p_ref: ref });
+  if (error) return toast(friendly(error));
+  const m = can('informatica.gerir'); const [k, l] = IT_ST[a.status]; const hd = a.holder;
+  const row = (label, val) => (val ? `<tr><th>${esc(label)}</th><td>${esc(val)}</td></tr>` : '');
+  const d = document.createElement('dialog'); d.className = 'dlg';
+  d.innerHTML = `<form method="dialog"><h2>${esc(a.code)} · ${esc(a.label)}</h2>
+    <p>${chip(k, t_(l))} ${hd ? `com <b>${esc(hd.name)}</b> (${hd.site ? esc(hd.site) : 'escritório'}) desde ${esc(fmtDate(hd.since.slice(0, 10)))}` : ''}</p>
+    ${a.status_note ? `<p class="small">${esc(a.status_note)}</p>` : ''}
+    <table class="rt">${row('Tipo', t_(IT_KIND[a.kind]))}${row('N.º de série', a.serial)}${row('IMEI', a.imei)}${row('Telefone', a.phone_number)}
+      ${row('N.º do bem no Primavera', a.erp_ref || 'falta')}${row('Comprado a', a.bought_on && fmtDate(a.bought_on))}${row('Preço', a.cost != null && invEur(a.cost))}
+      ${row('Garantia até', a.warranty_until && fmtDate(a.warranty_until))}${row('Autocolante', a.tag_code)}${row('Nota', a.note)}</table>
+    <h3>Quem teve</h3>${a.history.length ? `<ul class="plain small">${a.history.map((x) => `<li><b>${esc(x.name)}</b> · ${esc(fmtDate(x.given_at.slice(0, 10)))}${x.returned_at ? ` a ${esc(fmtDate(x.returned_at.slice(0, 10)))} (${esc(x.condition === 'ok' ? 'bom estado' : x.condition === 'damaged' ? 'estragado' : 'perdido')})` : ' até hoje'}${x.site ? ' · ' + esc(x.site) : ''}${x.card ? ' · assinou com o cartão' : x.no_card ? ' · sem cartão: ' + esc(x.no_card) : ''}</li>`).join('')}</ul>` : '<p class="small muted">Ainda ninguém.</p>'}
+    <div class="acts">${m && a.status === 'stock' ? '<button class="btn" value="give">Entregar a uma pessoa</button>' : ''}
+      ${m && a.status === 'assigned' ? '<button class="btn" value="back">Receber de volta</button>' : ''}
+      ${m && a.status === 'to_wipe' ? '<button class="btn" value="wiped">Os dados já foram apagados</button>' : ''}
+      ${m && ['to_wipe', 'repair', 'lost', 'stock'].includes(a.status) ? '<button class="btn ghost wide" value="state">Mudar o estado</button>' : ''}
+      ${m && a.status !== 'retired' ? '<button class="btn ghost wide" value="edit">Corrigir a ficha</button>' : ''}
+      <button class="btn ghost wide" value="cancel">Fechar</button></div></form>`;
+  document.body.appendChild(d); d.showModal();
+  d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
+  d.addEventListener('close', async () => {
+    const r = d.returnValue; d.remove();
+    if (r === 'give') itGive(a); else if (r === 'back') itReceive(a); else if (r === 'edit') itForm(a); else if (r === 'state') itStatus(a);
+    else if (r === 'wiped') {
+      if (!confirm(`Confirmas que ${a.code} foi apagado (reposto de fábrica, sem contas nem ficheiros da pessoa anterior)?`)) return;
+      const { error: e } = await sb.rpc('mini_it_status', { p_asset: a.id, p_to: 'stock', p_note: null });
+      if (e) return toast(friendly(e));
+      toast(`${a.code} apagado e pronto a entregar.`, 'ok'); itRefresh();
+    }
+  });
+}
+function itRefresh() { if ($('#itbody')) return state.it.page ? itPersonPage(state.it.page) : itHome(); if ($('#wit') && state.worker) loadItCard(state.worker); }
+async function itGive(a) {
+  if (a.status !== 'stock') return toast(`${a.code} não está livre: ${t_(IT_ST[a.status][1]).toLowerCase()}.`);
+  const people = (state.people || []).filter((p) => p.is_active);
+  const fd = await askSheet(`Entregar ${a.code}`, `<p class="small muted">${esc(t_(IT_KIND[a.kind]))} ${esc(a.label)}</p>
+    <label for="itpp">A quem? *</label><select id="itpp" name="c" required><option value="">Escolhe…</option>${people.map((p) => `<option value="${esc(p.id)}">${esc(p.full_name)}${p.employee_number ? ' · ' + esc(p.employee_number) : ''}</option>`).join('')}</select>
+    <label for="itsite">Onde vai ser usado?</label><select id="itsite" name="s"><option value="">Escritório</option>${activeSites().map((s) => `<option value="${esc(s.id)}">${esc(s.title)} (${esc(s.cost_center_code)})</option>`).join('')}</select>
+    <label for="itno">Nota</label><input id="itno" name="n" maxlength="300" placeholder="ex.: com carregador e mala">`, 'A pessoa assina');
+  if (!fd) return;
+  const who = people.find((p) => p.id === fd.get('c')); if (!who) return toast('Escolhe a pessoa.');
+  itSign(who, { asset: a.id, collaborator_id: who.id, site_id: fd.get('s') || null, note: String(fd.get('n') || '').trim() || null }, a);
+}
+// The person taps their own card; without a card, the reason (kept in the record).
+function itSign(who, req, a) {
+  const nfcOk = 'NDEFReader' in window;
+  const d = document.createElement('dialog'); d.className = 'dlg';
+  d.innerHTML = `<form method="dialog"><h2>${esc(who.full_name)} assina</h2><p class="small muted">Recebe ${esc(a.code)} · ${esc(a.label)}.</p>
+    ${nfcOk ? `<button class="tapzone reading" type="button"><span class="ring">${ic('tap')}</span><b>${esc(who.full_name.split(' ')[0])}, encoste o seu cartão</b></button>` : ''}
+    <div class="manual"><input id="isuid" autocomplete="off" autocapitalize="characters" placeholder="Número do cartão"><button class="btn ghost" type="button" id="isgo">Assinar</button></div>
+    ${more('Não tem cartão', '<label for="isnc">Porquê? *</label><input id="isnc" maxlength="250" placeholder="ex.: cartão ainda não chegou"><p><button class="btn ghost wide" type="button" id="isnb">Entregar sem cartão</button></p>')}
+    <div id="isres" aria-live="polite"></div><div class="acts"><button class="btn ghost wide" value="cancel">Cancelar</button></div></form>`;
+  document.body.appendChild(d); d.showModal();
+  let ctrl = null; let busy = false;
+  const send = async (extra) => {
+    if (busy) return; busy = true;
+    const { data, error } = await sb.rpc('mini_it_give', { p: { ...req, ...extra } });
+    busy = false;
+    if (error) { beep(false); d.querySelector('#isres').innerHTML = `<div class="result bad">${ic('x')}<div><b>Não ficou entregue</b>${esc(friendly(error))}</div></div>`; return; }
+    beep(true); d.close(); showFlash('ok', 'ENTREGUE', `${data.name} recebeu ${data.code}.`); itRefresh();
+  };
+  const typed = typedWatch(d.querySelector('#isuid'));
+  const byCard = (raw, wasTyped) => { const uid = normUid(raw); if (uid) send({ uid, typed: !!wasTyped }); };
+  if (nfcOk) (async () => { try { ctrl = new AbortController(); const r = new NDEFReader(); await r.scan({ signal: ctrl.signal }); r.onreading = (ev) => byCard(ev.serialNumber, false); } catch (_) { /* typed number still works */ } })();
+  d.querySelector('#isgo').onclick = () => byCard(d.querySelector('#isuid').value, typed());
+  d.querySelector('#isuid').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); byCard(e.target.value, typed()); } };
+  d.querySelector('#isnb').onclick = () => { const why = d.querySelector('#isnc').value.trim(); if (why.length < 5) return toast('Escreve porquê (5 letras ou mais).'); send({ no_card_reason: why }); };
+  d.addEventListener('close', () => { if (ctrl) ctrl.abort(); d.remove(); });
+}
+async function itReceive(a) {
+  if (a.status !== 'assigned') return toast(`${a.code} não está com ninguém.`);
+  const fd = await askSheet(`Receber ${a.code}`, `<p class="small muted">${a.holder ? `De ${esc(a.holder.name)}. ` : ''}${esc(a.label)}</p>
+    <label>Como veio? *</label><div class="chips reasons" role="radiogroup">
+      <label class="chip"><input type="radio" name="c" value="ok" checked required>Em bom estado</label>
+      <label class="chip"><input type="radio" name="c" value="damaged">Estragado</label><label class="chip"><input type="radio" name="c" value="lost">Não devolveu (perdido)</label></div>
+    ${a.keeps_data ? `<label class="chip"><input type="checkbox" name="w" value="1">Já apaguei os dados (reposto de fábrica)</label>
+      <p class="small muted">Se não, fica «por apagar» e ninguém o recebe antes disso.</p>` : ''}
+    <label for="itrn">O que aconteceu?</label><input id="itrn" name="n" maxlength="300" placeholder="Obrigatório se estragado ou perdido">`, 'Receber');
+  if (!fd) return;
+  const { data, error } = await sb.rpc('mini_it_receive', { p: { asset: a.id, condition: fd.get('c'), wiped: fd.get('w') === '1', note: String(fd.get('n') || '').trim() || null } });
+  if (error) return toast(friendly(error));
+  toast(data.status === 'to_wipe' ? `${a.code} recebido. Falta apagar os dados antes de o entregar a outra pessoa.` : data.status === 'stock' ? `${a.code} recebido e pronto a entregar.`
+    : data.status === 'repair' ? `${a.code} recebido: vai para reparação.` : `${a.code} marcado como perdido.`, 'ok');
+  itRefresh();
+}
+async function itStatus(a) {
+  const opts = [['stock', 'Voltou ao armazém (reparado ou encontrado)'], ['repair', 'Em reparação'], ['lost', 'Perdido ou roubado'], ['retired', 'Abater (não volta a ser usado)']].filter(([k]) => k !== a.status);
+  const fd = await askSheet(`Estado de ${a.code}`, `<label>O que aconteceu? *</label><div class="chips reasons" role="radiogroup">${opts.map(([k, l], i) => `<label class="chip"><input type="radio" name="s" value="${k}" ${i ? '' : 'required'}>${esc(l)}</label>`).join('')}</div>
+    ${a.keeps_data ? '<p class="small muted">Para abater um portátil, telemóvel ou tablet, diz como foram destruídos os dados (ex.: disco destruído pela empresa X).</p>' : ''}
+    <label for="itsn">Porquê? *</label><input id="itsn" name="n" required minlength="5" maxlength="300">`, 'Guardar');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_it_status', { p_asset: a.id, p_to: fd.get('s'), p_note: String(fd.get('n')).trim() });
+  if (error) return toast(friendly(error));
+  toast('Guardado.', 'ok'); itRefresh();
+}
+// A person: what they have now, their accounts, and (if they left) what is still open.
+async function itPersonPage(id) {
+  const box = $('#itbody'); if (!box) return;
+  state.it.page = id;
+  box.innerHTML = `<p><button class="btn ghost small" id="itpb">‹ Informática</button></p><div id="wit">${skel(2)}</div>`;
+  $('#itpb').onclick = () => { state.it.page = null; box.innerHTML = skel(3); itHome(); };
+  loadItCard(id, true);
+}
+async function loadItCard(id, full) {
+  const box = $('#wit'); if (!box) return;
+  const { data: p, error } = await sb.rpc('mini_it_person', { p_collab: id });
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = full ? `<div class="card"><p>${esc(friendly(error))}</p></div>` : ''; return; }
+  const o = p.open; const open = o.it.length + o.tools.length + o.cases.length + o.accounts.length; const m = p.can_manage;
+  if (!full && p.active && !open && !m) { box.innerHTML = ''; return; }
+  const done = (ok, txt) => `<li class="ws-al ${ok ? 'ok' : 'bad'}"><span class="dot">${ic(ok ? 'ok' : 'warn')}</span><span class="grow">${txt}</span></li>`;
+  const exit = !p.active ? `<ul class="plain">
+      ${done(!p.login_active, p.has_login ? (p.login_active ? 'Acesso à app ainda ligado: desliga-o em «Conta na app».' : 'Acesso à app desligado.') : 'Não tinha conta na app.')}
+      ${done(!p.card_active, p.card_active ? 'Cartão de picar ainda ativo.' : 'Cartão de picar anulado.')}
+      ${done(!o.it.length, o.it.length ? `Falta devolver ${pl(o.it.length, 'equipamento', 'equipamentos')} de informática.` : 'Equipamento de informática devolvido.')}
+      ${done(!(o.tools.length + o.cases.length), o.tools.length + o.cases.length ? `Falta devolver ${pl(o.tools.length + o.cases.length, 'ferramenta ou malão', 'ferramentas ou malões')} ao armazém.` : 'Ferramentas devolvidas.')}
+      ${done(!o.accounts.length, o.accounts.length ? `Falta fechar ${pl(o.accounts.length, 'conta', 'contas')} (email e outras).` : 'Contas fechadas.')}</ul>` : '';
+  box.innerHTML = `<div class="card${!p.active && open ? ' it-exit' : ''}"><h2 style="margin-top:0">${!p.active ? (open ? 'Saída: o que falta' : 'Saída: tudo devolvido e fechado') : 'Informática e contas'}</h2>
+    ${full ? `<p><b>${esc(p.name)}</b>${p.active ? '' : ' · saiu' + (p.left_on ? ' a ' + esc(fmtDate(p.left_on)) : '')}</p>` : ''}${exit}
+    ${o.it.length ? `<h3>Equipamento com ${p.active ? 'esta pessoa' : 'esta pessoa, por devolver'}</h3><ul class="plain">${o.it.map((x) => `<li class="it-li"><span class="grow"><b>${esc(x.code)}</b> · ${esc(t_(IT_KIND[x.kind]))} ${esc(x.label)}<br><span class="small muted">desde ${esc(fmtDate(x.since.slice(0, 10)))} · ${x.site ? esc(x.site) : 'escritório'}${x.serial ? ' · ' + esc(x.serial) : ''}</span></span>${m ? `<button class="btn ghost small" type="button" data-itr="${esc(x.asset_id)}">Receber</button>` : ''}</li>`).join('')}</ul>` : p.active ? '<p class="small muted">Sem equipamento de informática.</p>' : ''}
+    ${o.tools.length || o.cases.length ? `<h3>Ferramentas do armazém</h3><ul class="plain small">${o.tools.map((x) => `<li><b>${esc(x.tag)}</b> · ${esc(x.name)}${x.site ? ' · ' + esc(x.site) : ''}</li>`).join('')}${o.cases.map((x) => `<li><b>${esc(x.code)}</b> · malão ${esc(x.name)}${x.site ? ' · ' + esc(x.site) : ''}</li>`).join('')}</ul>
+      <p class="small muted">Devolvem-se no Armazém, como sempre.</p>` : ''}
+    <h3>Contas</h3>${o.accounts.length ? `<ul class="plain">${o.accounts.map((x) => `<li class="it-li"><span class="grow"><b>${esc(t_(IT_ACC[x.kind]))}</b> · ${esc(x.identifier)}</span>${m ? `<button class="btn ghost small" type="button" data-itc="${esc(x.id)}" data-itn="${esc(x.identifier)}">Fechar</button>` : ''}</li>`).join('')}</ul>` : '<p class="small muted">Nenhuma conta aberta registada.</p>'}
+    ${p.accounts_closed.length ? more(`Contas fechadas (${p.accounts_closed.length})`, `<ul class="plain small">${p.accounts_closed.map((x) => `<li>${esc(t_(IT_ACC[x.kind]))} · ${esc(x.identifier)} · ${esc(t_(IT_HOW[x.how]))} a ${esc(fmtDate(x.closed_at.slice(0, 10)))}${x.by ? ' por ' + esc(x.by) : ''}</li>`).join('')}</ul>`) : ''}
+    ${p.returned.length ? more(`Equipamento já devolvido (${p.returned.length})`, `<ul class="plain small">${p.returned.map((x) => `<li>${esc(x.code)} · ${esc(x.label)} · ${esc(fmtDate(x.given_at.slice(0, 10)))} a ${esc(fmtDate(x.returned_at.slice(0, 10)))}</li>`).join('')}</ul>`) : ''}
+    ${m && p.active ? `<p><button class="btn ghost wide" type="button" id="itacc">+ Conta (email, Microsoft 365…)</button></p>` : ''}
+    ${m && p.active ? '<p class="small muted">Para entregar equipamento: Informática › «Entregar a uma pessoa».</p>' : ''}</div>`;
+  box.querySelectorAll('[data-itr]').forEach((b) => b.onclick = async () => {
+    const { data: a, error: e } = await sb.rpc('mini_it_asset', { p_ref: b.dataset.itr }); if (e) return toast(friendly(e)); itReceive(a); });
+  box.querySelectorAll('[data-itc]').forEach((b) => b.onclick = () => itCloseAccount(b.dataset.itc, b.dataset.itn));
+  if ($('#itacc')) $('#itacc').onclick = () => itAddAccount(id);
+}
+async function itAddAccount(id) {
+  const fd = await askSheet('Conta nova', `<label for="iak">Que conta? *</label><select id="iak" name="k" required>${Object.entries(IT_ACC).map(([k, l]) => `<option value="${k}">${esc(t_(l))}</option>`).join('')}</select>
+    <label for="iai">Endereço ou nome da conta *</label><input id="iai" name="i" required maxlength="160" autocomplete="off" placeholder="ex.: joao.silva@empresa.pt">
+    <label for="ian">Nota</label><input id="ian" name="n" maxlength="300">
+    <p class="small muted">${ic('lock')} Nunca escrevas palavras-passe aqui. Só o nome da conta, para saber o que fechar quando a pessoa sair.</p>`, 'Guardar');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_it_account_add', { p_collab: id, p_kind: fd.get('k'), p_identifier: String(fd.get('i')).trim(), p_note: String(fd.get('n') || '').trim() || null });
+  if (error) return toast(friendly(error));
+  toast('Conta guardada.', 'ok'); loadItCard(id, !!$('#itbody'));
+}
+async function itCloseAccount(accId, name) {
+  const fd = await askSheet(`Fechar ${name}`, `<p class="small muted">Fecha primeiro no Microsoft 365, no Google ou no sistema da conta. Aqui fica registado quem fechou, quando e como.</p>
+    <label>Como ficou? *</label><div class="chips reasons" role="radiogroup">
+      <label class="chip"><input type="radio" name="h" value="fechada" required>Fechada</label>
+      <label class="chip"><input type="radio" name="h" value="reencaminha">Reencaminhada</label>
+      <label class="chip"><input type="radio" name="h" value="resposta">Resposta automática</label></div>
+    <label for="icn">Nota</label><input id="icn" name="n" maxlength="300" placeholder="Para reencaminhar: para quem">
+    <p class="small muted">${ic('lock')} Ninguém lê a caixa de correio de quem saiu. Reencaminha ou deixa uma resposta automática a dizer a quem escrever.</p>`, 'Fechar a conta');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_it_account_close', { p_account: accId, p_how: fd.get('h'), p_note: String(fd.get('n') || '').trim() || null });
+  if (error) return toast(friendly(error));
+  toast('Conta fechada.', 'ok'); itRefresh();
+}
+
 // ------------------------------------------------------------------ Avisos (sql/83): the bell, and the screens that change by themselves
 // The database writes a notice for a role or a person (documents to expire, a week to confirm, a contract unsigned,
 // a tool overdue…). The bell shows the ones for this login; each one is read per person, and a tap opens where it
@@ -16723,6 +17050,7 @@ function noticeRoute(x) {
   if (/^ship_/.test(k)) return () => {
     if (k === 'ship_missing' && viewOpen('armazem')) { state.wh = Object.assign(state.wh || { cart: [], tools: [], person: null, wid: null }, { tab: 'envios', shipId: l.shipment_id || null, shipSite: null }); go('armazem'); return true; }
     if (viewOpen('material')) { go('material'); return true; } return false; };
+  if (k === 'it_exit') return () => { if (!viewOpen('informatica')) return false; state.it = { ...(state.it || {}), person: l.collaborator_id || null }; go('informatica'); return true; };
   if (/^inv_/.test(k)) return () => { if (!viewOpen('inventario')) return false; state.inv = { id: l.count_id || null, zone: null }; go('inventario'); return true; };
   if (/^client_docs/.test(k)) return () => { if (!viewOpen('docscliente')) return false; state.cdocs = { tab: 'curso', ltab: 'pessoas', sel: new Set(), list: l.list_id || null }; go('docscliente'); return true; };
   return () => false;
