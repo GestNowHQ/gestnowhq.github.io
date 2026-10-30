@@ -481,6 +481,12 @@ const ERRORS = [
   [/this card is cancelled/i, 'Este cartão está cancelado.'],
   [/this card has expired/i, 'Este cartão já caducou.'],
   [/say how the card came back/i, 'Diz como veio o cartão.'],
+  [/the term is too short/i, 'O texto do termo é curto demais.'],
+  [/nothing changed/i, 'Não mudaste nada no texto.'],
+  [/the term is already signed/i, 'Este termo já está assinado.'],
+  [/choose about personal spending/i, 'Escolhe se autorizas o desconto no salário dos gastos pessoais.'],
+  [/term not found/i, 'Termo não encontrado.'],
+  [/this card was already given back/i, 'Este cartão já foi devolvido.'],
   [/card not found/i, 'Cartão não encontrado.'],
   [/say why you used another card/i, 'Diz porque usaste outro cartão (5 letras ou mais).'],
   [/say how it was paid back/i, 'Diz como foi devolvido: transferência ou com o salário.'],
@@ -1302,7 +1308,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '129';
+const APP_VERSION = '130';
 // v107 (Diogo 2026-10-26): «Início» = what is urgent + the departments. The bottom bar keeps only Início, the field tools of
 // the encarregado (Equipa, Picar) or of the safety officer (Emergência), Procurar and Eu. Everything else is in its department.
 const TABS = { supervisor: ['inicio', 'equipa', 'picar', 'minhas'], admin: ['inicio', 'minhas'],
@@ -5954,6 +5960,8 @@ async function loadMeHome(quiet) {
     sb.rpc('mini_time_mode').then((r) => r, () => ({})), sb.rpc('mini_my_meetings').then((r) => r, () => ({})), sb.rpc('mini_my_team_messages').then((r) => r, () => ({})),
     sb.rpc('mini_my_hazards').then((r) => r, () => ({})),
     sb.rpc('mini_my_month', { p_month: ym + '-01' }).then((r) => r, () => ({}))]);
+  const tmq = await sb.rpc('mini_my_card_terms').then((r) => r, () => ({}));
+  state.meTerms = (tmq && tmq.data) || [];   // v130: the term of a company card still to sign (sql/144)
   state.meMonth = (mo && mo.data) || null;   // v99 (sql/117): the month in big, and the days with no hours at all
   // v89: once per session with network, the screens behind the tiles are kept on the phone for a site without signal
   if (!state.prefetched && navigator.onLine !== false && !home.cached) {
@@ -5976,7 +5984,10 @@ async function loadMeHome(quiet) {
   $('#metiles').innerHTML = meTiles(d, s, papers.error ? null : papers.data);
   $('#metiles').dataset.on = '1';
   app.querySelectorAll('[data-me]').forEach((b) => b.onclick = () => meOpen(b.dataset.me));
-  $('#meact').onclick = (e) => { if (e.target.closest('[data-hzgo]')) hazardReport(() => loadMeHome()); };   // survives the re-renders of #meact
+  $('#meact').onclick = (e) => {
+    if (e.target.closest('[data-hzgo]')) hazardReport(() => loadMeHome());
+    const tm = e.target.closest('[data-tmsign]'); if (tm) termSign((state.meTerms || []).find((x) => x.custody_id === tm.dataset.tmsign), () => loadMeHome());
+  };   // survives the re-renders of #meact
   app.querySelectorAll('[data-confirm]').forEach((b) => b.onclick = () => meConfirmWeek(b.dataset.confirm, b.dataset.label, () => loadMeHome()));
   app.querySelectorAll('[data-gotit]').forEach((b) => b.onclick = async () => {
     b.disabled = true; const { error } = await callOrQueue('mini_my_team_read', { p_message: b.dataset.gotit }, t('Aviso lido'));
@@ -6041,6 +6052,9 @@ function meActions(s) {
   const out = [`<button class="me-do hz-me" data-hzgo><span class="me-ic">${ic('warn')}</span><div class="grow"><b>Relatar um perigo</b>
       <small>Quase acidente ou algo perigoso. Demora 15 segundos.</small></div>${ic('go')}</button>`];
   const notes = meNotices(); if (notes) out.push(notes);
+  for (const tm of (state.meTerms || []).filter((x) => !x.signed_at && !x.returned_at))
+    out.push(`<button class="me-do bad" data-tmsign="${esc(tm.custody_id)}"><span class="me-dot bad"></span><div class="grow"><b>${esc(t_('Assina o termo do cartão da empresa'))}</b>
+      <small>${esc(tm.card)} · ${esc(t_('Lê as regras e assina. Demora 1 minuto.'))}</small></div>${ic('go')}</button>`);
   // v93: once today is written the yellow call to action becomes a quiet line (still a tap away to correct)
   const wrote = state.meToday && Number(state.meToday.worked) > 0;
   if (state.timeMode === 'sheet') out.push(wrote
@@ -13628,16 +13642,21 @@ async function exPaid(x, reload) {
 // The worker's own receipts on As minhas horas: hand one in, see what happened to it.
 async function loadMyExpenses() {
   const box = $('#myexp'); if (!box) return;
-  const { data: h, error } = await sb.rpc('mini_expense_home');
+  const [{ data: h, error }, tq] = await Promise.all([sb.rpc('mini_expense_home'), sb.rpc('mini_my_card_terms').then((r) => r, () => ({}))]);
   if (!box.isConnected) return;
   if (error || !h || !h.sites.length && !h.expenses.length) { box.innerHTML = ''; return; }
+  const terms = (tq && tq.data) || [];
   const mine = h.expenses.filter((x) => x.person_id === h.me).slice(0, 8);
   box.innerHTML = `<div class="card ex-mine"><div class="wk"><h2 class="grow" style="margin:0">${ic('card')} As minhas despesas</h2>
       ${h.sites.length ? '<button class="btn small" id="myexnew">+ Entregar talão</button>' : ''}</div>
     ${(h.cards || []).filter((k) => k.holder_id === h.me && k.now).map((k) => `<p class="small sh-mob">${ic('card')}<span><span>O cartão da empresa</span> <b>•••• ${esc(k.last4)}</b> <span>está contigo. Cada pagamento: foto do talão aqui, com fatura em nome da empresa.</span></span></p>`).join('')}
     ${mine.length ? `<ul class="q-list">${mine.map((x) => `<li><b>${esc(eur2(x.amount))}</b> ${esc(EX_CAT[x.category])} · ${esc(fmtDate(x.day))} · ${esc(EX_STATE[x.status][1])}${x.reason ? ': «' + esc(x.reason) + '»' : ''}</li>`).join('')}</ul>`
-      : '<p class="small muted">Pagaste algo para a obra? Tira uma foto ao talão e entrega aqui.</p>'}</div>`;
+      : '<p class="small muted">Pagaste algo para a obra? Tira uma foto ao talão e entrega aqui.</p>'}
+    ${terms.map((tm, i) => `<p class="small tm-mine">${tm.signed_at ? chip('ok', 'Termo assinado') : chip('bad', 'Termo por assinar')} <span>${cdJoin([esc(tm.card), tm.signed_at && esc(fmtTime(tm.signed_at))])}</span>
+      ${tm.signed_at || tm.returned_at ? `<button class="btn ghost small" data-tmview="${i}">Ver termo</button>` : `<button class="btn small" data-tmgo="${i}">Assinar</button>`}</p>`).join('')}</div>`;
   if ($('#myexnew')) $('#myexnew').onclick = () => exSubmit(h, loadMyExpenses);
+  box.querySelectorAll('[data-tmview]').forEach((b) => b.onclick = () => termShow(terms[b.dataset.tmview]));
+  box.querySelectorAll('[data-tmgo]').forEach((b) => b.onclick = () => termSign(terms[b.dataset.tmgo], loadMyExpenses));
 }
 // v129 Cartões da empresa (Secretariado, sql/143): each card by its last 4 digits only, who has it (hand over with the
 // person's own clock-in card, take back), what was spent this month against the limit, and the month close: load the
@@ -13676,16 +13695,19 @@ async function loadCards() {
   const gone = out.filter((c) => !c.holder.active);
   const missing = live.reduce((a, c) => a + Number((c.statement && c.statement.missing) || 0), 0);
   const spent = live.reduce((a, c) => a + Number(c.spent || 0), 0);
+  const unsigned = out.filter((c) => c.holder.term && !c.holder.term.signed_at).length;
   top.innerHTML = `<div class="fl-sum">
       <div class="fl-n"><b>${live.length}</b><span>cartões ativos</span></div>
       <div class="fl-n"><b>${out.length}</b><span>com alguém</span></div>
       <div class="fl-n"><b>${esc(eur2(spent))}</b><span>em talões este mês</span></div>
       <div class="fl-n ${missing ? 'warn' : ''}"><b>${missing}</b><span>movimentos sem talão</span></div></div>
     ${gone.length ? `<p class="small sh-warn">${ic('warn')}<span>${gone.map((c) => `<b>${esc(c.holder.name)}</b> <span>saiu da empresa com o cartão</span> <b>${esc(cardName(c))}</b>`).join('; ')}. Recolhe e regista a devolução.</span></p>` : ''}
-    <div class="wk">${cardMonthPick(K)}<span class="grow"></span><button class="btn" id="cdnew">+ Novo cartão</button></div>
+    ${unsigned ? `<p class="small sh-warn">${ic('warn')}<span>${esc(pl(unsigned, 'cartão com o termo por assinar', 'cartões com o termo por assinar'))}. Abre o cartão e pede a assinatura.</span></p>` : ''}
+    <div class="wk cd-tools">${cardMonthPick(K)}<span class="grow"></span><button class="btn ghost" id="cdterms">${ic('doc')}Texto do termo</button><button class="btn" id="cdnew">+ Novo cartão</button></div>
     <p class="small muted">Só os 4 últimos dígitos. Nunca escrevas aqui o número completo, o PIN nem o código de segurança. Faturas em nome da empresa: NIF ${esc(h.company_nif || '—')}.</p>`;
   wireCardMonth(K, loadCards);
   $('#cdnew').onclick = () => cardEdit(null, loadCards);
+  $('#cdterms').onclick = () => termEdit();
   const body = $('#cdbody');
   body.innerHTML = h.cards.length ? `<div class="list">${h.cards.map(cardCard).join('')}</div>`
     : `<div class="card">${empty('card', 'Ainda sem cartões', 'Regista cada cartão da empresa (só os 4 últimos dígitos) e entrega-o ao encarregado. Os talões passam a vir pela app, com foto, em vez do Excel por email.')}</div>`;
@@ -13706,6 +13728,7 @@ function cardState(c) {
   if (c.expired) return chip('bad', 'Caducado');
   if (c.holder && !c.holder.active) return chip('bad', 'Saiu da empresa');
   if (!c.holder) return chip('info', 'No escritório');
+  if (c.holder.term && !c.holder.term.signed_at) return chip('warn', 'Termo por assinar');
   const s = c.statement;
   if (s && s.closed_at) return chip('ok', 'Mês fechado');
   if (s && Number(s.missing)) return chip('warn', pl(Number(s.missing), 'sem talão', 'sem talão'));
@@ -13755,8 +13778,9 @@ async function loadCard() {
   const s = c.statement; const closed = !!(s && s.closed_at);
   const people = (K.home && K.home.people) || [];
   box.innerHTML = `<section class="card"><div class="wk"><div class="grow"><b>${esc(c.label || CARD_KIND[c.kind] || '')}</b>
-        <div class="sub">${cdJoin([esc(CARD_KIND[c.kind] || ''), c.valid_until && `válido até ${esc(String(c.valid_until).slice(5, 7) + '/' + String(c.valid_until).slice(0, 4))}`])}</div></div>${cardState(c)}</div>
-      ${c.holder ? `<p><span>Está com</span> <b>${esc(c.holder.name)}</b> · ${cdJoin([`desde ${esc(fmtTime(c.holder.since))}`, c.holder.signed ? 'assinou com o cartão de ponto' : 'sem cartão de ponto', !c.holder.signed && '«' + esc(c.holder.no_card || '') + '»'])}</p>` : c.active ? '<p>Está no escritório.</p>' : `<p>${cdJoin(['Cancelado', esc(c.cancel_reason || '')])}</p>`}
+        <div class="sub">${cdJoin([c.label && esc(CARD_KIND[c.kind] || ''), c.valid_until && `válido até ${esc(String(c.valid_until).slice(5, 7) + '/' + String(c.valid_until).slice(0, 4))}`])}</div></div>${cardState(c)}</div>
+      ${c.holder ? `<p><span>Está com</span> <b>${esc(c.holder.name)}</b> · ${cdJoin([`desde ${esc(fmtTime(c.holder.since))}`, c.holder.signed ? 'assinou com o cartão de ponto' : 'sem cartão de ponto', !c.holder.signed && '<q data-nt>' + esc(c.holder.no_card || '') + '</q>'])}</p>` : c.active ? '<p>Está no escritório.</p>' : `<p>${cdJoin(['Cancelado', esc(c.cancel_reason || '')])}</p>`}
+      ${c.holder ? termLine(c) : ''}
       ${c.note ? `<p class="small">${esc(c.note)}</p>` : ''}
       ${c.active ? `<div class="acts">${c.holder ? '<button class="btn" id="cdrecv">Receber o cartão</button>' : '<button class="btn" id="cdgive">Entregar a alguém</button>'}
         <button class="btn ghost small" id="cdedit">Editar</button>${c.holder ? '' : '<button class="btn ghost small" id="cdcancel">Cancelar o cartão</button>'}</div>` : ''}</section>
@@ -13770,7 +13794,7 @@ async function loadCard() {
       ${c.lines.length ? `<ul class="cd-lines">${c.lines.map((l) => cardLine(l, closed)).join('')}</ul>` : ''}
       ${c.loose.length ? `<h3>Talões sem movimento no extrato</h3><p class="small muted">Podem vir no extrato do mês seguinte, ou foram entregues com o cartão errado.</p>
         <ul class="q-list">${c.loose.map((x) => `<li><b>${esc(eur2(x.amount))}</b> · ${cdJoin([esc(EX_CAT[x.category] || x.category), esc(x.person), esc(x.site), esc(fmtDate(x.day))])} <button class="chip" data-exfile="${esc(x.file)}">${ic('doc')}Talão</button></li>`).join('')}</ul>` : ''}</section>
-    ${c.history.length ? `<section class="card"><h2>Quem teve o cartão</h2><ul class="q-list">${c.history.map((x) => `<li><b>${esc(x.name)}</b> · <span>${esc(fmtTime(x.given_at))} → ${x.returned_at ? esc(fmtTime(x.returned_at)) : ''}</span>${x.returned_at ? '' : '<b>agora</b>'} · ${cdJoin([x.returned_at && esc(CARD_BACK[x.state] || x.state), x.signed ? 'assinou com o cartão de ponto' : 'sem cartão de ponto', x.no_card && '«' + esc(x.no_card) + '»', x.return_note && '«' + esc(x.return_note) + '»'])}</li>`).join('')}</ul></section>` : ''}`;
+    ${c.history.length ? `<section class="card"><h2>Quem teve o cartão</h2><ul class="q-list">${c.history.map((x) => `<li><b>${esc(x.name)}</b> · <span>${esc(fmtTime(x.given_at))} → ${x.returned_at ? esc(fmtTime(x.returned_at)) : ''}</span>${x.returned_at ? '' : '<b>agora</b>'} · ${cdJoin([x.returned_at && esc(CARD_BACK[x.state] || x.state), x.signed ? 'assinou com o cartão de ponto' : 'sem cartão de ponto', x.no_card && '<q data-nt>' + esc(x.no_card) + '</q>', x.return_note && '<q data-nt>' + esc(x.return_note) + '</q>', x.term && x.term.signed_at ? 'termo assinado' : 'termo por assinar'])}${x.term && x.term.text ? ` <button class="chip" data-cdtv="${esc(x.id)}">${ic('doc')}Termo</button>` : ''}</li>`).join('')}</ul></section>` : ''}`;
   wireCardMonth(K, loadCard);
   const on = (id, f) => { const b = $(id); if (b) b.onclick = f; };
   on('#cdgive', () => cardGive(c, people));
@@ -13778,6 +13802,14 @@ async function loadCard() {
   on('#cdedit', () => cardEdit(c, loadCard));
   on('#cdcancel', () => cardCancel(c));
   on('#cdload', () => cardLoadStatement(c));
+  on('#cdterm', () => termShow(c.holder.term, c.holder.name));
+  on('#cdtask', async () => {
+    const { data, error: e } = await sb.rpc('mini_card_term_ask', { p_card: c.id });
+    if (e) return toast(friendly(e));
+    toast(data ? `Pedido enviado a ${c.holder.name}: assina na app, em «Eu».` : 'Esta pessoa não tem conta na app. Assina aqui, ao balcão, com o cartão de ponto.'); loadCard();
+  });
+  on('#cdthere', () => termHere(c));
+  box.querySelectorAll('[data-cdtv]').forEach((b) => b.onclick = () => { const x = c.history.find((h) => h.id === b.dataset.cdtv); termShow(x.term, x.name); });
   on('#cdchase', async () => {
     const { data, error: e } = await sb.rpc('mini_card_chase', { p_card: c.id, p_month: K.month });
     if (e) return toast(friendly(e));
@@ -13820,22 +13852,28 @@ async function cardExplain(l) {
   toast('Movimento explicado.'); loadCard();
 }
 async function cardGive(c, people) {
+  const { data: term } = await sb.rpc('mini_card_term');
   const fd = await askSheet(cardName(c), `
     <label for="cgp">A quem *</label><select id="cgp" name="p" required><option value="">Escolhe</option>${people.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}${p.number ? ' · ' + esc(p.number) : ''}${p.cards ? ' · já tem ' + pl(p.cards, 'cartão', 'cartões') : ''}</option>`).join('')}</select>
     <label for="cgu">Cartão de ponto de quem recebe</label><div class="wk"><input id="cgu" name="u" maxlength="40" placeholder="Encosta o cartão ou escreve o número" autocomplete="off">${'NDEFReader' in window ? '<button type="button" class="btn ghost small" id="cgnfc">Ler</button>' : ''}</div>
     <label for="cgr">Sem cartão de ponto? Porquê</label><input id="cgr" name="r" maxlength="200" placeholder="ex.: entregue em mão no escritório, confirmado por mim">
     <label for="cgn">Nota</label><input id="cgn" name="n" maxlength="300">
-    <p class="small muted">Quem recebe é avisado na app: cada talão pago com o cartão entra pela foto em «Entregar talão», com fatura em nome da empresa.</p>`, 'Entregar', (d) => {
+    <details class="fold tm-fold"><summary><span>Termo de responsabilidade: lê com a pessoa</span></summary><div data-nt class="tm-text tm-scroll" id="cgterm"></div></details>
+    <label>Gastos pessoais com o cartão</label>${termPayChoice(false)}
+    <p class="small muted">Com o cartão de ponto encostado e a escolha feita, a pessoa assina o termo aqui. Sem cartão de ponto, assina depois na app, em «Eu». Quem recebe é avisado na app: cada talão pago com o cartão entra pela foto em «Entregar talão».</p>`, 'Entregar', (d) => {
     if (d.querySelector('#cgnfc')) d.querySelector('#cgnfc').onclick = () => wtReadTag((uid) => { d.querySelector('#cgu').value = uid; });
+    const sel = d.querySelector('#cgp'); const box = d.querySelector('#cgterm');
+    const show = () => { box.textContent = term ? termFill(term.body, c, people.find((p) => p.id === sel.value)) : ''; };
+    sel.onchange = show; show();
   });
   if (!fd) return;
-  const uid = String(fd.get('u') || '').trim(); const why = String(fd.get('r') || '').trim();
+  const uid = String(fd.get('u') || '').trim(); const why = String(fd.get('r') || '').trim(); const tp = fd.get('tp');
   if (!uid && !why) return toast('Encosta o cartão de ponto de quem recebe, ou diz porque não há cartão.');
   const p = { card_id: c.id, collaborator_id: fd.get('p'), note: fd.get('n') };
-  if (uid) p.uid = uid; else p.no_card_reason = why;
+  if (uid) { p.uid = uid; if (tp) p.term_payroll = tp; } else p.no_card_reason = why;
   const { data, error } = await sb.rpc('mini_card_give', { p });
   if (error) return toast(friendly(error));
-  toast(`Cartão ${data.card} entregue a ${data.name}.`); loadCard();
+  toast(data.term_signed ? `Cartão ${data.card} entregue a ${data.name}, com o termo assinado.` : `Cartão ${data.card} entregue a ${data.name}. O termo fica por assinar: na app, em «Eu», ou aqui ao balcão.`); loadCard();
 }
 async function cardReceive(c) {
   const fd = await askSheet(cardName(c), `<p class="small"><span>Está com</span> <b>${esc(c.holder ? c.holder.name : '')}</b></p>
@@ -13856,6 +13894,83 @@ async function cardCancel(c) {
   const { error } = await sb.rpc('mini_card_cancel', { p_card: c.id, p_reason: String(fd.get('r')).trim() });
   if (error) return toast(friendly(error));
   toast('Cartão cancelado.'); loadCard();
+}
+// v130 Termo de responsabilidade do cartão (sql/144): the words are frozen at the handover; the person signs with their own
+// clock-in card at the counter, or later in «Eu» with their own login, and writes down the choice about the salary
+// (Código do Trabalho art. 279.º: a deduction only with written consent). Signed = never changes; printable.
+const TERM_PAY = { true: 'Autorizo que os gastos pessoais feitos com este cartão me sejam descontados no salário, dentro dos limites da lei (art. 279.º do Código do Trabalho).',
+  false: 'Não autorizo o desconto no salário: devolvo os gastos pessoais por transferência.' };
+const termPayChoice = (req) => `<div class="chips reasons tm-pay" role="radiogroup">${['true', 'false'].map((v, i) => `<label class="chip"><input type="radio" name="tp" value="${v}" ${req && !i ? 'required' : ''}>${esc(TERM_PAY[v])}</label>`).join('')}</div>`;
+// the same filling as the server's, to read before handing over (the server writes the final words)
+function termFill(body, c, person) {
+  const map = { empresa: (state.platform && state.platform.tenant) || '', nif: (state.cards && state.cards.home && state.cards.home.company_nif) || '—',
+    pessoa: person ? person.name : '…', numero: (person && person.number) || '—', cartao: cardName(c), limite: c.limit ? eur2(c.limit) : 'sem limite definido',
+    data: fmtDate(isoDay(new Date())) };
+  return String(body || '').replace(/\{(empresa|nif|pessoa|numero|cartao|limite|data)\}/g, (m, k) => map[k]);
+}
+const termHow = (tm) => (tm.how === 'card' ? 'com o cartão de ponto, ao balcão' : 'na app, com a conta da pessoa');
+function termLine(c) {
+  const tm = c.holder.term;
+  if (tm && tm.signed_at) return `<p class="small tm-line">${chip('ok', 'Termo assinado')} <span>${cdJoin([esc(fmtTime(tm.signed_at)), esc(termHow(tm)), tm.payroll_ok ? 'autoriza o desconto no salário' : 'não autoriza o desconto no salário'])}</span>
+    <button class="btn ghost small" id="cdterm">${ic('doc')}Ver termo</button></p>`;
+  return `<p class="small tm-line">${chip('warn', 'Termo por assinar')} ${tm && tm.asked_at ? `<span>${cdJoin(['pedido a ' + esc(fmtTime(tm.asked_at))])}</span>` : ''}</p>
+    <div class="acts"><button class="btn small" id="cdthere">Assinar agora ao balcão</button>${c.has_login ? '<button class="btn ghost small" id="cdtask">Pedir na app</button>' : ''}${tm && tm.text ? '<button class="btn ghost small" id="cdterm">Ver termo</button>' : ''}</div>`;
+}
+// the term as a document: on screen, printed, or saved as PDF from the print dialog
+function termShow(tm, person) {
+  if (!tm || !tm.text) return toast('Este cartão foi entregue antes do termo. Pede a assinatura.');
+  const d = document.createElement('dialog'); d.className = 'dlg q-book tm-doc';
+  d.innerHTML = `<div class="printable"><div data-nt class="tm-text">${esc(tm.text)}</div>
+    <div class="tm-sign">${tm.signed_at ? `<p><b>${esc(t_(TERM_PAY[String(!!tm.payroll_ok)]))}</b></p>
+      <p>${cdJoin([`${esc(t_('Assinado por'))} ${esc(person || tm.signed_by || '')}`, esc(fmtTime(tm.signed_at)), esc(termHow(tm))])}</p>` : `<p>${chip('warn', 'Termo por assinar')}</p>`}
+      <p class="small muted">${tm.version ? `${esc(t_('Texto da empresa, versão'))} ${esc(String(tm.version))}` : esc(t_('Texto base da GestNow'))}</p></div></div>
+    <div class="acts noprint"><button class="btn" data-print>${ic('print')}Imprimir ou guardar PDF</button><button class="btn ghost wide" data-x>Fechar</button></div>`;
+  document.body.appendChild(d); d.showModal();
+  d.querySelector('[data-x]').onclick = () => d.close();
+  d.querySelector('[data-print]').onclick = () => window.print();
+  d.addEventListener('close', () => d.remove());
+}
+// the person, in «Eu»: read and sign with their own login
+async function termSign(tm, done) {
+  if (!tm) return;
+  const fd = await askSheet(`${t_('Termo do cartão')} ${tm.card}`, `<div data-nt class="tm-text tm-scroll">${esc(tm.text)}</div>
+    <label>Gastos pessoais com o cartão *</label>${termPayChoice(true)}
+    <p class="small muted">Ao tocar em «Assino», o termo fica assinado com a tua conta, a data e a hora. Depois já não muda. Podes voltar a lê-lo em «Despesas».</p>`, 'Assino');
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_my_card_term_sign', { p_custody: tm.custody_id, p_payroll: fd.get('tp') === 'true' });
+  if (error) return toast(friendly(error));
+  toast('Termo assinado. Obrigado.'); if (done) done();
+}
+// the office: the person signs now, at the counter, with their own clock-in card
+async function termHere(c) {
+  let text = c.holder.term && c.holder.term.text;
+  if (!text) { const { data: t } = await sb.rpc('mini_card_term'); text = t ? termFill(t.body, c, { name: c.holder.name, number: c.holder.number }) : ''; }
+  const fd = await askSheet(c.holder.name, `<div data-nt class="tm-text tm-scroll">${esc(text)}</div>
+    <label>Gastos pessoais com o cartão *</label>${termPayChoice(true)}
+    <label for="thu">Cartão de ponto de quem assina *</label><div class="wk"><input id="thu" name="u" required maxlength="40" placeholder="Encosta o cartão ou escreve o número" autocomplete="off">${'NDEFReader' in window ? '<button type="button" class="btn ghost small" id="thnfc">Ler</button>' : ''}</div>
+    <p class="small muted">A pessoa lê o termo, escolhe e encosta o seu cartão de ponto: é a assinatura dela.</p>`, 'Assinar', (d) => {
+    if (d.querySelector('#thnfc')) d.querySelector('#thnfc').onclick = () => wtReadTag((uid) => { d.querySelector('#thu').value = uid; });
+  });
+  if (!fd) return;
+  const { error } = await sb.rpc('mini_card_term_sign_here', { p_card: c.id, p_uid: String(fd.get('u') || '').trim(), p_payroll: fd.get('tp') === 'true' });
+  if (error) return toast(friendly(error));
+  toast('Termo assinado.'); loadCard();
+}
+// the office: the company's own words (each change is a new version; who signed keeps the words they signed)
+async function termEdit() {
+  const { data: t, error } = await sb.rpc('mini_card_term');
+  if (error) return toast(friendly(error));
+  const fd = await askSheet('Texto do termo do cartão', `
+    <p class="small muted">${t.is_default ? '<span>Ainda é o texto base da GestNow.</span>' : cdJoin([`${esc(t_('Versão'))} ${esc(String(t.version))}`, esc(t.by || ''), esc(fmtTime(t.at))])}${Number(t.unsigned) ? ` · <b>${esc(pl(Number(t.unsigned), 'termo por assinar', 'termos por assinar'))}</b>` : ''}</p>
+    <label for="tmb">Texto *</label><textarea id="tmb" name="b" rows="16" required minlength="100" maxlength="20000" class="tm-edit">${esc(t.body)}</textarea>
+    <p class="small muted">Ao entregar o cartão, estas palavras são preenchidas: {empresa} {nif} {pessoa} {numero} {cartao} {limite} {data}. A escolha sobre o desconto no salário é sempre acrescentada no fim, quando a pessoa assina. Cada mudança fica como nova versão; quem já assinou fica com o texto que assinou. Confirma o texto com o advogado de trabalho.</p>
+    <button type="button" class="btn ghost small" id="tmdef">Repor o texto base</button>`, 'Guardar nova versão', (d) => {
+    d.querySelector('#tmdef').onclick = () => { d.querySelector('#tmb').value = t.default; };
+  });
+  if (!fd) return;
+  const { data: v, error: e } = await sb.rpc('mini_card_term_save', { p_body: String(fd.get('b') || '') });
+  if (e) return toast(friendly(e));
+  toast(`Texto guardado: versão ${v}. Vale para os próximos cartões entregues.`);
 }
 // The bank file is read on this device: only date, amount and description of each line go to the database.
 // CSV (; or , separated) or Excel. Columns are found by their names (Data, Descrição, Montante / Débito / Crédito…).
