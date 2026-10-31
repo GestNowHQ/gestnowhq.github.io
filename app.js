@@ -2362,6 +2362,24 @@ async function homeWaiting() {
   box.querySelectorAll('[data-go]').forEach((b) => b.onclick = () => { state.backNext = backFrom(); go(b.dataset.go); });
 }
 // A department's page: all its screens (the bottom-bar ones too), with «‹ Início»
+// v131 (Diogo 2026-10-31, «arrumação, nada sai»): a department with many screens (the Encarregados one has ~30) shows
+// the everyday ones first and the rest by area, closed until tapped. Nothing is hidden: every screen stays one tap away.
+// Its numbers (one strip per area it covers) go below the screens, so the tools are not 5 dashboards down the page.
+const DAILY_VIEWS = ['picar', 'naobra', 'horas', 'equipa', 'progresso', 'lmra', 'relatos', 'rotinas'];
+const DEPT_AREAS = [['Segurança', ['seguranca', 'reunioes', 'emergencia', 'painelqsa']],
+  ['Obra e qualidade', ['painel', 'frentes', 'material', 'andaimes', 'qualidade', 'obras', 'processo', 'docscliente']],
+  ['Material e armazém', ['armazem', 'envios', 'inventario', 'compras', 'frota']],
+  ['Pessoas e viagens', ['trabalhadores', 'viagens', 'alojamento', 'despesas', 'premios', 'contactos']]];
+function deptTools(views) {
+  if (views.length <= 12) return toolTiles(views);
+  const daily = DAILY_VIEWS.filter((v) => views.includes(v));
+  const rest = views.filter((v) => !daily.includes(v));
+  const areas = DEPT_AREAS.map(([t, vs]) => [t, rest.filter((v) => vs.includes(v))]);
+  const other = rest.filter((v) => !DEPT_AREAS.some(([, vs]) => vs.includes(v)));
+  if (other.length) areas.push(['Outros', other]);
+  return `${daily.length ? `<h2 class="dept-h">Todos os dias</h2>${toolTiles(daily)}` : ''}`
+    + areas.filter(([, vs]) => vs.length).map(([t, vs]) => `<details class="card dept-area"><summary><b>${esc(t)}</b> <small class="muted">${vs.length === 1 ? '1 ecrã' : `${vs.length} ecrãs`}</small></summary>${toolTiles(vs)}</details>`).join('');
+}
 function viewDept() {
   if (!state.ready) return boot();
   const d = navDeps().find((x) => x.title === state.dept);
@@ -2370,8 +2388,8 @@ function viewDept() {
   const from = state.deptFrom === 'saude' && canHealth() ? 'saude' : null;   // v123: opened from «Saúde dos departamentos»
   app.innerHTML = `<button class="btn ghost small home-back" id="dback">‹ ${from ? 'Saúde dos departamentos' : 'Início'}</button>
     <div class="ph"><div><p class="ph-k">${sub ? esc(sub) : 'Departamento'}</p><h1>${esc(name)}</h1></div></div>
-    <div id="dpulse"></div>
-    ${toolTiles(d.views)}${d.title === 'Eu' ? `<button class="btn ghost" id="dtour">${ic('bot')}Visita guiada</button>` : ''}`;
+    ${d.views.length > 12 ? '' : '<div id="dpulse"></div>'}
+    ${deptTools(d.views)}${d.views.length > 12 ? '<div id="dpulse" class="dpulse-after"></div>' : ''}${d.title === 'Eu' ? `<button class="btn ghost" id="dtour">${ic('bot')}Visita guiada</button>` : ''}`;
   $('#dback').onclick = () => { if (from) { state.deptFrom = null; go(from); } else if (history.state && history.state.gnDept) history.back(); else go('inicio'); };
   if ($('#dtour')) $('#dtour').onclick = () => startTour();
   bindTiles(app);

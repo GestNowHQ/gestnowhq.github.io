@@ -2846,3 +2846,12 @@ button.cd-card { display: block; width: 100%; text-align: left; font: inherit; c
 @media print { .tm-doc .tm-text { font-size: 11pt; color: #000; } }
 .cd-tools { flex-wrap: wrap; row-gap: 8px; }
 q[data-nt] { quotes: '«' '»'; }
+/* v131: a big department page: the everyday screens first, the rest by area (closed until tapped) */
+.dept-h { margin: 16px 0 8px; font-size: var(--t-xs); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+.dept-area { margin-top: 10px; padding: 12px 14px; }
+.dept-area > summary { cursor: pointer; list-style: none; display: flex; align-items: baseline; gap: 8px; min-height: 32px; }
+.dept-area > summary::-webkit-details-marker { display: none; }
+.dept-area > summary::after { content: '›'; margin-left: auto; color: var(--ink-2); transition: transform .15s; }
+.dept-area[open] > summary::after { transform: rotate(90deg); }
+.dept-area .mrow { margin-top: 10px; }
+.dpulse-after { margin-top: 18px; }
