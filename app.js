@@ -1308,7 +1308,7 @@ nav.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openMore(false); });
 // Bottom tab bar: four tabs for what this role uses most, the rest under "Mais" (with "Sair").
 // The buttons are the same elements (same data-view), only moved; who may open a screen is still decided in go() and each view.
-const APP_VERSION = '130';
+const APP_VERSION = '131';
 // v107 (Diogo 2026-10-26): «Início» = what is urgent + the departments. The bottom bar keeps only Início, the field tools of
 // the encarregado (Equipa, Picar) or of the safety officer (Emergência), Procurar and Eu. Everything else is in its department.
 const TABS = { supervisor: ['inicio', 'equipa', 'picar', 'minhas'], admin: ['inicio', 'minhas'],
@@ -2224,7 +2224,7 @@ function go(view) {
   ({ picar: viewClock, naobra: viewOnSite, horas: viewHours, seguranca: viewSafety, trabalhadores: viewPeople,
      ficha: viewWorker, obras: viewSites, area: viewArea, painel: viewSitePanel, secretariado: viewOffice, minhas: viewMine, onbtextos: viewOnbTexts, equipa: viewTeam, acolhimento: viewInduction, clientes: viewClients, cliente: viewClient, precos: viewPrices, empresa: viewCompanyRules, inicio: viewHome, departamento: viewDept, saude: viewHealth, painelqsa: viewQsaPanel, painelcom: viewSalesPanel,
      processo: viewProcess, orcamentos: viewEstimates, comercial: viewSales, premios: viewAwards, custos: viewCosts, diarias: viewPerDiemOffice, faltas: viewOfficeAbsences, mesresumo: viewOfficeSummary, reclamacoes: viewOfficeRequests, salarios: viewOfficePayroll, lmra: viewLmra, reunioes: viewMeetings, relatos: viewHazards, material: viewSiteMaterial, emergencia: viewEmergency,
-     armazem: viewWarehouse, envios: viewShipments, inventario: viewInventory, residuos: viewWaste, informatica: viewIT, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, docscliente: viewClientDocs, producao: viewProd, progresso: viewProgress, frentes: viewFronts, rotinas: viewRoutines, contactos: viewContacts, qualidade: viewQuality, despesas: viewExpenses, cartoes: viewCards, andaimes: viewScaffolds }[view] || viewClock)();
+     armazem: viewWarehouseHome, envios: viewShipments, inventario: viewInventory, residuos: viewWaste, informatica: viewIT, fichaepi: viewPpeRecord, compras: viewBuy, frota: viewFleet, alojamento: viewHousing, viagens: viewTravel, docscliente: viewClientDocs, producao: viewProd, progresso: viewProgress, frentes: viewFronts, rotinas: viewRoutines, contactos: viewContacts, qualidade: viewQuality, despesas: viewExpenses, cartoes: viewCards, andaimes: viewScaffolds }[view] || viewClock)();
   checkEmergencyBar(); encBadges();
 }
 
@@ -2362,6 +2362,24 @@ async function homeWaiting() {
   box.querySelectorAll('[data-go]').forEach((b) => b.onclick = () => { state.backNext = backFrom(); go(b.dataset.go); });
 }
 // A department's page: all its screens (the bottom-bar ones too), with «‹ Início»
+// v131 (Diogo 2026-10-31, «arrumação, nada sai»): a department with many screens (the Encarregados one has ~30) shows
+// the everyday ones first and the rest by area, closed until tapped. Nothing is hidden: every screen stays one tap away.
+// Its numbers (one strip per area it covers) go below the screens, so the tools are not 5 dashboards down the page.
+const DAILY_VIEWS = ['picar', 'naobra', 'horas', 'equipa', 'progresso', 'lmra', 'relatos', 'rotinas'];
+const DEPT_AREAS = [['Segurança', ['seguranca', 'reunioes', 'emergencia', 'painelqsa']],
+  ['Obra e qualidade', ['painel', 'frentes', 'material', 'andaimes', 'qualidade', 'obras', 'processo', 'docscliente']],
+  ['Material e armazém', ['armazem', 'envios', 'inventario', 'compras', 'frota']],
+  ['Pessoas e viagens', ['trabalhadores', 'viagens', 'alojamento', 'despesas', 'premios', 'contactos']]];
+function deptTools(views) {
+  if (views.length <= 12) return toolTiles(views);
+  const daily = DAILY_VIEWS.filter((v) => views.includes(v));
+  const rest = views.filter((v) => !daily.includes(v));
+  const areas = DEPT_AREAS.map(([t, vs]) => [t, rest.filter((v) => vs.includes(v))]);
+  const other = rest.filter((v) => !DEPT_AREAS.some(([, vs]) => vs.includes(v)));
+  if (other.length) areas.push(['Outros', other]);
+  return `${daily.length ? `<h2 class="dept-h">Todos os dias</h2>${toolTiles(daily)}` : ''}`
+    + areas.filter(([, vs]) => vs.length).map(([t, vs]) => `<details class="card dept-area"><summary><b>${esc(t)}</b> <small class="muted">${vs.length === 1 ? '1 ecrã' : `${vs.length} ecrãs`}</small></summary>${toolTiles(vs)}</details>`).join('');
+}
 function viewDept() {
   if (!state.ready) return boot();
   const d = navDeps().find((x) => x.title === state.dept);
@@ -2370,8 +2388,8 @@ function viewDept() {
   const from = state.deptFrom === 'saude' && canHealth() ? 'saude' : null;   // v123: opened from «Saúde dos departamentos»
   app.innerHTML = `<button class="btn ghost small home-back" id="dback">‹ ${from ? 'Saúde dos departamentos' : 'Início'}</button>
     <div class="ph"><div><p class="ph-k">${sub ? esc(sub) : 'Departamento'}</p><h1>${esc(name)}</h1></div></div>
-    <div id="dpulse"></div>
-    ${toolTiles(d.views)}${d.title === 'Eu' ? `<button class="btn ghost" id="dtour">${ic('bot')}Visita guiada</button>` : ''}`;
+    ${d.views.length > 12 ? '' : '<div id="dpulse"></div>'}
+    ${deptTools(d.views)}${d.views.length > 12 ? '<div id="dpulse" class="dpulse-after"></div>' : ''}${d.title === 'Eu' ? `<button class="btn ghost" id="dtour">${ic('bot')}Visita guiada</button>` : ''}`;
   $('#dback').onclick = () => { if (from) { state.deptFrom = null; go(from); } else if (history.state && history.state.gnDept) history.back(); else go('inicio'); };
   if ($('#dtour')) $('#dtour').onclick = () => startTour();
   bindTiles(app);
@@ -10725,6 +10743,11 @@ function shipWhere(s, card = true) {
 }
 // v122: «Envios para a obra» has its own tile; it opens the warehouse on the Envios tab.
 const canShip = () => canWh() && ['armazem.gerir', 'armazem.entregar'].some(can);
+// v131: the Armazém tile opens the Armazém, not the Envios tab left open by the «Envios para a obra» tile
+function viewWarehouseHome() {
+  if (state.wh && state.wh.tab === 'envios') state.wh = { ...state.wh, tab: null, shipId: null, shipSite: null, shipEdit: null };
+  viewWarehouse();
+}
 function viewShipments() {
   if (!state.ready) return boot();
   if (!canShip()) return viewClock();
@@ -11031,7 +11054,7 @@ function viewWarehouse() {
   if (!state.ready) return boot();   // never a screen before login (audit: direct calls skip go())
   if (!canWh()) return viewClock();   // code guard as well as the database's
   if (!state.wh) state.wh = { tab: null, cart: [], tools: [], person: null, wid: null };
-  app.innerHTML = `<div class="ph"><div><p class="ph-k">EPI, farda e ferramentas</p><h1>Armazém</h1></div></div>
+  app.innerHTML = `<div class="ph"><div><p class="ph-k">EPI, farda e ferramentas</p><h1>${state.wh.tab === 'envios' ? 'Envios para a obra' : 'Armazém'}</h1></div></div>
     <div id="whtop">${skel(1)}</div><div id="whbody"></div>`;
   loadWarehouse();
 }
